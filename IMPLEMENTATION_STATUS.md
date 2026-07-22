@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-28%
+32%
 
 ## FOUNDATION
 
@@ -28,7 +28,7 @@
 
 ## SETTINGS
 
-- [ ] SETTINGS-001 - Laboratory settings
+- [x] SETTINGS-001 - Laboratory settings
 
 ## CLINICS
 
@@ -105,7 +105,7 @@ NONE / AWAITING APPROVAL
 
 ## Next Task
 
-SETTINGS-001
+CLINICS-001
 
 ## Known Technical Debt
 
@@ -706,3 +706,133 @@ None.
 - Remaining risks:
   - Linting remains unconfigured.
   - Last administrator protection is enforced in service logic using current effective permissions. A future security hardening task can add stronger transaction-level locking if concurrent admin changes become a practical risk.
+
+### SETTINGS-001 - Laboratory settings
+
+- Status: COMPLETED.
+- Started: 2026-07-22 21:34:23 CEST.
+- Completed: 2026-07-22 21:45:42 CEST.
+- Commit message: `SETTINGS-001: add laboratory settings`.
+- Pre-flight audit:
+  - Branch: `main`.
+  - Working tree: clean before SETTINGS-001 changes.
+  - SETTINGS-001 definition and dependencies were read from the attached task file and existing project documentation.
+  - AUTH-001, RBAC-001, USERS-001, UI-001, and UI-002 were completed before this task.
+  - Existing hardcoded app/lab naming was found in health, HTML title, auth UI, docs, and shared constants.
+  - No Prisma settings model existed.
+  - No private storage/upload foundation existed.
+  - `FileUpload` exists only as a local UI selection component.
+  - No `role ===`, `isAdmin`, tenant model, or generic settings key-value model was introduced.
+  - Lint remains unconfigured.
+- Summary:
+  - Added singleton `LaboratorySettings` Prisma model and deterministic migration.
+  - Added idempotent seed defaults for the single laboratory instance.
+  - Added `SettingsModule` with `GET /settings` and `PATCH /settings`.
+  - Added strict DTO validation and explicit response view.
+  - Added `settings.updated` audit event.
+  - Added shared settings contracts and formatting helpers for frontend use.
+  - Added `/settings` frontend page with read-only mode, editable form, validation, reset, save loading, and toast feedback.
+- Singleton strategy:
+  - `LaboratorySettings.key` is unique.
+  - The only supported key is `default`.
+  - `GET` and `PATCH` use controlled upsert/update and do not expose create-many behavior.
+- Default values:
+  - `laboratoryName`: `Dental Lab Management`
+  - `countryCode`: `RO`
+  - `timezone`: `Europe/Bucharest`
+  - `locale`: `ro-RO`
+  - `currency`: `RON`
+  - `primaryColor`: `#0f766e`
+  - `documentFooter`: `Multumim pentru colaborare.`
+- Fields:
+  - Identity: `laboratoryName`, `legalName`, `companyRegistrationNumber`, `taxId`
+  - Contact: `email`, `phone`, `website`
+  - Address: `addressLine1`, `addressLine2`, `city`, `countyOrRegion`, `postalCode`, `countryCode`
+  - Localization: `timezone`, `locale`, `currency`
+  - Branding: `logoFileKey`, `primaryColor`, `documentFooter`
+  - Metadata: `createdAt`, `updatedAt`, `updatedByUserId`
+- Endpoints added:
+  - `GET /settings`
+  - `PATCH /settings`
+- Permissions:
+  - `settings.read` for `GET /settings`
+  - `settings.update` for `PATCH /settings`
+- Validation:
+  - Required trimmed laboratory name.
+  - Normalized lowercase email.
+  - Permissive controlled phone pattern.
+  - `http`/`https` website URLs only.
+  - ISO alpha-2 uppercase country code.
+  - Supported locales: `ro-RO`, `en-US`, `fr-FR`.
+  - Supported currencies: `RON`, `EUR`.
+  - Supported timezones: `Europe/Bucharest`, `Europe/Paris`, `UTC`.
+  - Hex-only `primaryColor`.
+- Branding:
+  - Implemented `primaryColor` and `documentFooter`.
+  - Logo upload is deferred until `FILES-001`; `logoFileKey` is nullable and no file content is stored in PostgreSQL.
+- Frontend:
+  - Route: `/settings`
+  - Sections: profile, contact, address, localization, branding.
+  - Read-only users can view but cannot edit or save.
+  - `settings.update` users can edit and save.
+  - Uses React Query cache invalidation after update.
+- Main files modified:
+  - `apps/api/prisma/schema.prisma`
+  - `apps/api/prisma/migrations/20260722213500_laboratory_settings/migration.sql`
+  - `apps/api/prisma/seed.ts`
+  - `apps/api/src/modules/settings/*`
+  - `apps/api/src/modules/app.module.ts`
+  - `apps/web/src/features/settings/*`
+  - `apps/web/src/app/app.tsx`
+  - `packages/shared/src/settings.ts`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `IMPLEMENTATION_STATUS.md`
+- Dependencies added:
+  - None.
+- Automated verification:
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed.
+  - `pnpm --filter @dental-lab/api prisma:validate` passed.
+  - `pnpm --filter @dental-lab/api prisma:generate` passed.
+  - `pnpm --filter @dental-lab/api prisma:migrate:dev` passed and applied `20260722213500_laboratory_settings`.
+  - `pnpm --filter @dental-lab/api prisma:db:seed` passed.
+- Backend tests:
+  - Settings singleton default upsert.
+  - Partial update preserves omitted fields.
+  - Empty update rejected.
+  - Audit metadata written with actor id.
+  - DTO rejects invalid country, currency, locale, timezone, and website.
+  - DTO normalizes country, email, primary color, and website.
+  - Controller returns 401 without auth.
+  - Controller returns 403 without `settings.read`.
+  - Controller allows `settings.read`.
+  - Controller rejects mutation without CSRF.
+  - Controller allows `settings.update` with CSRF.
+- Frontend tests:
+  - `/settings` renders existing values.
+  - Read-only mode disables save without `settings.update`.
+  - Missing `settings.read` renders access error.
+  - Shared helpers validate supported settings and format representative date/currency values.
+- Manual verification:
+  - `GET /health` returned `200`.
+  - Manager login returned `200`.
+  - `GET /settings` returned `200`.
+  - `PATCH /settings` without CSRF returned `403`.
+  - `PATCH /settings` with CSRF returned `200`.
+  - Re-reading settings returned the updated values.
+  - User with `settings.read` override could read settings.
+  - User with only `settings.read` could not update settings.
+  - User without `settings.read` received `403`.
+  - `settings.updated` audit row exists.
+  - `laboratory_settings` row count remained `1`.
+  - `GET /users` still returned `200`.
+  - Frontend `/settings` returned `200`.
+  - Frontend `/users` still returned `200`.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Linting remains unconfigured.
+  - Logo upload is intentionally deferred until private file storage exists.
+  - Health and HTML title still use static application naming; there is no authenticated app shell yet where laboratory settings can be globally displayed without broader routing work.

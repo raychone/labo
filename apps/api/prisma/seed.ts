@@ -155,6 +155,23 @@ async function main(): Promise<void> {
       },
     },
   });
+
+  await prisma.laboratorySettings.upsert({
+    create: {
+      countryCode: "RO",
+      currency: "RON",
+      documentFooter: "Multumim pentru colaborare.",
+      laboratoryName: "Dental Lab Management",
+      locale: "ro-RO",
+      primaryColor: "#0f766e",
+      timezone: "Europe/Bucharest",
+      updatedByUserId: managerUser.id,
+    },
+    update: {},
+    where: {
+      key: "default",
+    },
+  });
 }
 
 main()

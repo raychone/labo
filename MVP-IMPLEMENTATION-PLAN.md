@@ -1015,6 +1015,20 @@ Decizie concreta USERS-001:
 - DoD: setari persistente.
 - Estimare: M.
 
+Decizie concreta SETTINGS-001:
+
+- Setarile globale sunt implementate prin modelul Prisma `LaboratorySettings`.
+- Singleton-ul foloseste cheia unica `key = "default"`; API-ul expune doar `GET /settings` si `PATCH /settings`.
+- Valorile default seeduite idempotent sunt `Europe/Bucharest`, `ro-RO`, `RON`, `RO`, `#0f766e` si `Dental Lab Management`.
+- Endpointul `GET /settings` foloseste `settings.read`; `PATCH /settings` foloseste `settings.update` si `CsrfGuard`.
+- Validarile sunt stricte pentru nume laborator, email, telefon, website `http/https`, tara ISO alpha-2, locale allowlist, currency allowlist, timezone allowlist si culoare hex.
+- Frontend-ul `/settings` este implementat cu formular mobile-first, stare loading/error, mod read-only fara `settings.update`, reset/revert si toast la salvare.
+- Contractele stabile si utilitarele de formatare sunt in `packages/shared/src/settings.ts`; backend-ul pastreaza constante locale pentru a respecta configuratia curenta `rootDir`.
+- Branding-ul implementat include `primaryColor` si `documentFooter`.
+- Upload-ul de logo nu este implementat in SETTINGS-001 deoarece `FILES-001`/private storage nu exista inca; `logoFileKey` ramane nullable.
+- Auditul `settings.updated` salveaza doar campurile modificate si valori nesensibile.
+- Nu s-au implementat multi-tenant, clinici, medici, lucrari, pricing, facturare, serii de facturi, email/SMS sau generic key-value settings.
+
 ### CLINICS-001 - Clinics and doctors
 
 - Scop: cabinete si medici.

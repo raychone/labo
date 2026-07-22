@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { createBrowserRouter, RouterProvider } from "react-router";
 
 import { LoginPage } from "../features/auth/login-page.js";
+import { SettingsPage } from "../features/settings/settings-page.js";
 import { StylePreviewPage } from "../features/style-preview/style-preview-page.js";
 import { UsersPage } from "../features/users/users-page.js";
 
@@ -25,6 +26,10 @@ const router = createBrowserRouter([
   {
     element: <UsersPage />,
     path: "/users",
+  },
+  {
+    element: <SettingsPage />,
+    path: "/settings",
   },
 ]);
 

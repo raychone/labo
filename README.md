@@ -176,6 +176,34 @@ http://localhost:5173/users
 
 The page is mobile-first and uses the shared UI components for controls, table, drawer, modal, badges, and toasts.
 
+## Laboratory Settings
+
+SETTINGS-001 adds a global singleton settings record for the single laboratory instance. The Prisma model is `LaboratorySettings`, stored in `laboratory_settings`, with a unique `key = "default"` so the API cannot create arbitrary settings rows.
+
+Default development values:
+
+- `laboratoryName`: `Dental Lab Management`
+- `countryCode`: `RO`
+- `timezone`: `Europe/Bucharest`
+- `locale`: `ro-RO`
+- `currency`: `RON`
+- `primaryColor`: `#0f766e`
+
+Backend endpoints:
+
+- `GET /settings`: protected with `settings.read`.
+- `PATCH /settings`: protected with `settings.update` and CSRF.
+
+Supported locale/timezone/currency values for MVP:
+
+- Locales: `ro-RO`, `en-US`, `fr-FR`
+- Timezones: `Europe/Bucharest`, `Europe/Paris`, `UTC`
+- Currencies: `RON`, `EUR`
+
+The `/settings` frontend route displays profile, fiscal identity, contact, address, localization, and minimal branding fields. Users with only `settings.read` get read-only access. Logo upload is intentionally deferred until private file storage is implemented; `logoFileKey` remains nullable.
+
+Settings updates write `settings.updated` audit events with changed field names and safe before/after metadata.
+
 ## Design Foundation
 
 Design tokens and base styles live in `packages/ui/src/styles.css` and are imported by the web app through `@dental-lab/ui/styles.css`.

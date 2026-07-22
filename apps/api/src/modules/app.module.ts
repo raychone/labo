@@ -3,9 +3,10 @@ import { Module } from "@nestjs/common";
 import { AuthModule } from "./auth/auth.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { RbacModule } from "./rbac/rbac.module.js";
+import { SettingsModule } from "./settings/settings.module.js";
 import { UsersModule } from "./users/users.module.js";
 
 @Module({
-  imports: [AuthModule, HealthModule, RbacModule, UsersModule],
+  imports: [AuthModule, HealthModule, RbacModule, SettingsModule, UsersModule],
 })
 export class AppModule {}

@@ -23,10 +23,42 @@ model User {
   assignedUserRoles UserRole[] @relation("AssignedUserRoles")
   permissionOverrides UserPermissionOverride[] @relation("UserPermissionOverrides")
   assignedPermissionOverrides UserPermissionOverride[] @relation("AssignedPermissionOverrides")
+  updatedLaboratorySettings LaboratorySettings[] @relation("LaboratorySettingsUpdatedBy")
 
   @@index([isActive])
   @@index([createdAt])
   @@map("users")
+}
+
+model LaboratorySettings {
+  id                        String   @id @default(cuid())
+  key                       String   @unique @default("default")
+  laboratoryName            String   @map("laboratory_name") @db.VarChar(120)
+  legalName                 String?  @map("legal_name") @db.VarChar(160)
+  companyRegistrationNumber String?  @map("company_registration_number") @db.VarChar(80)
+  taxId                     String?  @map("tax_id") @db.VarChar(80)
+  email                     String?  @db.VarChar(254)
+  phone                     String?  @db.VarChar(40)
+  website                   String?  @db.VarChar(2048)
+  addressLine1              String?  @map("address_line_1") @db.VarChar(160)
+  addressLine2              String?  @map("address_line_2") @db.VarChar(160)
+  city                      String?  @db.VarChar(100)
+  countyOrRegion            String?  @map("county_or_region") @db.VarChar(100)
+  postalCode                String?  @map("postal_code") @db.VarChar(20)
+  countryCode               String   @default("RO") @map("country_code") @db.Char(2)
+  timezone                  String   @default("Europe/Bucharest") @db.VarChar(64)
+  locale                    String   @default("ro-RO") @db.VarChar(12)
+  currency                  String   @default("RON") @db.Char(3)
+  logoFileKey               String?  @map("logo_file_key") @db.VarChar(512)
+  primaryColor              String   @default("#0f766e") @map("primary_color") @db.Char(7)
+  documentFooter            String?  @map("document_footer") @db.VarChar(500)
+  updatedByUserId           String?  @map("updated_by_user_id")
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+  updatedBy                 User?    @relation("LaboratorySettingsUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([updatedByUserId])
+  @@map("laboratory_settings")
 }
 
 model Role {
