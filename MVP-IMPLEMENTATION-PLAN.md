@@ -881,6 +881,14 @@ Un task este Done cand:
 - DoD: baza UI documentata.
 - Estimare: M.
 
+Decizie concreta UI-001:
+
+- Token-urile de design sunt definite ca CSS custom properties in `packages/ui/src/styles.css`.
+- Nu se introduce Tailwind, Storybook sau alt framework CSS in UI-001.
+- Preview-ul intern de stiluri este disponibil la `/` si `/style-preview`.
+- Base styles includ document defaults, tipografie, focus-visible, native controls, stari disabled/invalid, layout utilities minimale si reduced motion.
+- Linting nu este configurat in scripturile proiectului; comanda `pnpm lint` nu reprezinta inca o verificare valida a repository-ului.
+
 ### UI-002 - Core UI components
 
 - Scop: componente separate Button, Accordion, Select, RadioGroup, Textarea, Card etc.

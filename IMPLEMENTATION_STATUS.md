@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-8%
+12%
 
 ## FOUNDATION
 
@@ -11,7 +11,7 @@
 
 ## UI
 
-- [ ] UI-001 - Design tokens and base styles
+- [x] UI-001 - Design tokens and base styles
 - [ ] UI-002 - Core UI components
 
 ## AUTH
@@ -105,7 +105,7 @@ NONE / AWAITING APPROVAL
 
 ## Next Task
 
-UI-001
+UI-002
 
 ## Known Technical Debt
 
@@ -127,6 +127,9 @@ None.
 - Validate backend runtime environment with Zod before starting the NestJS app.
 - Load local API environment from `.env` in either the API working directory or the monorepo root.
 - Keep database connectivity health in a dedicated NestJS database module.
+- Use plain CSS custom properties in `packages/ui/src/styles.css` as the design token source of truth.
+- Keep UI-001 limited to base styles, tokens, native element defaults, layout utilities, and an internal style preview.
+- Avoid introducing a CSS framework for UI-001 because the existing CSS mechanism is sufficient.
 
 ## Completed Tasks
 
@@ -184,6 +187,48 @@ None.
 - Remaining risks:
   - The chosen host port `55439` may still conflict on another machine; developers can override `POSTGRES_PORT` and `DATABASE_URL` in their local `.env`.
 
+### UI-001 - Design tokens and base styles
+
+- Status: COMPLETED.
+- Started: 2026-07-22 16:45:12 CEST.
+- Completed: 2026-07-22 16:52:35 CEST.
+- Commit message: `UI-001: add design tokens and base styles`.
+- Summary:
+  - Expanded CSS design tokens for colors, semantic states, operational statuses, typography, spacing, layout, radii, borders, shadows, breakpoints, motion, and z-index.
+  - Added base styles for document, typography, links, native controls, tables, media, focus-visible, disabled, placeholder, invalid, selection, and reduced motion.
+  - Added minimal layout utilities: page, container, section, stack, grid, and visually hidden.
+  - Replaced the foundation home screen with an internal style preview at `/` and `/style-preview`.
+  - Added automated tests for token availability and style preview rendering.
+- Main files modified:
+  - `packages/ui/src/styles.css`
+  - `packages/ui/src/styles.test.ts`
+  - `apps/web/src/app/app.tsx`
+  - `apps/web/src/features/style-preview/*`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `IMPLEMENTATION_STATUS.md`
+- Dependencies added:
+  - None.
+- Automated verification:
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed.
+  - `pnpm lint` is not configured as a project script; the command resolves to an external environment executable and fails with a JDK 17 requirement.
+- Manual verification:
+  - Frontend dev server responded with `200 OK` at `/` and `/style-preview`.
+  - Chrome headless CDP check passed at 360px, 768px, and 1280px widths.
+  - No page console errors were reported by CDP.
+  - No horizontal overflow at tested widths.
+  - Keyboard Tab focus reached the native action button.
+  - Touch target minimum for the primary native button resolved to `44px`.
+  - Browser zoom simulation at 150% did not introduce horizontal overflow.
+  - `prefers-reduced-motion: reduce` was emulated during responsive checks.
+  - Native invalid input used semantic danger styling.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Linting remains unconfigured in project scripts and should be addressed in a future tooling task.
+
 ## Manual Testing Checklist
 
 ### FOUNDATION-001
@@ -204,3 +249,19 @@ None.
 - [x] Confirm `GET /health` returns `database: "ok"`.
 - [x] Start the frontend dev server with `pnpm --filter @dental-lab/web dev`.
 - [x] Confirm the frontend responds with `200 OK`.
+
+### UI-001
+
+- [x] Verify current styling mechanism.
+- [x] Define semantic design tokens.
+- [x] Define base styles.
+- [x] Add internal style preview.
+- [x] Verify 360px viewport.
+- [x] Verify 768px viewport.
+- [x] Verify 1280px viewport.
+- [x] Verify keyboard focus.
+- [x] Verify browser zoom at 150%.
+- [x] Verify reduced motion emulation.
+- [x] Verify no horizontal overflow.
+- [x] Verify text remains legible.
+- [x] Verify native disabled/focus/invalid states.

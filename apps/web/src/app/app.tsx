@@ -2,14 +2,18 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { createBrowserRouter, RouterProvider } from "react-router";
 
-import { HomePage } from "../features/home/home-page.js";
+import { StylePreviewPage } from "../features/style-preview/style-preview-page.js";
 
 const queryClient = new QueryClient();
 
 const router = createBrowserRouter([
   {
-    element: <HomePage />,
+    element: <StylePreviewPage />,
     path: "/",
+  },
+  {
+    element: <StylePreviewPage />,
+    path: "/style-preview",
   },
 ]);
 
