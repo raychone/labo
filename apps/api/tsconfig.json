@@ -1,0 +1,14 @@
+{
+  "extends": "../../packages/config/tsconfig/node.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "outDir": "dist",
+    "paths": {
+      "@dental-lab/shared": ["../../packages/shared/src/index.ts"]
+    },
+    "rootDir": "src"
+  },
+  "include": ["src/**/*.ts"]
+}
