@@ -1,0 +1,99 @@
+.auth-page {
+  background: var(--dl-color-background);
+  min-height: 100vh;
+}
+
+.auth-page__layout {
+  align-items: start;
+  display: grid;
+  gap: var(--dl-space-6);
+  padding-block: var(--dl-space-6);
+}
+
+.auth-page__intro {
+  display: grid;
+  gap: var(--dl-space-3);
+}
+
+.auth-page__intro h1 {
+  font-size: var(--dl-font-size-page-title);
+}
+
+.auth-page__intro p {
+  color: var(--dl-color-text-secondary);
+  max-width: var(--dl-layout-readable-max-width);
+}
+
+.auth-page__eyebrow {
+  color: var(--dl-color-accent);
+  font-size: var(--dl-font-size-label);
+  font-weight: var(--dl-font-weight-bold);
+  text-transform: uppercase;
+}
+
+.auth-page__panel {
+  width: 100%;
+}
+
+.auth-page__form,
+.auth-page__session {
+  display: grid;
+  gap: var(--dl-space-4);
+}
+
+.auth-page__user {
+  display: grid;
+  gap: var(--dl-space-2);
+}
+
+.auth-page__user span:last-child {
+  color: var(--dl-color-text-secondary);
+}
+
+.auth-page__permissions {
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  overflow: hidden;
+}
+
+.auth-page__permissions-header {
+  align-items: center;
+  background: var(--dl-color-surface-secondary);
+  display: flex;
+  justify-content: space-between;
+  padding: var(--dl-space-3);
+}
+
+.auth-page__permissions ul {
+  display: grid;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.auth-page__permissions li {
+  align-items: start;
+  border-top: var(--dl-border-width) solid var(--dl-color-border);
+  display: grid;
+  gap: var(--dl-space-1);
+  padding: var(--dl-space-3);
+}
+
+.auth-page__permissions code {
+  font-size: var(--dl-font-size-caption);
+  overflow-wrap: anywhere;
+}
+
+.auth-page__permissions li span {
+  color: var(--dl-color-text-secondary);
+  font-size: var(--dl-font-size-caption);
+}
+
+@media (min-width: 48rem) {
+  .auth-page__layout {
+    align-items: center;
+    grid-template-columns: minmax(0, 1fr) minmax(22rem, 28rem);
+    min-height: 100vh;
+    padding-block: var(--dl-space-10);
+  }
+}
