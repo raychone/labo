@@ -137,7 +137,44 @@ Current RBAC endpoints:
 - `GET /rbac/roles`: protected with `roles.read`.
 - `GET /rbac/permissions`: protected with `permissions.read`.
 
-RBAC role and override changes should go through `RbacManagementService` so audit events are written. Public role/user management endpoints are intentionally deferred to later tasks.
+RBAC role and override changes should go through `RbacManagementService` so audit events are written. User management endpoints are implemented separately in `UsersModule`.
+
+## User Management
+
+USERS-001 adds internal user administration for authenticated users with the required permissions.
+
+Backend endpoints:
+
+- `GET /users`: list users with pagination, search, status filter, role filter, and safe sorting.
+- `GET /users/:id`: user details with roles, permission overrides, active session count, timestamps, and `mustChangePassword`.
+- `POST /users`: create an internal user with a temporary password and roles.
+- `PATCH /users/:id`: update display name and email.
+- `POST /users/:id/disable`: soft-disable a user and revoke sessions.
+- `POST /users/:id/enable`: reactivate a user without creating a session.
+- `PUT /users/:id/roles`: replace active roles.
+- `POST /users/:id/reset-password`: set a temporary password, mark `mustChangePassword`, and revoke sessions.
+
+State-changing user endpoints require cookie authentication, RBAC permissions, and CSRF validation. The frontend sends the `x-csrf-token` header automatically.
+
+Permissions used:
+
+- `users.create`
+- `users.read`
+- `users.update`
+- `users.disable`
+- `users.assign_roles`
+- `roles.read`
+- `permissions.read`
+
+The backend never returns `passwordHash`, raw session tokens, or temporary passwords. Disabling users preserves historical audit, roles, and overrides. The service protects the last active administrator by checking effective permissions, not role keys.
+
+The user management UI is available at:
+
+```text
+http://localhost:5173/users
+```
+
+The page is mobile-first and uses the shared UI components for controls, table, drawer, modal, badges, and toasts.
 
 ## Design Foundation
 

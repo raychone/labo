@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-24%
+28%
 
 ## FOUNDATION
 
@@ -24,7 +24,7 @@
 
 ## USERS
 
-- [ ] USERS-001 - User management
+- [x] USERS-001 - User management
 
 ## SETTINGS
 
@@ -105,7 +105,7 @@ NONE / AWAITING APPROVAL
 
 ## Next Task
 
-USERS-001
+SETTINGS-001
 
 ## Known Technical Debt
 
@@ -608,4 +608,101 @@ None.
 - Remaining risks:
   - Linting remains unconfigured.
   - Ownership checks for non-`ALL` scopes must be implemented inside future business modules when those resources exist.
-  - Public role/user management is intentionally deferred to `USERS-001`.
+  - Full role and permission editors remain deferred to future tasks.
+
+### USERS-001 - User management
+
+- Status: COMPLETED.
+- Started: 2026-07-22 21:09:31 CEST.
+- Completed: 2026-07-22 21:23:31 CEST.
+- Commit message: `USERS-001: add internal user management`.
+- Pre-flight audit:
+  - Branch: `main`.
+  - Working tree: clean before USERS-001 changes.
+  - USERS-001 definition and dependencies were read from the attached task file and existing project documentation.
+  - AUTH-001, RBAC-001, UI-001, and UI-002 were completed before this task.
+  - Existing RBAC code had no `role ===`, `isAdmin`, JWT/localStorage, or permission cache shortcuts.
+- Summary:
+  - Added internal user management backend module.
+  - Added `mustChangePassword` to `User`.
+  - Added user list, details, create, update, enable, disable, replace roles, and reset password endpoints.
+  - Added session revocation/counting helpers for user management flows.
+  - Added `/users` frontend page with filters, table, role selector, create modal, detail drawer, edit form, role assignment, enable/disable, reset password, loading/error/empty states, and permission-aware actions.
+  - Added tests for service behavior, session invalidation helpers, auth response shape, and the user management UI.
+- Main files modified:
+  - `apps/api/prisma/schema.prisma`
+  - `apps/api/prisma/migrations/20260722211000_user_management_fields/migration.sql`
+  - `apps/api/prisma/seed.ts`
+  - `apps/api/src/modules/users/*`
+  - `apps/api/src/modules/auth/*`
+  - `apps/api/src/modules/app.module.ts`
+  - `apps/web/src/features/users/*`
+  - `apps/web/src/app/app.tsx`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `IMPLEMENTATION_STATUS.md`
+- Endpoints added:
+  - `GET /users`
+  - `GET /users/:id`
+  - `POST /users`
+  - `PATCH /users/:id`
+  - `POST /users/:id/disable`
+  - `POST /users/:id/enable`
+  - `PUT /users/:id/roles`
+  - `POST /users/:id/reset-password`
+- Security and authorization:
+  - All USERS endpoints require cookie authentication.
+  - All USERS endpoints enforce server-side RBAC through `@RequirePermission`.
+  - State-changing USERS endpoints require CSRF validation.
+  - Responses omit `passwordHash`, raw session tokens, and temporary passwords.
+  - The last active administrator protection uses effective permissions, not role keys.
+- Audit events implemented:
+  - `users.created`
+  - `users.updated`
+  - `users.disabled`
+  - `users.enabled`
+  - `users.roles_updated`
+  - `users.password_reset`
+  - `users.sessions_revoked`
+- Dependencies added:
+  - None.
+- Automated verification:
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed.
+  - `pnpm --filter @dental-lab/api prisma:validate` passed.
+  - `pnpm --filter @dental-lab/api prisma:generate` passed.
+  - `pnpm --filter @dental-lab/api prisma:migrate:dev` passed and reported the database in sync.
+  - `pnpm --filter @dental-lab/api prisma:db:seed` passed.
+- Unit and UI tests:
+  - User list response does not expose password hashes.
+  - Duplicate email update throws conflict.
+  - Last active administrator cannot be disabled.
+  - Password reset hashes the password, revokes sessions, audits safely, and does not leak temporary password.
+  - Session service revokes all sessions for a user.
+  - Session service counts active non-expired sessions.
+  - Auth responses include `mustChangePassword`.
+  - `/users` UI renders list/filter/role data.
+  - `/users` UI hides create action without `users.create`.
+- Manual verification:
+  - PostgreSQL was running through Docker Compose.
+  - API started on `http://localhost:3010` because lower local ports were already occupied.
+  - Frontend started on `http://127.0.0.1:5175`.
+  - `GET /auth/csrf` returned `200`.
+  - Manager login returned `200`.
+  - `GET /users` returned `200`.
+  - `GET /rbac/roles` returned `200`.
+  - `POST /users` returned `201` with CSRF and did not leak password material.
+  - `GET /users/:id` returned `200` and did not leak password material.
+  - `PUT /users/:id/roles` returned `200` with CSRF.
+  - `POST /users/:id/reset-password` returned `201` with CSRF and did not leak password material.
+  - `POST /users/:id/disable` returned `201` with CSRF.
+  - `POST /users/:id/enable` returned `201` with CSRF.
+  - `POST /users/:id/disable` without CSRF returned `403`.
+  - Audit table contained `users.created`, `users.disabled`, `users.enabled`, `users.password_reset`, and `users.roles_updated`.
+  - `GET /users` frontend route returned `200`.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Linting remains unconfigured.
+  - Last administrator protection is enforced in service logic using current effective permissions. A future security hardening task can add stronger transaction-level locking if concurrent admin changes become a practical risk.

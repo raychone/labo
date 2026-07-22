@@ -10,6 +10,7 @@ const activeUser: User = {
   email: "manager@example.test",
   id: "user_1",
   isActive: true,
+  mustChangePassword: false,
   passwordChangedAt: new Date("2026-01-01T00:00:00.000Z"),
   passwordHash: "hash",
   updatedAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -85,5 +86,47 @@ describe("SessionService", () => {
     const service = new SessionService(prisma);
 
     await expect(service.resolveToken("raw-token")).resolves.toBeNull();
+  });
+
+  it("revokes all active sessions for a user", async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 2 });
+    const prisma = {
+      session: {
+        updateMany,
+      },
+    } as unknown as PrismaService;
+    const service = new SessionService(prisma);
+
+    await expect(service.revokeAllForUser(activeUser.id)).resolves.toBe(2);
+    expect(updateMany).toHaveBeenCalledWith({
+      data: {
+        revokedAt: expect.any(Date),
+      },
+      where: {
+        revokedAt: null,
+        userId: activeUser.id,
+      },
+    });
+  });
+
+  it("counts only active non-expired sessions for a user", async () => {
+    const count = vi.fn().mockResolvedValue(1);
+    const prisma = {
+      session: {
+        count,
+      },
+    } as unknown as PrismaService;
+    const service = new SessionService(prisma);
+
+    await expect(service.countActiveForUser(activeUser.id)).resolves.toBe(1);
+    expect(count).toHaveBeenCalledWith({
+      where: {
+        expiresAt: {
+          gt: expect.any(Date),
+        },
+        revokedAt: null,
+        userId: activeUser.id,
+      },
+    });
   });
 });

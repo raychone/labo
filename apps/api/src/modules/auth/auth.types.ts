@@ -5,6 +5,7 @@ export interface AuthenticatedUser {
   readonly email: string;
   readonly displayName: string;
   readonly isActive: boolean;
+  readonly mustChangePassword: boolean;
 }
 
 export interface AuthenticatedSession {

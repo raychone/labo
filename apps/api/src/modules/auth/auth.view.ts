@@ -6,6 +6,7 @@ export interface AuthUserResponse {
     readonly displayName: string;
     readonly email: string;
     readonly id: string;
+    readonly mustChangePassword: boolean;
   };
 }
 
@@ -15,6 +16,7 @@ export function toAuthenticatedUser(user: User): AuthenticatedUser {
     email: user.email,
     id: user.id,
     isActive: user.isActive,
+    mustChangePassword: user.mustChangePassword,
   };
 }
 
@@ -24,6 +26,7 @@ export function toAuthUserResponse(user: AuthenticatedUser): AuthUserResponse {
       displayName: user.displayName,
       email: user.email,
       id: user.id,
+      mustChangePassword: user.mustChangePassword,
     },
   };
 }

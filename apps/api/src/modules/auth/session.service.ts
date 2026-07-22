@@ -97,6 +97,32 @@ export class SessionService {
     return resolvedSession;
   }
 
+  public async revokeAllForUser(userId: string): Promise<number> {
+    const result = await this.prisma.session.updateMany({
+      data: {
+        revokedAt: new Date(),
+      },
+      where: {
+        revokedAt: null,
+        userId,
+      },
+    });
+
+    return result.count;
+  }
+
+  public async countActiveForUser(userId: string): Promise<number> {
+    return this.prisma.session.count({
+      where: {
+        expiresAt: {
+          gt: new Date(),
+        },
+        revokedAt: null,
+        userId,
+      },
+    });
+  }
+
   private isSessionUsable(session: SessionWithUser): boolean {
     return session.revokedAt === null && session.expiresAt.getTime() > Date.now() && session.user.isActive;
   }

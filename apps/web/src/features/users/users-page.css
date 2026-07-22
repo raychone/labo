@@ -1,0 +1,122 @@
+.users-page {
+  background: var(--dl-color-background);
+  min-height: 100vh;
+  padding-block: var(--dl-space-5);
+}
+
+.users-page__layout {
+  display: grid;
+  gap: var(--dl-space-4);
+}
+
+.users-page__header,
+.users-page__toolbar,
+.users-page__panel-header,
+.users-page__actions,
+.users-page__drawer-actions {
+  display: flex;
+  gap: var(--dl-space-3);
+}
+
+.users-page__header,
+.users-page__panel-header {
+  align-items: start;
+  justify-content: space-between;
+}
+
+.users-page__header {
+  flex-direction: column;
+}
+
+.users-page__header h1 {
+  font-size: var(--dl-font-size-page-title);
+}
+
+.users-page__header p,
+.users-page__panel-header p,
+.users-page__muted {
+  color: var(--dl-color-text-secondary);
+}
+
+.users-page__toolbar {
+  align-items: end;
+  flex-direction: column;
+}
+
+.users-page__toolbar > * {
+  width: 100%;
+}
+
+.users-page__panel {
+  display: grid;
+  gap: var(--dl-space-4);
+}
+
+.users-page__roles,
+.users-page__form {
+  display: grid;
+  gap: var(--dl-space-3);
+}
+
+.users-page__role-list {
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  display: grid;
+  max-height: 15rem;
+  overflow: auto;
+  padding: var(--dl-space-3);
+}
+
+.users-page__actions,
+.users-page__drawer-actions {
+  flex-wrap: wrap;
+}
+
+.users-page__drawer {
+  display: grid;
+  gap: var(--dl-space-5);
+}
+
+.users-page__details {
+  display: grid;
+  gap: var(--dl-space-2);
+}
+
+.users-page__details div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--dl-space-3);
+}
+
+.users-page__details dt {
+  color: var(--dl-color-text-secondary);
+}
+
+.users-page__details dd {
+  font-weight: var(--dl-font-weight-semibold);
+  margin: 0;
+  text-align: right;
+}
+
+.users-page__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-2);
+}
+
+@media (min-width: 48rem) {
+  .users-page {
+    padding-block: var(--dl-space-8);
+  }
+
+  .users-page__header,
+  .users-page__toolbar {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .users-page__toolbar {
+    display: grid;
+    grid-template-columns: minmax(12rem, 1fr) 12rem 14rem;
+  }
+}

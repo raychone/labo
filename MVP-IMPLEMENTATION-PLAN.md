@@ -985,6 +985,21 @@ Decizie concreta RBAC-001:
 - DoD: user management complet MVP.
 - Estimare: L.
 
+Decizie concreta USERS-001:
+
+- Backend-ul de user management este implementat in `apps/api/src/modules/users`.
+- `User` are campul `mustChangePassword`, folosit pentru parole temporare generate de manager si resetari de parola.
+- Migrarea determinista este `apps/api/prisma/migrations/20260722211000_user_management_fields/migration.sql`.
+- Endpointurile implementate sunt `GET /users`, `GET /users/:id`, `POST /users`, `PATCH /users/:id`, `POST /users/:id/disable`, `POST /users/:id/enable`, `PUT /users/:id/roles` si `POST /users/:id/reset-password`.
+- Endpointurile USERS folosesc `AuthGuard`, `PermissionsGuard`, `@RequirePermission(...)` si `CsrfGuard` pentru mutatii cookie-auth.
+- Rolurile sunt asignate prin `roleKeys`; doar rolurile active sunt acceptate.
+- Resetarea parolei nu trimite email, nu returneaza parola si nu logheaza parola; seteaza `mustChangePassword=true`, actualizeaza `passwordChangedAt` si revoca sesiunile.
+- Dezactivarea este soft-disable, revoca sesiunile si pastreaza auditul, rolurile si override-urile.
+- Protectia ultimului administrator foloseste permisiunile efective `users.create`, `users.update`, `users.disable` si `users.assign_roles` cu scope `ALL`, nu cheia rolului `MANAGER`.
+- UI-ul este implementat la `/users` in `apps/web/src/features/users`, folosind componentele `@dental-lab/ui`.
+- Nu s-au implementat signup public, invite links, email reset, MFA, SSO, custom role CRUD, role editor complet, permission editor complet sau module business.
+- Risc ramas: protectia ultimului administrator este verificata la nivel de service pe baza permisiunilor efective curente; fara lock dedicat pe un agregat administrativ, doua modificari concurente rare pot necesita intarire intr-un task de hardening.
+
 ### SETTINGS-001 - Laboratory settings
 
 - Scop: date laborator si setari fiscale initiale.

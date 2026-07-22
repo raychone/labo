@@ -38,6 +38,7 @@ async function main(): Promise<void> {
     update: {
       displayName,
       isActive: true,
+      mustChangePassword: false,
       passwordHash,
       passwordChangedAt: new Date(),
       version: {
