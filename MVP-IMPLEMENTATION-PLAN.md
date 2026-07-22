@@ -800,6 +800,14 @@ MVP:
 - CI ruleaza lint, typecheck, test, build.
 - Environments: local, staging, production.
 
+Decizie concreta FOUNDATION-002:
+
+- Docker Compose porneste PostgreSQL local pentru development.
+- Portul implicit de host pentru PostgreSQL este `55439`, mapat catre `5432` in container, pentru a reduce conflictele cu instalari locale existente.
+- API-ul incarca `.env` din directorul API sau din radacina monorepo-ului.
+- API-ul valideaza env-ul cu Zod inainte de startup.
+- `GET /health` include statusul conectivitatii PostgreSQL.
+
 ## 42. Definition of Done
 
 Un task este Done cand:

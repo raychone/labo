@@ -8,7 +8,7 @@ export class HealthController {
   public constructor(private readonly healthService: HealthService) {}
 
   @Get()
-  public getHealth(): HealthCheckResponse {
+  public async getHealth(): Promise<HealthCheckResponse> {
     return this.healthService.getHealth();
   }
 }
