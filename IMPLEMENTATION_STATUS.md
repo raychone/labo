@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-16%
+20%
 
 ## FOUNDATION
 
@@ -16,7 +16,7 @@
 
 ## AUTH
 
-- [ ] AUTH-001 - Auth backend
+- [x] AUTH-001 - Auth backend
 
 ## RBAC
 
@@ -105,7 +105,7 @@ NONE / AWAITING APPROVAL
 
 ## Next Task
 
-AUTH-001
+RBAC-001
 
 ## Known Technical Debt
 
@@ -127,6 +127,13 @@ None.
 - Validate backend runtime environment with Zod before starting the NestJS app.
 - Load local API environment from `.env` in either the API working directory or the monorepo root.
 - Keep database connectivity health in a dedicated NestJS database module.
+- Use Prisma Client as the backend database access layer.
+- Configure Prisma 7 through `apps/api/prisma.config.ts`.
+- Store backend sessions server-side and send only httpOnly cookie tokens to the browser.
+- Store only SHA-256 hashes of session tokens in PostgreSQL.
+- Use Argon2id for password hashing and verification.
+- Protect cookie-backed state-changing auth requests with CSRF tokens.
+- Keep AUTH-001 rate limiting in memory until a shared store is introduced.
 - Use plain CSS custom properties in `packages/ui/src/styles.css` as the design token source of truth.
 - Keep UI-001 limited to base styles, tokens, native element defaults, layout utilities, and an internal style preview.
 - Avoid introducing a CSS framework for UI-001 because the existing CSS mechanism is sufficient.
@@ -294,7 +301,101 @@ None.
   - None.
 - Remaining risks:
   - Linting remains unconfigured in project scripts and should be addressed in a future tooling task.
-  - DataTable mobile strategy is horizontal scroll for MVP; stacked mobile rows can be added later if needed.
+
+### AUTH-001 - Auth backend
+
+- Status: COMPLETED.
+- Started: 2026-07-22 18:34:44 CEST.
+- Completed: 2026-07-22 18:49:47 CEST.
+- Commit message: `AUTH-001: add secure backend authentication`.
+- Summary:
+  - Added backend-only authentication module with login, me, logout, and CSRF endpoints.
+  - Added Prisma 7 configuration, schema, deterministic migration, and development seed.
+  - Added minimal `User`, `Session`, and `AuditLog` persistence.
+  - Replaced direct `pg` health connectivity with Prisma-based database health.
+  - Added Argon2id password hashing, server-side sessions, httpOnly auth cookie, CSRF cookie/header validation, in-memory login rate limiting, and audit events.
+- Dependencies verified:
+  - FOUNDATION-001 monorepo baseline exists.
+  - FOUNDATION-002 Docker Compose PostgreSQL setup exists.
+  - UI tasks are completed and unrelated to this backend-only task.
+- Pre-flight audit:
+  - Current branch: `main`.
+  - Working tree: clean before AUTH-001 changes.
+  - AUTH-001 definition and dependencies were read from the attached task file and existing project documentation.
+- Main files modified:
+  - `.env.example`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `apps/api/prisma.config.ts`
+  - `apps/api/prisma/*`
+  - `apps/api/src/config/environment.ts`
+  - `apps/api/src/main.ts`
+  - `apps/api/src/modules/auth/*`
+  - `apps/api/src/modules/database/*`
+  - `apps/api/package.json`
+  - `pnpm-lock.yaml`
+- Prisma models introduced:
+  - `User`
+  - `Session`
+  - `AuditLog`
+- Migration created:
+  - `apps/api/prisma/migrations/20260722183500_auth_backend/migration.sql`
+- Dependencies added:
+  - `@prisma/client`, `prisma`, `@prisma/adapter-pg`: Prisma ORM, migrations, PostgreSQL adapter for Prisma 7.
+  - `@node-rs/argon2`: native Argon2id password hashing without fragile local source builds on the current platform.
+  - `cookie-parser`: cookie parsing for NestJS/Express requests.
+  - `helmet`: security headers.
+  - `class-validator`, `class-transformer`: NestJS DTO validation.
+  - `dotenv-cli`: load monorepo root `.env` for Prisma CLI commands.
+  - `supertest`, `@types/supertest`: API-level auth tests.
+  - `@types/cookie-parser`, `@types/express`: request/cookie typing.
+  - `tsx`: TypeScript runner for Prisma seed with NodeNext imports.
+- Dependencies removed:
+  - `pg`, `@types/pg`: replaced by Prisma Client plus Prisma PostgreSQL adapter.
+- Automated verification:
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed.
+  - `pnpm --filter @dental-lab/api prisma:validate` passed.
+  - `pnpm --filter @dental-lab/api prisma:generate` passed.
+  - `pnpm --filter @dental-lab/api prisma:migrate:dev` passed and reported the database in sync.
+  - `pnpm --filter @dental-lab/api prisma:db:seed` passed.
+- Unit and API tests:
+  - Password hashing and verification.
+  - Explicit Argon2id parameters.
+  - Session creation, token hashing, active session resolution, inactive user rejection.
+  - CSRF token creation and validation.
+  - Login rate limit behavior.
+  - Auth controller API behavior for CSRF, login cookie, `/auth/me`, invalid CSRF logout, and valid logout.
+- Manual verification:
+  - `docker compose up -d postgres` started PostgreSQL.
+  - `docker compose ps` reported PostgreSQL as healthy.
+  - `GET /health` returned `{"applicationName":"Dental Lab Management","database":"ok","status":"ok"}`.
+  - `GET /auth/csrf` set `dl_csrf` and returned a CSRF token.
+  - Valid login returned `200` and set `dl_session` with `HttpOnly` and `SameSite=Lax`.
+  - `GET /auth/me` returned the current seeded user.
+  - Logout with invalid CSRF returned `403`.
+  - Logout with valid CSRF returned `204` and cleared the session cookie.
+  - After logout, `/auth/me` returned `401`.
+  - Repeated invalid login attempts returned `429`.
+  - Existing session for a deactivated user returned `401`.
+  - Login for a deactivated user returned generic `401`.
+- Audit events implemented:
+  - `auth.csrf_issued`
+  - `auth.login_succeeded`
+  - `auth.login_failed`
+  - `auth.logout_succeeded`
+- Architecture decisions:
+  - Prisma is the backend database access layer from AUTH-001 onward.
+  - Session tokens are random browser tokens; only token hashes are stored.
+  - CSRF is implemented with a double-submit cookie for the current cookie-auth endpoints.
+  - Login rate limiting remains in-memory for MVP local development.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Linting remains unconfigured in project scripts.
+  - The in-memory login rate limiter is not suitable for multi-instance deployment.
+  - CSRF protection must be applied to future cookie-backed state-changing endpoints as they are introduced.
 
 ## Manual Testing Checklist
 
@@ -356,3 +457,37 @@ None.
 - [x] Verify zoom at 150%.
 - [x] Verify reduced motion emulation.
 - [x] Verify browser console through CDP.
+
+### AUTH-001
+
+- [x] Confirm branch is `main`.
+- [x] Confirm working tree is clean before implementation.
+- [x] Read AUTH-001 definition and dependencies.
+- [x] Verify FOUNDATION-001 result.
+- [x] Verify FOUNDATION-002 result.
+- [x] Update status to IN PROGRESS with start timestamp.
+- [x] Implement Prisma schema and migration.
+- [x] Implement development seed.
+- [x] Implement auth endpoints.
+- [x] Implement server-side sessions.
+- [x] Implement Argon2id password verification.
+- [x] Implement CSRF protection for logout.
+- [x] Implement in-memory login rate limiting.
+- [x] Implement auth audit events.
+- [x] Run `pnpm typecheck`.
+- [x] Run `pnpm test`.
+- [x] Run `pnpm build`.
+- [x] Run Prisma validate/generate/migrate/seed.
+- [x] Start PostgreSQL with Docker Compose.
+- [x] Start backend API.
+- [x] Verify `GET /health`.
+- [x] Verify `GET /auth/csrf`.
+- [x] Verify valid login sets cookie.
+- [x] Verify `/auth/me`.
+- [x] Verify invalid CSRF blocks logout.
+- [x] Verify valid logout revokes session.
+- [x] Verify `/auth/me` returns 401 after logout.
+- [x] Verify invalid login response is generic.
+- [x] Verify inactive user cannot keep using a session.
+- [x] Verify inactive user cannot log in.
+- [x] Verify rate limit returns 429.

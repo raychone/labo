@@ -10,8 +10,15 @@ describe("parseServerEnvironment", () => {
     });
 
     expect(environment).toStrictEqual({
+      csrfCookieName: "dl_csrf",
+      csrfHeaderName: "x-csrf-token",
       databaseUrl: "postgresql://user:password@localhost:5432/database",
+      loginRateLimitMaxAttempts: 5,
+      loginRateLimitWindowSeconds: 60,
       port: 3001,
+      sessionCookieName: "dl_session",
+      sessionTtlSeconds: 28800,
+      webOrigin: "http://localhost:5173",
     });
   });
 

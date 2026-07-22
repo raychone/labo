@@ -8,7 +8,7 @@
     "paths": {
       "@dental-lab/shared": ["../../packages/shared/src/index.ts"]
     },
-    "rootDir": "src"
+    "rootDir": "."
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "prisma/**/*.ts"]
 }

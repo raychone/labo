@@ -6,7 +6,7 @@ Custom management application for a Romanian dental laboratory.
 
 - Frontend: React, TypeScript, Vite, React Router, TanStack Query, React Hook Form, Zod.
 - Backend: NestJS, TypeScript, REST API.
-- Database target: PostgreSQL with Prisma in later foundation tasks.
+- Database: PostgreSQL with Prisma.
 - Package manager: pnpm workspace.
 
 ## Workspace
@@ -30,6 +30,15 @@ pnpm test
 pnpm build
 pnpm dev:web
 pnpm dev:api
+```
+
+Prisma commands are scoped to the API workspace:
+
+```bash
+pnpm --filter @dental-lab/api prisma:validate
+pnpm --filter @dental-lab/api prisma:generate
+pnpm --filter @dental-lab/api prisma:migrate:dev
+pnpm --filter @dental-lab/api prisma:db:seed
 ```
 
 ## Local Environment
@@ -57,6 +66,38 @@ curl http://localhost:3000/health
 The health response includes `database: "ok"` when the API can connect to PostgreSQL.
 
 The default host PostgreSQL port is `55439` to avoid conflicts with an existing local PostgreSQL installation. Inside Docker, PostgreSQL still listens on `5432`.
+
+Prisma configuration lives in `apps/api/prisma.config.ts`, the schema lives in `apps/api/prisma/schema.prisma`, and migrations are versioned under `apps/api/prisma/migrations`.
+
+## Backend Authentication
+
+AUTH-001 adds backend-only cookie authentication:
+
+- `GET /auth/csrf` sets a readable CSRF cookie and returns the token for clients to send in `x-csrf-token`.
+- `POST /auth/login` validates credentials server-side and sets an httpOnly session cookie.
+- `GET /auth/me` returns the current authenticated user.
+- `POST /auth/logout` requires a valid CSRF token, revokes the server-side session, and clears the session cookie.
+
+The development seed creates a local-only manager account from `.env`:
+
+```text
+AUTH_SEED_EMAIL=manager.dev@example.test
+AUTH_SEED_PASSWORD=ChangeMe-Dev-Only-12345
+```
+
+Do not use these credentials outside local development.
+
+Sessions are stored server-side in PostgreSQL. Only a random session token is sent to the browser; the database stores a SHA-256 token hash. Password hashes use Argon2id with explicit memory, time, parallelism, and output length parameters.
+
+Cookie defaults for development:
+
+- Session cookie: `dl_session`, httpOnly, SameSite=Lax, 8 hour TTL.
+- CSRF cookie: `dl_csrf`, readable by the browser, SameSite=Lax, 8 hour TTL.
+- Cookies become `secure` automatically when `NODE_ENV=production`.
+
+Login rate limiting is currently in-memory and keyed by IP address plus normalized email. This is acceptable for local MVP development but must move to shared storage before multi-instance deployment.
+
+The automated API tests use service fakes for database-facing auth tests. Real database verification for AUTH-001 is covered by running Docker PostgreSQL, Prisma migrate/seed, and manual API requests against the running backend.
 
 ## Design Foundation
 

@@ -929,6 +929,19 @@ Decizie concreta UI-002:
 - DoD: auth securizat MVP.
 - Estimare: L.
 
+Decizie concreta AUTH-001:
+
+- Autentificarea backend este implementata in `apps/api/src/modules/auth`.
+- Persistenta minima foloseste Prisma + PostgreSQL cu modelele `User`, `Session` si `AuditLog`.
+- Prisma este configurat prin `apps/api/prisma.config.ts`; schema este in `apps/api/prisma/schema.prisma`; migrarile sunt in `apps/api/prisma/migrations`.
+- `GET /auth/csrf`, `POST /auth/login`, `GET /auth/me` si `POST /auth/logout` sunt endpoint-urile AUTH-001.
+- Sesiunile sunt server-side; cookie-ul contine doar tokenul random, iar baza de date pastreaza hash SHA-256 pentru token.
+- Parolele sunt verificate cu Argon2id prin `@node-rs/argon2`, cu parametri expliciti.
+- CSRF foloseste double-submit cookie pentru request-urile state-changing existente care se bazeaza pe cookie, inclusiv logout.
+- Rate limiter-ul pentru login este in-memory si documentat ca limita MVP.
+- Seed-ul development creeaza doar managerul local din variabilele `AUTH_SEED_*`.
+- Nu s-au implementat RBAC, roluri, public signup, resetare parola, frontend login final sau entitati business.
+
 ### RBAC-001 - Permission model
 
 - Scop: roluri, permisiuni, scope, override-uri.
