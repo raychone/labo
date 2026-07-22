@@ -37,5 +37,7 @@ describe("design foundation stylesheet", () => {
     expect(stylesheet).toContain(".dl-visually-hidden");
     expect(stylesheet).toContain(":focus-visible");
     expect(stylesheet).toContain('input[aria-invalid="true"]');
+    expect(stylesheet).toContain("select {");
+    expect(stylesheet).toContain("appearance: none;");
   });
 });

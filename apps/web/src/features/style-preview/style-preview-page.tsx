@@ -216,12 +216,18 @@ export function StylePreviewPage(): ReactNode {
               </label>
               <textarea id="preview-textarea" placeholder="Operational note" />
               <label className="style-preview__label" htmlFor="preview-select">
-                Native select
+                Styled native select
               </label>
               <select id="preview-select">
                 <option>Planned</option>
                 <option>In production</option>
                 <option>Ready for delivery</option>
+              </select>
+              <label className="style-preview__label" htmlFor="preview-disabled-select">
+                Disabled styled select
+              </label>
+              <select disabled id="preview-disabled-select">
+                <option>Unavailable</option>
               </select>
             </form>
           </section>
