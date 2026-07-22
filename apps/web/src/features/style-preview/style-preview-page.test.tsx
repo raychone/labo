@@ -4,11 +4,12 @@ import { describe, expect, it } from "vitest";
 import { StylePreviewPage } from "./style-preview-page.js";
 
 describe("StylePreviewPage", () => {
-  it("renders the internal design foundation preview", () => {
+  it("renders the internal core UI components preview", () => {
     render(<StylePreviewPage />);
 
-    expect(screen.getByRole("heading", { name: /Design Foundation/i })).toBeDefined();
+    expect(screen.getByRole("heading", { name: /Core UI Components/i })).toBeDefined();
     expect(screen.getByRole("heading", { name: "Semantic Colors" })).toBeDefined();
-    expect(screen.getByRole("heading", { name: "Native Control States" })).toBeDefined();
+    expect(screen.getByRole("heading", { name: "Buttons" })).toBeDefined();
+    expect(screen.getByRole("heading", { name: "File Upload and Data Table" })).toBeDefined();
   });
 });

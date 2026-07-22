@@ -1,5 +1,42 @@
 import { formatApplicationTitle } from "@dental-lab/shared";
+import {
+  Accordion,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  Checkbox,
+  DataTable,
+  DateInput,
+  Drawer,
+  EmptyState,
+  ErrorState,
+  FileUpload,
+  FilterBar,
+  IconButton,
+  LoadingState,
+  Modal,
+  NumberInput,
+  PriorityBadge,
+  RadioGroup,
+  SearchInput,
+  Select,
+  StatusBadge,
+  Stepper,
+  Switch,
+  Tabs,
+  Textarea,
+  TextInput,
+  Timeline,
+  ToastProvider,
+  Tooltip,
+  useToast,
+} from "@dental-lab/ui";
 import type { CSSProperties, ReactNode } from "react";
+import { useState } from "react";
 
 import "./style-preview-page.css";
 
@@ -14,17 +51,19 @@ interface SpaceTokenPreview {
   readonly sizeToken: string;
 }
 
+interface DemoRow {
+  readonly id: string;
+  readonly owner: string;
+  readonly status: string;
+}
+
 type CustomPropertyStyle<PropertyName extends string> = CSSProperties &
   Record<PropertyName, string>;
 
 const colorTokens: readonly ColorTokenPreview[] = [
   { name: "Background", backgroundToken: "--dl-color-background" },
   { name: "Surface", backgroundToken: "--dl-color-surface" },
-  {
-    name: "Accent",
-    backgroundToken: "--dl-color-accent",
-    foregroundToken: "#ffffff",
-  },
+  { name: "Accent", backgroundToken: "--dl-color-accent", foregroundToken: "#ffffff" },
   {
     name: "Success",
     backgroundToken: "--dl-color-success-background",
@@ -52,45 +91,17 @@ const colorTokens: readonly ColorTokenPreview[] = [
   },
 ];
 
-const statusTokens: readonly ColorTokenPreview[] = [
-  {
-    name: "Registered",
-    backgroundToken: "--dl-status-registered-background",
-    foregroundToken: "--dl-status-registered-foreground",
-  },
-  {
-    name: "Production",
-    backgroundToken: "--dl-status-production-background",
-    foregroundToken: "--dl-status-production-foreground",
-  },
-  {
-    name: "Quality",
-    backgroundToken: "--dl-status-quality-background",
-    foregroundToken: "--dl-status-quality-foreground",
-  },
-  {
-    name: "Rejected",
-    backgroundToken: "--dl-status-rejected-background",
-    foregroundToken: "--dl-status-rejected-foreground",
-  },
-  {
-    name: "Delivery",
-    backgroundToken: "--dl-status-delivery-background",
-    foregroundToken: "--dl-status-delivery-foreground",
-  },
-  {
-    name: "Closed",
-    backgroundToken: "--dl-status-closed-background",
-    foregroundToken: "--dl-status-closed-foreground",
-  },
-];
-
 const spaceTokens: readonly SpaceTokenPreview[] = [
   { name: "2", sizeToken: "--dl-space-2" },
   { name: "4", sizeToken: "--dl-space-4" },
   { name: "6", sizeToken: "--dl-space-6" },
   { name: "8", sizeToken: "--dl-space-8" },
   { name: "12", sizeToken: "--dl-space-12" },
+];
+
+const demoRows: readonly DemoRow[] = [
+  { id: "1", owner: "Demo owner", status: "Planned" },
+  { id: "2", owner: "Second owner", status: "Ready" },
 ];
 
 function createTokenStyle(tokenName: string): string {
@@ -131,116 +142,256 @@ function renderColorSwatch(token: ColorTokenPreview): ReactNode {
 function renderSpaceSample(token: SpaceTokenPreview): ReactNode {
   return (
     <div className="dl-stack" key={token.name}>
-      <div
-        className="style-preview__space"
-        style={createSpaceSizeStyle(token.sizeToken)}
-      />
+      <div className="style-preview__space" style={createSpaceSizeStyle(token.sizeToken)} />
       <span className="style-preview__swatch-value">{token.sizeToken}</span>
+    </div>
+  );
+}
+
+function ToastDemo(): ReactNode {
+  const toast = useToast();
+
+  return (
+    <Button
+      onClick={() =>
+        toast.showToast({
+          durationMs: 3000,
+          message: "This is a generic UI notification.",
+          title: "Saved",
+          variant: "success",
+        })
+      }
+      variant="secondary"
+    >
+      Show toast
+    </Button>
+  );
+}
+
+function OverlayDemo(): ReactNode {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  return (
+    <div className="style-preview__sample-row">
+      <Button onClick={() => setIsModalOpen(true)}>Open modal</Button>
+      <Button onClick={() => setIsDrawerOpen(true)} variant="outline">
+        Open drawer
+      </Button>
+      <Modal
+        footer={<Button onClick={() => setIsModalOpen(false)}>Confirm</Button>}
+        isOpen={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        title="Accessible modal"
+      >
+        <p>Modal content is generic and returns focus when closed.</p>
+        <TextInput label="Focusable field" />
+      </Modal>
+      <Drawer
+        description="Drawer uses the same overlay behavior."
+        isOpen={isDrawerOpen}
+        onOpenChange={setIsDrawerOpen}
+        position="right"
+        title="Accessible drawer"
+      >
+        <p>Drawer content scrolls internally and supports Escape.</p>
+        <Button onClick={() => setIsDrawerOpen(false)} variant="secondary">
+          Close drawer
+        </Button>
+      </Drawer>
     </div>
   );
 }
 
 export function StylePreviewPage(): ReactNode {
   return (
-    <main className="dl-page style-preview">
-      <div className="dl-container">
-        <header className="style-preview__header">
-          <p className="style-preview__eyebrow">UI-001</p>
-          <h1 className="style-preview__title">{formatApplicationTitle("Design Foundation")}</h1>
-          <p className="style-preview__summary">
-            Internal preview for design tokens, base styles, responsive layout, native
-            controls, and accessibility states.
-          </p>
-        </header>
-
-        <div className="dl-stack" style={createStackGapStyle("--dl-space-8")}>
-          <section className="style-preview__panel dl-stack" aria-labelledby="colors-title">
-            <h2 id="colors-title">Semantic Colors</h2>
-            <div className="dl-grid">{colorTokens.map(renderColorSwatch)}</div>
-          </section>
-
-          <section className="style-preview__panel dl-stack" aria-labelledby="statuses-title">
-            <h2 id="statuses-title">Operational Status Colors</h2>
-            <div className="dl-grid">{statusTokens.map(renderColorSwatch)}</div>
-          </section>
-
-          <section className="style-preview__panel dl-stack" aria-labelledby="type-title">
-            <h2 id="type-title">Typography</h2>
-            <div className="style-preview__type-scale">
-              <p className="style-preview__type-display">Display text</p>
-              <p className="style-preview__type-page">Page title</p>
-              <p className="style-preview__type-section">Section title</p>
-              <p>Body text designed for long operational work sessions.</p>
-              <small>Small text and captions remain legible on mobile.</small>
-            </div>
-          </section>
-
-          <section className="style-preview__panel dl-stack" aria-labelledby="spacing-title">
-            <h2 id="spacing-title">Spacing</h2>
-            <div className="style-preview__sample-row">{spaceTokens.map(renderSpaceSample)}</div>
-          </section>
-
-          <section className="style-preview__panel dl-stack" aria-labelledby="controls-title">
-            <h2 id="controls-title">Native Control States</h2>
-            <div className="style-preview__sample-row">
-              <button className="style-preview__native-button" type="button">
-                Focusable action
-              </button>
-              <button
-                className="style-preview__native-button style-preview__native-button--secondary"
-                disabled
-                type="button"
-              >
-                Disabled action
-              </button>
-            </div>
-            <form className="style-preview__form">
-              <label className="style-preview__label" htmlFor="preview-input">
-                Native input
-              </label>
-              <input id="preview-input" placeholder="Search by lucrare, medic, cabinet" />
-              <label className="style-preview__label" htmlFor="preview-invalid-input">
-                Native invalid input
-              </label>
-              <input
-                aria-describedby="preview-invalid-input-error"
-                aria-invalid="true"
-                id="preview-invalid-input"
-                placeholder="Required field"
-              />
-              <small id="preview-invalid-input-error">
-                Error state uses semantic danger tokens and remains text-backed.
-              </small>
-              <label className="style-preview__label" htmlFor="preview-textarea">
-                Native textarea
-              </label>
-              <textarea id="preview-textarea" placeholder="Operational note" />
-              <label className="style-preview__label" htmlFor="preview-select">
-                Styled native select
-              </label>
-              <select id="preview-select">
-                <option>Planned</option>
-                <option>In production</option>
-                <option>Ready for delivery</option>
-              </select>
-              <label className="style-preview__label" htmlFor="preview-disabled-select">
-                Disabled styled select
-              </label>
-              <select disabled id="preview-disabled-select">
-                <option>Unavailable</option>
-              </select>
-            </form>
-          </section>
-
-          <section className="style-preview__surface-elevated dl-stack" aria-labelledby="surface-title">
-            <h2 id="surface-title">Elevation</h2>
-            <p>
-              Elevated surfaces use restrained shadows and borders so operational screens
-              remain calm and readable.
+    <ToastProvider>
+      <main className="dl-page style-preview">
+        <div className="dl-container">
+          <header className="style-preview__header">
+            <p className="style-preview__eyebrow">UI-002</p>
+            <h1 className="style-preview__title">
+              {formatApplicationTitle("Core UI Components")}
+            </h1>
+            <p className="style-preview__summary">
+              Internal preview for design tokens, reusable generic components, responsive
+              layout, native control states, overlays, feedback, and table states.
             </p>
-          </section>
+          </header>
+
+          <div className="dl-stack" style={createStackGapStyle("--dl-space-8")}>
+            <section className="style-preview__panel dl-stack" aria-labelledby="colors-title">
+              <h2 id="colors-title">Semantic Colors</h2>
+              <div className="dl-grid">{colorTokens.map(renderColorSwatch)}</div>
+            </section>
+
+            <section className="style-preview__panel dl-stack" aria-labelledby="spacing-title">
+              <h2 id="spacing-title">Spacing</h2>
+              <div className="style-preview__sample-row">{spaceTokens.map(renderSpaceSample)}</div>
+            </section>
+
+            <section className="style-preview__panel dl-stack" aria-labelledby="buttons-title">
+              <h2 id="buttons-title">Buttons</h2>
+              <div className="style-preview__sample-row">
+                <Button>Primary</Button>
+                <Button variant="secondary">Secondary</Button>
+                <Button variant="outline">Outline</Button>
+                <Button variant="ghost">Ghost</Button>
+                <Button variant="danger">Danger</Button>
+                <Button isLoading>Loading</Button>
+                <IconButton aria-label="More actions" icon="..." variant="secondary" />
+              </div>
+            </section>
+
+            <section className="style-preview__panel dl-stack" aria-labelledby="forms-title">
+              <h2 id="forms-title">Form Controls</h2>
+              <div className="style-preview__form-grid">
+                <TextInput hint="Associated hint text." label="Text input" placeholder="Enter text" />
+                <TextInput error="Text input error" label="Invalid input" />
+                <NumberInput label="Number input" />
+                <DateInput label="Date input" />
+                <Select
+                  label="Styled select"
+                  options={[
+                    { label: "Planned", value: "planned" },
+                    { label: "Production", value: "production" },
+                  ]}
+                  placeholder="Choose status"
+                />
+                <Textarea label="Textarea" placeholder="Write a generic note" />
+              </div>
+              <div className="style-preview__sample-row">
+                <Checkbox label="Checkbox option" />
+                <Switch label="Switch option" />
+              </div>
+              <RadioGroup
+                label="Radio group"
+                options={[
+                  { label: "Normal", value: "normal" },
+                  { label: "Urgent", value: "urgent" },
+                ]}
+              />
+            </section>
+
+            <section className="style-preview__panel dl-stack" aria-labelledby="badges-title">
+              <h2 id="badges-title">Badges</h2>
+              <div className="style-preview__sample-row">
+                <StatusBadge label="Draft" variant="draft" />
+                <StatusBadge label="Registered" variant="registered" />
+                <StatusBadge label="Production" variant="production" />
+                <StatusBadge label="Rejected" variant="rejected" />
+                <StatusBadge label="Closed" variant="closed" />
+                <PriorityBadge label="Low" variant="low" />
+                <PriorityBadge label="Urgent" variant="urgent" />
+              </div>
+            </section>
+
+            <section className="style-preview__panel dl-stack" aria-labelledby="cards-title">
+              <h2 id="cards-title">Cards</h2>
+              <div className="dl-grid">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Standard card</CardTitle>
+                    <CardDescription>Generic composition surface.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p>Cards do not impose business layout.</p>
+                  </CardContent>
+                  <CardFooter>
+                    <Button size="small" variant="secondary">
+                      Action
+                    </Button>
+                  </CardFooter>
+                </Card>
+                <Card variant="compact">
+                  <CardTitle>Compact card</CardTitle>
+                  <CardContent>Compact density for operational screens.</CardContent>
+                </Card>
+              </div>
+            </section>
+
+            <section className="style-preview__panel dl-stack" aria-labelledby="overlay-title">
+              <h2 id="overlay-title">Overlays and Feedback</h2>
+              <OverlayDemo />
+              <div className="style-preview__sample-row">
+                <ToastDemo />
+                <Tooltip content="Tooltip appears on hover and focus.">
+                  <Button variant="ghost">Tooltip trigger</Button>
+                </Tooltip>
+              </div>
+              <div className="dl-grid">
+                <LoadingState text="Loading state" />
+                <EmptyState description="No generic records." title="Empty state" />
+                <ErrorState description="Retry action can be supplied." title="Error state" />
+              </div>
+            </section>
+
+            <section className="style-preview__panel dl-stack" aria-labelledby="navigation-title">
+              <h2 id="navigation-title">Composition and Navigation</h2>
+              <Accordion
+                items={[
+                  { content: <p>Accordion content.</p>, id: "one", title: "Accordion item" },
+                ]}
+              />
+              <Tabs
+                tabs={[
+                  { content: <p>First panel.</p>, id: "first", label: "First" },
+                  { content: <p>Second panel.</p>, id: "second", label: "Second" },
+                ]}
+              />
+              <FilterBar
+                actions={<Button variant="secondary">Action</Button>}
+                filters={<Select label="Filter select" options={[{ label: "All", value: "all" }]} />}
+                onClearFilters={() => undefined}
+                search={<SearchInput label="Search" placeholder="Search generic data" />}
+              />
+            </section>
+
+            <section className="style-preview__panel dl-stack" aria-labelledby="progress-title">
+              <h2 id="progress-title">Timeline and Stepper</h2>
+              <Timeline
+                items={[
+                  { description: "Generic timeline item.", timestamp: "09:00", title: "Created" },
+                  { description: "Another generic event.", timestamp: "10:00", title: "Updated" },
+                ]}
+              />
+              <Stepper
+                items={[
+                  { label: "Received", state: "completed" },
+                  { label: "Production", state: "current" },
+                  { label: "Review", state: "upcoming" },
+                  { label: "Exception", state: "error" },
+                ]}
+              />
+            </section>
+
+            <section className="style-preview__panel dl-stack" aria-labelledby="data-title">
+              <h2 id="data-title">File Upload and Data Table</h2>
+              <FileUpload description="No API request is performed." label="File upload" multiple />
+              <DataTable
+                columns={[
+                  { header: "ID", id: "id", renderCell: (row: DemoRow) => row.id },
+                  { header: "Owner", id: "owner", renderCell: (row: DemoRow) => row.owner },
+                  {
+                    header: "Status",
+                    id: "status",
+                    isSortable: true,
+                    renderCell: (row: DemoRow) => row.status,
+                  },
+                ]}
+                getRowKey={(row) => row.id}
+                pagination={{ onPageChange: () => undefined, page: 1, pageCount: 3 }}
+                rows={demoRows}
+              />
+              <div className="dl-grid">
+                <DataTable columns={[]} getRowKey={() => "empty"} isLoading rows={[]} />
+                <DataTable columns={[]} getRowKey={() => "empty"} rows={[]} />
+                <DataTable columns={[]} error="Generic load error." getRowKey={() => "error"} rows={[]} />
+              </div>
+            </section>
+          </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </ToastProvider>
   );
 }

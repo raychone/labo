@@ -112,6 +112,12 @@
   gap: var(--dl-space-3);
 }
 
+.style-preview__form-grid {
+  display: grid;
+  gap: var(--dl-space-4);
+  grid-template-columns: 1fr;
+}
+
 .style-preview__label {
   color: var(--dl-color-text-secondary);
   font-size: var(--dl-font-size-label);
@@ -133,5 +139,9 @@
 
   .style-preview__panel {
     padding: var(--dl-space-6);
+  }
+
+  .style-preview__form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

@@ -13,7 +13,7 @@ describe("Button", () => {
   it("disables the button while loading", () => {
     render(<Button isLoading>Save</Button>);
 
-    expect(screen.getByRole("button", { name: "Loading" }).hasAttribute("disabled")).toBe(
+    expect(screen.getByRole("button", { name: "Save" }).hasAttribute("disabled")).toBe(
       true,
     );
   });

@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-12%
+16%
 
 ## FOUNDATION
 
@@ -12,7 +12,7 @@
 ## UI
 
 - [x] UI-001 - Design tokens and base styles
-- [ ] UI-002 - Core UI components
+- [x] UI-002 - Core UI components
 
 ## AUTH
 
@@ -105,7 +105,7 @@ NONE / AWAITING APPROVAL
 
 ## Next Task
 
-UI-002
+AUTH-001
 
 ## Known Technical Debt
 
@@ -130,6 +130,10 @@ None.
 - Use plain CSS custom properties in `packages/ui/src/styles.css` as the design token source of truth.
 - Keep UI-001 limited to base styles, tokens, native element defaults, layout utilities, and an internal style preview.
 - Avoid introducing a CSS framework for UI-001 because the existing CSS mechanism is sufficient.
+- Keep UI-002 components framework-free and token-driven inside `packages/ui`.
+- Use native controls for select, checkbox, radio, switch, file input, and table semantics where possible.
+- Use internal portal/focus management for Modal and Drawer instead of adding an overlay dependency.
+- Keep QRScanner and SignaturePad out of UI-002 because they depend on device/browser functional flows.
 
 ## Completed Tasks
 
@@ -229,6 +233,69 @@ None.
 - Remaining risks:
   - Linting remains unconfigured in project scripts and should be addressed in a future tooling task.
 
+### UI-002 - Core UI components
+
+- Status: COMPLETED.
+- Started: 2026-07-22 17:17:42 CEST.
+- Completed: 2026-07-22 17:34:26 CEST.
+- Commit message: `UI-002: add core UI components`.
+- Summary:
+  - Added reusable UI components for primitives, form controls, selection controls, cards, badges, overlays, toast, tooltip, feedback states, disclosure/navigation, composition, file upload, and data table.
+  - Exported stable public component APIs from `@dental-lab/ui`.
+  - Extended `/style-preview` to demonstrate all UI-002 components.
+  - Added component tests for render, native props, className, ref forwarding, labels, invalid/error states, keyboard interactions, overlays, toast timers, file selection, table states, sorting, and pagination.
+- Main files modified:
+  - `packages/ui/src/components/*`
+  - `packages/ui/src/utils/*`
+  - `packages/ui/src/index.ts`
+  - `packages/ui/src/styles.css`
+  - `packages/ui/src/components/components.test.tsx`
+  - `apps/web/src/features/style-preview/*`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `IMPLEMENTATION_STATUS.md`
+- Public exports:
+  - Button, IconButton
+  - TextInput, Textarea, NumberInput, DateInput, Select
+  - Checkbox, RadioGroup, Switch
+  - Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter
+  - StatusBadge, PriorityBadge
+  - Modal, Drawer
+  - ToastProvider, useToast
+  - Tooltip
+  - LoadingState, EmptyState, ErrorState
+  - Accordion, Tabs
+  - SearchInput, FilterBar
+  - Timeline, Stepper
+  - FileUpload
+  - DataTable
+- Explicitly not implemented:
+  - QRScanner.
+  - SignaturePad.
+  - Reason: both require browser/device capability integration and belong in their functional tasks.
+- Dependencies added:
+  - None.
+- Automated verification:
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed.
+  - Project lint script is still not configured; `package.json` has no `lint` script.
+- Manual verification:
+  - Frontend dev server responded with `200 OK` at `/` and `/style-preview`.
+  - Chrome headless CDP check passed at 360px, 768px, and 1280px widths.
+  - Browser console reported no page runtime errors through CDP.
+  - No uncontrolled horizontal overflow at tested widths.
+  - Focus-visible styling was present on a focused button.
+  - Minimum primary button touch target resolved to `44px`.
+  - Browser zoom simulation at 150% did not introduce horizontal overflow.
+  - `prefers-reduced-motion: reduce` was emulated during responsive checks.
+  - Modal/Drawer Escape and focus return behavior are covered by automated component tests.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Linting remains unconfigured in project scripts and should be addressed in a future tooling task.
+  - DataTable mobile strategy is horizontal scroll for MVP; stacked mobile rows can be added later if needed.
+
 ## Manual Testing Checklist
 
 ### FOUNDATION-001
@@ -265,3 +332,27 @@ None.
 - [x] Verify no horizontal overflow.
 - [x] Verify text remains legible.
 - [x] Verify native disabled/focus/invalid states.
+
+### UI-002
+
+- [x] Audit existing `packages/ui` files and exports.
+- [x] Verify React test infrastructure.
+- [x] Implement Group A primitives.
+- [x] Implement Group B feedback and overlay components.
+- [x] Implement Group C composition and navigation components.
+- [x] Implement Group D FileUpload and DataTable MVP versions.
+- [x] Export public components from `@dental-lab/ui`.
+- [x] Extend `/style-preview`.
+- [x] Run `pnpm typecheck`.
+- [x] Run `pnpm test`.
+- [x] Run `pnpm build`.
+- [x] Confirm no project `lint` script exists.
+- [x] Verify `/` responds HTTP 200.
+- [x] Verify `/style-preview` responds HTTP 200.
+- [x] Verify 360px viewport.
+- [x] Verify 768px viewport.
+- [x] Verify 1280px viewport.
+- [x] Verify keyboard/focus behavior.
+- [x] Verify zoom at 150%.
+- [x] Verify reduced motion emulation.
+- [x] Verify browser console through CDP.

@@ -904,6 +904,16 @@ Decizie concreta UI-001:
 - DoD: componente de baza reutilizabile.
 - Estimare: L.
 
+Decizie concreta UI-002:
+
+- Componentele UI generice sunt implementate in `packages/ui/src/components`.
+- Exporturile publice sunt centralizate in `packages/ui/src/index.ts`.
+- `/style-preview` demonstreaza componentele UI-002 fara date reale sau request-uri API.
+- `DataTable` foloseste tabel semantic cu horizontal scroll controlat pe mobil pentru MVP.
+- `FileUpload` gestioneaza selectia locala de fisiere, fara upload/API/storage.
+- `QRScanner` si `SignaturePad` nu sunt incluse in UI-002 deoarece depind de task-uri functionale cu browser/device capabilities.
+- Nu s-au adaugat dependinte noi sau framework UI.
+
 ### AUTH-001 - Auth backend
 
 - Scop: login/logout securizat.

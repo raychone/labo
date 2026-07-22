@@ -70,6 +70,30 @@ http://localhost:5173/style-preview
 
 The preview demonstrates semantic colors, operational status colors, typography, spacing, native control states, focus behavior, and elevation tokens. It is not the reusable component library; that is reserved for `UI-002`.
 
+## UI Components
+
+Reusable UI components are exported from `@dental-lab/ui`:
+
+```ts
+import {
+  Button,
+  TextInput,
+  Modal,
+  DataTable,
+} from "@dental-lab/ui";
+```
+
+Component styles use the design tokens in `packages/ui/src/styles.css`. Components are generic, accessible where implemented, and contain no business logic.
+
+The internal preview at `http://localhost:5173/style-preview` now demonstrates the core UI components.
+
+Current UI-002 limits:
+
+- `QRScanner` is not implemented yet because it belongs to QR/browser-device integration work.
+- `SignaturePad` is not implemented yet because it belongs to delivery/signature capture work.
+- `DataTable` uses controlled sorting/pagination and horizontal scroll on small screens; it does not implement querying, virtualization, resizing, editing, or export.
+- `FileUpload` only handles local selection/removal; it does not upload files.
+
 ## Current Task
 
 See `IMPLEMENTATION_STATUS.md` for task progress and manual testing checklists.
