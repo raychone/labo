@@ -59,4 +59,20 @@ export type {
   WorkTypeUnit,
   WorkTypesListParams,
 } from "./work-types.js";
+export { WORK_PRIORITIES, WORK_SORT_FIELDS, WORK_STATUSES } from "./works.js";
+export type {
+  CreateWorkInput,
+  PaginatedWorksResponse,
+  UpdateWorkInput,
+  WorkClinicSummary,
+  WorkDetail,
+  WorkDoctorSummary,
+  WorkPriority,
+  WorkSortField,
+  WorkStatus,
+  WorkSummary,
+  WorkTypeFormOption,
+  WorkTypeSnapshot,
+  WorksListParams,
+} from "./works.js";
 export { formatApplicationTitle } from "./workspace-title.js";

@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-40%
+43%
 
 ## FOUNDATION
 
@@ -40,7 +40,7 @@
 
 ## WORKS
 
-- [ ] WORKS-001 - Work order creation
+- [x] WORKS-001 - Work order creation
 
 ## QR
 
@@ -109,7 +109,7 @@ Started: N/A
 
 ## Next Task
 
-WORKS-001 - Work order creation
+QR-001 - QR generation and scan
 
 ## Known Technical Debt
 
@@ -149,6 +149,12 @@ None.
 - Use native controls for select, checkbox, radio, switch, file input, and table semantics where possible.
 - Use internal portal/focus management for Modal and Drawer instead of adding an overlay dependency.
 - Keep QRScanner and SignaturePad out of UI-002 because they depend on device/browser functional flows.
+- Store work orders in `work_orders` with a generated stable `WO-YYYY-NNNNNN` code backed by `work_order_code_seq`.
+- WORKS-001 creates work orders directly as `REGISTERED`; draft and workflow status transitions remain deferred.
+- Keep patient identity minimal in WORKS-001 with `patientName` and optional `patientReference`; no patient model is introduced.
+- Snapshot work order pricing from `WorkType.basePriceMinor` and `LaboratorySettings.currency` at create time.
+- Hide work order price fields from readers without `pricing.read`; reception can still select active work types through a price-free `/works/work-type-options` endpoint.
+- Treat `works.read_assigned` as deny-safe until an assignment relationship exists; WORKS-001 list/detail require `works.read_all`.
 
 ## Completed Tasks
 
@@ -1100,3 +1106,104 @@ None.
 - Remaining risks:
   - Linting remains unconfigured.
   - Vite production build now warns that one JS chunk is slightly over 500 kB; build still passes. Code splitting can be handled in a future frontend performance task.
+
+### WORKS-001 - Work order creation
+
+- Status: COMPLETED.
+- Started: 2026-07-22 23:04:42 CEST.
+- Completed: 2026-07-22 23:26:46 CEST.
+- Commit message: `WORKS-001: add work order creation`.
+- Pre-flight audit:
+  - Branch: `main`.
+  - Working tree: clean before WORKS-001 changes.
+  - Last completed commit: `34eb24b WORKTYPES-001: add work types and base pricing`.
+  - WORKS-001 definition and dependencies were read from the attached task file and existing documentation.
+  - Dependencies `CLINICS-001`, `WORKTYPES-001`, and `UI-002` were present.
+  - RBAC already had `works.create`, `works.read_all`, `works.read_assigned`, `works.update`, `works.assign`, `works.change_status`, and `works.archive`.
+  - Existing schema had no premature `WorkOrder`, work, case, QR, barcode, or patient model.
+- Summary:
+  - Added `WorkOrder` Prisma model, `WorkStatus`, `WorkPriority`, deterministic migration, foreign keys, justified lookup/sort indexes, and optimistic `version`.
+  - Added `WorksModule` with list, detail, active work type options for reception, create, and update endpoints.
+  - Added server-side validation for active clinic, active doctor belonging to selected clinic, active work type, delivery date, quantity, and immutable price snapshot fields.
+  - Added generated work order codes through PostgreSQL sequence `work_order_code_seq`, formatted `WO-YYYY-NNNNNN`.
+  - Added audit events for work order create and update without patient names or clinical notes in metadata.
+  - Added shared work order contracts.
+  - Added `/works` frontend route with mobile-first register, filters, create modal, detail/edit drawer, styled selectors, badges, toasts, and price masking.
+  - Updated settings query hook to support permission-gated fetching.
+- Models:
+  - `WorkOrder`: `id`, `code`, `clinicId`, `doctorId`, `workTypeId`, patient fields, `quantity`, pricing snapshot, `priority`, `status`, delivery date, notes, actor IDs, timestamps, `version`.
+  - `WorkStatus`: `REGISTERED`.
+  - `WorkPriority`: `NORMAL`, `URGENT`.
+- Endpoints added:
+  - `GET /works`
+  - `GET /works/work-type-options`
+  - `GET /works/:id`
+  - `POST /works`
+  - `PATCH /works/:id`
+- Permissions:
+  - `works.read_all`: list/detail.
+  - `works.create`: create and price-free form work type options.
+  - `works.update`: update intake fields.
+  - `pricing.read`: optional price visibility in list/detail.
+- Non-goals:
+  - No workflow execution.
+  - No QR/barcode generation or scan.
+  - No files or private storage.
+  - No assignments.
+  - No patient model.
+  - No archive endpoint for work orders.
+- Main files modified:
+  - `apps/api/prisma/schema.prisma`
+  - `apps/api/prisma/migrations/20260722230500_work_order_creation/migration.sql`
+  - `apps/api/src/modules/works/*`
+  - `apps/api/src/modules/app.module.ts`
+  - `apps/web/src/features/works/*`
+  - `apps/web/src/app/app.tsx`
+  - `apps/web/src/features/settings/settings-api.ts`
+  - `packages/shared/src/works.ts`
+  - `packages/shared/src/index.ts`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `IMPLEMENTATION_STATUS.md`
+- Dependencies added:
+  - None.
+- Automated verification:
+  - `pnpm --filter @dental-lab/api prisma:generate` passed.
+  - `pnpm --filter @dental-lab/api prisma:migrate:dev --name work_order_creation` passed and applied `20260722230500_work_order_creation`.
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed with the existing Vite chunk-size warning only.
+- Backend tests:
+  - Work order create snapshots price, generates code, sets `REGISTERED`, and writes audit.
+  - Doctor from another clinic is rejected.
+  - Archived work type is rejected on create.
+  - Pricing is masked for readers without `pricing.read`.
+  - Quantity update keeps the original base unit price snapshot.
+  - DTO rejects missing/invalid intake fields.
+  - Controller 401 without auth.
+  - Controller 403 without `works.read_all`.
+  - Controller checks optional `pricing.read` for list responses.
+  - Controller rejects create without CSRF.
+  - Controller allows `works.create` with CSRF.
+- Frontend tests:
+  - `/works` renders the reception register without pricing access.
+  - Reception flow uses `/works/work-type-options` instead of `/work-types/options`.
+  - Create form resets doctor selection when clinic changes.
+  - Missing `works.read_all` renders access error.
+- Manual verification:
+  - API started on `http://localhost:3010` because lower local ports were occupied.
+  - Runtime route map included `WorksController` routes.
+  - Frontend started on `http://127.0.0.1:5180` with `VITE_API_BASE_URL=http://localhost:3010`.
+  - `GET /works` required auth and responded after manager login.
+  - `GET /works/work-type-options` returned active work type selector data without prices.
+  - `POST /works` with CSRF created `WO-2026-000001`.
+  - Created work status was `REGISTERED`.
+  - `GET /works?search=SMK-001` returned the created `REGISTERED` work.
+  - Frontend `/works` returned `200 text/html`.
+  - UI form behavior was verified through RTL at form level; Playwright is not installed in the project.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Linting remains unconfigured.
+  - Vite production build still warns that one JS chunk is slightly over 500 kB; build passes.
+  - A `pg` deprecation warning appeared during API shutdown after smoke testing; no request failed.

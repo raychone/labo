@@ -301,6 +301,46 @@ http://localhost:5173/work-types
 
 Categories, clinic-specific pricing, discounts, VAT, invoices, quotations, price books, and price history tables are intentionally not implemented in WORKTYPES-001.
 
+## Work Order Creation
+
+WORKS-001 adds the first work order intake flow for reception.
+
+Backend endpoints:
+
+- `GET /works`: list work orders with pagination, search, filters, and safe sorting.
+- `GET /works/work-type-options`: active work type options without pricing for reception forms.
+- `GET /works/:id`: work order detail.
+- `POST /works`: create a work order directly in `REGISTERED`.
+- `PATCH /works/:id`: update intake fields without workflow transitions.
+
+Permissions used:
+
+- `works.read_all`
+- `works.create`
+- `works.update`
+- `pricing.read` only controls whether pricing fields are visible in work order responses.
+
+Reception can create work orders without receiving price data from `/work-types/options`. The dedicated `/works/work-type-options` endpoint returns only `id`, `code`, `name`, and `unit`.
+
+Work order codes are generated server-side from `work_order_code_seq` and formatted as `WO-YYYY-NNNNNN`. Codes are immutable after creation.
+
+The minimum persisted intake fields for `REGISTERED` are clinic, doctor, work type, patient name, promised delivery date, quantity, and priority. The backend validates that the clinic is active, the doctor is active and belongs to the selected clinic, and the selected work type is active.
+
+Pricing is snapshotted on the work order from `WorkType.basePriceMinor` and `LaboratorySettings.currency`. Later catalog price changes do not rewrite existing work order snapshots. Readers without `pricing.read` receive `null` for price fields.
+
+Audit events:
+
+- `work_orders.created`
+- `work_orders.updated`
+
+The frontend route is:
+
+```text
+http://localhost:5173/works
+```
+
+Workflow execution, QR/barcode, files, assignments, archive behavior, and a dedicated patient model are intentionally deferred to later tasks.
+
 ## Design Foundation
 
 Design tokens and base styles live in `packages/ui/src/styles.css` and are imported by the web app through `@dental-lab/ui/styles.css`.

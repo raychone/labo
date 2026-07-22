@@ -1075,6 +1075,9 @@ Decizie concreta SETTINGS-001:
 - Nu modifica: workflow execution.
 - DoD: lucrare persistenta si auditata.
 - Estimare: L.
+- Implementare: `WorksModule` expune registrul sub `/works`; lucrarea este creata direct cu status `REGISTERED`, cod `WO-YYYY-NNNNNN`, snapshot de pret si audit.
+- Non-goals implementate explicit: fara workflow execution, fara QR/barcode, fara fisiere, fara asignari, fara arhivare lucrare si fara model dedicat de pacient in WORKS-001.
+- Securitate pricing: receptia foloseste `/works/work-type-options`, care nu returneaza preturi; campurile de pret din `/works` sunt vizibile doar cu `pricing.read`.
 
 ### QR-001 - QR generation and scan
 

@@ -51,8 +51,9 @@ export async function updateSettings(input: UpdateLaboratorySettingsInput): Prom
   return parseJsonResponse<LaboratorySettings>(response);
 }
 
-export function useSettings() {
+export function useSettings(enabled = true) {
   return useQuery({
+    enabled,
     queryFn: fetchSettings,
     queryKey: settingsQueryKey,
     retry: false,
