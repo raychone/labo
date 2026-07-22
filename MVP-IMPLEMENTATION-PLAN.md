@@ -957,6 +957,19 @@ Decizie concreta AUTH-001:
 - DoD: autorizare centralizata.
 - Estimare: L.
 
+Decizie concreta RBAC-001:
+
+- Modelele `Role`, `Permission`, `UserRole`, `RolePermission` si `UserPermissionOverride` sunt adaugate in Prisma.
+- Scope-urile implementate sunt `ALL`, `ASSIGNED`, `OWN_CLINIC`, `OWN_DELIVERY` si `OWN_STAGE`.
+- Registry-ul tipat al permisiunilor MVP este in `apps/api/src/modules/rbac/permission-registry.ts`.
+- Seed-ul creeaza cele 62 permisiuni MVP, cele sase roluri sistem si maparea `A` din matrice.
+- Valorile `O` din matrice nu sunt acordate implicit si raman posibile prin override `ALLOW`.
+- `DENY` override are prioritate peste roluri si peste override `ALLOW`.
+- Autorizarea este centralizata in `AuthorizationService`; endpoint-urile folosesc `@RequirePermission` si `PermissionsGuard`.
+- Permisiunile nu sunt copiate in sesiune sau cookie; evaluarea citeste DB-ul si schimbarile au efect fara relogare.
+- Endpointurile tehnice adaugate sunt `GET /auth/permissions`, `GET /rbac/roles` si `GET /rbac/permissions`.
+- Nu s-au implementat CRUD useri, editor roluri, editor permisiuni, UI RBAC sau module business.
+
 ### USERS-001 - User management
 
 - Scop: manager creeaza/editeaza/dezactiveaza useri.

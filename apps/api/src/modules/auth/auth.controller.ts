@@ -16,6 +16,7 @@ import { CsrfService } from "./csrf.service.js";
 import { LoginDto } from "./dto/login.dto.js";
 import { getRequestMetadata } from "./request-metadata.js";
 import { SessionService } from "./session.service.js";
+import { AuthorizationService, type EffectivePermissionSnapshot } from "../rbac/authorization.service.js";
 
 interface CsrfResponse {
   readonly csrfToken: string;
@@ -32,6 +33,8 @@ export class AuthController {
     private readonly csrfService: CsrfService,
     @Inject(SessionService)
     private readonly sessionService: SessionService,
+    @Inject(AuthorizationService)
+    private readonly authorizationService: AuthorizationService,
   ) {}
 
   @Get("csrf")
@@ -74,6 +77,14 @@ export class AuthController {
     @CurrentUser() user: AuthenticatedUser,
   ): AuthUserResponse {
     return toAuthUserResponse(user);
+  }
+
+  @Get("permissions")
+  @UseGuards(AuthGuard)
+  public async getCurrentPermissions(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<EffectivePermissionSnapshot> {
+    return this.authorizationService.getEffectivePermissions(user.id);
   }
 
   @Post("logout")

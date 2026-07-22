@@ -18,8 +18,107 @@ model User {
   version           Int        @default(1)
   sessions          Session[]
   auditLogs         AuditLog[] @relation("AuditActor")
+  roles             UserRole[] @relation("UserRoles")
+  assignedUserRoles UserRole[] @relation("AssignedUserRoles")
+  permissionOverrides UserPermissionOverride[] @relation("UserPermissionOverrides")
+  assignedPermissionOverrides UserPermissionOverride[] @relation("AssignedPermissionOverrides")
 
   @@map("users")
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  name        String
+  description String
+  isSystem    Boolean          @default(false) @map("is_system")
+  isActive    Boolean          @default(true) @map("is_active")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@index([key])
+  @@map("roles")
+}
+
+model Permission {
+  id              String                   @id @default(cuid())
+  key             String                   @unique
+  description     String
+  resource        String
+  action          String
+  createdAt       DateTime                 @default(now()) @map("created_at")
+  updatedAt       DateTime                 @updatedAt @map("updated_at")
+  roles           RolePermission[]
+  userOverrides   UserPermissionOverride[]
+
+  @@index([key])
+  @@map("permissions")
+}
+
+model UserRole {
+  userId           String   @map("user_id")
+  roleId           String   @map("role_id")
+  assignedAt       DateTime @default(now()) @map("assigned_at")
+  assignedByUserId String?  @map("assigned_by_user_id")
+  role             Role     @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  user             User     @relation("UserRoles", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy       User?    @relation("AssignedUserRoles", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+
+  @@id([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@index([assignedByUserId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String          @map("role_id")
+  permissionId String          @map("permission_id")
+  scope        PermissionScope
+  createdAt    DateTime        @default(now()) @map("created_at")
+  role         Role            @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission      @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId, scope])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model UserPermissionOverride {
+  id               String           @id @default(cuid())
+  userId           String           @map("user_id")
+  permissionId     String           @map("permission_id")
+  effect           PermissionEffect
+  scope            PermissionScope
+  reason           String?
+  assignedByUserId String?          @map("assigned_by_user_id")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  user             User             @relation("UserPermissionOverrides", fields: [userId], references: [id], onDelete: Cascade)
+  permission       Permission       @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  assignedBy       User?            @relation("AssignedPermissionOverrides", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, permissionId, effect, scope])
+  @@index([userId])
+  @@index([permissionId])
+  @@index([assignedByUserId])
+  @@map("user_permission_overrides")
+}
+
+enum PermissionScope {
+  ALL
+  ASSIGNED
+  OWN_CLINIC
+  OWN_DELIVERY
+  OWN_STAGE
+}
+
+enum PermissionEffect {
+  ALLOW
+  DENY
 }
 
 model Session {

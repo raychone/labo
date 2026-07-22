@@ -99,6 +99,46 @@ Login rate limiting is currently in-memory and keyed by IP address plus normaliz
 
 The automated API tests use service fakes for database-facing auth tests. Real database verification for AUTH-001 is covered by running Docker PostgreSQL, Prisma migrate/seed, and manual API requests against the running backend.
 
+## RBAC
+
+RBAC-001 adds centralized backend authorization. The Prisma models are:
+
+- `Role`
+- `Permission`
+- `UserRole`
+- `RolePermission`
+- `UserPermissionOverride`
+
+The typed permission registry lives in `apps/api/src/modules/rbac/permission-registry.ts` and contains the full MVP permission matrix. Seed data creates six system roles: `MANAGER`, `LOGISTICA`, `RECEPTIE`, `TEHNICIAN`, `CURIER`, and `MEDIC`.
+
+Matrix meaning:
+
+- `A`: granted by seeded `RolePermission`.
+- `O`: not granted by default; can be granted later with `UserPermissionOverride(ALLOW)`.
+- `-`: not granted.
+
+Implemented scopes are `ALL`, `ASSIGNED`, `OWN_CLINIC`, `OWN_DELIVERY`, and `OWN_STAGE`. `ALL` satisfies any required scope. Other ownership scopes are distinct and do not imply each other; future business modules must still verify concrete resource ownership.
+
+Evaluation order:
+
+1. User must exist and be active.
+2. Permission must exist in effective grants.
+3. Explicit `DENY` override removes matching access and has priority.
+4. Explicit `ALLOW` override can add access.
+5. Active role permissions are aggregated.
+6. Required scope is checked.
+7. Default is deny.
+
+Use `@RequirePermission("permission.key", "SCOPE")` together with `AuthGuard` and `PermissionsGuard` on protected backend routes. Permissions are never stored in cookies or sessions; changes are read from the database and take effect without relogin.
+
+Current RBAC endpoints:
+
+- `GET /auth/permissions`: authenticated user permission snapshot.
+- `GET /rbac/roles`: protected with `roles.read`.
+- `GET /rbac/permissions`: protected with `permissions.read`.
+
+RBAC role and override changes should go through `RbacManagementService` so audit events are written. Public role/user management endpoints are intentionally deferred to later tasks.
+
 ## Design Foundation
 
 Design tokens and base styles live in `packages/ui/src/styles.css` and are imported by the web app through `@dental-lab/ui/styles.css`.

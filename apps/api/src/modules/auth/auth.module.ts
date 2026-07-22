@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 
 import { DatabaseModule } from "../database/database.module.js";
+import { RbacModule } from "../rbac/rbac.module.js";
 import { AuditService } from "./audit.service.js";
 import { AuthController } from "./auth.controller.js";
 import { AuthGuard } from "./auth.guard.js";
@@ -14,7 +15,7 @@ import { SessionService } from "./session.service.js";
 @Module({
   controllers: [AuthController],
   exports: [AuthGuard],
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, RbacModule],
   providers: [
     AuditService,
     AuthGuard,

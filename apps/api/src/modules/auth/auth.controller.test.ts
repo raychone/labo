@@ -14,6 +14,7 @@ import type { AuthenticatedUser } from "./auth.types.js";
 import { CsrfGuard } from "./csrf.guard.js";
 import { CsrfService } from "./csrf.service.js";
 import { SessionService } from "./session.service.js";
+import { AuthorizationService, type EffectivePermissionSnapshot } from "../rbac/authorization.service.js";
 
 const testUser: AuthenticatedUser = {
   displayName: "Development Manager",
@@ -48,6 +49,19 @@ describe("AuthController", () => {
         AuthGuard,
         CsrfGuard,
         CsrfService,
+        {
+          provide: AuthorizationService,
+          useValue: {
+            getEffectivePermissions: vi.fn().mockResolvedValue({
+              permissions: [
+                {
+                  key: "users.create",
+                  scopes: ["ALL"],
+                },
+              ],
+            } satisfies EffectivePermissionSnapshot),
+          },
+        },
         {
           provide: AuditService,
           useValue: {
@@ -151,6 +165,21 @@ describe("AuthController", () => {
           email: testUser.email,
           id: testUser.id,
         },
+      });
+  });
+
+  it("returns a sanitized effective permissions snapshot", async () => {
+    await request(app.getHttpServer() as App)
+      .get("/auth/permissions")
+      .set("Cookie", ["dl_session=session-token"])
+      .expect(200)
+      .expect({
+        permissions: [
+          {
+            key: "users.create",
+            scopes: ["ALL"],
+          },
+        ],
       });
   });
 

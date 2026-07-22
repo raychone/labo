@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-20%
+24%
 
 ## FOUNDATION
 
@@ -20,7 +20,7 @@
 
 ## RBAC
 
-- [ ] RBAC-001 - Permission model
+- [x] RBAC-001 - Permission model
 
 ## USERS
 
@@ -105,7 +105,7 @@ NONE / AWAITING APPROVAL
 
 ## Next Task
 
-RBAC-001
+USERS-001
 
 ## Known Technical Debt
 
@@ -134,6 +134,10 @@ None.
 - Use Argon2id for password hashing and verification.
 - Protect cookie-backed state-changing auth requests with CSRF tokens.
 - Keep AUTH-001 rate limiting in memory until a shared store is introduced.
+- Use a central RBAC authorization service for permission checks.
+- Keep permissions out of cookies and sessions.
+- Evaluate RBAC from the database so access changes take effect without relogin.
+- Treat `ALL` as the only broad scope; ownership scopes remain distinct.
 - Use plain CSS custom properties in `packages/ui/src/styles.css` as the design token source of truth.
 - Keep UI-001 limited to base styles, tokens, native element defaults, layout utilities, and an internal style preview.
 - Avoid introducing a CSS framework for UI-001 because the existing CSS mechanism is sufficient.
@@ -491,3 +495,117 @@ None.
 - [x] Verify inactive user cannot keep using a session.
 - [x] Verify inactive user cannot log in.
 - [x] Verify rate limit returns 429.
+
+### RBAC-001 - Permission model
+
+- Status: COMPLETED.
+- Started: 2026-07-22 20:37:30 CEST.
+- Completed: 2026-07-22 20:52:30 CEST.
+- Commit message: `RBAC-001: add granular permission model`.
+- Pre-flight audit:
+  - Branch: `main`.
+  - Working tree: clean before implementation.
+  - The attached incremental compilation error was stale; `pnpm --filter @dental-lab/api typecheck` passed before RBAC changes.
+  - `User` had only identity/auth fields before RBAC.
+  - `AuthGuard` attaches a minimal authenticated identity to `request.auth`.
+  - `CurrentUser` returns identity only, not a Prisma object.
+  - Existing sessions check `user.isActive` on every protected request.
+  - Seed created only the development manager before RBAC.
+  - No `role ===`, `isAdmin`, JWT/localStorage, or existing RBAC shortcuts were found.
+  - No permission cache existed; RBAC keeps DB evaluation per request.
+  - Lint remains unconfigured.
+- Summary:
+  - Added RBAC Prisma models, enums, indexes, foreign keys, and migrations.
+  - Added typed MVP permission registry and seeded role-permission matrix.
+  - Added `AuthorizationService`, `PermissionsGuard`, `@RequirePermission`, and internal `RbacManagementService`.
+  - Added authenticated permission snapshot endpoint and read-only RBAC endpoints.
+  - Updated seed to create all permissions, roles, role grants, and assign `MANAGER` to the development user.
+- Prisma models added:
+  - `Role`
+  - `Permission`
+  - `UserRole`
+  - `RolePermission`
+  - `UserPermissionOverride`
+- Migrations created:
+  - `apps/api/prisma/migrations/20260722204000_rbac_permission_model/migration.sql`
+  - `apps/api/prisma/migrations/20260722204800_align_rbac_override_index/migration.sql`
+- Roles seeded:
+  - `MANAGER`
+  - `LOGISTICA`
+  - `RECEPTIE`
+  - `TEHNICIAN`
+  - `CURIER`
+  - `MEDIC`
+- Permissions seeded:
+  - 62 MVP permissions from the permission matrix.
+- Scope model:
+  - `ALL`
+  - `ASSIGNED`
+  - `OWN_CLINIC`
+  - `OWN_DELIVERY`
+  - `OWN_STAGE`
+- Evaluation order:
+  - User must exist and be active.
+  - Active role grants are aggregated.
+  - `ALLOW` overrides add scopes.
+  - `DENY` overrides remove scopes and have priority.
+  - `ALL` satisfies any required scope.
+  - Distinct ownership scopes do not satisfy each other.
+  - Missing permissions are denied by default.
+- Endpoints added:
+  - `GET /auth/permissions`
+  - `GET /rbac/roles`
+  - `GET /rbac/permissions`
+- Audit events supported by internal RBAC infrastructure:
+  - `rbac.role_assigned`
+  - `rbac.role_removed`
+  - `rbac.permission_override_created`
+  - `rbac.permission_override_updated`
+  - `rbac.permission_override_removed`
+- Automated verification:
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed.
+  - `pnpm --filter @dental-lab/api prisma:validate` passed.
+  - `pnpm --filter @dental-lab/api prisma:generate` passed.
+  - `pnpm --filter @dental-lab/api prisma:migrate:dev` passed.
+  - `pnpm --filter @dental-lab/api prisma:db:seed` passed.
+- Unit and API tests:
+  - Permission registry uniqueness and completeness.
+  - Representative matrix grants and override-only exclusions.
+  - Scope comparison rules.
+  - AuthorizationService allow/deny behavior.
+  - `DENY` override priority.
+  - `ALLOW` override grants.
+  - Inactive user and inactive role denial.
+  - PermissionsGuard 401/403 delegation behavior.
+  - Decorator metadata.
+  - Auth permissions endpoint.
+  - RBAC read endpoint guard integration.
+  - RBAC management audit hooks.
+- Manual verification:
+  - `docker compose up -d postgres` confirmed PostgreSQL running.
+  - API started on `http://localhost:3001` because port `3000` was already occupied by an older local node process.
+  - `GET /health` returned `{"applicationName":"Dental Lab Management","database":"ok","status":"ok"}`.
+  - Manager login returned `200`; cookies did not contain role or permission data.
+  - `GET /auth/me` returned `200`.
+  - Manager `GET /auth/permissions` returned 62 permissions and `users.create` with `ALL`.
+  - Manager `GET /rbac/roles` returned `200` and 6 roles.
+  - Manager `GET /rbac/permissions` returned `200` and 62 permissions.
+  - User without role received `403` for `/rbac/roles`.
+  - User without role had 0 effective permissions.
+  - Assigning `TEHNICIAN` directly in DB gave `workflow.complete_stage` with `OWN_STAGE` without relogin.
+  - Removing that role removed permissions without relogin.
+  - `ALLOW roles.read ALL` override allowed `/rbac/roles` without relogin.
+  - `DENY roles.read ALL` override blocked `/rbac/roles` without relogin.
+  - Deactivating `MANAGER` role blocked manager access without relogin.
+  - Deactivating the user blocked `/auth/permissions` with `401`.
+  - Logout returned `204`; `/auth/me` returned `401` after logout.
+- Dependencies added:
+  - None.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Linting remains unconfigured.
+  - Ownership checks for non-`ALL` scopes must be implemented inside future business modules when those resources exist.
+  - Public role/user management is intentionally deferred to `USERS-001`.

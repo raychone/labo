@@ -1,0 +1,2 @@
+ALTER INDEX IF EXISTS "user_permission_overrides_user_id_permission_id_effect_scope_ke"
+RENAME TO "user_permission_overrides_user_id_permission_id_effect_scop_key";
