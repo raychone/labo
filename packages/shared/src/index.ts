@@ -40,4 +40,23 @@ export type {
   UpdateClinicInput,
   UpdateDoctorInput,
 } from "./clinics.js";
+export {
+  WORK_TYPE_SORT_FIELDS,
+  WORK_TYPE_UNITS,
+  decimalStringToMinor,
+  formatMoneyMinor,
+  minorToDecimalString,
+} from "./work-types.js";
+export type {
+  CreateWorkTypeInput,
+  DecimalStringToMinorResult,
+  PaginatedWorkTypesResponse,
+  UpdateWorkTypeInput,
+  WorkTypeDetail,
+  WorkTypeOption,
+  WorkTypeSortField,
+  WorkTypeSummary,
+  WorkTypeUnit,
+  WorkTypesListParams,
+} from "./work-types.js";
 export { formatApplicationTitle } from "./workspace-title.js";

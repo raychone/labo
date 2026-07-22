@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-36%
+40%
 
 ## FOUNDATION
 
@@ -36,7 +36,7 @@
 
 ## WORK TYPES
 
-- [ ] WORKTYPES-001 - Work types and pricing base
+- [x] WORKTYPES-001 - Work types and pricing base
 
 ## WORKS
 
@@ -109,7 +109,7 @@ Started: N/A
 
 ## Next Task
 
-WORKTYPES-001 - Work types and pricing base
+WORKS-001 - Work order creation
 
 ## Known Technical Debt
 
@@ -949,3 +949,154 @@ None.
 - Remaining risks:
   - Linting remains unconfigured.
   - `@dental-lab/api` start script still points at `dist/main.js`, while the current Nest build emits `dist/src/main.js`; this was pre-existing and manual verification used the generated entrypoint directly.
+
+### WORKTYPES-001 - Work types and pricing base
+
+- Status: COMPLETED.
+- Started: 2026-07-22 22:40:21 CEST.
+- Completed: 2026-07-22 22:55:00 CEST.
+- Commit message: `WORKTYPES-001: add work types and base pricing`.
+- Pre-flight audit:
+  - Branch: `main`.
+  - Working tree: clean before WORKTYPES-001 changes.
+  - Last commit: `c382bbc CLINICS-001: add clinics and doctors management`.
+  - WORKTYPES-001 definition and dependencies were read from the attached task file and existing documentation.
+  - Existing schema had no premature work type, price catalog, work order, clinic pricing, or category models.
+  - RBAC already had `pricing.read`, `pricing.create`, and `pricing.update`.
+  - Matrix grants pricing permissions only to `MANAGER`.
+  - Plan does not explicitly require categories, duration, materials, default stages, clinic-specific prices, or price history.
+  - Existing linting remains unconfigured as a project script.
+  - `clinics-page.tsx`, `clinics.service.ts`, and `doctors.service.ts` were not modified.
+  - API `start` script pointed at `dist/main.js`, while build output is `dist/src/main.js`.
+- Start script fix:
+  - Updated `@dental-lab/api` `start` script to `node dist/src/main.js`.
+  - Verified `pnpm --filter @dental-lab/api build` followed by `PORT=3010 pnpm --filter @dental-lab/api start` launches Nest successfully.
+- Summary:
+  - Added `WorkType` Prisma model and deterministic migrations.
+  - Added generated stable work type codes using `work_type_code_seq`.
+  - Added `WorkTypesModule` with list, options, detail, create, update, archive, and restore endpoints.
+  - Stored base pricing as `basePriceMinor` integer minor units.
+  - Kept currency global through `LaboratorySettings.currency`; no currency is stored per work type.
+  - Added minimal `WorkTypeUnit` enum with `UNIT`.
+  - Added audit events for create, update, price update, archive, and restore.
+  - Added shared work type contracts and money helpers.
+  - Added `/work-types` frontend route with catalog, filters, sorting, pagination, active-only selector, create/edit drawer, archive/restore, read-only mode, and toast feedback.
+  - Added a migration to align prior `updated_at` defaults with Prisma `@updatedAt`.
+- Models:
+  - `WorkType`: `id`, `code`, `name`, `description`, `basePriceMinor`, `unit`, `isActive`, `archivedAt`, actor IDs, timestamps, `version`.
+  - `WorkTypeUnit`: `UNIT`.
+- Categories:
+  - Not implemented. The plan does not explicitly require categories for WORKTYPES-001.
+- Price catalog strategy:
+  - Implemented as the current base price on `WorkType`.
+  - No separate `PriceHistory`, price book, valid-from period, clinic-specific price, discount, VAT, quote, or invoice model was added.
+- Code strategy:
+  - Server-generated sequential code, formatted `WT-0001`.
+  - No `count + 1`.
+  - Code is immutable after creation.
+- Money strategy:
+  - `basePriceMinor` integer only.
+  - API accepts `basePriceMinor`, not float.
+  - Shared helpers convert decimal strings deterministically.
+- Endpoints added:
+  - `GET /work-types`
+  - `GET /work-types/options`
+  - `GET /work-types/:id`
+  - `POST /work-types`
+  - `PATCH /work-types/:id`
+  - `POST /work-types/:id/archive`
+  - `POST /work-types/:id/restore`
+- Permissions:
+  - `pricing.read`: list/detail/options.
+  - `pricing.create`: create.
+  - `pricing.update`: update/archive/restore.
+- Search/filter/sort/page:
+  - Search: `code`, `name`, `description`.
+  - Filter: `isActive`.
+  - Sort allowlist: `code`, `name`, `basePriceMinor`, `createdAt`, `updatedAt`.
+  - Pagination: `page`, `pageSize`.
+- Archive/restore:
+  - Soft archive only.
+  - Archived work types are excluded from `/work-types/options`.
+  - Archived work types are read-only until restored.
+- Audit:
+  - `work_types.created`
+  - `work_types.updated`
+  - `work_types.price_updated`
+  - `work_types.archived`
+  - `work_types.restored`
+- Main files modified:
+  - `apps/api/package.json`
+  - `apps/api/prisma/schema.prisma`
+  - `apps/api/prisma/migrations/20260722224500_work_types_base_pricing/migration.sql`
+  - `apps/api/prisma/migrations/20260722224600_align_updated_at_defaults/migration.sql`
+  - `apps/api/src/modules/work-types/*`
+  - `apps/api/src/modules/app.module.ts`
+  - `apps/api/src/modules/rbac/permission-registry.test.ts`
+  - `apps/web/src/features/work-types/*`
+  - `apps/web/src/app/app.tsx`
+  - `packages/shared/src/work-types.ts`
+  - `packages/shared/src/work-types.test.ts`
+  - `packages/shared/src/index.ts`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `IMPLEMENTATION_STATUS.md`
+- Dependencies added:
+  - None.
+- Automated verification:
+  - `pnpm --filter @dental-lab/api prisma:validate` passed.
+  - `pnpm --filter @dental-lab/api prisma:generate` passed.
+  - `pnpm --filter @dental-lab/api prisma:migrate:dev` passed and applied `20260722224500_work_types_base_pricing` plus `20260722224600_align_updated_at_defaults`.
+  - `pnpm --filter @dental-lab/api prisma:db:seed` passed.
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed with a Vite chunk-size warning only.
+  - `PORT=3010 pnpm --filter @dental-lab/api start` launched the built API successfully.
+- Backend tests:
+  - Generated code create flow.
+  - No float `basePrice` payload.
+  - Price update audit with old/new minor values.
+  - Options active-only.
+  - Archived work type edit rejection.
+  - DTO rejects negative and non-integer minor prices.
+  - Controller 401 without auth.
+  - Controller 403 without `pricing.read`.
+  - Controller rejects create without CSRF.
+  - Controller allows `pricing.create` with CSRF.
+- RBAC tests:
+  - Pricing permissions remain unique in registry.
+  - `MANAGER` has `pricing.read`.
+  - `LOGISTICA` and `RECEPTIE` do not have `pricing.read`.
+- Frontend tests:
+  - `/work-types` renders manager catalog and active options.
+  - Read-only copy appears without `pricing.update`.
+  - Missing `pricing.read` renders access error.
+- Shared tests:
+  - `minorToDecimalString`.
+  - `decimalStringToMinor`.
+  - invalid, negative, and over-precise money input rejection.
+- Manual verification:
+  - API started through the fixed `start` script on `http://localhost:3010`.
+  - Runtime route map included all `/work-types` endpoints.
+  - Frontend started on `http://localhost:5175` because lower Vite ports were occupied.
+  - `GET /health` returned `200`.
+  - `GET /auth/csrf` returned `200`.
+  - Manager login returned `200`.
+  - `POST /work-types` without CSRF returned `403`.
+  - `POST /work-types` with CSRF returned `201` and generated `WT-0001`.
+  - `GET /work-types` included the created item.
+  - `GET /work-types/:id` returned matching detail.
+  - `PATCH /work-types/:id` updated name and `basePriceMinor`.
+  - `GET /work-types/options` included active work type before archive.
+  - `POST /work-types/:id/archive` returned `201`.
+  - `GET /work-types/options` excluded archived work type.
+  - Archived filter included archived work type.
+  - `POST /work-types/:id/restore` returned `201`.
+  - `GET /users`, `GET /settings`, and `GET /clinics` returned `200`.
+  - Audit table contained `work_types.created`, `work_types.price_updated`, `work_types.archived`, and `work_types.restored`.
+  - Frontend `/work-types` returned `200 text/html`.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Linting remains unconfigured.
+  - Vite production build now warns that one JS chunk is slightly over 500 kB; build still passes. Code splitting can be handled in a future frontend performance task.

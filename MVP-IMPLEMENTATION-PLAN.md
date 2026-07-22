@@ -1027,7 +1027,7 @@ Decizie concreta SETTINGS-001:
 - Branding-ul implementat include `primaryColor` si `documentFooter`.
 - Upload-ul de logo nu este implementat in SETTINGS-001 deoarece `FILES-001`/private storage nu exista inca; `logoFileKey` ramane nullable.
 - Auditul `settings.updated` salveaza doar campurile modificate si valori nesensibile.
-- Nu s-au implementat multi-tenant, clinici, medici, lucrari, pricing, facturare, serii de facturi, email/SMS sau generic key-value settings.
+- Nu s-au implementat multi-tenant, lucrari, facturare, serii de facturi, email/SMS sau generic key-value settings.
 
 ### CLINICS-001 - Clinics and doctors
 
@@ -1058,6 +1058,8 @@ Decizie concreta SETTINGS-001:
 - Nu modifica: invoices.
 - DoD: catalog initial.
 - Estimare: M.
+- Implementare: `WorkTypesModule` expune catalogul de baza sub `/work-types`; pretul standard este `basePriceMinor` integer si moneda vine din `LaboratorySettings.currency`.
+- Non-goals implementate explicit: fara categorii, fara price lists per clinica, fara discount, fara TVA, fara work orders si fara istoric comercial complet in WORKTYPES-001.
 
 ### WORKS-001 - Work order creation
 

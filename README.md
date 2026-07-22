@@ -250,6 +250,57 @@ http://localhost:5173/clinics
 
 The page is mobile-first and uses shared UI components for filters, styled selectors, tables, drawer, modals, badges, forms, and toasts.
 
+## Work Types And Base Pricing
+
+WORKTYPES-001 adds the manager-only base pricing catalog for dental work types.
+
+Backend endpoints:
+
+- `GET /work-types`: list work types with pagination, search, status filter, and safe sorting.
+- `GET /work-types/options`: active work type options for future work order selectors.
+- `GET /work-types/:id`: work type detail.
+- `POST /work-types`: create a work type with a generated stable internal code.
+- `PATCH /work-types/:id`: update an active work type.
+- `POST /work-types/:id/archive`: soft-archive a work type.
+- `POST /work-types/:id/restore`: restore an archived work type.
+
+Permissions used:
+
+- `pricing.read`
+- `pricing.create`
+- `pricing.update`
+
+The seeded MVP matrix grants pricing permissions only to `MANAGER`. Non-finance operational roles do not receive `pricing.read`, so they cannot see the pricing catalog or base prices.
+
+Money is stored as integer minor units in `WorkType.basePriceMinor`; the database never stores prices as `Float`. Frontend helpers convert deterministic decimal input to minor units:
+
+- `35000` renders as `350.00`
+- `350.00` saves as `35000`
+- `350.5` saves as `35050`
+- more than two decimal places are rejected
+
+Currency is not duplicated per work type. The UI reads `LaboratorySettings.currency` and formats prices with the global laboratory currency. `WorkType.unit` is currently the minimal enum value `UNIT` because the plan does not define a broader unit model yet.
+
+Work type codes are generated server-side from `work_type_code_seq` and formatted as `WT-0001`, `WT-0002`, etc. Codes are immutable after creation.
+
+Archived work types remain available for future historical references but are excluded from `/work-types/options`. There is no hard delete and no work order behavior in this task.
+
+Audit events:
+
+- `work_types.created`
+- `work_types.updated`
+- `work_types.price_updated`
+- `work_types.archived`
+- `work_types.restored`
+
+The frontend route is:
+
+```text
+http://localhost:5173/work-types
+```
+
+Categories, clinic-specific pricing, discounts, VAT, invoices, quotations, price books, and price history tables are intentionally not implemented in WORKTYPES-001.
+
 ## Design Foundation
 
 Design tokens and base styles live in `packages/ui/src/styles.css` and are imported by the web app through `@dental-lab/ui/styles.css`.

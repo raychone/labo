@@ -1,0 +1,3 @@
+ALTER TABLE "clinics" ALTER COLUMN "updated_at" DROP DEFAULT;
+ALTER TABLE "doctors" ALTER COLUMN "updated_at" DROP DEFAULT;
+ALTER TABLE "work_types" ALTER COLUMN "updated_at" DROP DEFAULT;

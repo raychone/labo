@@ -128,6 +128,9 @@ describe("PERMISSION_REGISTRY", () => {
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["doctors.read"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["clinics.create"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["doctors.create"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.MANAGER["pricing.read"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["pricing.read"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["pricing.read"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.MEDIC["audit.read"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.MANAGER["audit.read"]).toBe("ALL");
   });

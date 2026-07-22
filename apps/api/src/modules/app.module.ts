@@ -6,8 +6,9 @@ import { HealthModule } from "./health/health.module.js";
 import { RbacModule } from "./rbac/rbac.module.js";
 import { SettingsModule } from "./settings/settings.module.js";
 import { UsersModule } from "./users/users.module.js";
+import { WorkTypesModule } from "./work-types/work-types.module.js";
 
 @Module({
-  imports: [AuthModule, ClinicsModule, HealthModule, RbacModule, SettingsModule, UsersModule],
+  imports: [AuthModule, ClinicsModule, HealthModule, RbacModule, SettingsModule, UsersModule, WorkTypesModule],
 })
 export class AppModule {}

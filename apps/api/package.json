@@ -10,7 +10,7 @@
     "prisma:generate": "dotenv -e ../../.env -- prisma generate",
     "prisma:migrate:dev": "dotenv -e ../../.env -- prisma migrate dev",
     "prisma:validate": "dotenv -e ../../.env -- prisma validate",
-    "start": "env -u ELECTRON_RUN_AS_NODE node dist/main.js",
+    "start": "env -u ELECTRON_RUN_AS_NODE node dist/src/main.js",
     "start:dev": "env -u ELECTRON_RUN_AS_NODE nest start --watch",
     "test": "env -u ELECTRON_RUN_AS_NODE vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
