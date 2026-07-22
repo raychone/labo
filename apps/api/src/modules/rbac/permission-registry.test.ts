@@ -16,6 +16,14 @@ const expectedPermissionKeys = [
   "users.assign_roles",
   "roles.read",
   "permissions.read",
+  "clinics.create",
+  "clinics.read",
+  "clinics.update",
+  "clinics.archive",
+  "doctors.create",
+  "doctors.read",
+  "doctors.update",
+  "doctors.archive",
   "works.create",
   "works.read_all",
   "works.read_assigned",
@@ -116,6 +124,10 @@ describe("PERMISSION_REGISTRY", () => {
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["works.read_all"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["workflow.complete_stage"]).toBe("OWN_STAGE");
     expect(ROLE_PERMISSION_MATRIX.CURIER["delivery.deliver"]).toBe("OWN_DELIVERY");
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["clinics.read"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["doctors.read"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["clinics.create"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["doctors.create"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.MEDIC["audit.read"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.MANAGER["audit.read"]).toBe("ALL");
   });

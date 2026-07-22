@@ -204,6 +204,52 @@ The `/settings` frontend route displays profile, fiscal identity, contact, addre
 
 Settings updates write `settings.updated` audit events with changed field names and safe before/after metadata.
 
+## Clinic And Doctor Management
+
+CLINICS-001 adds partner dental clinic management and minimal external doctor management.
+
+Backend endpoints:
+
+- `GET /clinics`: list clinics with pagination, search, status filter, city filter, and safe sorting.
+- `GET /clinics/options`: active clinic options for selectors.
+- `GET /clinics/:id`: clinic detail.
+- `POST /clinics`: create a clinic with a generated internal code.
+- `PATCH /clinics/:id`: update an active clinic.
+- `POST /clinics/:id/archive`: soft-archive a clinic.
+- `POST /clinics/:id/restore`: restore an archived clinic.
+- `GET /doctors`: list external doctors with pagination, clinic filter, search, status filter, and safe sorting.
+- `GET /doctors/options?clinicId=...`: active doctor options, optionally scoped to one active clinic.
+- `GET /doctors/:id`: doctor detail.
+- `POST /doctors`: create an external doctor for an active clinic.
+- `PATCH /doctors/:id`: update an active doctor.
+- `POST /doctors/:id/archive`: soft-archive a doctor.
+- `POST /doctors/:id/restore`: restore a doctor if its clinic is active.
+
+Permissions used:
+
+- `clinics.read`
+- `clinics.create`
+- `clinics.update`
+- `clinics.archive`
+- `doctors.read`
+- `doctors.create`
+- `doctors.update`
+- `doctors.archive`
+
+The `RECEPTIE` role receives only `clinics.read` and `doctors.read` so reception can select clinic/doctor in future intake flows. Create, update, archive, and restore remain manager-level through the seeded `MANAGER` matrix.
+
+Clinic codes are generated server-side from the deterministic PostgreSQL sequence `clinic_code_seq` and formatted as `CL-0001`, `CL-0002`, etc. Doctors are external dentists, not internal app users; they do not have sessions, passwords, roles, or portal access. Doctor `displayName` is derived server-side from first and last name.
+
+Archived clinics and doctors remain in history but are excluded from option endpoints. Archived records are read-only until restored. Archiving a clinic does not hard-delete or automatically archive its doctors.
+
+The clinic management UI is available at:
+
+```text
+http://localhost:5173/clinics
+```
+
+The page is mobile-first and uses shared UI components for filters, styled selectors, tables, drawer, modals, badges, forms, and toasts.
+
 ## Design Foundation
 
 Design tokens and base styles live in `packages/ui/src/styles.css` and are imported by the web app through `@dental-lab/ui/styles.css`.

@@ -16,4 +16,28 @@ export type {
   SupportedTimezone,
   UpdateLaboratorySettingsInput,
 } from "./settings.js";
+export {
+  CLINIC_SORT_FIELDS,
+  DOCTOR_SORT_FIELDS,
+  SORT_DIRECTIONS,
+} from "./clinics.js";
+export type {
+  ClinicDetail,
+  ClinicOption,
+  ClinicSortField,
+  ClinicSummary,
+  ClinicsListParams,
+  ClinicsListResponse,
+  CreateClinicInput,
+  CreateDoctorInput,
+  DoctorDetail,
+  DoctorOption,
+  DoctorSortField,
+  DoctorSummary,
+  DoctorsListParams,
+  DoctorsListResponse,
+  SortDirection,
+  UpdateClinicInput,
+  UpdateDoctorInput,
+} from "./clinics.js";
 export { formatApplicationTitle } from "./workspace-title.js";

@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-32%
+36%
 
 ## FOUNDATION
 
@@ -32,7 +32,7 @@
 
 ## CLINICS
 
-- [ ] CLINICS-001 - Clinics and doctors
+- [x] CLINICS-001 - Clinics and doctors
 
 ## WORK TYPES
 
@@ -103,9 +103,13 @@
 
 NONE / AWAITING APPROVAL
 
+Status: AWAITING APPROVAL
+
+Started: N/A
+
 ## Next Task
 
-CLINICS-001
+WORKTYPES-001 - Work types and pricing base
 
 ## Known Technical Debt
 
@@ -836,3 +840,112 @@ None.
   - Linting remains unconfigured.
   - Logo upload is intentionally deferred until private file storage exists.
   - Health and HTML title still use static application naming; there is no authenticated app shell yet where laboratory settings can be globally displayed without broader routing work.
+
+### CLINICS-001 - Clinics and doctors
+
+- Status: COMPLETED.
+- Started: 2026-07-22 22:06:41 CEST.
+- Completed: 2026-07-22 22:27:00 CEST.
+- Commit message: `CLINICS-001: add clinics and doctors management`.
+- Pre-flight audit:
+  - Branch: `main`.
+  - Working tree: clean before CLINICS-001 changes.
+  - CLINICS-001 definition, dependencies, and approved option 2 were read from the attached task files and existing project documentation.
+  - FOUNDATION-001, FOUNDATION-002, UI-001, UI-002, AUTH-001, RBAC-001, USERS-001, and SETTINGS-001 were completed before this task.
+  - Existing RBAC registry did not include clinic or doctor permissions.
+  - Existing Prisma schema did not include `Clinic` or `Doctor`.
+  - Existing frontend routing did not include `/clinics`.
+  - No doctor portal, doctor auth, app user linkage, or future work order behavior was introduced.
+- Summary:
+  - Added `Clinic` and `Doctor` Prisma models with deterministic migration.
+  - Added generated internal clinic codes backed by a PostgreSQL sequence.
+  - Added RBAC permissions for clinic and doctor read/create/update/archive.
+  - Granted `RECEPTIE` only `clinics.read` and `doctors.read`; `MANAGER` receives all registry permissions through the existing matrix.
+  - Added `ClinicsModule` with REST endpoints for clinic list/detail/options/create/update/archive/restore.
+  - Added doctor REST endpoints for list/detail/options/create/update/archive/restore.
+  - Added audit events for clinic and doctor create/update/archive/restore.
+  - Added shared frontend contracts for clinic and doctor summaries, details, inputs, options, list params, and paginated responses.
+  - Added `/clinics` frontend page with filters, paginated clinic table, detail/edit drawer, doctor section, create/edit modals, archive/restore actions, and functional clinic-doctor selector.
+- Endpoints added:
+  - `GET /clinics`
+  - `GET /clinics/options`
+  - `GET /clinics/:id`
+  - `POST /clinics`
+  - `PATCH /clinics/:id`
+  - `POST /clinics/:id/archive`
+  - `POST /clinics/:id/restore`
+  - `GET /doctors`
+  - `GET /doctors/options`
+  - `GET /doctors/:id`
+  - `POST /doctors`
+  - `PATCH /doctors/:id`
+  - `POST /doctors/:id/archive`
+  - `POST /doctors/:id/restore`
+- Permissions:
+  - `clinics.read`
+  - `clinics.create`
+  - `clinics.update`
+  - `clinics.archive`
+  - `doctors.read`
+  - `doctors.create`
+  - `doctors.update`
+  - `doctors.archive`
+- Architecture decisions:
+  - `Doctor` represents an external dentist linked to one clinic, not an internal `User`.
+  - `displayName` is server-derived from first and last name.
+  - Clinic codes are generated server-side as `CL-0001`, `CL-0002`, etc.
+  - Archived clinics and doctors are excluded from option endpoints.
+  - Creating or restoring a doctor requires an active clinic.
+  - Archived clinics and doctors are read-only until restored.
+  - Archiving a clinic does not hard-delete or auto-archive doctors.
+  - The frontend uses shared UI components only; the selector remains in the application style.
+- Main files modified:
+  - `apps/api/prisma/schema.prisma`
+  - `apps/api/prisma/migrations/20260722221500_clinic_management/migration.sql`
+  - `apps/api/src/modules/rbac/permission-registry.ts`
+  - `apps/api/src/modules/clinics/*`
+  - `apps/api/src/modules/app.module.ts`
+  - `apps/web/src/features/clinics/*`
+  - `apps/web/src/app/app.tsx`
+  - `packages/shared/src/clinics.ts`
+  - `packages/shared/src/index.ts`
+  - `README.md`
+  - `IMPLEMENTATION_STATUS.md`
+- Dependencies added:
+  - None.
+- Automated verification:
+  - `pnpm --filter @dental-lab/api prisma:validate` passed.
+  - `pnpm --filter @dental-lab/api prisma:generate` passed.
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed.
+  - `pnpm --filter @dental-lab/api prisma:migrate:dev` applied `20260722221500_clinic_management`; the interactive follow-up prompt was cancelled without creating a new migration.
+  - `pnpm --filter @dental-lab/api prisma:db:seed` passed.
+- Backend tests:
+  - RBAC registry includes clinic and doctor permissions.
+  - Reception receives only read permissions for clinics and doctors.
+  - Clinic creation generates a code and writes audit metadata.
+  - Doctor creation is rejected for archived clinics.
+- Frontend tests:
+  - `/clinics` renders clinic management for a user with read permissions.
+  - The clinic-doctor selector resets selected doctor when clinic changes.
+  - Missing `clinics.read` renders an access error.
+- Manual verification:
+  - API started on `http://localhost:3010`.
+  - Frontend started on `http://localhost:5175` because ports 5173 and 5174 were occupied.
+  - Runtime route map included all `/clinics` and `/doctors` endpoints.
+  - `GET /health` returned `200`.
+  - `GET /auth/csrf` returned `200`.
+  - Manager login returned `200`.
+  - `POST /clinics` with CSRF returned a generated clinic code.
+  - `POST /doctors` with CSRF returned `Dr. Ana Popescu`.
+  - `GET /clinics/options` included the active clinic.
+  - `GET /doctors/options?clinicId=...` included the active doctor.
+  - After doctor archive, doctor options excluded that doctor.
+  - After clinic archive, clinic options excluded that clinic.
+  - Frontend `/clinics` returned `200 text/html`.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Linting remains unconfigured.
+  - `@dental-lab/api` start script still points at `dist/main.js`, while the current Nest build emits `dist/src/main.js`; this was pre-existing and manual verification used the generated entrypoint directly.

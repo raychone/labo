@@ -22,6 +22,14 @@ export type PermissionKey =
   | "users.assign_roles"
   | "roles.read"
   | "permissions.read"
+  | "clinics.create"
+  | "clinics.read"
+  | "clinics.update"
+  | "clinics.archive"
+  | "doctors.create"
+  | "doctors.read"
+  | "doctors.update"
+  | "doctors.archive"
   | "works.create"
   | "works.read_all"
   | "works.read_assigned"
@@ -98,6 +106,14 @@ export const PERMISSION_REGISTRY = [
   definePermission("users.assign_roles", "Assign roles to users."),
   definePermission("roles.read", "Read roles."),
   definePermission("permissions.read", "Read permissions."),
+  definePermission("clinics.create", "Create dental clinics."),
+  definePermission("clinics.read", "Read dental clinics."),
+  definePermission("clinics.update", "Update dental clinics."),
+  definePermission("clinics.archive", "Archive dental clinics."),
+  definePermission("doctors.create", "Create external doctors."),
+  definePermission("doctors.read", "Read external doctors."),
+  definePermission("doctors.update", "Update external doctors."),
+  definePermission("doctors.archive", "Archive external doctors."),
   definePermission("works.create", "Create work orders."),
   definePermission("works.read_all", "Read all work orders."),
   definePermission("works.read_assigned", "Read assigned work orders."),
@@ -242,9 +258,11 @@ export const ROLE_PERMISSION_MATRIX = {
     "works.read_assigned": "OWN_CLINIC",
   }),
   RECEPTIE: grants({
+    "clinics.read": "ALL",
     "comments.create": "ALL",
     "comments.read_external": "ALL",
     "comments.read_internal": "ALL",
+    "doctors.read": "ALL",
     "files.read": "ALL",
     "files.upload": "ALL",
     "logistics.prepare_delivery": "ALL",
@@ -278,12 +296,20 @@ export const ROLE_PERMISSION_MATRIX = {
 
 export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "audit.read",
+  "clinics.archive",
+  "clinics.create",
+  "clinics.read",
+  "clinics.update",
   "delivery.capture_signature",
   "delivery.create_route",
   "delivery.deliver",
   "delivery.fail",
   "delivery.pickup",
   "delivery.read_own",
+  "doctors.archive",
+  "doctors.create",
+  "doctors.read",
+  "doctors.update",
   "files.delete",
   "files.read",
   "finance.read",
