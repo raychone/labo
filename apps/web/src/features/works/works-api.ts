@@ -2,8 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateWorkInput,
   PaginatedWorksResponse,
+  ResolveWorkQrInput,
+  ResolveWorkQrResult,
   UpdateWorkInput,
   WorkDetail,
+  WorkQrView,
   WorksListParams,
   WorkTypeFormOption,
 } from "@dental-lab/shared";
@@ -16,6 +19,7 @@ export const worksQueryKeys = {
   all: ["works"] as const,
   detail: (workOrderId: string | null) => ["works", "detail", workOrderId] as const,
   list: (params: WorksListParams) => ["works", "list", params] as const,
+  qr: (workOrderId: string | null) => ["works", "qr", workOrderId] as const,
   workTypeOptions: ["works", "work-type-options"] as const,
 };
 
@@ -91,6 +95,18 @@ export async function fetchWork(workOrderId: string): Promise<WorkDetail> {
   return parseJsonResponse<WorkDetail>(response);
 }
 
+export async function fetchWorkQr(workOrderId: string): Promise<WorkQrView> {
+  const response = await fetch(`${API_BASE_URL}/works/${workOrderId}/qr`, {
+    credentials: "include",
+  });
+
+  return parseJsonResponse<WorkQrView>(response);
+}
+
+export function getWorkQrImageUrl(workOrderId: string): string {
+  return `${API_BASE_URL}/works/${workOrderId}/qr-image`;
+}
+
 export async function fetchWorkFormWorkTypeOptions(): Promise<readonly WorkTypeFormOption[]> {
   const response = await fetch(`${API_BASE_URL}/works/work-type-options`, {
     credentials: "include",
@@ -107,6 +123,14 @@ export async function updateWork(workOrderId: string, input: UpdateWorkInput): P
   return sendJson<WorkDetail>(`/works/${workOrderId}`, "PATCH", input);
 }
 
+export async function resolveWorkQr(input: ResolveWorkQrInput): Promise<ResolveWorkQrResult> {
+  return sendJson<ResolveWorkQrResult>("/works/resolve-qr", "POST", input);
+}
+
+export async function recordWorkQrPrint(workOrderId: string): Promise<WorkQrView> {
+  return sendJson<WorkQrView>(`/works/${workOrderId}/qr/print`, "POST");
+}
+
 export function useWorks(params: WorksListParams, enabled: boolean) {
   return useQuery({
     enabled,
@@ -121,6 +145,15 @@ export function useWork(workOrderId: string | null, enabled: boolean) {
     enabled: enabled && workOrderId !== null,
     queryFn: () => fetchWork(workOrderId ?? ""),
     queryKey: worksQueryKeys.detail(workOrderId),
+    retry: false,
+  });
+}
+
+export function useWorkQr(workOrderId: string | null, enabled: boolean) {
+  return useQuery({
+    enabled: enabled && workOrderId !== null,
+    queryFn: () => fetchWorkQr(workOrderId ?? ""),
+    queryKey: worksQueryKeys.qr(workOrderId),
     retry: false,
   });
 }
@@ -151,5 +184,17 @@ export function useUpdateWork() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: worksQueryKeys.all });
     },
+  });
+}
+
+export function useResolveWorkQr() {
+  return useMutation({
+    mutationFn: resolveWorkQr,
+  });
+}
+
+export function useRecordWorkQrPrint() {
+  return useMutation({
+    mutationFn: recordWorkQrPrint,
   });
 }

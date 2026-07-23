@@ -5,6 +5,7 @@ import { validate } from "class-validator";
 import { describe, expect, it, vi } from "vitest";
 
 import type { PrismaService } from "../database/prisma.service.js";
+import type { WorkQrTokenService } from "../qr/work-qr-token.service.js";
 import { CreateWorkDto } from "./dto/works.dto.js";
 import type { WorkOrderCodeService } from "./work-order-code.service.js";
 import { calculateTotalPriceMinor, parseDateOnly, WorksService } from "./works.service.js";
@@ -110,6 +111,8 @@ function workOrder(overrides: Partial<WorkOrder> = {}) {
     patientName: "Ion Pop",
     patientReference: "P-100",
     priority: "NORMAL",
+    qrCreatedAt: new Date("2026-07-22T12:00:00.000Z"),
+    qrToken: "qr_token_1",
     quantity: 2,
     requestedDeliveryDate: new Date("2026-08-01T00:00:00.000Z"),
     status: "REGISTERED",
@@ -123,8 +126,16 @@ function workOrder(overrides: Partial<WorkOrder> = {}) {
   };
 }
 
-function createService(prisma: unknown, codeService: unknown = { generate: vi.fn().mockResolvedValue("WO-2026-000001") }): WorksService {
-  return new WorksService(prisma as PrismaService, codeService as WorkOrderCodeService);
+function createService(
+  prisma: unknown,
+  codeService: unknown = { generate: vi.fn().mockResolvedValue("WO-2026-000001") },
+  qrTokenService: unknown = { generate: vi.fn().mockResolvedValue("qr_token_1") },
+): WorksService {
+  return new WorksService(
+    prisma as PrismaService,
+    codeService as WorkOrderCodeService,
+    qrTokenService as WorkQrTokenService,
+  );
 }
 
 const createDto = {
@@ -144,6 +155,7 @@ describe("WorksService", () => {
     const auditCreate = vi.fn().mockResolvedValue({});
     const create = vi.fn().mockResolvedValue(createdWorkOrder);
     const codeService = { generate: vi.fn().mockResolvedValue("WO-2026-000001") };
+    const qrTokenService = { generate: vi.fn().mockResolvedValue("qr_token_1") };
     const service = createService({
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
@@ -157,7 +169,7 @@ describe("WorksService", () => {
           workType: { findUnique: vi.fn().mockResolvedValue({ basePriceMinor: 35000, isActive: true }) },
         }),
       ),
-    }, codeService);
+    }, codeService, qrTokenService);
 
     const result = await service.createWork(
       { actorUserId: "actor_1", requestMetadata: { ipAddress: "127.0.0.1" } },
@@ -165,11 +177,13 @@ describe("WorksService", () => {
     );
 
     expect(codeService.generate).toHaveBeenCalled();
+    expect(qrTokenService.generate).toHaveBeenCalled();
     expect(create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         baseUnitPriceMinor: 35000,
         code: "WO-2026-000001",
         currency: "RON",
+        qrToken: "qr_token_1",
         quantity: 2,
         status: "REGISTERED",
         totalPriceMinor: 70000,

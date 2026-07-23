@@ -332,6 +332,9 @@ Audit events:
 
 - `work_orders.created`
 - `work_orders.updated`
+- `works.qr_viewed`
+- `works.qr_resolved`
+- `works.qr_printed`
 
 The frontend route is:
 
@@ -339,7 +342,34 @@ The frontend route is:
 http://localhost:5173/works
 ```
 
-Workflow execution, QR/barcode, files, assignments, archive behavior, and a dedicated patient model are intentionally deferred to later tasks.
+Workflow execution, barcode, files, assignments, archive behavior, and a dedicated patient model are intentionally deferred to later tasks.
+
+## QR And Scan
+
+QR-001 adds authenticated QR traceability for work orders.
+
+Backend endpoints:
+
+- `GET /works/:id/qr`: returns QR metadata and a minimal printable label view.
+- `GET /works/:id/qr-image`: returns a private, non-cached PNG QR image.
+- `POST /works/resolve-qr`: resolves a QR payload or work code through authenticated, CSRF-protected backend lookup.
+- `POST /works/:id/qr/print`: records label print intent before browser print.
+
+Permissions used:
+
+- `works.read_all` for QR view, image, resolve, and print audit.
+- `pricing.read` only controls whether resolved work detail includes pricing fields.
+
+QR payloads use the `dl-work:<opaque-token>` format. They do not contain work codes, patient names, pricing, clinic details, or internal database IDs. Existing work orders are backfilled with QR tokens by the QR migration; newly created work orders receive a token in the create transaction.
+
+The frontend shows QR actions inside the work detail drawer and opens a printable label modal. The `/scan` route is lazy-loaded and mobile-first. Camera scanning uses the native browser `BarcodeDetector` API only after the user presses the camera start button; manual work-code or QR-payload entry remains available for desktop, unsupported browsers, denied camera permission, and damaged labels.
+
+Browser access points:
+
+```text
+http://localhost:5173/works
+http://localhost:5173/scan
+```
 
 ## Design Foundation
 
@@ -372,7 +402,7 @@ The internal preview at `http://localhost:5173/style-preview` now demonstrates t
 
 Current UI-002 limits:
 
-- `QRScanner` is not implemented yet because it belongs to QR/browser-device integration work.
+- QR scanning is implemented as a feature-specific `/scan` route in QR-001, not as a generic `packages/ui` primitive.
 - `SignaturePad` is not implemented yet because it belongs to delivery/signature capture work.
 - `DataTable` uses controlled sorting/pagination and horizontal scroll on small screens; it does not implement querying, virtualization, resizing, editing, or export.
 - `FileUpload` only handles local selection/removal; it does not upload files.

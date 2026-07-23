@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { DEFAULT_LABORATORY_SETTINGS, SETTINGS_SINGLETON_KEY } from "../settings/settings.constants.js";
+import { WorkQrTokenService } from "../qr/work-qr-token.service.js";
 import { WORK_ORDER_AUDIT_ACTIONS, WORK_ORDER_RESOURCE_TYPE } from "./works.constants.js";
 import type { CreateWorkDto, ListWorksQueryDto, UpdateWorkDto } from "./dto/works.dto.js";
 import { WorkOrderCodeService } from "./work-order-code.service.js";
@@ -55,6 +56,7 @@ export class WorksService {
   public constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(WorkOrderCodeService) private readonly workOrderCodeService: WorkOrderCodeService,
+    @Inject(WorkQrTokenService) private readonly workQrTokenService: WorkQrTokenService,
   ) {}
 
   public async listWorks(query: ListWorksQueryDto, includePricing: boolean): Promise<PaginatedWorksView> {
@@ -142,6 +144,7 @@ export class WorksService {
       const workType = await this.validateWorkType(tx, dto.workTypeId, true);
       const pricing = await this.createPricingSnapshot(tx, workType.basePriceMinor, dto.quantity);
       const code = await this.workOrderCodeService.generate(tx);
+      const qrToken = await this.workQrTokenService.generate(tx);
 
       const data: Prisma.WorkOrderUncheckedCreateInput = {
         baseUnitPriceMinor: pricing.baseUnitPriceMinor,
@@ -152,6 +155,7 @@ export class WorksService {
         doctorId: dto.doctorId,
         patientName: dto.patientName,
         priority: dto.priority,
+        qrToken,
         quantity: dto.quantity,
         requestedDeliveryDate,
         status: "REGISTERED",

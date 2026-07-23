@@ -59,15 +59,21 @@ export type {
   WorkTypeUnit,
   WorkTypesListParams,
 } from "./work-types.js";
-export { WORK_PRIORITIES, WORK_SORT_FIELDS, WORK_STATUSES } from "./works.js";
+export { SCAN_SOURCES, WORK_PRIORITIES, WORK_QR_PAYLOAD_PREFIX, WORK_SORT_FIELDS, WORK_STATUSES, isWorkQrPayload } from "./works.js";
 export type {
   CreateWorkInput,
   PaginatedWorksResponse,
+  ResolveWorkQrInput,
+  ResolveWorkQrResult,
+  ScanSource,
   UpdateWorkInput,
   WorkClinicSummary,
   WorkDetail,
   WorkDoctorSummary,
   WorkPriority,
+  WorkLabelView,
+  WorkQrLabelView,
+  WorkQrView,
   WorkSortField,
   WorkStatus,
   WorkSummary,

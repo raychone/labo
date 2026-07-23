@@ -1,0 +1,59 @@
+.work-scan-page {
+  min-height: 100vh;
+  background: var(--dl-color-background);
+}
+
+.work-scan-page__layout,
+.work-scan-page__camera,
+.work-scan-page__manual,
+.work-scan-page__result {
+  display: grid;
+  gap: var(--dl-space-4);
+}
+
+.work-scan-page__layout {
+  padding-block: var(--dl-space-5);
+}
+
+.work-scan-page__header,
+.work-scan-page__camera-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-3);
+}
+
+.work-scan-page a.dl-button {
+  text-decoration: none;
+}
+
+.work-scan-page__header {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.work-scan-page__header h1 {
+  margin: 0;
+}
+
+.work-scan-page__header p,
+.work-scan-page__result p {
+  color: var(--dl-color-text-muted);
+  margin: var(--dl-space-1) 0 0;
+}
+
+.work-scan-page__video {
+  aspect-ratio: 4 / 3;
+  background: #111827;
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  inline-size: 100%;
+  max-block-size: 70vh;
+  object-fit: cover;
+}
+
+@media (min-width: 720px) {
+  .work-scan-page__manual {
+    align-items: end;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}

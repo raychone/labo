@@ -1,10 +1,13 @@
 export const WORK_STATUSES = ["REGISTERED"] as const;
 export const WORK_PRIORITIES = ["NORMAL", "URGENT"] as const;
 export const WORK_SORT_FIELDS = ["code", "createdAt", "priority", "requestedDeliveryDate", "status", "totalPriceMinor", "updatedAt"] as const;
+export const WORK_QR_PAYLOAD_PREFIX = "dl-work:" as const;
+export const SCAN_SOURCES = ["camera", "manual"] as const;
 
 export type WorkStatus = (typeof WORK_STATUSES)[number];
 export type WorkPriority = (typeof WORK_PRIORITIES)[number];
 export type WorkSortField = (typeof WORK_SORT_FIELDS)[number];
+export type ScanSource = (typeof SCAN_SOURCES)[number];
 
 export interface WorkClinicSummary {
   readonly code: string;
@@ -92,4 +95,36 @@ export interface PaginatedWorksResponse {
   readonly pageCount: number;
   readonly pageSize: number;
   readonly total: number;
+}
+
+export interface WorkQrLabelView {
+  readonly clinicName: string;
+  readonly doctorName: string;
+  readonly dueDate: string;
+  readonly patientDisplay: string;
+  readonly priority: WorkPriority;
+  readonly quantity: number;
+  readonly workTypeName: string;
+}
+
+export interface WorkQrView {
+  readonly label: WorkQrLabelView;
+  readonly payload: string;
+  readonly workCode: string;
+  readonly workId: string;
+}
+
+export interface WorkLabelView extends WorkQrView {}
+
+export interface ResolveWorkQrInput {
+  readonly payload: string;
+  readonly source: ScanSource;
+}
+
+export interface ResolveWorkQrResult {
+  readonly work: WorkDetail;
+}
+
+export function isWorkQrPayload(value: string): boolean {
+  return value.startsWith(WORK_QR_PAYLOAD_PREFIX);
 }

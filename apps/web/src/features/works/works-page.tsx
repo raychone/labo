@@ -23,6 +23,7 @@ import { formatMoneyMinor, type CreateWorkInput, type UpdateWorkInput, type Work
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
 import { fetchClinicOptions, fetchDoctorOptions } from "../clinics/clinics-api.js";
@@ -32,6 +33,7 @@ import { useWorkTypeOptions } from "../work-types/work-types-api.js";
 import { WorkForm, WorkFormActions, defaultWorkFormValues, toWorkFormValues } from "./work-form.js";
 import { useCreateWork, useUpdateWork, useWork, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
 import { workFormSchema, type WorkFormValues } from "./works-page.schema.js";
+import { WorkQrModal } from "./work-qr-modal.js";
 import "./works-page.css";
 
 const pageSize = 20;
@@ -98,9 +100,11 @@ function formatPrice(value: number | null, currency: string, locale: string): st
 
 export function WorksPage(): ReactNode {
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [params, setParams] = useState<WorksListParams>(defaultListParams);
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [qrWorkId, setQrWorkId] = useState<string | null>(null);
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   const canRead = hasPermission(permissionsQuery.data, "works.read_all");
   const canCreate = hasPermission(permissionsQuery.data, "works.create");
@@ -123,6 +127,18 @@ export function WorksPage(): ReactNode {
   const currency = settingsQuery.data?.currency ?? "RON";
   const locale = settingsQuery.data?.locale ?? "ro-RO";
   const selectedWork = selectedWorkQuery.data;
+
+  useEffect(() => {
+    const workId = searchParams.get("workId");
+    if (workId) {
+      setSelectedWorkId(workId);
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.delete("workId");
+        return next;
+      }, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const columns = useMemo<readonly DataTableColumn<WorkSummary>[]>(() => [
     { header: "Cod", id: "code", isSortable: true, renderCell: (work) => <strong>{work.code}</strong> },
@@ -292,11 +308,17 @@ export function WorksPage(): ReactNode {
           }
         }}
         onSubmit={handleUpdate}
+        onShowQr={(workId) => setQrWorkId(workId)}
         pricingWorkTypeOptions={pricingWorkTypeOptionsQuery.data ?? []}
         work={selectedWork}
         workError={selectedWorkQuery.error}
         workTypeOptionsError={formWorkTypeOptionsQuery.error}
       />
+      <WorkQrModal isOpen={qrWorkId !== null} onOpenChange={(isOpen) => {
+        if (!isOpen) {
+          setQrWorkId(null);
+        }
+      }} workId={qrWorkId} />
     </main>
   );
 }
@@ -366,6 +388,7 @@ function WorkDetailsDrawer({
   isSaving,
   locale,
   onOpenChange,
+  onShowQr,
   onSubmit,
   pricingWorkTypeOptions,
   work,
@@ -381,6 +404,7 @@ function WorkDetailsDrawer({
   readonly isSaving: boolean;
   readonly locale: string;
   readonly onOpenChange: (isOpen: boolean) => void;
+  readonly onShowQr: (workId: string) => void;
   readonly onSubmit: (values: WorkFormValues) => void;
   readonly pricingWorkTypeOptions: readonly { readonly basePriceMinor: number; readonly id: string }[];
   readonly work: import("@dental-lab/shared").WorkDetail | undefined;
@@ -425,6 +449,9 @@ function WorkDetailsDrawer({
             <span>Termen: {formatDate(work.requestedDeliveryDate)}</span>
             {canReadPricing ? <span>Total: {formatPrice(work.totalPriceMinor, work.currency ?? currency, locale)}</span> : null}
             {canReadPricing && totalPreview !== null ? <span>Preview: {totalPreview}</span> : null}
+          </div>
+          <div className="works-page__actions">
+            <Button onClick={() => onShowQr(work.id)} variant="outline">Vezi QR</Button>
           </div>
           {workTypeOptionsError ? <ErrorState title="Optiunile nu au fost incarcate" description={getErrorMessage(workTypeOptionsError)} /> : null}
           <WorkForm

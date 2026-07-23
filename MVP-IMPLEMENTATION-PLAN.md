@@ -1093,6 +1093,9 @@ Decizie concreta SETTINGS-001:
 - Nu modifica: delivery.
 - DoD: QR functional si securizat.
 - Estimare: M.
+- Implementare: `QrModule` expune metadata, PNG privat, resolve autorizat si audit print sub `/works`; payloadul este `dl-work:<opaque-token>` si nu include cod lucrare, date pacient, preturi sau ID-uri interne.
+- UI: `/works` afiseaza modal de eticheta printabila din drawerul lucrarii; `/scan` este ruta lazy-loaded cu `BarcodeDetector` pornit doar la actiunea utilizatorului si fallback manual.
+- Non-goals implementate explicit: fara workflow/stage changes, fara asignari, fara QC, fara delivery, fara fisiere, fara notificari si fara portal public/anonim.
 
 ### FILES-001 - Private file upload
 

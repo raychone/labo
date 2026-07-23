@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ToastProvider } from "@dental-lab/ui";
-import type { ReactNode } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { createBrowserRouter, RouterProvider } from "react-router";
 
 import { LoginPage } from "../features/auth/login-page.js";
@@ -12,6 +12,10 @@ import { WorkTypesPage } from "../features/work-types/work-types-page.js";
 import { WorksPage } from "../features/works/works-page.js";
 
 const queryClient = new QueryClient();
+const WorkScanPage = lazy(async () => {
+  const module = await import("../features/works/work-scan-page.js");
+  return { default: module.WorkScanPage };
+});
 
 const router = createBrowserRouter([
   {
@@ -45,6 +49,14 @@ const router = createBrowserRouter([
   {
     element: <WorksPage />,
     path: "/works",
+  },
+  {
+    element: (
+      <Suspense fallback={null}>
+        <WorkScanPage />
+      </Suspense>
+    ),
+    path: "/scan",
   },
 ]);
 

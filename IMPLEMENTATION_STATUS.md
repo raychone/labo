@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-43%
+46%
 
 ## FOUNDATION
 
@@ -44,7 +44,7 @@
 
 ## QR
 
-- [ ] QR-001 - QR generation and scan
+- [x] QR-001 - QR generation and scan
 
 ## FILES
 
@@ -105,11 +105,9 @@ NONE / AWAITING APPROVAL
 
 Status: AWAITING APPROVAL
 
-Started: N/A
-
 ## Next Task
 
-QR-001 - QR generation and scan
+FILES-001 - Private file upload
 
 ## Known Technical Debt
 
@@ -155,6 +153,11 @@ None.
 - Snapshot work order pricing from `WorkType.basePriceMinor` and `LaboratorySettings.currency` at create time.
 - Hide work order price fields from readers without `pricing.read`; reception can still select active work types through a price-free `/works/work-type-options` endpoint.
 - Treat `works.read_assigned` as deny-safe until an assignment relationship exists; WORKS-001 list/detail require `works.read_all`.
+- Store QR payloads as `dl-work:<opaque-token>` and keep work codes, patient data, pricing, clinic details, and internal database IDs out of QR content.
+- Generate QR tokens server-side with cryptographic randomness for new work orders inside the work-order create transaction.
+- Keep QR resolve behind cookie authentication, CSRF, `works.read_all`, and server-side rate limiting.
+- Implement browser camera scan in the works feature route `/scan` with native `BarcodeDetector` feature detection and manual fallback; do not add a frontend scanner dependency until browser support requires it.
+- Keep QR-001 limited to traceability lookup and label printing; workflow transitions, assignments, QC, delivery, files, notifications, and public/anonymous portals remain deferred.
 
 ## Completed Tasks
 
@@ -1207,3 +1210,113 @@ None.
   - Linting remains unconfigured.
   - Vite production build still warns that one JS chunk is slightly over 500 kB; build passes.
   - A `pg` deprecation warning appeared during API shutdown after smoke testing; no request failed.
+
+### QR-001 - QR generation and scan
+
+- Status: COMPLETED.
+- Started: 2026-07-23 08:27:42 CEST.
+- Completed: 2026-07-23 08:44:12 CEST.
+- Commit message: `QR-001: add QR generation and scan`.
+- Pre-flight audit:
+  - Branch: `main`.
+  - Working tree: clean before QR-001 changes.
+  - Last completed commit: `5de4d03 WORKS-001: add work order creation`.
+  - QR-001 definition and dependencies were read from the attached task file and existing documentation.
+  - Dependency `WORKS-001` was present and committed.
+  - Existing work order endpoints, RBAC guards, audit conventions, shared contracts, frontend works route, Vite routing, and test strategy were reviewed.
+- Summary:
+  - Added `qrToken` and `qrCreatedAt` fields to `WorkOrder` with a unique token index and QR creation timestamp index.
+  - Added QR migration `20260723083000_work_order_qr`.
+  - Added `QrModule` with QR metadata, PNG image generation, authorized QR resolve, print audit, in-memory resolve rate limiting, and token generation.
+  - Added QR token generation to work order creation inside the existing create transaction.
+  - Added shared QR contracts and payload helpers.
+  - Added `/scan` lazy-loaded frontend route with native `BarcodeDetector` camera scanning, explicit camera start, stream cleanup, duplicate detection lock, and manual fallback.
+  - Added QR label modal to the work detail drawer, including minimal printable label and print audit trigger.
+  - Added work detail deep-open support through `/works?workId=...` for scan results.
+- Endpoints added:
+  - `GET /works/:id/qr`
+  - `GET /works/:id/qr-image`
+  - `POST /works/resolve-qr`
+  - `POST /works/:id/qr/print`
+- Permissions:
+  - `works.read_all`: QR metadata, image, resolve, and print.
+  - `pricing.read`: optional price visibility on resolved work details.
+- Security:
+  - QR payload format is `dl-work:<opaque-token>`.
+  - QR payload does not include work code, patient data, pricing, clinic details, notes, or internal database IDs.
+  - Resolve and print endpoints require cookie auth, RBAC, and CSRF for state-changing requests.
+  - QR image response is marked `Cache-Control: private, no-store`.
+  - Resolve attempts are rate-limited per authenticated user and IP in memory.
+  - QR audit metadata records safe work code and source only, not raw token payload.
+- Audit events:
+  - `works.qr_viewed`
+  - `works.qr_resolved`
+  - `works.qr_printed`
+- Non-goals:
+  - No workflow execution or stage changes.
+  - No QR-triggered assignment.
+  - No quality control.
+  - No delivery or signature capture.
+  - No files or attachments.
+  - No notifications.
+  - No public, anonymous, or portal QR access.
+  - No barcode implementation.
+- Main files modified:
+  - `apps/api/prisma/schema.prisma`
+  - `apps/api/prisma/migrations/20260723083000_work_order_qr/migration.sql`
+  - `apps/api/src/modules/qr/*`
+  - `apps/api/src/modules/works/works.service.ts`
+  - `apps/api/src/modules/works/works.module.ts`
+  - `apps/api/src/modules/app.module.ts`
+  - `apps/web/src/app/app.tsx`
+  - `apps/web/src/features/works/*`
+  - `packages/shared/src/works.ts`
+  - `packages/shared/src/index.ts`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `IMPLEMENTATION_STATUS.md`
+- Dependencies added:
+  - `qrcode`: backend-only PNG QR generation; no frontend bundle impact.
+  - `@types/qrcode`: TypeScript types for `qrcode`.
+- Automated verification:
+  - `pnpm --filter @dental-lab/api prisma:generate` passed.
+  - `pnpm --filter @dental-lab/api prisma:validate` passed.
+  - `pnpm --filter @dental-lab/api prisma:migrate:dev --name work_order_qr` passed and applied `20260723083000_work_order_qr`.
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed with the existing Vite chunk-size warning only.
+- Backend tests:
+  - QR payload and patient display helpers keep QR opaque.
+  - QR lookup accepts `dl-work:<token>` and work-code manual fallback.
+  - Malformed payloads return uniform not-found behavior.
+  - Resolve rate limiting rejects excessive attempts.
+  - QR service resolves through backend lookup, masks pricing without `pricing.read`, and audits without token leakage.
+  - QR token generation creates URL-safe high-entropy tokens and retries collisions.
+  - QR controller covers unauthenticated, unauthorized, metadata, PNG image, CSRF rejection, resolve, and print routes.
+  - Works service tests verify create now stores generated `qrToken`.
+- Frontend tests:
+  - Camera scanner does not request camera access before explicit user start.
+  - Camera scanner stops media tracks after detection.
+  - Camera scanner shows fallback guidance when `BarcodeDetector` is unavailable.
+  - `/scan` resolves a manual work code through CSRF-protected backend call.
+  - `/scan` denies access without `works.read_all`.
+  - `/works` opens QR details from the work drawer and does not render the raw QR token text.
+- Manual verification:
+  - API started on `http://localhost:3010`.
+  - Frontend started on `http://127.0.0.1:5180`.
+  - `GET http://localhost:3010/health` returned `200` with database `ok`.
+  - `GET http://127.0.0.1:5180/works` returned `200 text/html`.
+  - `GET http://127.0.0.1:5180/scan` returned `200 text/html`.
+  - Manager login with CSRF returned `200`.
+  - `GET /works?page=1&pageSize=1&sortBy=createdAt&sortDirection=desc` returned existing work `WO-2026-000001`.
+  - `GET /works/:id/qr` returned `200`; payload started with `dl-work:` and did not include the work code.
+  - `GET /works/:id/qr-image` returned `200 image/png` with valid PNG header.
+  - `POST /works/resolve-qr` with CSRF resolved the QR payload to `WO-2026-000001`.
+  - `POST /works/:id/qr/print` with CSRF returned `200` and recorded print intent.
+  - Physical mobile camera scan and real printer preview were not verified in this environment; camera behavior is covered by browser-unit tests with mocked media streams.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Linting remains unconfigured.
+  - Vite production build still warns that the main JS chunk is over 500 kB; `/scan` itself is emitted as a separate lazy chunk.
+  - In-memory QR resolve rate limiting is process-local and should move to shared storage before multi-instance deployment.
