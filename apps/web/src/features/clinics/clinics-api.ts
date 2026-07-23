@@ -14,19 +14,7 @@ import type {
 } from "@dental-lab/shared";
 
 import { fetchCsrfToken } from "../auth/auth-api.js";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000";
-
-async function parseJsonResponse<TResponse>(response: Response): Promise<TResponse> {
-  if (!response.ok) {
-    const body = await response.json().catch(() => undefined) as { readonly message?: string | readonly string[] } | undefined;
-    const rawMessage = body?.message;
-    const message = Array.isArray(rawMessage) ? rawMessage.join(" ") : typeof rawMessage === "string" ? rawMessage : undefined;
-    throw new Error(message ?? "Request-ul a esuat.");
-  }
-
-  return response.json() as Promise<TResponse>;
-}
+import { apiFetch, parseApiResponse } from "../../lib/api-client.js";
 
 function appendOptional(query: URLSearchParams, key: string, value: boolean | number | string | undefined): void {
   if (value !== undefined && value !== "") {
@@ -67,7 +55,6 @@ function toDoctorsQueryString(params: DoctorsListParams): string {
 async function sendJson<TResponse>(path: string, method: "PATCH" | "POST", body?: unknown): Promise<TResponse> {
   const csrfToken = await fetchCsrfToken();
   const init: RequestInit = {
-    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       "x-csrf-token": csrfToken,
@@ -79,32 +66,26 @@ async function sendJson<TResponse>(path: string, method: "PATCH" | "POST", body?
     init.body = JSON.stringify(body);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, init);
-  return parseJsonResponse<TResponse>(response);
+  const response = await apiFetch(path, init);
+  return parseApiResponse<TResponse>(response);
 }
 
 export async function fetchClinics(params: ClinicsListParams): Promise<ClinicsListResponse> {
-  const response = await fetch(`${API_BASE_URL}/clinics?${toClinicsQueryString(params)}`, {
-    credentials: "include",
-  });
+  const response = await apiFetch(`/clinics?${toClinicsQueryString(params)}`);
 
-  return parseJsonResponse<ClinicsListResponse>(response);
+  return parseApiResponse<ClinicsListResponse>(response);
 }
 
 export async function fetchClinic(clinicId: string): Promise<ClinicDetail> {
-  const response = await fetch(`${API_BASE_URL}/clinics/${clinicId}`, {
-    credentials: "include",
-  });
+  const response = await apiFetch(`/clinics/${clinicId}`);
 
-  return parseJsonResponse<ClinicDetail>(response);
+  return parseApiResponse<ClinicDetail>(response);
 }
 
 export async function fetchClinicOptions(): Promise<readonly ClinicOption[]> {
-  const response = await fetch(`${API_BASE_URL}/clinics/options`, {
-    credentials: "include",
-  });
+  const response = await apiFetch("/clinics/options");
 
-  return parseJsonResponse<readonly ClinicOption[]>(response);
+  return parseApiResponse<readonly ClinicOption[]>(response);
 }
 
 export async function createClinic(input: CreateClinicInput): Promise<ClinicDetail> {
@@ -124,30 +105,24 @@ export async function restoreClinic(clinicId: string): Promise<ClinicDetail> {
 }
 
 export async function fetchDoctors(params: DoctorsListParams): Promise<DoctorsListResponse> {
-  const response = await fetch(`${API_BASE_URL}/doctors?${toDoctorsQueryString(params)}`, {
-    credentials: "include",
-  });
+  const response = await apiFetch(`/doctors?${toDoctorsQueryString(params)}`);
 
-  return parseJsonResponse<DoctorsListResponse>(response);
+  return parseApiResponse<DoctorsListResponse>(response);
 }
 
 export async function fetchDoctor(doctorId: string): Promise<DoctorDetail> {
-  const response = await fetch(`${API_BASE_URL}/doctors/${doctorId}`, {
-    credentials: "include",
-  });
+  const response = await apiFetch(`/doctors/${doctorId}`);
 
-  return parseJsonResponse<DoctorDetail>(response);
+  return parseApiResponse<DoctorDetail>(response);
 }
 
 export async function fetchDoctorOptions(clinicId?: string): Promise<readonly DoctorOption[]> {
   const query = new URLSearchParams();
   appendOptional(query, "clinicId", clinicId);
   const suffix = query.toString();
-  const response = await fetch(`${API_BASE_URL}/doctors/options${suffix ? `?${suffix}` : ""}`, {
-    credentials: "include",
-  });
+  const response = await apiFetch(`/doctors/options${suffix ? `?${suffix}` : ""}`);
 
-  return parseJsonResponse<readonly DoctorOption[]>(response);
+  return parseApiResponse<readonly DoctorOption[]>(response);
 }
 
 export async function createDoctor(input: CreateDoctorInput): Promise<DoctorDetail> {

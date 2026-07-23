@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
+import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LoginPage } from "./login-page.js";
@@ -15,9 +16,11 @@ function renderWithQueryClient(component: ReactNode): void {
   });
 
   render(
-    <QueryClientProvider client={queryClient}>
-      {component}
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        {component}
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -47,9 +50,26 @@ describe("LoginPage", () => {
     expect(await screen.findByRole("button", { name: "Login" })).toBeDefined();
   });
 
-  it("renders current user and permission count for an active session", async () => {
+  it("clears the password and keeps the email after failed login", async () => {
     vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(createJsonResponse({ csrfToken: "csrf-token" }))
+      .mockResolvedValueOnce(createJsonResponse({ message: "Unauthorized" }, 401))
+      .mockResolvedValueOnce(createJsonResponse({ message: "Unauthorized" }, 401)));
+
+    renderWithQueryClient(<LoginPage />);
+
+    const email = await screen.findByLabelText("Email");
+    const password = await screen.findByLabelText("Parola");
+    fireEvent.change(email, { target: { value: "manager.dev@example.test" } });
+    fireEvent.change(password, { target: { value: "wrong-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Login" }));
+
+    expect(await screen.findByText("Login esuat")).toBeDefined();
+    expect(email).toHaveProperty("value", "manager.dev@example.test");
+    expect(password).toHaveProperty("value", "");
+  });
+
+  it("does not render the login form for an active session", async () => {
+    vi.stubGlobal("fetch", vi.fn()
       .mockResolvedValueOnce(createJsonResponse({
         user: {
           displayName: "Development Manager",
@@ -68,10 +88,6 @@ describe("LoginPage", () => {
 
     renderWithQueryClient(<LoginPage />);
 
-    expect(await screen.findByText("Development Manager")).toBeDefined();
-    expect(await screen.findByText("users.create")).toBeDefined();
-    await waitFor(() => {
-      expect(screen.getByText("1")).toBeDefined();
-    });
+    await waitFor(() => expect(screen.queryByLabelText("Email")).toBeNull());
   });
 });

@@ -1,4 +1,5 @@
 import { fetchCsrfToken, type PermissionSnapshot } from "../auth/auth-api.js";
+import { apiFetch, parseApiResponse } from "../../lib/api-client.js";
 
 export interface RoleOption {
   readonly description: string;
@@ -67,17 +68,6 @@ export interface UpdateUserInput {
   readonly email: string;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000";
-
-async function parseJsonResponse<TResponse>(response: Response): Promise<TResponse> {
-  if (!response.ok) {
-    const body = await response.json().catch(() => undefined) as { readonly message?: string } | undefined;
-    throw new Error(body?.message ?? "Request-ul a esuat.");
-  }
-
-  return response.json() as Promise<TResponse>;
-}
-
 function toQueryString(params: UsersListParams): string {
   const query = new URLSearchParams({
     page: String(params.page),
@@ -104,7 +94,6 @@ function toQueryString(params: UsersListParams): string {
 async function sendJson<TResponse>(path: string, method: "PATCH" | "POST" | "PUT", body?: unknown): Promise<TResponse> {
   const csrfToken = await fetchCsrfToken();
   const init: RequestInit = {
-    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       "x-csrf-token": csrfToken,
@@ -116,32 +105,26 @@ async function sendJson<TResponse>(path: string, method: "PATCH" | "POST" | "PUT
     init.body = JSON.stringify(body);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, init);
+  const response = await apiFetch(path, init);
 
-  return parseJsonResponse<TResponse>(response);
+  return parseApiResponse<TResponse>(response);
 }
 
 export async function fetchUsers(params: UsersListParams): Promise<UsersListResponse> {
-  const response = await fetch(`${API_BASE_URL}/users?${toQueryString(params)}`, {
-    credentials: "include",
-  });
+  const response = await apiFetch(`/users?${toQueryString(params)}`);
 
-  return parseJsonResponse<UsersListResponse>(response);
+  return parseApiResponse<UsersListResponse>(response);
 }
 
 export async function fetchUser(userId: string): Promise<UserDetail> {
-  const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
-    credentials: "include",
-  });
+  const response = await apiFetch(`/users/${userId}`);
 
-  return parseJsonResponse<UserDetail>(response);
+  return parseApiResponse<UserDetail>(response);
 }
 
 export async function fetchRoles(): Promise<readonly RoleOption[]> {
-  const response = await fetch(`${API_BASE_URL}/rbac/roles`, {
-    credentials: "include",
-  });
-  const body = await parseJsonResponse<{ readonly roles: readonly RoleOption[] }>(response);
+  const response = await apiFetch("/rbac/roles");
+  const body = await parseApiResponse<{ readonly roles: readonly RoleOption[] }>(response);
 
   return body.roles.filter((role) => role.isActive);
 }

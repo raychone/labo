@@ -1,3 +1,5 @@
+import { apiFetch, ApiError, parseApiResponse } from "../../lib/api-client.js";
+
 export interface AuthUser {
   readonly displayName: string;
   readonly email: string;
@@ -20,65 +22,51 @@ export interface LoginCredentials {
   readonly password: string;
 }
 
-interface CsrfResponse {
+export interface CsrfResponse {
   readonly csrfToken: string;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000";
-
-async function parseJsonResponse<TResponse>(response: Response): Promise<TResponse> {
-  if (!response.ok) {
-    throw new Error(response.status === 401 ? "Email sau parola invalide." : "Request-ul a esuat.");
-  }
-
-  return response.json() as Promise<TResponse>;
-}
-
 export async function fetchCsrfToken(): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/auth/csrf`, {
-    credentials: "include",
-  });
-  const body = await parseJsonResponse<CsrfResponse>(response);
+  const response = await apiFetch("/auth/csrf");
+  const body = await parseApiResponse<CsrfResponse>(response);
 
   return body.csrfToken;
 }
 
 export async function login(credentials: LoginCredentials): Promise<AuthUserResponse> {
-  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+  const response = await apiFetch("/auth/login", {
     body: JSON.stringify(credentials),
-    credentials: "include",
     headers: {
       "Content-Type": "application/json",
     },
     method: "POST",
   });
 
-  return parseJsonResponse<AuthUserResponse>(response);
+  if (response.status === 401) {
+    throw new ApiError("Email sau parola invalide.", 401);
+  }
+
+  return parseApiResponse<AuthUserResponse>(response);
 }
 
 export async function fetchCurrentUser(): Promise<AuthUserResponse | null> {
-  const response = await fetch(`${API_BASE_URL}/auth/me`, {
-    credentials: "include",
-  });
+  const response = await apiFetch("/auth/me");
 
   if (response.status === 401) {
     return null;
   }
 
-  return parseJsonResponse<AuthUserResponse>(response);
+  return parseApiResponse<AuthUserResponse>(response);
 }
 
 export async function fetchPermissions(): Promise<PermissionSnapshot> {
-  const response = await fetch(`${API_BASE_URL}/auth/permissions`, {
-    credentials: "include",
-  });
+  const response = await apiFetch("/auth/permissions");
 
-  return parseJsonResponse<PermissionSnapshot>(response);
+  return parseApiResponse<PermissionSnapshot>(response);
 }
 
 export async function logout(csrfToken: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/auth/logout`, {
-    credentials: "include",
+  const response = await apiFetch("/auth/logout", {
     headers: {
       "x-csrf-token": csrfToken,
     },
@@ -86,6 +74,6 @@ export async function logout(csrfToken: string): Promise<void> {
   });
 
   if (!response.ok) {
-    throw new Error("Logout-ul a esuat.");
+    throw new ApiError("Logout-ul a esuat.", response.status);
   }
 }

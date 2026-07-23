@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-46%
+48%
 
 ## FOUNDATION
 
@@ -48,7 +48,7 @@
 
 ## SHELL
 
-- [ ] SHELL-001 - Authenticated application shell and navigation (APPROVED)
+- [x] SHELL-001 - Authenticated application shell and navigation
 
 ## DASHBOARD
 
@@ -131,9 +131,9 @@
 
 ## Current Task
 
-SHELL-001 - Authenticated application shell and navigation
+NONE / AWAITING APPROVAL
 
-Status: APPROVED
+Status: AWAITING APPROVAL
 
 ## Next Recommended Task
 
@@ -188,12 +188,16 @@ None.
 - Keep QR resolve behind cookie authentication, CSRF, `works.read_all`, and server-side rate limiting.
 - Implement browser camera scan in the works feature route `/scan` with native `BarcodeDetector` feature detection and manual fallback; do not add a frontend scanner dependency until browser support requires it.
 - Keep QR-001 limited to traceability lookup and label printing; workflow transitions, assignments, QC, delivery, files, notifications, and public/anonymous portals remain deferred.
+- Keep authenticated frontend routes behind a shared app shell that reads `/auth/me` and `/auth/permissions` through TanStack Query.
+- Treat frontend route guards and permission-aware navigation as UX only; backend RBAC remains the enforcement source of truth.
+- Centralize frontend API calls through `apps/web/src/lib/api-client.ts` so cookie credentials, error parsing, and expired-session handling are consistent.
+- Reject external `returnTo` values on login and only redirect to safe relative app paths.
 
 ## Planned Task Definitions
 
 ### SHELL-001 - Authenticated application shell and navigation
 
-- Status: APPROVED.
+- Status: COMPLETED.
 - Obiectiv: experienta unitara pentru utilizatorii autentificati, cu layout, navigare si protectie vizibila a rutelor.
 - Scope: app shell responsive, top bar/mobile nav, desktop sidebar, linkuri catre paginile existente, user menu, logout, stari loading/unauthorized si redirect login.
 - Non-goals: dashboard operational, redesign pagini existente, permisiuni noi, business logic nou.
@@ -1593,3 +1597,83 @@ None.
   - Linting remains unconfigured.
   - Vite production build still warns that the main JS chunk is over 500 kB; `/scan` itself is emitted as a separate lazy chunk.
   - In-memory QR resolve rate limiting is process-local and should move to shared storage before multi-instance deployment.
+
+### SHELL-001 - Authenticated application shell and navigation
+
+- Status: COMPLETED.
+- Started: 2026-07-23 09:35:00 CEST.
+- Completed: 2026-07-23 09:45:37 CEST.
+- Commit message: `SHELL-001: add authenticated app shell and navigation`.
+- Pre-flight audit:
+  - Branch: `main`.
+  - Working tree: clean before SHELL-001 changes.
+  - Last completed task commit before SHELL-001: `cb7f86b PLAN-001: update task roadmap`.
+  - SHELL-001 definition and dependencies were read from the attached task file and existing documentation.
+  - Dependencies `AUTH-001`, `RBAC-001`, `UI-002`, and `QR-001` were present and committed.
+  - Existing routes `/works`, `/scan`, `/clinics`, `/work-types`, `/users`, and `/settings` were reviewed.
+- Summary:
+  - Added an authenticated React app shell with desktop sidebar, mobile topbar, drawer navigation, skip link, breadcrumbs, user summary, logout flow, branded fallback state, and route error boundary.
+  - Added route registry helpers for labels, permission checks, navigation filtering, default authorized route selection, and safe `returnTo` validation.
+  - Added route guards for authenticated-only routes, public-only login, permission-gated pages, 403, 404, and loading/error states.
+  - Added a lightweight dashboard landing route as a shell home, without operational dashboard metrics.
+  - Polished `/login` into the public entry page with empty credentials, safe return redirect, active-session redirect, failed-login password clear, and expired-session messaging.
+  - Centralized frontend API behavior through `apps/web/src/lib/api-client.ts`.
+  - Updated existing frontend feature API clients to use the central client for cookie credentials, API base URL, response parsing, and expired-session handling.
+- Non-goals:
+  - No backend endpoints added.
+  - No new permissions or RBAC rules.
+  - No operational dashboard implementation.
+  - No redesign or business logic changes in existing feature pages.
+  - No notifications center.
+  - No FILES-001 or FORMS-001 work.
+- Main files modified:
+  - `apps/web/src/app/app.tsx`
+  - `apps/web/src/app/authenticated-app-shell.tsx`
+  - `apps/web/src/app/app-shell.css`
+  - `apps/web/src/app/auth-state.ts`
+  - `apps/web/src/app/route-registry.tsx`
+  - `apps/web/src/app/route-guards.tsx`
+  - `apps/web/src/app/dashboard-page.tsx`
+  - `apps/web/src/app/error-pages.tsx`
+  - `apps/web/src/lib/api-client.ts`
+  - `apps/web/src/features/auth/auth-api.ts`
+  - `apps/web/src/features/auth/login-page.tsx`
+  - `apps/web/src/features/*/*-api.ts`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `IMPLEMENTATION_STATUS.md`
+- Dependencies added:
+  - None.
+- Automated verification:
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed.
+- Frontend tests:
+  - Route registry filters navigation by permissions.
+  - `works.read_all` and `works.read_assigned` are treated as any-of route access for works and scan.
+  - Unsafe external `returnTo` values are rejected.
+  - Authenticated shell renders permission-aware navigation and active route state.
+  - Mobile navigation drawer opens and closes with Escape.
+  - Missing permission routes redirect to 403 without logging out.
+  - Login form renders for anonymous sessions.
+  - Failed login clears password while preserving email.
+  - Active sessions are redirected away from login.
+- Manual verification:
+  - API started on `http://localhost:3010`.
+  - Frontend started on `http://localhost:5175` because lower Vite ports were occupied.
+  - `GET http://localhost:3010/health` returned `200`.
+  - `GET http://localhost:5175/login` returned `200 text/html`.
+  - `GET http://localhost:5175/dashboard` returned `200 text/html`.
+  - `GET http://localhost:5175/works` returned `200 text/html`.
+  - Anonymous `GET /auth/me` returned `401`.
+  - `GET /auth/csrf` returned a CSRF token.
+  - Manager login with CSRF returned `200`.
+  - Authenticated `GET /auth/me` returned `200`.
+  - Authenticated `GET /auth/permissions` returned `200` with 70 permission snapshots.
+  - `POST /auth/logout` with CSRF returned `204`.
+  - `GET /auth/me` after logout returned `401`.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Linting remains unconfigured.
+  - Runtime route smoke depends on a seeded local manager account and local PostgreSQL being available.

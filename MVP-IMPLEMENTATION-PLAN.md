@@ -1099,7 +1099,7 @@ Decizie concreta SETTINGS-001:
 
 ### SHELL-001 - Authenticated application shell and navigation
 
-- Status: APPROVED.
+- Status: COMPLETED.
 - Obiectiv: experienta unitara pentru utilizatorii autentificati, cu layout, navigare si protectie vizibila a rutelor.
 - Scope: app shell responsive, top bar/mobile nav, desktop sidebar, linkuri catre paginile existente, user menu, logout, stari loading/unauthorized si redirect login.
 - Non-goals: dashboard operational, redesign pagini existente, permisiuni noi, business logic nou.
@@ -1110,6 +1110,10 @@ Decizie concreta SETTINGS-001:
 - Securitate: route protection este doar UX; backend RBAC ramane sursa de adevar.
 - Audit: fara audit nou; logout ramane comportamentul AUTH-001.
 - Testare: component/route tests pentru auth loading, unauthorized redirect, permission-aware nav si logout.
+- Implementare: shell autentificat pe `/` cu dashboard, sidebar desktop, topbar/drawer mobil, route registry permission-aware, redirect login cu `returnTo` sigur, 403/404, logout CSRF si handler central pentru 401.
+- Login: formular final fara credentiale precompletate, clear parola la login esuat, focus pe parola si redirect catre prima ruta permisa dupa autentificare.
+- API client frontend: `apps/web/src/lib/api-client.ts` centralizeaza `VITE_API_BASE_URL`, cookie credentials, parse erori si notificarea globala pentru sesiuni expirate.
+- Non-goals pastrate: fara endpointuri backend noi, fara dashboard operational, fara permisiuni noi, fara business logic nou.
 
 ### DASHBOARD-001 - Operational dashboard
 

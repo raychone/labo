@@ -371,6 +371,26 @@ http://localhost:5173/works
 http://localhost:5173/scan
 ```
 
+## Authenticated App Shell
+
+SHELL-001 adds the authenticated frontend shell around the existing product routes.
+
+Routes under the shell:
+
+- `/dashboard`
+- `/works`
+- `/scan`
+- `/clinics`
+- `/work-types`
+- `/users`
+- `/settings`
+
+The shell uses `/auth/me` and `/auth/permissions` through a central frontend API client with cookie credentials. Unauthenticated users are redirected to `/login`, and missing-permission routes render a `403` page without logging out. Navigation items are filtered from the current permission snapshot, but backend RBAC remains the security source of truth.
+
+The login page is now the public entry point. It accepts an optional safe relative `returnTo` parameter, rejects external redirects, clears only the password after failed login, and redirects authenticated users to the first route they can access.
+
+The layout is mobile-first: mobile gets a top bar and drawer navigation; desktop gets a persistent sidebar. Laboratory name and primary color are read from `/settings` only for users with `settings.read`, with a safe fallback when settings are unavailable.
+
 ## Design Foundation
 
 Design tokens and base styles live in `packages/ui/src/styles.css` and are imported by the web app through `@dental-lab/ui/styles.css`.

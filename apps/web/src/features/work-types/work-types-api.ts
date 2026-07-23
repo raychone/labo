@@ -9,8 +9,7 @@ import type {
 } from "@dental-lab/shared";
 
 import { fetchCsrfToken } from "../auth/auth-api.js";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000";
+import { apiFetch, parseApiResponse } from "../../lib/api-client.js";
 
 export const workTypeQueryKeys = {
   all: ["work-types"] as const,
@@ -18,17 +17,6 @@ export const workTypeQueryKeys = {
   list: (params: WorkTypesListParams) => ["work-types", "list", params] as const,
   options: ["work-types", "options"] as const,
 };
-
-async function parseJsonResponse<TResponse>(response: Response): Promise<TResponse> {
-  if (!response.ok) {
-    const body = await response.json().catch(() => undefined) as { readonly message?: string | readonly string[] } | undefined;
-    const rawMessage = body?.message;
-    const message = Array.isArray(rawMessage) ? rawMessage.join(" ") : typeof rawMessage === "string" ? rawMessage : undefined;
-    throw new Error(message ?? "Request-ul a esuat.");
-  }
-
-  return response.json() as Promise<TResponse>;
-}
 
 function appendOptional(query: URLSearchParams, key: string, value: boolean | number | string | undefined): void {
   if (value !== undefined && value !== "") {
@@ -53,7 +41,6 @@ function toWorkTypesQueryString(params: WorkTypesListParams): string {
 async function sendJson<TResponse>(path: string, method: "PATCH" | "POST", body?: unknown): Promise<TResponse> {
   const csrfToken = await fetchCsrfToken();
   const init: RequestInit = {
-    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       "x-csrf-token": csrfToken,
@@ -65,32 +52,26 @@ async function sendJson<TResponse>(path: string, method: "PATCH" | "POST", body?
     init.body = JSON.stringify(body);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, init);
-  return parseJsonResponse<TResponse>(response);
+  const response = await apiFetch(path, init);
+  return parseApiResponse<TResponse>(response);
 }
 
 export async function fetchWorkTypes(params: WorkTypesListParams): Promise<PaginatedWorkTypesResponse> {
-  const response = await fetch(`${API_BASE_URL}/work-types?${toWorkTypesQueryString(params)}`, {
-    credentials: "include",
-  });
+  const response = await apiFetch(`/work-types?${toWorkTypesQueryString(params)}`);
 
-  return parseJsonResponse<PaginatedWorkTypesResponse>(response);
+  return parseApiResponse<PaginatedWorkTypesResponse>(response);
 }
 
 export async function fetchWorkType(workTypeId: string): Promise<WorkTypeDetail> {
-  const response = await fetch(`${API_BASE_URL}/work-types/${workTypeId}`, {
-    credentials: "include",
-  });
+  const response = await apiFetch(`/work-types/${workTypeId}`);
 
-  return parseJsonResponse<WorkTypeDetail>(response);
+  return parseApiResponse<WorkTypeDetail>(response);
 }
 
 export async function fetchWorkTypeOptions(): Promise<readonly WorkTypeOption[]> {
-  const response = await fetch(`${API_BASE_URL}/work-types/options`, {
-    credentials: "include",
-  });
+  const response = await apiFetch("/work-types/options");
 
-  return parseJsonResponse<readonly WorkTypeOption[]>(response);
+  return parseApiResponse<readonly WorkTypeOption[]>(response);
 }
 
 export async function createWorkType(input: CreateWorkTypeInput): Promise<WorkTypeDetail> {
