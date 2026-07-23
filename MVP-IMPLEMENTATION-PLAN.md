@@ -1131,10 +1131,10 @@ Decizie concreta SETTINGS-001:
 
 ### FORMS-001 - Form patterns and validation UX
 
-- Status: NOT STARTED.
+- Status: COMPLETED.
 - Obiectiv: standardizare formulare pentru utilizatori atehnici.
 - Scope: patternuri pentru erori, required markers, field groups, submit states, reset/cancel si validare Zod/RHF coerenta.
-- Non-goals: schimbarea regulilor business, wizard complex, autosave.
+- Non-goals: schimbarea regulilor business, wizard complex, autosave, template builder dinamic, snapshot valori formular pe lucrare.
 - Dependente: UI-002, SHELL-001.
 - Acceptance criteria: formularele principale au erori clare, stari de saving consistente si layout mobile-first.
 - Backend: fara endpointuri noi.
@@ -1142,20 +1142,35 @@ Decizie concreta SETTINGS-001:
 - Securitate: nu inlocuieste validarea server-side.
 - Audit: fara audit nou.
 - Testare: component tests pentru erori, disabled states si submit.
+- Implementare: adaugate `FormLayout`, `FormSection`, `FormGrid`, `FormGridFull`, `FormErrorSummary`, `FormActions`, `ConfirmActionModal`, normalizare frontend pentru erori API, focus pe error summary/primul camp invalid, dirty guards pentru refresh/navigare/close si patternuri aplicate pe login, users, settings, clinics/doctors, work types, works si manual scan.
 
-### FORMS-002 - Form performance and reuse hardening
+### WORKFORMS-001 - Work form template builder
 
 - Status: NOT STARTED.
-- Obiectiv: reducerea duplicarii si imbunatatirea performantei formularelor existente.
-- Scope: extragere compozitii reutilizabile, query enabling coerent, evitarea rerenderelor inutile.
-- Non-goals: refactor major de domeniu, schimbare UX vizibila fara cerinta.
-- Dependente: FORMS-001.
-- Acceptance criteria: duplicarea comuna scade fara regresii de comportament.
-- Backend: fara endpointuri noi.
-- Frontend: refactor concentrat pe formulare existente si teste.
-- Securitate: contractele de validare raman sincronizate cu serverul.
-- Audit: fara audit nou.
-- Testare: typecheck, teste existente si teste focalizate pe formulare refactorizate.
+- Obiectiv: configurarea formularelor dinamice per tip de lucrare fara salvarea valorilor pe WorkOrder.
+- Scope: template activ per WorkType, field definitions, field types MVP, versiuni, preview, activare si arhivare.
+- Non-goals: upload fisiere, scripting, HTML custom, conditional rules engine complex, autosave, completare/snapshot valori pe lucrare.
+- Dependente: FORMS-001, WORKTYPES-001, RBAC-001.
+- Acceptance criteria: managerii pot defini si publica un template versionat pentru un tip de lucrare, iar utilizatorii fara permisiuni de modificare il vad read-only.
+- Backend: modele si endpointuri pentru template-uri si field definitions, validate server-side, fara modificare retroactiva a versiunilor publicate.
+- Frontend: ruta de administrare template pentru WorkType, lista campuri, add/edit, ordonare simpla, preview si stari de activare/arhivare.
+- Securitate: RBAC server-side pentru citire/modificare/arhivare, validare stricta a optiunilor JSON si a tipurilor de camp.
+- Audit: audit pentru create/update/activate/archive template.
+- Testare: unit si integration pentru servicii/controllere, teste frontend pentru builder, preview, read-only si validare.
+
+### FORMS-002 - Work form completion and immutable snapshot
+
+- Status: NOT STARTED.
+- Obiectiv: completarea formularelor dinamice pe lucrare si salvarea unui snapshot imutabil al template-ului folosit.
+- Scope: completare valori pentru WorkOrder pe baza template-ului activ, validare, snapshot versiune/campuri/raspunsuri si afisare read-only in detalii.
+- Non-goals: editare template, fisiere, workflow execution, conditional rules engine complex.
+- Dependente: WORKFORMS-001, WORKS-001, RBAC-001.
+- Acceptance criteria: o lucrare noua poate salva raspunsurile cerute de template, iar lucrarile existente pastreaza snapshotul chiar daca template-ul se modifica ulterior.
+- Backend: modele/contract pentru raspunsuri si snapshot, validare server-side impotriva snapshotului, tranzactii unde este necesar.
+- Frontend: completare in create/edit Work, erori pe campuri dinamice, summary, read-only snapshot in detalii.
+- Securitate: RBAC pentru citire/modificare lucrari, fara expunere date peste permisiuni.
+- Audit: audit pentru create/update raspunsuri formular pe lucrare.
+- Testare: unit/integration pentru snapshot si validare, frontend pentru completare, erori si compatibilitate cu FORMS-001 patterns.
 
 ### FILES-001 - Private file upload
 
@@ -1458,6 +1473,7 @@ RBAC-001 -> SETTINGS-001 -> INVOICE-001
 RBAC-001 -> CLINICS-001 -> WORKS-001
 RBAC-001 -> WORKTYPES-001 -> WORKFLOW-001
 WORKS-001 -> QR-001
+SHELL-001 -> FORMS-001 -> WORKFORMS-001 -> FORMS-002
 WORKS-001 -> FILES-001
 WORKFLOW-001 -> WORKFLOW-002 -> LOGISTICS-001 -> TECH-001 -> QC-001 -> DELIVERY-001
 WORKS-001 -> PAYMENTS-001 -> INVOICE-001

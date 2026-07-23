@@ -1,9 +1,13 @@
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000";
 
+export type ApiFieldErrors = Readonly<Record<string, readonly string[]>>;
+
 export class ApiError extends Error {
   public constructor(
     message: string,
     public readonly status: number,
+    public readonly fieldErrors: ApiFieldErrors = {},
+    public readonly code: string | undefined = undefined,
   ) {
     super(message);
     this.name = "ApiError";
@@ -33,8 +37,27 @@ export function isForbiddenError(error: unknown): boolean {
   return error instanceof ApiError && error.status === 403;
 }
 
-async function getResponseMessage(response: Response): Promise<string> {
-  const body = await response.json().catch(() => undefined) as { readonly message?: string | readonly string[] } | undefined;
+interface ApiErrorBody {
+  readonly code?: string;
+  readonly error?: string;
+  readonly fieldErrors?: Record<string, string | readonly string[]>;
+  readonly message?: string | readonly string[] | Record<string, unknown>;
+}
+
+function normalizeFieldErrors(value: ApiErrorBody["fieldErrors"]): ApiFieldErrors {
+  if (value === undefined) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([fieldName, messages]) => [
+      fieldName,
+      Array.isArray(messages) ? messages : [messages],
+    ]),
+  );
+}
+
+function getMessageFromBody(body: ApiErrorBody | undefined, status: number): string {
   const rawMessage = body?.message;
 
   if (Array.isArray(rawMessage)) {
@@ -45,12 +68,27 @@ async function getResponseMessage(response: Response): Promise<string> {
     return rawMessage;
   }
 
-  return response.status === 401 ? "Sesiunea a expirat." : "Request-ul a esuat.";
+  if (typeof body?.error === "string") {
+    return body.error;
+  }
+
+  return status === 401 ? "Sesiunea a expirat." : "Request-ul a esuat.";
+}
+
+async function getResponseError(response: Response): Promise<ApiError> {
+  const body = await response.json().catch(() => undefined) as ApiErrorBody | undefined;
+
+  return new ApiError(
+    getMessageFromBody(body, response.status),
+    response.status,
+    normalizeFieldErrors(body?.fieldErrors),
+    body?.code,
+  );
 }
 
 export async function parseApiResponse<TResponse>(response: Response): Promise<TResponse> {
   if (!response.ok) {
-    const error = new ApiError(await getResponseMessage(response), response.status);
+    const error = await getResponseError(response);
 
     if (response.status === 401) {
       notifyUnauthorized();

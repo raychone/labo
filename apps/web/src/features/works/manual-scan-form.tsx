@@ -1,4 +1,4 @@
-import { Button, TextInput } from "@dental-lab/ui";
+import { FormActions, FormLayout, TextInput } from "@dental-lab/ui";
 import type { ReactNode } from "react";
 import { useState } from "react";
 
@@ -12,22 +12,25 @@ export function ManualScanForm({
   const [payload, setPayload] = useState("");
 
   return (
-    <form
+    <FormLayout
       className="work-scan-page__manual"
       onSubmit={(event) => {
         event.preventDefault();
-        onSubmit(payload);
+        if (!isLoading && payload.trim().length > 0) {
+          onSubmit(payload);
+        }
       }}
     >
       <TextInput
+        disabled={isLoading}
+        id="qrPayload"
         label="Cod lucrare sau payload QR"
         onChange={(event) => setPayload(event.target.value)}
         placeholder="WO-2026-000001 sau dl-work:..."
+        required
         value={payload}
       />
-      <Button disabled={payload.trim().length === 0 || isLoading} isLoading={isLoading} type="submit">
-        Cauta
-      </Button>
-    </form>
+      <FormActions isSubmitting={isLoading} submitDisabled={payload.trim().length === 0} submitLabel="Cauta" />
+    </FormLayout>
   );
 }

@@ -6,9 +6,13 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  ConfirmActionModal,
   DataTable,
   Drawer,
   ErrorState,
+  FormActions,
+  FormErrorSummary,
+  FormLayout,
   LoadingState,
   Modal,
   Select,
@@ -59,6 +63,7 @@ import {
   updateDoctor,
 } from "./clinics-api.js";
 import { clinicFormSchema, doctorFormSchema, type ClinicFormValues, type DoctorFormValues } from "./clinics-page.schema.js";
+import { applyApiErrorsToForm, getErrorMessage, getFormErrorSummaryItems, UnsavedChangesPrompt, useBeforeUnloadPrompt, useCloseGuard, useErrorSummaryFocus } from "../../lib/form-utils.js";
 import "./clinics-page.css";
 
 const statusOptions = [
@@ -145,9 +150,23 @@ function toDoctorFormValues(doctor: DoctorDetail | undefined, clinicId: string):
   };
 }
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Actiunea a esuat.";
-}
+const clinicFieldLabels: Partial<Record<keyof ClinicFormValues, string>> = {
+  billingCountryCode: "Tara facturare",
+  contactPersonEmail: "Email contact",
+  countryCode: "Tara",
+  email: "Email clinica",
+  name: "Nume clinica",
+  phone: "Telefon clinica",
+  website: "Website",
+};
+
+const doctorFieldLabels: Partial<Record<keyof DoctorFormValues, string>> = {
+  clinicId: "Clinica",
+  email: "Email",
+  firstName: "Prenume",
+  lastName: "Nume",
+  phone: "Telefon",
+};
 
 function toPermissionError(permissionKey: string): ReactNode {
   return `Contul curent nu are permisiunea ${permissionKey}.`;
@@ -414,6 +433,7 @@ export function ClinicsPage(): ReactNode {
         isSaving={createClinicMutation.isPending}
         onOpenChange={setIsCreateOpen}
         onSubmit={(values) => createClinicMutation.mutate(values, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Clinica nu a fost creata", variant: "error" }) })}
+        submitError={createClinicMutation.error}
       />
 
       <ClinicDetailDrawer
@@ -437,6 +457,7 @@ export function ClinicsPage(): ReactNode {
         onSubmit={(clinicId, values) => updateClinicMutation.mutate({ clinicId, input: values }, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Clinica nu a fost salvata", variant: "error" }) })}
         onCreateDoctor={() => setDoctorModal({ doctorId: null, mode: "create" })}
         restoreMutationPending={restoreClinicMutation.isPending}
+        submitError={updateClinicMutation.error}
         updateMutationPending={updateClinicMutation.isPending}
       />
 
@@ -454,6 +475,7 @@ export function ClinicsPage(): ReactNode {
           }
           createDoctorMutation.mutate(values, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Medicul nu a fost creat", variant: "error" }) });
         }}
+        submitError={doctorModal?.mode === "edit" ? updateDoctorMutation.error : createDoctorMutation.error}
       />
     </main>
   );
@@ -484,16 +506,19 @@ function ClinicCreateModal({
   isSaving,
   onOpenChange,
   onSubmit,
+  submitError,
 }: {
   readonly isOpen: boolean;
   readonly isSaving: boolean;
   readonly onOpenChange: (isOpen: boolean) => void;
   readonly onSubmit: (values: ClinicFormValues) => void;
+  readonly submitError: unknown;
 }): ReactNode {
   const form = useForm<ClinicFormValues>({
     defaultValues: defaultClinicValues,
     resolver: zodResolver(clinicFormSchema),
   });
+  const closeGuard = useCloseGuard(form.formState.isDirty, isSaving, onOpenChange);
 
   useEffect(() => {
     if (isOpen) {
@@ -501,15 +526,35 @@ function ClinicCreateModal({
     }
   }, [form, isOpen]);
 
+  useEffect(() => {
+    if (submitError) {
+      applyApiErrorsToForm(form, submitError);
+    }
+  }, [form, submitError]);
+
+  useBeforeUnloadPrompt(isOpen && form.formState.isDirty && !isSaving);
+
   return (
-    <Modal
-      footer={<Button disabled={isSaving} form="clinic-create-form" isLoading={isSaving} type="submit">Creeaza clinica</Button>}
-      isOpen={isOpen}
-      onOpenChange={onOpenChange}
-      title="Clinica noua"
-    >
-      <ClinicForm formId="clinic-create-form" form={form} isDisabled={isSaving} onSubmit={onSubmit} />
-    </Modal>
+    <>
+      <UnsavedChangesPrompt when={isOpen && form.formState.isDirty && !isSaving} />
+      <Modal
+        footer={<FormActions canReset={form.formState.isDirty} formId="clinic-create-form" isSubmitting={isSaving} onReset={() => form.reset(defaultClinicValues)} submitLabel="Creeaza clinica" />}
+        isOpen={isOpen}
+        onOpenChange={closeGuard.handleOpenChange}
+        title="Clinica noua"
+      >
+        <ClinicForm
+          formId="clinic-create-form"
+          form={form}
+          isDisabled={isSaving}
+          onSubmit={(values) => {
+            form.clearErrors("root");
+            onSubmit(values);
+          }}
+        />
+      </Modal>
+      {closeGuard.confirmModal}
+    </>
   );
 }
 
@@ -534,6 +579,7 @@ function ClinicDetailDrawer({
   onRestore,
   onSubmit,
   restoreMutationPending,
+  submitError,
   updateMutationPending,
 }: {
   readonly archiveMutationPending: boolean;
@@ -556,57 +602,96 @@ function ClinicDetailDrawer({
   readonly onRestore: (clinicId: string) => void;
   readonly onSubmit: (clinicId: string, values: ClinicFormValues) => void;
   readonly restoreMutationPending: boolean;
+  readonly submitError: unknown;
   readonly updateMutationPending: boolean;
 }): ReactNode {
+  const [confirmAction, setConfirmAction] = useState<"archive" | "restore" | null>(null);
   const form = useForm<ClinicFormValues>({
     disabled: !canUpdate || clinic?.isActive === false,
     resolver: zodResolver(clinicFormSchema),
   });
+  const closeGuard = useCloseGuard(form.formState.isDirty, updateMutationPending, onOpenChange);
 
   useEffect(() => {
     form.reset(toClinicFormValues(clinic));
   }, [clinic, form]);
 
+  useEffect(() => {
+    if (submitError) {
+      applyApiErrorsToForm(form, submitError);
+    }
+  }, [form, submitError]);
+
+  useBeforeUnloadPrompt(isOpen && form.formState.isDirty && !updateMutationPending);
+
   return (
-    <Drawer isOpen={isOpen} onOpenChange={onOpenChange} title={clinic ? `${clinic.code} · ${clinic.name}` : "Detalii clinica"}>
-      {isLoading ? <LoadingState text="Incarc clinica" /> : null}
-      {error ? <ErrorState title="Clinica nu poate fi incarcata" description={error} /> : null}
+    <>
+      <UnsavedChangesPrompt when={isOpen && form.formState.isDirty && !updateMutationPending} />
+      <Drawer isOpen={isOpen} onOpenChange={closeGuard.handleOpenChange} title={clinic ? `${clinic.code} · ${clinic.name}` : "Detalii clinica"}>
+        {isLoading ? <LoadingState text="Incarc clinica" /> : null}
+        {error ? <ErrorState title="Clinica nu poate fi incarcata" description={error} /> : null}
+        {clinic ? (
+          <div className="clinics-page__drawer">
+            <div className="clinics-page__drawer-toolbar">
+              <ActiveBadge isActive={clinic.isActive} />
+              {canArchive && clinic.isActive ? <Button disabled={archiveMutationPending} onClick={() => setConfirmAction("archive")} variant="outline">Arhiveaza</Button> : null}
+              {canArchive && !clinic.isActive ? <Button disabled={restoreMutationPending} onClick={() => setConfirmAction("restore")} variant="outline">Reactiveaza</Button> : null}
+            </div>
+            {!clinic.isActive ? <p className="clinics-page__readonly">Clinica arhivata este read-only pana la reactivare.</p> : null}
+            <ClinicForm
+              formId="clinic-detail-form"
+              form={form}
+              isDisabled={!canUpdate || !clinic.isActive || updateMutationPending}
+              onSubmit={(values) => {
+                form.clearErrors("root");
+                onSubmit(clinic.id, values);
+              }}
+            />
+            {canUpdate && clinic.isActive ? (
+              <FormActions
+                canReset={form.formState.isDirty}
+                className="clinics-page__actions"
+                formId="clinic-detail-form"
+                isSubmitting={updateMutationPending}
+                onReset={() => form.reset(toClinicFormValues(clinic))}
+                submitLabel="Salveaza clinica"
+              />
+            ) : null}
+            <DoctorsSection
+              canArchive={canArchiveDoctors}
+              canCreate={canCreateDoctors && clinic.isActive}
+              canRead={canReadDoctors}
+              canUpdate={canUpdateDoctors}
+              clinicId={clinic.id}
+              onArchive={onDoctorArchive}
+              onCreate={onCreateDoctor}
+              onEdit={onDoctorEdit}
+              onRestore={onDoctorRestore}
+            />
+          </div>
+        ) : null}
+      </Drawer>
       {clinic ? (
-        <div className="clinics-page__drawer">
-          <div className="clinics-page__drawer-toolbar">
-            <ActiveBadge isActive={clinic.isActive} />
-            {canArchive && clinic.isActive ? <Button disabled={archiveMutationPending} onClick={() => onArchive(clinic.id)} variant="outline">Arhiveaza</Button> : null}
-            {canArchive && !clinic.isActive ? <Button disabled={restoreMutationPending} onClick={() => onRestore(clinic.id)} variant="outline">Reactiveaza</Button> : null}
-          </div>
-          {!clinic.isActive ? <p className="clinics-page__readonly">Clinica arhivata este read-only pana la reactivare.</p> : null}
-          <ClinicForm
-            formId="clinic-detail-form"
-            form={form}
-            isDisabled={!canUpdate || !clinic.isActive || updateMutationPending}
-            onSubmit={(values) => onSubmit(clinic.id, values)}
-          />
-          <div className="clinics-page__actions">
-            <Button disabled={!canUpdate || !clinic.isActive || updateMutationPending || !form.formState.isDirty} form="clinic-detail-form" isLoading={updateMutationPending} type="submit">
-              Salveaza clinica
-            </Button>
-            <Button disabled={!form.formState.isDirty} onClick={() => form.reset(toClinicFormValues(clinic))} variant="outline">
-              Revino
-            </Button>
-          </div>
-          <DoctorsSection
-            canArchive={canArchiveDoctors}
-            canCreate={canCreateDoctors && clinic.isActive}
-            canRead={canReadDoctors}
-            canUpdate={canUpdateDoctors}
-            clinicId={clinic.id}
-            onArchive={onDoctorArchive}
-            onCreate={onCreateDoctor}
-            onEdit={onDoctorEdit}
-            onRestore={onDoctorRestore}
-          />
-        </div>
+        <ConfirmActionModal
+          confirmLabel={confirmAction === "archive" ? "Arhiveaza" : "Reactiveaza"}
+          description={confirmAction === "archive" ? "Clinica arhivata nu va mai aparea in selectoarele pentru lucrari noi." : "Clinica va redeveni disponibila pentru selectie."}
+          isLoading={archiveMutationPending || restoreMutationPending}
+          isOpen={confirmAction !== null}
+          onCancel={() => setConfirmAction(null)}
+          onConfirm={() => {
+            if (confirmAction === "archive") {
+              onArchive(clinic.id);
+            } else {
+              onRestore(clinic.id);
+            }
+            setConfirmAction(null);
+          }}
+          title={confirmAction === "archive" ? "Arhiveaza clinica" : "Reactiveaza clinica"}
+          variant={confirmAction === "archive" ? "danger" : "primary"}
+        />
       ) : null}
-    </Drawer>
+      {closeGuard.confirmModal}
+    </>
   );
 }
 
@@ -621,30 +706,36 @@ function ClinicForm({
   readonly isDisabled: boolean;
   readonly onSubmit: (values: ClinicFormValues) => void;
 }): ReactNode {
+  const summaryRef = useErrorSummaryFocus(form.formState.errors, form.formState.submitCount);
+  const summaryItems = form.formState.submitCount > 0
+    ? getFormErrorSummaryItems(form.formState.errors, clinicFieldLabels)
+    : [];
+
   return (
-    <form className="clinics-page__form" id={formId} onSubmit={(event) => void form.handleSubmit(onSubmit)(event)}>
+    <FormLayout className="clinics-page__form" id={formId} onSubmit={(event) => void form.handleSubmit(onSubmit)(event)}>
+      <FormErrorSummary errors={summaryItems} ref={summaryRef} />
       <FormSection title="Profil">
-        <TextInput disabled={isDisabled} error={form.formState.errors.name?.message} label="Nume clinica" {...form.register("name")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.legalName?.message} label="Denumire legala" {...form.register("legalName")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.taxId?.message} label="Cod fiscal" {...form.register("taxId")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.registrationNumber?.message} label="Numar registru" {...form.register("registrationNumber")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.name?.message} id="name" label="Nume clinica" required {...form.register("name")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.legalName?.message} id="legalName" label="Denumire legala" {...form.register("legalName")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.taxId?.message} id="taxId" label="Cod fiscal" {...form.register("taxId")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.registrationNumber?.message} id="registrationNumber" label="Numar registru" {...form.register("registrationNumber")} />
       </FormSection>
       <FormSection title="Contact">
-        <TextInput disabled={isDisabled} error={form.formState.errors.email?.message} label="Email clinica" type="email" {...form.register("email")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.phone?.message} label="Telefon clinica" type="tel" {...form.register("phone")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.website?.message} label="Website" type="url" {...form.register("website")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.contactPersonName?.message} label="Persoana contact" {...form.register("contactPersonName")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.contactPersonRole?.message} label="Rol contact" {...form.register("contactPersonRole")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.contactPersonEmail?.message} label="Email contact" type="email" {...form.register("contactPersonEmail")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.contactPersonPhone?.message} label="Telefon contact" type="tel" {...form.register("contactPersonPhone")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.email?.message} id="email" label="Email clinica" type="email" {...form.register("email")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.phone?.message} id="phone" label="Telefon clinica" type="tel" {...form.register("phone")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.website?.message} id="website" label="Website" type="url" {...form.register("website")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.contactPersonName?.message} id="contactPersonName" label="Persoana contact" {...form.register("contactPersonName")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.contactPersonRole?.message} id="contactPersonRole" label="Rol contact" {...form.register("contactPersonRole")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.contactPersonEmail?.message} id="contactPersonEmail" label="Email contact" type="email" {...form.register("contactPersonEmail")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.contactPersonPhone?.message} id="contactPersonPhone" label="Telefon contact" type="tel" {...form.register("contactPersonPhone")} />
       </FormSection>
       <FormSection title="Adresa">
-        <TextInput disabled={isDisabled} error={form.formState.errors.addressLine1?.message} label="Adresa" {...form.register("addressLine1")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.addressLine2?.message} label="Adresa secundara" {...form.register("addressLine2")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.city?.message} label="Oras" {...form.register("city")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.countyOrRegion?.message} label="Judet / regiune" {...form.register("countyOrRegion")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.postalCode?.message} label="Cod postal" {...form.register("postalCode")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.countryCode?.message} label="Tara" maxLength={2} {...form.register("countryCode")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.addressLine1?.message} id="addressLine1" label="Adresa" {...form.register("addressLine1")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.addressLine2?.message} id="addressLine2" label="Adresa secundara" {...form.register("addressLine2")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.city?.message} id="city" label="Oras" {...form.register("city")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.countyOrRegion?.message} id="countyOrRegion" label="Judet / regiune" {...form.register("countyOrRegion")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.postalCode?.message} id="postalCode" label="Cod postal" {...form.register("postalCode")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.countryCode?.message} id="countryCode" label="Tara" maxLength={2} required {...form.register("countryCode")} />
       </FormSection>
       <FormSection title="Facturare">
         <TextInput disabled={isDisabled} error={form.formState.errors.billingName?.message} label="Denumire facturare" {...form.register("billingName")} />
@@ -655,10 +746,10 @@ function ClinicForm({
         <TextInput disabled={isDisabled} error={form.formState.errors.billingCity?.message} label="Oras facturare" {...form.register("billingCity")} />
         <TextInput disabled={isDisabled} error={form.formState.errors.billingCountyOrRegion?.message} label="Judet / regiune facturare" {...form.register("billingCountyOrRegion")} />
         <TextInput disabled={isDisabled} error={form.formState.errors.billingPostalCode?.message} label="Cod postal facturare" {...form.register("billingPostalCode")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.billingCountryCode?.message} label="Tara facturare" maxLength={2} {...form.register("billingCountryCode")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.billingCountryCode?.message} id="billingCountryCode" label="Tara facturare" maxLength={2} required {...form.register("billingCountryCode")} />
       </FormSection>
-      <Textarea disabled={isDisabled} error={form.formState.errors.internalNotes?.message} label="Note interne" rows={4} {...form.register("internalNotes")} />
-    </form>
+      <Textarea disabled={isDisabled} error={form.formState.errors.internalNotes?.message} id="internalNotes" label="Note interne" rows={4} {...form.register("internalNotes")} />
+    </FormLayout>
   );
 }
 
@@ -792,6 +883,7 @@ function DoctorModal({
   mode,
   onOpenChange,
   onSubmit,
+  submitError,
 }: {
   readonly clinicId: string;
   readonly doctorId: string | null;
@@ -800,6 +892,7 @@ function DoctorModal({
   readonly mode: "create" | "edit";
   readonly onOpenChange: (isOpen: boolean) => void;
   readonly onSubmit: (values: DoctorFormValues) => void;
+  readonly submitError: unknown;
 }): ReactNode {
   const doctorQuery = useQuery({
     enabled: isOpen && mode === "edit" && doctorId !== null,
@@ -809,30 +902,55 @@ function DoctorModal({
   const form = useForm<DoctorFormValues>({
     resolver: zodResolver(doctorFormSchema),
   });
+  const summaryRef = useErrorSummaryFocus(form.formState.errors, form.formState.submitCount);
+  const summaryItems = form.formState.submitCount > 0
+    ? getFormErrorSummaryItems(form.formState.errors, doctorFieldLabels)
+    : [];
+  const closeGuard = useCloseGuard(form.formState.isDirty, isSaving, onOpenChange);
 
   useEffect(() => {
     form.reset(toDoctorFormValues(doctorQuery.data, clinicId));
   }, [clinicId, doctorQuery.data, form, isOpen]);
 
+  useEffect(() => {
+    if (submitError) {
+      applyApiErrorsToForm(form, submitError);
+    }
+  }, [form, submitError]);
+
+  useBeforeUnloadPrompt(isOpen && form.formState.isDirty && !isSaving);
+
   return (
-    <Modal
-      footer={<Button disabled={isSaving || doctorQuery.isLoading} form="doctor-form" isLoading={isSaving} type="submit">{mode === "edit" ? "Salveaza medic" : "Adauga medic"}</Button>}
-      isOpen={isOpen}
-      onOpenChange={onOpenChange}
-      title={mode === "edit" ? "Editare medic" : "Medic nou"}
-    >
-      {doctorQuery.isLoading ? <LoadingState text="Incarc medicul" /> : null}
-      <form className="clinics-page__form" id="doctor-form" onSubmit={(event) => void form.handleSubmit(onSubmit)(event)}>
-        <input type="hidden" {...form.register("clinicId")} />
-        <div className="clinics-page__form-grid">
-          <TextInput disabled={isSaving} error={form.formState.errors.firstName?.message} label="Prenume" {...form.register("firstName")} />
-          <TextInput disabled={isSaving} error={form.formState.errors.lastName?.message} label="Nume" {...form.register("lastName")} />
-          <TextInput disabled={isSaving} error={form.formState.errors.email?.message} label="Email" type="email" {...form.register("email")} />
-          <TextInput disabled={isSaving} error={form.formState.errors.phone?.message} label="Telefon" type="tel" {...form.register("phone")} />
-          <TextInput disabled={isSaving} error={form.formState.errors.professionalCode?.message} label="Cod profesional" {...form.register("professionalCode")} />
-        </div>
-        <Textarea disabled={isSaving} error={form.formState.errors.internalNotes?.message} label="Note interne" rows={4} {...form.register("internalNotes")} />
-      </form>
-    </Modal>
+    <>
+      <UnsavedChangesPrompt when={isOpen && form.formState.isDirty && !isSaving} />
+      <Modal
+        footer={<FormActions canReset={form.formState.isDirty} formId="doctor-form" isSubmitting={isSaving || doctorQuery.isLoading} onReset={() => form.reset(toDoctorFormValues(doctorQuery.data, clinicId))} submitLabel={mode === "edit" ? "Salveaza medic" : "Adauga medic"} />}
+        isOpen={isOpen}
+        onOpenChange={closeGuard.handleOpenChange}
+        title={mode === "edit" ? "Editare medic" : "Medic nou"}
+      >
+        {doctorQuery.isLoading ? <LoadingState text="Incarc medicul" /> : null}
+        <FormLayout
+          className="clinics-page__form"
+          id="doctor-form"
+          onSubmit={(event) => void form.handleSubmit((values) => {
+            form.clearErrors("root");
+            onSubmit(values);
+          })(event)}
+        >
+          <FormErrorSummary errors={summaryItems} ref={summaryRef} />
+          <input type="hidden" {...form.register("clinicId")} />
+          <div className="clinics-page__form-grid">
+            <TextInput disabled={isSaving} error={form.formState.errors.firstName?.message} id="firstName" label="Prenume" required {...form.register("firstName")} />
+            <TextInput disabled={isSaving} error={form.formState.errors.lastName?.message} id="lastName" label="Nume" required {...form.register("lastName")} />
+            <TextInput disabled={isSaving} error={form.formState.errors.email?.message} id="email" label="Email" type="email" {...form.register("email")} />
+            <TextInput disabled={isSaving} error={form.formState.errors.phone?.message} id="phone" label="Telefon" type="tel" {...form.register("phone")} />
+            <TextInput disabled={isSaving} error={form.formState.errors.professionalCode?.message} id="professionalCode" label="Cod profesional" {...form.register("professionalCode")} />
+          </div>
+          <Textarea disabled={isSaving} error={form.formState.errors.internalNotes?.message} id="internalNotes" label="Note interne" rows={4} {...form.register("internalNotes")} />
+        </FormLayout>
+      </Modal>
+      {closeGuard.confirmModal}
+    </>
   );
 }

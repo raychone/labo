@@ -575,6 +575,18 @@ th {
   font-weight: var(--dl-font-weight-semibold);
 }
 
+.dl-field__label-row {
+  align-items: baseline;
+  display: inline-flex;
+  gap: var(--dl-space-1);
+}
+
+.dl-field__required {
+  color: var(--dl-color-danger);
+  font-size: var(--dl-font-size-label);
+  font-weight: var(--dl-font-weight-semibold);
+}
+
 .dl-field__description,
 .dl-choice__description {
   color: var(--dl-color-text-muted);
@@ -588,6 +600,97 @@ th {
 
 .dl-control {
   width: 100%;
+}
+
+.dl-form {
+  display: grid;
+  gap: var(--dl-space-5);
+}
+
+.dl-form-section {
+  background: var(--dl-color-surface);
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  display: grid;
+  gap: var(--dl-space-4);
+  margin: 0;
+  min-inline-size: 0;
+  padding: var(--dl-space-4);
+}
+
+.dl-form-section__legend {
+  color: var(--dl-color-text);
+  font-size: var(--dl-font-size-card-title);
+  font-weight: var(--dl-font-weight-bold);
+  padding-inline: 0;
+}
+
+.dl-form-section__description {
+  color: var(--dl-color-text-muted);
+  font-size: var(--dl-font-size-small);
+}
+
+.dl-form-section__content {
+  display: grid;
+  gap: var(--dl-space-4);
+}
+
+.dl-form-grid {
+  display: grid;
+  gap: var(--dl-space-4);
+  grid-template-columns: 1fr;
+}
+
+.dl-form-grid__full {
+  min-width: 0;
+}
+
+.dl-form-error-summary {
+  background: var(--dl-color-danger-background);
+  border: var(--dl-border-width) solid var(--dl-color-danger-border);
+  border-radius: var(--dl-radius-md);
+  color: var(--dl-color-danger-foreground);
+  display: grid;
+  gap: var(--dl-space-2);
+  padding: var(--dl-space-4);
+}
+
+.dl-form-error-summary__title {
+  color: var(--dl-color-danger-foreground);
+  font-weight: var(--dl-font-weight-semibold);
+}
+
+.dl-form-error-summary ul {
+  margin: 0;
+  padding-inline-start: var(--dl-space-5);
+}
+
+.dl-form-error-summary a {
+  color: var(--dl-color-danger-foreground);
+}
+
+.dl-form-actions,
+.dl-form-confirm-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dl-space-3);
+}
+
+@media (min-width: 48rem) {
+  .dl-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dl-form-grid__full {
+    grid-column: 1 / -1;
+  }
+
+  .dl-form-actions,
+  .dl-form-confirm-actions {
+    align-items: center;
+    flex-direction: row;
+    justify-content: flex-end;
+  }
 }
 
 .dl-choice,

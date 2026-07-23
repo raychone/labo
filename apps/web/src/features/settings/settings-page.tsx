@@ -1,12 +1,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   ErrorState,
+  FormActions,
+  FormErrorSummary,
+  FormGrid,
+  FormGridFull,
+  FormLayout,
+  FormSection,
   LoadingState,
   Select,
   TextInput,
@@ -28,6 +28,7 @@ import {
   useUpdateSettings,
 } from "./settings-api.js";
 import { settingsFormSchema, type SettingsFormValues } from "./settings-page.schema.js";
+import { applyApiErrorsToForm, getErrorMessage, getFormErrorSummaryItems, UnsavedChangesPrompt, useBeforeUnloadPrompt, useErrorSummaryFocus } from "../../lib/form-utils.js";
 import "./settings-page.css";
 
 function toFormValues(settings: LaboratorySettings): SettingsFormValues {
@@ -53,9 +54,26 @@ function toFormValues(settings: LaboratorySettings): SettingsFormValues {
   };
 }
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Actiunea a esuat.";
-}
+const settingsFieldLabels: Record<keyof SettingsFormValues, string> = {
+  addressLine1: "Adresa",
+  addressLine2: "Adresa secundara",
+  city: "Oras",
+  companyRegistrationNumber: "Numar registru/comercial",
+  countryCode: "Tara",
+  countyOrRegion: "Judet / regiune",
+  currency: "Moneda",
+  documentFooter: "Footer documente",
+  email: "Email",
+  laboratoryName: "Nume laborator",
+  legalName: "Denumire legala",
+  locale: "Locale",
+  phone: "Telefon",
+  postalCode: "Cod postal",
+  primaryColor: "Culoare principala",
+  taxId: "Cod fiscal",
+  timezone: "Timezone",
+  website: "Website",
+};
 
 export function SettingsPage(): ReactNode {
   const toast = useToast();
@@ -72,12 +90,18 @@ export function SettingsPage(): ReactNode {
     disabled: !canUpdate,
     resolver: zodResolver(settingsFormSchema),
   });
+  const summaryRef = useErrorSummaryFocus(form.formState.errors, form.formState.submitCount);
+  const summaryItems = form.formState.submitCount > 0
+    ? getFormErrorSummaryItems(form.formState.errors, settingsFieldLabels)
+    : [];
 
   useEffect(() => {
     if (settingsQuery.data) {
       form.reset(toFormValues(settingsQuery.data));
     }
   }, [form, settingsQuery.data]);
+
+  useBeforeUnloadPrompt(form.formState.isDirty && !updateMutation.isPending);
 
   if (settingsQuery.isLoading || permissionsQuery.isLoading) {
     return (
@@ -110,8 +134,10 @@ export function SettingsPage(): ReactNode {
   }
 
   function submit(values: SettingsFormValues): void {
+    form.clearErrors("root");
     updateMutation.mutate(values, {
       onError: (error) => {
+        applyApiErrorsToForm(form, error);
         toast.showToast({ message: getErrorMessage(error), title: "Setarile nu au fost salvate", variant: "error" });
       },
       onSuccess: (settings) => {
@@ -134,81 +160,68 @@ export function SettingsPage(): ReactNode {
           ) : null}
         </header>
 
-        <form className="settings-page__form" onSubmit={(event) => void form.handleSubmit(submit)(event)}>
-          <SettingsSection title="Profil laborator" description="Date folosite in anteturi si documente viitoare.">
-            <div className="settings-page__grid">
-              <TextInput error={form.formState.errors.laboratoryName?.message} label="Nume laborator" {...form.register("laboratoryName")} />
-              <TextInput error={form.formState.errors.legalName?.message} label="Denumire legala" {...form.register("legalName")} />
-              <TextInput error={form.formState.errors.companyRegistrationNumber?.message} label="Numar registru/comercial" {...form.register("companyRegistrationNumber")} />
-              <TextInput error={form.formState.errors.taxId?.message} label="Cod fiscal" {...form.register("taxId")} />
-            </div>
-          </SettingsSection>
+        <UnsavedChangesPrompt when={form.formState.isDirty && !updateMutation.isPending} />
 
-          <SettingsSection title="Contact" description="Date publice de contact pentru laborator.">
-            <div className="settings-page__grid">
-              <TextInput error={form.formState.errors.email?.message} label="Email" type="email" {...form.register("email")} />
-              <TextInput error={form.formState.errors.phone?.message} label="Telefon" type="tel" {...form.register("phone")} />
-              <TextInput error={form.formState.errors.website?.message} label="Website" type="url" {...form.register("website")} />
-            </div>
-          </SettingsSection>
+        <FormLayout className="settings-page__form" onSubmit={(event) => void form.handleSubmit(submit)(event)}>
+          <FormErrorSummary errors={summaryItems} ref={summaryRef} />
+          <FormSection title="Profil laborator" description="Date folosite in anteturi si documente viitoare.">
+            <FormGrid>
+              <TextInput error={form.formState.errors.laboratoryName?.message} id="laboratoryName" label="Nume laborator" required {...form.register("laboratoryName")} />
+              <TextInput error={form.formState.errors.legalName?.message} id="legalName" label="Denumire legala" {...form.register("legalName")} />
+              <TextInput error={form.formState.errors.companyRegistrationNumber?.message} id="companyRegistrationNumber" label="Numar registru/comercial" {...form.register("companyRegistrationNumber")} />
+              <TextInput error={form.formState.errors.taxId?.message} id="taxId" label="Cod fiscal" {...form.register("taxId")} />
+            </FormGrid>
+          </FormSection>
 
-          <SettingsSection title="Adresa" description="Adresa principala a laboratorului.">
-            <div className="settings-page__grid">
-              <TextInput error={form.formState.errors.addressLine1?.message} label="Adresa" {...form.register("addressLine1")} />
-              <TextInput error={form.formState.errors.addressLine2?.message} label="Adresa secundara" {...form.register("addressLine2")} />
-              <TextInput error={form.formState.errors.city?.message} label="Oras" {...form.register("city")} />
-              <TextInput error={form.formState.errors.countyOrRegion?.message} label="Judet / regiune" {...form.register("countyOrRegion")} />
-              <TextInput error={form.formState.errors.postalCode?.message} label="Cod postal" {...form.register("postalCode")} />
-              <TextInput error={form.formState.errors.countryCode?.message} label="Tara" maxLength={2} {...form.register("countryCode")} />
-            </div>
-          </SettingsSection>
+          <FormSection title="Contact" description="Date publice de contact pentru laborator.">
+            <FormGrid>
+              <TextInput error={form.formState.errors.email?.message} id="email" label="Email" type="email" {...form.register("email")} />
+              <TextInput error={form.formState.errors.phone?.message} id="phone" label="Telefon" type="tel" {...form.register("phone")} />
+              <TextInput error={form.formState.errors.website?.message} id="website" label="Website" type="url" {...form.register("website")} />
+            </FormGrid>
+          </FormSection>
 
-          <SettingsSection title="Localizare" description="Valori controlate pentru formatari viitoare.">
-            <div className="settings-page__grid">
-              <Select error={form.formState.errors.timezone?.message} label="Timezone" options={timezoneOptions} {...form.register("timezone")} />
-              <Select error={form.formState.errors.locale?.message} label="Locale" options={localeOptions} {...form.register("locale")} />
-              <Select error={form.formState.errors.currency?.message} label="Moneda" options={currencyOptions} {...form.register("currency")} />
-            </div>
-          </SettingsSection>
+          <FormSection title="Adresa" description="Adresa principala a laboratorului.">
+            <FormGrid>
+              <TextInput error={form.formState.errors.addressLine1?.message} id="addressLine1" label="Adresa" {...form.register("addressLine1")} />
+              <TextInput error={form.formState.errors.addressLine2?.message} id="addressLine2" label="Adresa secundara" {...form.register("addressLine2")} />
+              <TextInput error={form.formState.errors.city?.message} id="city" label="Oras" {...form.register("city")} />
+              <TextInput error={form.formState.errors.countyOrRegion?.message} id="countyOrRegion" label="Judet / regiune" {...form.register("countyOrRegion")} />
+              <TextInput error={form.formState.errors.postalCode?.message} id="postalCode" label="Cod postal" {...form.register("postalCode")} />
+              <TextInput error={form.formState.errors.countryCode?.message} id="countryCode" label="Tara" maxLength={2} required {...form.register("countryCode")} />
+            </FormGrid>
+          </FormSection>
 
-          <SettingsSection title="Branding" description="Upload-ul de logo ramane pentru task-ul de fisiere private.">
-            <div className="settings-page__grid">
-              <TextInput error={form.formState.errors.primaryColor?.message} label="Culoare principala" {...form.register("primaryColor")} />
+          <FormSection title="Localizare" description="Valori controlate pentru formatari viitoare.">
+            <FormGrid>
+              <Select error={form.formState.errors.timezone?.message} id="timezone" label="Timezone" options={timezoneOptions} required {...form.register("timezone")} />
+              <Select error={form.formState.errors.locale?.message} id="locale" label="Locale" options={localeOptions} required {...form.register("locale")} />
+              <Select error={form.formState.errors.currency?.message} id="currency" label="Moneda" options={currencyOptions} required {...form.register("currency")} />
+            </FormGrid>
+          </FormSection>
+
+          <FormSection title="Branding" description="Upload-ul de logo ramane pentru task-ul de fisiere private.">
+            <FormGrid>
+              <TextInput error={form.formState.errors.primaryColor?.message} id="primaryColor" label="Culoare principala" required {...form.register("primaryColor")} />
               <div className="settings-page__swatch" aria-label="Previzualizare culoare" style={{ background: form.watch("primaryColor") }} />
-            </div>
-            <Textarea error={form.formState.errors.documentFooter?.message} label="Footer documente" rows={4} {...form.register("documentFooter")} />
-          </SettingsSection>
+              <FormGridFull>
+                <Textarea error={form.formState.errors.documentFooter?.message} id="documentFooter" label="Footer documente" rows={4} {...form.register("documentFooter")} />
+              </FormGridFull>
+            </FormGrid>
+          </FormSection>
 
-          <div className="settings-page__actions">
-            <Button disabled={!form.formState.isDirty || updateMutation.isPending || !canUpdate} isLoading={updateMutation.isPending} type="submit">
-              Salveaza
-            </Button>
-            <Button disabled={!form.formState.isDirty || updateMutation.isPending} onClick={() => settingsQuery.data && form.reset(toFormValues(settingsQuery.data))} variant="outline">
-              Revino la valorile salvate
-            </Button>
-          </div>
-        </form>
+          {canUpdate ? (
+            <FormActions
+              canReset={form.formState.isDirty}
+              className="settings-page__actions"
+              isSubmitting={updateMutation.isPending}
+              onReset={() => settingsQuery.data && form.reset(toFormValues(settingsQuery.data))}
+              submitDisabled={!form.formState.isDirty}
+              submitLabel="Salveaza"
+            />
+          ) : null}
+        </FormLayout>
       </section>
     </main>
-  );
-}
-
-function SettingsSection({
-  children,
-  description,
-  title,
-}: {
-  readonly children: ReactNode;
-  readonly description: string;
-  readonly title: string;
-}): ReactNode {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="settings-page__section">{children}</CardContent>
-    </Card>
   );
 }

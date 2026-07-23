@@ -8,10 +8,17 @@ import {
   Checkbox,
   DataTable,
   DateInput,
+  ConfirmActionModal,
   Drawer,
   EmptyState,
   ErrorState,
   FileUpload,
+  FormActions,
+  FormErrorSummary,
+  FormGrid,
+  FormGridFull,
+  FormLayout,
+  FormSection,
   IconButton,
   LoadingState,
   Modal,
@@ -65,12 +72,13 @@ describe("primitive components", () => {
 
 describe("form controls", () => {
   it("associates TextInput label, hint, and error", () => {
-    render(<TextInput error="Required" hint="Use a visible name" label="Name" />);
+    render(<TextInput error="Required" hint="Use a visible name" label="Name" required />);
 
-    const input = screen.getByLabelText("Name");
+    const input = screen.getByLabelText(/Name/);
     expect(input.getAttribute("aria-invalid")).toBe("true");
     expect(input.getAttribute("aria-describedby")).toContain("hint");
     expect(screen.getByRole("alert").textContent).toBe("Required");
+    expect(input.hasAttribute("required")).toBe(true);
   });
 
   it("renders Textarea, NumberInput, DateInput, and Select", () => {
@@ -121,6 +129,51 @@ describe("form controls", () => {
     expect((screen.getByRole("switch", { name: "Enabled" }) as HTMLInputElement).checked).toBe(
       true,
     );
+  });
+});
+
+describe("form patterns", () => {
+  it("renders semantic sections, grid, and actions", () => {
+    render(
+      <FormLayout aria-label="Clinic form">
+        <FormSection title="Contact" description="Visible helper">
+          <FormGrid>
+            <TextInput label="Email" />
+            <FormGridFull>
+              <Textarea label="Notes" />
+            </FormGridFull>
+          </FormGrid>
+        </FormSection>
+        <FormActions canReset formId="clinic-form" onReset={vi.fn()} submitLabel="Save" />
+      </FormLayout>,
+    );
+
+    expect(screen.getByRole("form", { name: "Clinic form" })).toBeDefined();
+    expect(screen.getByRole("group", { name: "Contact" })).toBeDefined();
+    expect(screen.getByText("Visible helper")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Save" }).getAttribute("type")).toBe("submit");
+  });
+
+  it("renders error summary links and confirmation modal", () => {
+    const confirmHandler = vi.fn();
+    render(
+      <>
+        <FormErrorSummary errors={[{ fieldId: "email", message: "Email invalid" }]} />
+        <ConfirmActionModal
+          confirmLabel="Delete"
+          description="This cannot be undone."
+          isOpen
+          onCancel={vi.fn()}
+          onConfirm={confirmHandler}
+          title="Confirm action"
+        />
+      </>,
+    );
+
+    expect(screen.getByRole("alert").textContent).toContain("Email invalid");
+    expect(screen.getByRole("link", { name: "Email invalid" }).getAttribute("href")).toBe("#email");
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(confirmHandler).toHaveBeenCalled();
   });
 });
 

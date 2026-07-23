@@ -25,10 +25,12 @@ export const FieldLabel = forwardRef<HTMLLabelElement, FieldLabelProps>(function
   ref,
 ) {
   return (
-    <label className={clsx("dl-field__label", className)} ref={ref} {...props}>
-      {children}
-      {isRequired ? <span aria-hidden="true"> *</span> : null}
-    </label>
+    <span className="dl-field__label-row">
+      <label className={clsx("dl-field__label", className)} ref={ref} {...props}>
+        {children}
+      </label>
+      {isRequired ? <span aria-hidden="true" className="dl-field__required">*</span> : null}
+    </span>
   );
 });
 

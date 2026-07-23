@@ -34,6 +34,7 @@ import { WorkForm, WorkFormActions, defaultWorkFormValues, toWorkFormValues } fr
 import { useCreateWork, useUpdateWork, useWork, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
 import { workFormSchema, type WorkFormValues } from "./works-page.schema.js";
 import { WorkQrModal } from "./work-qr-modal.js";
+import { applyApiErrorsToForm, getErrorMessage, UnsavedChangesPrompt, useBeforeUnloadPrompt, useCloseGuard } from "../../lib/form-utils.js";
 import "./works-page.css";
 
 const pageSize = 20;
@@ -58,10 +59,6 @@ const priorityFilterOptions = [
   { label: "Normal", value: "NORMAL" },
   { label: "Urgent", value: "URGENT" },
 ] as const;
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Actiunea a esuat.";
-}
 
 function toApiSort(direction: DataTableSort["direction"]): "asc" | "desc" {
   return direction === "ascending" ? "asc" : "desc";
@@ -288,9 +285,13 @@ export function WorksPage(): ReactNode {
         clinicOptions={clinicOptionsQuery.data ?? []}
         formWorkTypeOptions={formWorkTypeOptionsQuery.data ?? []}
         isOpen={isCreateOpen}
+        pricingWorkTypeOptions={pricingWorkTypeOptionsQuery.data ?? []}
         isSaving={createMutation.isPending}
         onOpenChange={setIsCreateOpen}
         onSubmit={handleCreate}
+        submitError={createMutation.error}
+        currency={currency}
+        locale={locale}
       />
 
       <WorkDetailsDrawer
@@ -310,6 +311,7 @@ export function WorksPage(): ReactNode {
         onSubmit={handleUpdate}
         onShowQr={(workId) => setQrWorkId(workId)}
         pricingWorkTypeOptions={pricingWorkTypeOptionsQuery.data ?? []}
+        submitError={updateMutation.error}
         work={selectedWork}
         workError={selectedWorkQuery.error}
         workTypeOptionsError={formWorkTypeOptionsQuery.error}
@@ -326,23 +328,38 @@ export function WorksPage(): ReactNode {
 function CreateWorkModal({
   clinicOptions,
   formWorkTypeOptions,
+  currency,
   isOpen,
   isSaving,
+  locale,
   onOpenChange,
   onSubmit,
+  pricingWorkTypeOptions,
+  submitError,
 }: {
   readonly clinicOptions: readonly { readonly code: string; readonly id: string; readonly name: string }[];
+  readonly currency: string;
   readonly formWorkTypeOptions: readonly { readonly code: string; readonly id: string; readonly name: string; readonly unit: string }[];
   readonly isOpen: boolean;
   readonly isSaving: boolean;
+  readonly locale: string;
   readonly onOpenChange: (isOpen: boolean) => void;
   readonly onSubmit: (values: WorkFormValues) => void;
+  readonly pricingWorkTypeOptions: readonly { readonly basePriceMinor: number; readonly id: string }[];
+  readonly submitError: unknown;
 }): ReactNode {
   const form = useForm<WorkFormValues>({
     defaultValues: defaultWorkFormValues,
     resolver: zodResolver(workFormSchema),
   });
   const selectedClinicId = form.watch("clinicId");
+  const selectedWorkTypeId = form.watch("workTypeId");
+  const quantity = form.watch("quantity");
+  const selectedPriceOption = pricingWorkTypeOptions.find((option) => option.id === selectedWorkTypeId);
+  const totalPreview = selectedPriceOption && Number.isFinite(quantity)
+    ? formatMoneyMinor(selectedPriceOption.basePriceMinor * quantity, currency, locale)
+    : null;
+  const closeGuard = useCloseGuard(form.formState.isDirty, isSaving, onOpenChange);
   const doctorsQuery = useQuery({
     enabled: isOpen && selectedClinicId !== "",
     queryFn: () => fetchDoctorOptions(selectedClinicId),
@@ -356,25 +373,41 @@ function CreateWorkModal({
     }
   }, [form, isOpen]);
 
+  useEffect(() => {
+    if (submitError) {
+      applyApiErrorsToForm(form, submitError);
+    }
+  }, [form, submitError]);
+
+  useBeforeUnloadPrompt(isOpen && form.formState.isDirty && !isSaving);
+
   return (
-    <Modal
-      description="Completeaza datele minime pentru statusul REGISTERED."
-      footer={<WorkFormActions canReset={form.formState.isDirty} formId="create-work-form" isSaving={isSaving} onReset={() => form.reset(defaultWorkFormValues)} submitLabel="Creeaza lucrare" />}
-      isOpen={isOpen}
-      onOpenChange={onOpenChange}
-      title="Lucrare noua"
-    >
-      <WorkForm
-        clinicOptions={clinicOptions}
-        doctorOptions={doctorsQuery.data ?? []}
-        form={form}
-        formId="create-work-form"
-        isDisabled={isSaving}
-        onClinicChange={() => form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true })}
-        onSubmit={onSubmit}
-        workTypeOptions={formWorkTypeOptions}
-      />
-    </Modal>
+    <>
+      <UnsavedChangesPrompt when={isOpen && form.formState.isDirty && !isSaving} />
+      <Modal
+        description="Completeaza datele minime pentru statusul REGISTERED."
+        footer={<WorkFormActions canReset={form.formState.isDirty} formId="create-work-form" isSaving={isSaving} onReset={() => form.reset(defaultWorkFormValues)} submitLabel="Creeaza lucrare" />}
+        isOpen={isOpen}
+        onOpenChange={closeGuard.handleOpenChange}
+        title="Lucrare noua"
+      >
+        <WorkForm
+          clinicOptions={clinicOptions}
+          doctorOptions={doctorsQuery.data ?? []}
+          form={form}
+          formId="create-work-form"
+          isDisabled={isSaving}
+          onClinicChange={() => form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true })}
+          onSubmit={(values) => {
+            form.clearErrors("root");
+            onSubmit(values);
+          }}
+          totalPreview={totalPreview}
+          workTypeOptions={formWorkTypeOptions}
+        />
+      </Modal>
+      {closeGuard.confirmModal}
+    </>
   );
 }
 
@@ -391,6 +424,7 @@ function WorkDetailsDrawer({
   onShowQr,
   onSubmit,
   pricingWorkTypeOptions,
+  submitError,
   work,
   workError,
   workTypeOptionsError,
@@ -407,6 +441,7 @@ function WorkDetailsDrawer({
   readonly onShowQr: (workId: string) => void;
   readonly onSubmit: (values: WorkFormValues) => void;
   readonly pricingWorkTypeOptions: readonly { readonly basePriceMinor: number; readonly id: string }[];
+  readonly submitError: unknown;
   readonly work: import("@dental-lab/shared").WorkDetail | undefined;
   readonly workError: unknown;
   readonly workTypeOptionsError: unknown;
@@ -428,53 +463,69 @@ function WorkDetailsDrawer({
   const totalPreview = selectedPriceOption && Number.isFinite(quantity)
     ? formatMoneyMinor(selectedPriceOption.basePriceMinor * quantity, currency, locale)
     : null;
+  const closeGuard = useCloseGuard(form.formState.isDirty, isSaving, onOpenChange);
 
   useEffect(() => {
     form.reset(toWorkFormValues(work));
   }, [form, work]);
 
+  useEffect(() => {
+    if (submitError) {
+      applyApiErrorsToForm(form, submitError);
+    }
+  }, [form, submitError]);
+
+  useBeforeUnloadPrompt(isOpen && form.formState.isDirty && !isSaving);
+
   return (
-    <Drawer
-      description={work ? `${work.code} · ${work.status}` : "Detalii lucrare"}
-      isOpen={isOpen}
-      onOpenChange={onOpenChange}
-      title="Detalii lucrare"
-    >
-      {workError ? <ErrorState title="Lucrarea nu a fost incarcata" description={getErrorMessage(workError)} /> : null}
-      {work ? (
-        <div className="works-page__drawer">
-          <div className="works-page__meta">
-            <StatusBadge label="Inregistrata" variant="registered" />
-            <PriorityBadge label={work.priority === "URGENT" ? "Urgent" : "Normal"} variant={work.priority === "URGENT" ? "urgent" : "normal"} />
-            <span>Termen: {formatDate(work.requestedDeliveryDate)}</span>
-            {canReadPricing ? <span>Total: {formatPrice(work.totalPriceMinor, work.currency ?? currency, locale)}</span> : null}
-            {canReadPricing && totalPreview !== null ? <span>Preview: {totalPreview}</span> : null}
+    <>
+      <UnsavedChangesPrompt when={isOpen && form.formState.isDirty && !isSaving} />
+      <Drawer
+        description={work ? `${work.code} · ${work.status}` : "Detalii lucrare"}
+        isOpen={isOpen}
+        onOpenChange={closeGuard.handleOpenChange}
+        title="Detalii lucrare"
+      >
+        {workError ? <ErrorState title="Lucrarea nu a fost incarcata" description={getErrorMessage(workError)} /> : null}
+        {work ? (
+          <div className="works-page__drawer">
+            <div className="works-page__meta">
+              <StatusBadge label="Inregistrata" variant="registered" />
+              <PriorityBadge label={work.priority === "URGENT" ? "Urgent" : "Normal"} variant={work.priority === "URGENT" ? "urgent" : "normal"} />
+              <span>Termen: {formatDate(work.requestedDeliveryDate)}</span>
+              {canReadPricing ? <span>Total: {formatPrice(work.totalPriceMinor, work.currency ?? currency, locale)}</span> : null}
+            </div>
+            <div className="works-page__actions">
+              <Button onClick={() => onShowQr(work.id)} variant="outline">Vezi QR</Button>
+            </div>
+            {workTypeOptionsError ? <ErrorState title="Optiunile nu au fost incarcate" description={getErrorMessage(workTypeOptionsError)} /> : null}
+            <WorkForm
+              clinicOptions={clinicOptions}
+              doctorOptions={doctorsQuery.data ?? []}
+              form={form}
+              formId="update-work-form"
+              isDisabled={!canUpdate || isSaving}
+              onClinicChange={() => form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true })}
+              onSubmit={(values) => {
+                form.clearErrors("root");
+                onSubmit(values);
+              }}
+              totalPreview={canReadPricing ? totalPreview : null}
+              workTypeOptions={formWorkTypeOptions}
+            />
+            <WorkFormActions
+              canReset={form.formState.isDirty}
+              formId="update-work-form"
+              isSaving={isSaving}
+              onReset={() => form.reset(toWorkFormValues(work))}
+              submitLabel="Salveaza lucrarea"
+            />
+            {!canUpdate ? <p className="works-page__muted">Ai acces de citire, dar nu poti modifica lucrarea.</p> : null}
           </div>
-          <div className="works-page__actions">
-            <Button onClick={() => onShowQr(work.id)} variant="outline">Vezi QR</Button>
-          </div>
-          {workTypeOptionsError ? <ErrorState title="Optiunile nu au fost incarcate" description={getErrorMessage(workTypeOptionsError)} /> : null}
-          <WorkForm
-            clinicOptions={clinicOptions}
-            doctorOptions={doctorsQuery.data ?? []}
-            form={form}
-            formId="update-work-form"
-            isDisabled={!canUpdate || isSaving}
-            onClinicChange={() => form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true })}
-            onSubmit={onSubmit}
-            workTypeOptions={formWorkTypeOptions}
-          />
-          <WorkFormActions
-            canReset={form.formState.isDirty}
-            formId="update-work-form"
-            isSaving={isSaving}
-            onReset={() => form.reset(toWorkFormValues(work))}
-            submitLabel="Salveaza lucrarea"
-          />
-          {!canUpdate ? <p className="works-page__muted">Ai acces de citire, dar nu poti modifica lucrarea.</p> : null}
-        </div>
-      ) : !workError ? <LoadingState text="Incarc detaliile" /> : null}
-    </Drawer>
+        ) : !workError ? <LoadingState text="Incarc detaliile" /> : null}
+      </Drawer>
+      {closeGuard.confirmModal}
+    </>
   );
 }
 

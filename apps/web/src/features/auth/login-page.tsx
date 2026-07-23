@@ -1,12 +1,14 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  Button,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
   ErrorState,
+  FormActions,
+  FormErrorSummary,
+  FormLayout,
   LoadingState,
   TextInput,
 } from "@dental-lab/ui";
@@ -26,11 +28,17 @@ import { loginFormSchema } from "./login-form.schema.js";
 import { authQueryKeys, useAuthState } from "../../app/auth-state.js";
 import { getDefaultAuthorizedRoute, getFirstAuthorizedRoute, getSafeReturnTo } from "../../app/route-registry.js";
 import { usePageTitle } from "../../app/use-page-title.js";
+import { getFormErrorSummaryItems, useErrorSummaryFocus } from "../../lib/form-utils.js";
 import "./login-page.css";
 
 const defaultLoginValues: LoginFormValues = {
   email: "",
   password: "",
+};
+
+const loginFieldLabels: Record<keyof LoginFormValues, string> = {
+  email: "Email",
+  password: "Parola",
 };
 
 export function LoginPage(): ReactNode {
@@ -72,6 +80,10 @@ export function LoginPage(): ReactNode {
     },
   });
   const passwordRegistration = form.register("password");
+  const summaryRef = useErrorSummaryFocus(form.formState.errors, form.formState.submitCount);
+  const summaryItems = form.formState.submitCount > 0
+    ? getFormErrorSummaryItems(form.formState.errors, loginFieldLabels)
+    : [];
   usePageTitle("Autentificare", "Dental Lab Management");
 
   useEffect(() => {
@@ -106,23 +118,28 @@ export function LoginPage(): ReactNode {
             {auth.status === "loading" ? (
               <LoadingState text="Verific sesiunea" />
             ) : (
-              <form
+              <FormLayout
                 className="auth-page__form"
                 onSubmit={(event) => {
                   void form.handleSubmit((values) => loginMutation.mutate(values))(event);
                 }}
               >
+                <FormErrorSummary errors={summaryItems} ref={summaryRef} />
                 <TextInput
                   autoComplete="email"
                   error={form.formState.errors.email?.message}
+                  id="email"
                   label="Email"
+                  required
                   type="email"
                   {...form.register("email")}
                 />
                 <TextInput
                   autoComplete="current-password"
                   error={form.formState.errors.password?.message}
+                  id="password"
                   label="Parola"
+                  required
                   type="password"
                   {...passwordRegistration}
                   ref={(element) => {
@@ -142,14 +159,12 @@ export function LoginPage(): ReactNode {
                     description="Email sau parola invalide."
                   />
                 ) : null}
-                <Button
-                  fullWidth
-                  isLoading={loginMutation.isPending}
-                  type="submit"
-                >
-                  Login
-                </Button>
-              </form>
+                <FormActions
+                  className="auth-page__actions"
+                  isSubmitting={loginMutation.isPending}
+                  submitLabel="Login"
+                />
+              </FormLayout>
             )}
           </CardContent>
         </Card>

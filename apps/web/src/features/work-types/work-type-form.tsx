@@ -1,10 +1,21 @@
-import { Button, Select, TextInput, Textarea } from "@dental-lab/ui";
+import {
+  FormActions,
+  FormErrorSummary,
+  FormGrid,
+  FormGridFull,
+  FormLayout,
+  FormSection,
+  Select,
+  TextInput,
+  Textarea,
+} from "@dental-lab/ui";
 import type { WorkTypeDetail } from "@dental-lab/shared";
 import { minorToDecimalString } from "@dental-lab/shared";
 import type { ReactNode } from "react";
 import type { UseFormReturn } from "react-hook-form";
 
 import type { WorkTypeFormValues } from "./work-types-page.schema.js";
+import { getFormErrorSummaryItems, useErrorSummaryFocus } from "../../lib/form-utils.js";
 
 export const workTypeUnitOptions = [{ label: "Unitate", value: "UNIT" }] as const;
 
@@ -13,6 +24,13 @@ export const defaultWorkTypeFormValues: WorkTypeFormValues = {
   description: null,
   name: "",
   unit: "UNIT",
+};
+
+const workTypeFieldLabels: Record<keyof WorkTypeFormValues, string> = {
+  basePriceDecimal: "Pret de baza",
+  description: "Descriere",
+  name: "Denumire",
+  unit: "Unitate tarifare",
 };
 
 export function toWorkTypeFormValues(workType: WorkTypeDetail | undefined): WorkTypeFormValues {
@@ -41,29 +59,38 @@ export function WorkTypeForm({
   readonly isDisabled: boolean;
   readonly onSubmit: (values: WorkTypeFormValues) => void;
 }): ReactNode {
+  const summaryRef = useErrorSummaryFocus(form.formState.errors, form.formState.submitCount);
+  const summaryItems = form.formState.submitCount > 0
+    ? getFormErrorSummaryItems(form.formState.errors, workTypeFieldLabels)
+    : [];
+
   return (
-    <form className="work-types-page__form" id={formId} onSubmit={(event) => void form.handleSubmit(onSubmit)(event)}>
-      <fieldset className="work-types-page__fieldset">
-        <legend>Identificare</legend>
-        <div className="work-types-page__form-grid">
-          <TextInput disabled={isDisabled} error={form.formState.errors.name?.message} label="Denumire" {...form.register("name")} />
-          <Select disabled={isDisabled} error={form.formState.errors.unit?.message} label="Unitate tarifare" options={workTypeUnitOptions} {...form.register("unit")} />
-        </div>
-      </fieldset>
-      <fieldset className="work-types-page__fieldset">
-        <legend>Pricing</legend>
-        <div className="work-types-page__form-grid">
+    <FormLayout className="work-types-page__form" id={formId} onSubmit={(event) => void form.handleSubmit(onSubmit)(event)}>
+      <FormErrorSummary errors={summaryItems} ref={summaryRef} />
+      <FormSection title="Identificare" description="Codul este generat de backend si ramane nemodificabil.">
+        <FormGrid>
+          <TextInput disabled={isDisabled} error={form.formState.errors.name?.message} id="name" label="Denumire" required {...form.register("name")} />
+          <Select disabled={isDisabled} error={form.formState.errors.unit?.message} id="unit" label="Unitate tarifare" options={workTypeUnitOptions} required {...form.register("unit")} />
+        </FormGrid>
+      </FormSection>
+      <FormSection title="Pricing" description="Pretul este introdus strict in unitati majore si salvat in minor units, fara rotunjiri ascunse.">
+        <FormGrid>
           <TextInput
             disabled={isDisabled}
             error={form.formState.errors.basePriceDecimal?.message}
+            hint="Maximum doua zecimale. Valorile negative sunt respinse."
+            id="basePriceDecimal"
             inputMode="decimal"
             label={`Pret de baza (${currency})`}
+            required
             {...form.register("basePriceDecimal")}
           />
-        </div>
-      </fieldset>
-      <Textarea disabled={isDisabled} error={form.formState.errors.description?.message} label="Descriere" rows={4} {...form.register("description")} />
-    </form>
+          <FormGridFull>
+            <Textarea disabled={isDisabled} error={form.formState.errors.description?.message} id="description" label="Descriere" rows={4} {...form.register("description")} />
+          </FormGridFull>
+        </FormGrid>
+      </FormSection>
+    </FormLayout>
   );
 }
 
@@ -81,13 +108,13 @@ export function WorkTypeFormActions({
   readonly submitLabel: string;
 }): ReactNode {
   return (
-    <div className="work-types-page__actions">
-      <Button disabled={isSaving} form={formId} isLoading={isSaving} type="submit">
-        {submitLabel}
-      </Button>
-      <Button disabled={!canReset || isSaving} onClick={onReset} variant="outline">
-        Revino
-      </Button>
-    </div>
+    <FormActions
+      canReset={canReset}
+      className="work-types-page__actions"
+      formId={formId}
+      isSubmitting={isSaving}
+      onReset={onReset}
+      submitLabel={submitLabel}
+    />
   );
 }

@@ -427,6 +427,42 @@ Current UI-002 limits:
 - `DataTable` uses controlled sorting/pagination and horizontal scroll on small screens; it does not implement querying, virtualization, resizing, editing, or export.
 - `FileUpload` only handles local selection/removal; it does not upload files.
 
+## Form Patterns
+
+FORMS-001 standardizes existing frontend form UX without adding new backend business models.
+
+Reusable form layout primitives live in `@dental-lab/ui`:
+
+```ts
+import {
+  FormActions,
+  FormErrorSummary,
+  FormGrid,
+  FormGridFull,
+  FormLayout,
+  FormSection,
+} from "@dental-lab/ui";
+```
+
+Feature forms still own their domain schemas and submit handlers. Shared frontend form behavior lives in `apps/web/src/lib/form-utils.tsx`:
+
+- `normalizeApiError` and `applyApiErrorsToForm` map backend and network errors into field-level or form-level React Hook Form errors.
+- `getFormErrorSummaryItems` builds accessible error summary links from form errors.
+- `useErrorSummaryFocus` and `focusFirstInvalidField` move focus after invalid submit.
+- `useBeforeUnloadPrompt`, `UnsavedChangesPrompt`, and `useCloseGuard` protect dirty forms on refresh, internal navigation, and modal/drawer close.
+
+Validation rules remain split deliberately:
+
+- Simple UX validation stays in frontend Zod schemas.
+- Backend DTO validation and RBAC remain the source of truth.
+- Business conflicts are shown as form-level errors instead of stack traces or raw objects.
+
+FORMS-001 migrated the current forms for login, users, settings, clinics/doctors, work types, works, and manual QR scan. Work order forms are organized into operational sections: clinic and doctor, patient, work, deadline and priority, and notes. The clinic to doctor dependency resets stale doctors on clinic change.
+
+Read-only users see values without false submit actions where the page is not editable. Save actions are disabled when there are no relevant dirty changes where appropriate. Confirmation dialogs use reusable modal-based actions instead of native `window.confirm`.
+
+Dynamic work form templates are not part of FORMS-001. They are tracked separately as `WORKFORMS-001`, followed by immutable work form completion/snapshot work in `FORMS-002`.
+
 ## Current Task
 
 See `IMPLEMENTATION_STATUS.md` for task progress and manual testing checklists.

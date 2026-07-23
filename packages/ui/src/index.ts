@@ -58,6 +58,25 @@ export type {
   TextareaProps,
   TextInputProps,
 } from "./components/form-controls.js";
+export {
+  ConfirmActionModal,
+  FormActions,
+  FormErrorSummary,
+  FormGrid,
+  FormGridFull,
+  FormLayout,
+  FormSection,
+} from "./components/form-patterns.js";
+export type {
+  ConfirmActionModalProps,
+  FormActionsProps,
+  FormErrorSummaryItem,
+  FormErrorSummaryProps,
+  FormGridFullProps,
+  FormGridProps,
+  FormLayoutProps,
+  FormSectionProps,
+} from "./components/form-patterns.js";
 export { FileUpload } from "./components/file-upload.js";
 export type { FileUploadProps } from "./components/file-upload.js";
 export { Field, FieldDescription, FieldError, FieldLabel } from "./components/field.js";

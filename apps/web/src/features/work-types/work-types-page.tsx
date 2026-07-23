@@ -6,6 +6,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  ConfirmActionModal,
   DataTable,
   Drawer,
   ErrorState,
@@ -50,6 +51,7 @@ import {
   toWorkTypeFormValues,
 } from "./work-type-form.js";
 import { workTypeFormSchema, type WorkTypeFormValues } from "./work-types-page.schema.js";
+import { applyApiErrorsToForm, getErrorMessage, UnsavedChangesPrompt, useBeforeUnloadPrompt, useCloseGuard } from "../../lib/form-utils.js";
 import "./work-types-page.css";
 
 const statusOptions = [
@@ -57,10 +59,6 @@ const statusOptions = [
   { label: "Active", value: "active" },
   { label: "Arhivate", value: "archived" },
 ] as const;
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Actiunea a esuat.";
-}
 
 function toStatusValue(isActive: boolean | undefined): string {
   return isActive === undefined ? "all" : isActive ? "active" : "archived";
@@ -235,6 +233,7 @@ export function WorkTypesPage(): ReactNode {
             toast.showToast({ message: "Tipul de lucrare a fost creat.", variant: "success" });
           },
         })}
+        submitError={createMutation.error}
       />
       <WorkTypeDetailDrawer
         canUpdate={canUpdate}
@@ -256,6 +255,7 @@ export function WorkTypesPage(): ReactNode {
           onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Tipul nu a fost salvat", variant: "error" }),
           onSuccess: () => toast.showToast({ message: "Tipul de lucrare a fost salvat.", variant: "success" }),
         })}
+        submitError={updateMutation.error}
         workType={selectedWorkTypeQuery.data}
       />
     </main>
@@ -276,24 +276,54 @@ function WorkTypeCreateModal({
   isSaving,
   onOpenChange,
   onSubmit,
+  submitError,
 }: {
   readonly currency: string;
   readonly isOpen: boolean;
   readonly isSaving: boolean;
   readonly onOpenChange: (isOpen: boolean) => void;
   readonly onSubmit: (values: WorkTypeFormValues) => void;
+  readonly submitError: unknown;
 }): ReactNode {
   const form = useForm<WorkTypeFormValues>({ defaultValues: defaultWorkTypeFormValues, resolver: zodResolver(workTypeFormSchema) });
+  const closeGuard = useCloseGuard(form.formState.isDirty, isSaving, onOpenChange);
+
   useEffect(() => {
     if (isOpen) {
       form.reset(defaultWorkTypeFormValues);
     }
   }, [form, isOpen]);
 
+  useEffect(() => {
+    if (submitError) {
+      applyApiErrorsToForm(form, submitError);
+    }
+  }, [form, submitError]);
+
+  useBeforeUnloadPrompt(isOpen && form.formState.isDirty && !isSaving);
+
   return (
-    <Modal footer={<Button disabled={isSaving} form="work-type-create-form" isLoading={isSaving} type="submit">Creeaza</Button>} isOpen={isOpen} onOpenChange={onOpenChange} title="Tip de lucrare nou">
-      <WorkTypeForm currency={currency} form={form} formId="work-type-create-form" isDisabled={isSaving} onSubmit={onSubmit} />
-    </Modal>
+    <>
+      <UnsavedChangesPrompt when={isOpen && form.formState.isDirty && !isSaving} />
+      <Modal
+        footer={<WorkTypeFormActions canReset={form.formState.isDirty} formId="work-type-create-form" isSaving={isSaving} onReset={() => form.reset(defaultWorkTypeFormValues)} submitLabel="Creeaza" />}
+        isOpen={isOpen}
+        onOpenChange={closeGuard.handleOpenChange}
+        title="Tip de lucrare nou"
+      >
+        <WorkTypeForm
+          currency={currency}
+          form={form}
+          formId="work-type-create-form"
+          isDisabled={isSaving}
+          onSubmit={(values) => {
+            form.clearErrors("root");
+            onSubmit(values);
+          }}
+        />
+      </Modal>
+      {closeGuard.confirmModal}
+    </>
   );
 }
 
@@ -308,6 +338,7 @@ function WorkTypeDetailDrawer({
   onOpenChange,
   onRestore,
   onSubmit,
+  submitError,
   workType,
 }: {
   readonly canUpdate: boolean;
@@ -320,41 +351,81 @@ function WorkTypeDetailDrawer({
   readonly onOpenChange: (isOpen: boolean) => void;
   readonly onRestore: (workTypeId: string) => void;
   readonly onSubmit: (workTypeId: string, values: WorkTypeFormValues) => void;
+  readonly submitError: unknown;
   readonly workType: import("@dental-lab/shared").WorkTypeDetail | undefined;
 }): ReactNode {
+  const [confirmAction, setConfirmAction] = useState<"archive" | "restore" | null>(null);
   const form = useForm<WorkTypeFormValues>({ disabled: !canUpdate || workType?.isActive === false, resolver: zodResolver(workTypeFormSchema) });
+  const closeGuard = useCloseGuard(form.formState.isDirty, isSaving, onOpenChange);
+
   useEffect(() => {
     form.reset(toWorkTypeFormValues(workType));
   }, [form, workType]);
 
+  useEffect(() => {
+    if (submitError) {
+      applyApiErrorsToForm(form, submitError);
+    }
+  }, [form, submitError]);
+
+  useBeforeUnloadPrompt(isOpen && form.formState.isDirty && !isSaving);
+
   return (
-    <Drawer isOpen={isOpen} onOpenChange={onOpenChange} title={workType ? `${workType.code} · ${workType.name}` : "Detalii tip lucrare"}>
-      {isLoading ? <LoadingState text="Incarc tipul de lucrare" /> : null}
-      {error ? <ErrorState title="Tipul nu poate fi incarcat" description={error} /> : null}
-      {workType ? (
-        <div className="work-types-page__drawer">
-          <div className="work-types-page__drawer-toolbar">
-            <ActiveBadge isActive={workType.isActive} />
-            {canUpdate && workType.isActive ? <Button disabled={isSaving} onClick={() => onArchive(workType.id)} variant="outline">Arhiveaza</Button> : null}
-            {canUpdate && !workType.isActive ? <Button disabled={isSaving} onClick={() => onRestore(workType.id)} variant="outline">Reactiveaza</Button> : null}
+    <>
+      <UnsavedChangesPrompt when={isOpen && form.formState.isDirty && !isSaving} />
+      <Drawer isOpen={isOpen} onOpenChange={closeGuard.handleOpenChange} title={workType ? `${workType.code} · ${workType.name}` : "Detalii tip lucrare"}>
+        {isLoading ? <LoadingState text="Incarc tipul de lucrare" /> : null}
+        {error ? <ErrorState title="Tipul nu poate fi incarcat" description={error} /> : null}
+        {workType ? (
+          <div className="work-types-page__drawer">
+            <div className="work-types-page__drawer-toolbar">
+              <ActiveBadge isActive={workType.isActive} />
+              {canUpdate && workType.isActive ? <Button disabled={isSaving} onClick={() => setConfirmAction("archive")} variant="outline">Arhiveaza</Button> : null}
+              {canUpdate && !workType.isActive ? <Button disabled={isSaving} onClick={() => setConfirmAction("restore")} variant="outline">Reactiveaza</Button> : null}
+            </div>
+            {!workType.isActive ? <p className="work-types-page__readonly">Tipul arhivat este read-only pana la reactivare.</p> : null}
+            <WorkTypeForm
+              currency={currency}
+              form={form}
+              formId="work-type-detail-form"
+              isDisabled={!canUpdate || !workType.isActive || isSaving}
+              onSubmit={(values) => {
+                form.clearErrors("root");
+                onSubmit(workType.id, values);
+              }}
+            />
+            {canUpdate && workType.isActive ? (
+              <WorkTypeFormActions
+                canReset={form.formState.isDirty}
+                formId="work-type-detail-form"
+                isSaving={isSaving}
+                onReset={() => form.reset(toWorkTypeFormValues(workType))}
+                submitLabel="Salveaza"
+              />
+            ) : null}
           </div>
-          {!workType.isActive ? <p className="work-types-page__readonly">Tipul arhivat este read-only pana la reactivare.</p> : null}
-          <WorkTypeForm
-            currency={currency}
-            form={form}
-            formId="work-type-detail-form"
-            isDisabled={!canUpdate || !workType.isActive || isSaving}
-            onSubmit={(values) => onSubmit(workType.id, values)}
-          />
-          <WorkTypeFormActions
-            canReset={form.formState.isDirty}
-            formId="work-type-detail-form"
-            isSaving={isSaving}
-            onReset={() => form.reset(toWorkTypeFormValues(workType))}
-            submitLabel="Salveaza"
-          />
-        </div>
+        ) : null}
+      </Drawer>
+      {workType ? (
+        <ConfirmActionModal
+          confirmLabel={confirmAction === "archive" ? "Arhiveaza" : "Reactiveaza"}
+          description={confirmAction === "archive" ? "Tipul arhivat nu va mai aparea in selectoarele pentru lucrari noi." : "Tipul va redeveni disponibil pentru lucrari noi."}
+          isLoading={isSaving}
+          isOpen={confirmAction !== null}
+          onCancel={() => setConfirmAction(null)}
+          onConfirm={() => {
+            if (confirmAction === "archive") {
+              onArchive(workType.id);
+            } else {
+              onRestore(workType.id);
+            }
+            setConfirmAction(null);
+          }}
+          title={confirmAction === "archive" ? "Arhiveaza tipul de lucrare" : "Reactiveaza tipul de lucrare"}
+          variant={confirmAction === "archive" ? "danger" : "primary"}
+        />
       ) : null}
-    </Drawer>
+      {closeGuard.confirmModal}
+    </>
   );
 }

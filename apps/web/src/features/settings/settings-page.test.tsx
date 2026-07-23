@@ -91,8 +91,7 @@ describe("SettingsPage", () => {
     renderWithProviders(<SettingsPage />);
 
     expect(await screen.findByText("Ai acces de citire, dar nu poti modifica aceste setari.")).toBeDefined();
-    const saveButton = await screen.findByRole("button", { name: "Salveaza" });
-    expect(saveButton).toHaveProperty("disabled", true);
+    expect(screen.queryByRole("button", { name: "Salveaza" })).toBeNull();
   });
 
   it("renders an access error without settings.read", async () => {

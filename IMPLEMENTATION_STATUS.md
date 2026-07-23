@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-48%
+50%
 
 ## FOUNDATION
 
@@ -56,8 +56,9 @@
 
 ## FORMS
 
-- [ ] FORMS-001 - Form patterns and validation UX (NOT STARTED)
-- [ ] FORMS-002 - Form performance and reuse hardening (NOT STARTED)
+- [x] FORMS-001 - Form patterns and validation UX
+- [ ] WORKFORMS-001 - Work form template builder (NOT STARTED)
+- [ ] FORMS-002 - Work form completion and immutable snapshot (NOT STARTED)
 
 ## FILES
 
@@ -137,7 +138,7 @@ Status: AWAITING APPROVAL
 
 ## Next Recommended Task
 
-FORMS-001 - Form patterns and validation UX
+WORKFORMS-001 - Work form template builder
 
 ## Known Technical Debt
 
@@ -168,6 +169,11 @@ None.
 - Keep AUTH-001 rate limiting in memory until a shared store is introduced.
 - Use a central RBAC authorization service for permission checks.
 - Keep permissions out of cookies and sessions.
+- Keep FORMS-001 limited to common form UX patterns; dynamic work form templates are tracked separately as WORKFORMS-001.
+- Keep backend DTO validation and RBAC as the source of truth; frontend Zod validation is for immediate UX feedback only.
+- Use `@dental-lab/ui` form pattern primitives for layout, sections, error summaries, form actions, and confirmation modals.
+- Normalize frontend API errors in `apps/web/src/lib/api-client.ts` and map them to React Hook Form through `apps/web/src/lib/form-utils.tsx`.
+- Protect dirty forms with route blocking where React Router data-router context exists, plus `beforeunload` and modal/drawer close guards.
 - Evaluate RBAC from the database so access changes take effect without relogin.
 - Treat `ALL` as the only broad scope; ownership scopes remain distinct.
 - Use plain CSS custom properties in `packages/ui/src/styles.css` as the design token source of truth.
@@ -225,10 +231,10 @@ None.
 
 ### FORMS-001 - Form patterns and validation UX
 
-- Status: NOT STARTED.
+- Status: COMPLETED.
 - Obiectiv: standardizare formulare pentru utilizatori atehnici.
 - Scope: patternuri pentru erori, required markers, field groups, submit states, reset/cancel si validare Zod/RHF coerenta.
-- Non-goals: schimbarea regulilor business, wizard complex, autosave.
+- Non-goals: schimbarea regulilor business, wizard complex, autosave, template builder dinamic, snapshot valori formular pe lucrare.
 - Dependente: UI-002, SHELL-001.
 - Acceptance criteria: formularele principale au erori clare, stari de saving consistente si layout mobile-first.
 - Backend: fara endpointuri noi.
@@ -236,20 +242,35 @@ None.
 - Securitate: nu inlocuieste validarea server-side.
 - Audit: fara audit nou.
 - Testare: component tests pentru erori, disabled states si submit.
+- Implementare: adaugate patternuri comune de formular, mapare erori API, error summary accesibil, focus management, dirty guards si confirmari modal aplicate pe formularele existente.
 
-### FORMS-002 - Form performance and reuse hardening
+### WORKFORMS-001 - Work form template builder
 
 - Status: NOT STARTED.
-- Obiectiv: reducerea duplicarii si imbunatatirea performantei formularelor existente.
-- Scope: extragere compozitii reutilizabile, query enabling coerent, evitarea rerenderelor inutile.
-- Non-goals: refactor major de domeniu, schimbare UX vizibila fara cerinta.
-- Dependente: FORMS-001.
-- Acceptance criteria: duplicarea comuna scade fara regresii de comportament.
-- Backend: fara endpointuri noi.
-- Frontend: refactor concentrat pe formulare existente si teste.
-- Securitate: contractele de validare raman sincronizate cu serverul.
-- Audit: fara audit nou.
-- Testare: typecheck, teste existente si teste focalizate pe formulare refactorizate.
+- Obiectiv: configurarea formularelor dinamice per tip de lucrare fara salvarea valorilor pe WorkOrder.
+- Scope: template activ per WorkType, field definitions, field types MVP, versiuni, preview, activare si arhivare.
+- Non-goals: upload fisiere, scripting, HTML custom, conditional rules engine complex, autosave, completare/snapshot valori pe lucrare.
+- Dependente: FORMS-001, WORKTYPES-001, RBAC-001.
+- Acceptance criteria: managerii pot defini si publica un template versionat pentru un tip de lucrare, iar utilizatorii fara permisiuni de modificare il vad read-only.
+- Backend: modele si endpointuri pentru template-uri si field definitions, validate server-side, fara modificare retroactiva a versiunilor publicate.
+- Frontend: ruta de administrare template pentru WorkType, lista campuri, add/edit, ordonare simpla, preview si stari de activare/arhivare.
+- Securitate: RBAC server-side pentru citire/modificare/arhivare, validare stricta a optiunilor JSON si a tipurilor de camp.
+- Audit: audit pentru create/update/activate/archive template.
+- Testare: unit si integration pentru servicii/controllere, teste frontend pentru builder, preview, read-only si validare.
+
+### FORMS-002 - Work form completion and immutable snapshot
+
+- Status: NOT STARTED.
+- Obiectiv: completarea formularelor dinamice pe lucrare si salvarea unui snapshot imutabil al template-ului folosit.
+- Scope: completare valori pentru WorkOrder pe baza template-ului activ, validare, snapshot versiune/campuri/raspunsuri si afisare read-only in detalii.
+- Non-goals: editare template, fisiere, workflow execution, conditional rules engine complex.
+- Dependente: WORKFORMS-001, WORKS-001, RBAC-001.
+- Acceptance criteria: o lucrare noua poate salva raspunsurile cerute de template, iar lucrarile existente pastreaza snapshotul chiar daca template-ul se modifica ulterior.
+- Backend: modele/contract pentru raspunsuri si snapshot, validare server-side impotriva snapshotului, tranzactii unde este necesar.
+- Frontend: completare in create/edit Work, erori pe campuri dinamice, summary, read-only snapshot in detalii.
+- Securitate: RBAC pentru citire/modificare lucrari, fara expunere date peste permisiuni.
+- Audit: audit pentru create/update raspunsuri formular pe lucrare.
+- Testare: unit/integration pentru snapshot si validare, frontend pentru completare, erori si compatibilitate cu FORMS-001 patterns.
 
 ### FILES-001 - Private file upload
 
@@ -1677,3 +1698,88 @@ None.
 - Remaining risks:
   - Linting remains unconfigured.
   - Runtime route smoke depends on a seeded local manager account and local PostgreSQL being available.
+
+### FORMS-001 - Form patterns and validation UX
+
+- Status: COMPLETED.
+- Started: 2026-07-23 22:25:00 CEST.
+- Completed: 2026-07-23 22:41:39 CEST.
+- Commit message: `FORMS-001: standardize form patterns and validation UX`.
+- Pre-flight audit:
+  - Branch: `main`.
+  - Working tree: clean before FORMS-001 changes.
+  - Last completed task commit before FORMS-001: `ece038d SHELL-001: add authenticated app shell and navigation`.
+  - FORMS-001 definition was read from the attached task file, `MVP-IMPLEMENTATION-PLAN.md`, and `IMPLEMENTATION_STATUS.md`.
+  - Scope resolved as Scope A: existing form patterns and validation UX. Dynamic work form templates were separated into `WORKFORMS-001`.
+  - Existing forms audited: login, user create/edit/reset/roles/disable, settings, clinic create/edit, doctor create/edit/archive/restore, work type create/edit/archive/restore, work create/edit, and manual QR scan.
+  - Existing frontend validation audited: React Hook Form, Zod, and `@hookform/resolvers` were already installed and reused.
+  - Existing backend DTO validation audited across auth, users, settings, clinics/doctors, work types, works, and QR scan flows.
+  - CSRF flow remains centralized through existing auth helpers and API clients.
+  - Linting remains unconfigured.
+- Summary:
+  - Added reusable form pattern primitives in `@dental-lab/ui`: form layout, sections, responsive grids, error summary, actions, and confirmation modal.
+  - Added frontend form utilities for API error normalization, field-error mapping, error-summary items, focus management, dirty route blocking, refresh prompts, and close guards.
+  - Extended the API client error type so frontend forms can consume field errors, error codes, and normalized fallback messages without showing raw objects.
+  - Migrated form UX patterns across login, users, settings, clinics/doctors, work types, works, and manual QR scan.
+  - Reorganized the Work form into operational sections: clinic and doctor, patient, work, deadline and priority, and notes.
+  - Standardized modal confirmation UX for archive/restore/disable flows through reusable UI instead of native confirms.
+  - Disabled or hid false save actions where forms are read-only or unchanged, where appropriate.
+  - Updated plan/status documentation to track `WORKFORMS-001` separately before `FORMS-002`.
+- Non-goals:
+  - No Prisma schema or migration changes.
+  - No backend endpoints or permissions added.
+  - No dynamic work form template builder.
+  - No work form submission/snapshot storage.
+  - No files, workflow, QC, logistics, delivery, dashboard metrics, autosave, or localStorage draft storage.
+- Main files modified:
+  - `packages/ui/src/components/form-patterns.tsx`
+  - `packages/ui/src/components/field.tsx`
+  - `packages/ui/src/styles.css`
+  - `packages/ui/src/index.ts`
+  - `packages/ui/src/components/components.test.tsx`
+  - `apps/web/src/lib/api-client.ts`
+  - `apps/web/src/lib/form-utils.tsx`
+  - `apps/web/src/features/auth/login-page.tsx`
+  - `apps/web/src/features/users/users-page.tsx`
+  - `apps/web/src/features/settings/settings-page.tsx`
+  - `apps/web/src/features/settings/settings-page.test.tsx`
+  - `apps/web/src/features/clinics/clinics-page.tsx`
+  - `apps/web/src/features/work-types/work-type-form.tsx`
+  - `apps/web/src/features/work-types/work-types-page.tsx`
+  - `apps/web/src/features/works/work-form.tsx`
+  - `apps/web/src/features/works/works-page.tsx`
+  - `apps/web/src/features/works/manual-scan-form.tsx`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `IMPLEMENTATION_STATUS.md`
+- Dependencies added:
+  - None.
+- Automated verification:
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed with no Vite chunk-size warning.
+- Frontend tests:
+  - UI component tests cover field labels, descriptions, required state, errors, select/textarea/card/table/modal/toast primitives, form sections, error summaries, actions, and confirmation modal behavior.
+  - Feature tests cover login error semantics, users list/forms, settings read-only behavior, clinics doctor reset dependency, work types, works pricing visibility and clinic-doctor reset, scan manual fallback, route shell behavior, and camera scanner behavior.
+- Manual verification:
+  - API started on `http://localhost:3010`.
+  - Frontend started on `http://127.0.0.1:5181`.
+  - `GET http://127.0.0.1:5181/login` returned `200 text/html`.
+  - `GET http://127.0.0.1:5181/dashboard` returned `200 text/html`.
+  - `GET http://127.0.0.1:5181/works` returned `200 text/html`.
+  - `GET http://127.0.0.1:5181/clinics` returned `200 text/html`.
+  - `GET http://127.0.0.1:5181/work-types` returned `200 text/html`.
+  - `GET http://127.0.0.1:5181/users` returned `200 text/html`.
+  - `GET http://127.0.0.1:5181/settings` returned `200 text/html`.
+  - `GET http://127.0.0.1:5181/scan` returned `200 text/html`.
+  - `GET http://localhost:3010/health` returned `200` with database `ok`.
+  - `GET http://localhost:3010/auth/csrf` returned `200`.
+  - Manager login with CSRF returned `200`.
+  - Authenticated `GET http://localhost:3010/auth/me` returned `200`.
+  - Authenticated `GET http://localhost:3010/auth/permissions` returned `200`.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Linting remains unconfigured.
+  - Physical responsive checks at 360px, 390px, 768px, 1024px, 1280px, zoom 150/200%, screen reader behavior, and real mobile keyboard behavior were not fully verified in this terminal-only environment.
+  - `UnsavedChangesPrompt` uses React Router blocking only when data-router context exists, with `beforeunload` and close guards as fallback paths.
