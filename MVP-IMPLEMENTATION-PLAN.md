@@ -1097,6 +1097,62 @@ Decizie concreta SETTINGS-001:
 - UI: `/works` afiseaza modal de eticheta printabila din drawerul lucrarii; `/scan` este ruta lazy-loaded cu `BarcodeDetector` pornit doar la actiunea utilizatorului si fallback manual.
 - Non-goals implementate explicit: fara workflow/stage changes, fara asignari, fara QC, fara delivery, fara fisiere, fara notificari si fara portal public/anonim.
 
+### SHELL-001 - Authenticated application shell and navigation
+
+- Status: APPROVED.
+- Obiectiv: experienta unitara pentru utilizatorii autentificati, cu layout, navigare si protectie vizibila a rutelor.
+- Scope: app shell responsive, top bar/mobile nav, desktop sidebar, linkuri catre paginile existente, user menu, logout, stari loading/unauthorized si redirect login.
+- Non-goals: dashboard operational, redesign pagini existente, permisiuni noi, business logic nou.
+- Dependente: AUTH-001, RBAC-001, UI-002, QR-001.
+- Acceptance criteria: utilizatorul autentificat navigheaza intre `/works`, `/scan`, `/clinics`, `/work-types`, `/users`, `/settings`; utilizatorul neautentificat este trimis la `/login`; linkurile nepermise nu sunt promovate in navigatie.
+- Backend: fara endpointuri noi estimate; reutilizeaza `/auth/me`, `/auth/permissions`, `/auth/logout`.
+- Frontend: layout shell, route protection, navigation responsive, logout flow, login polish.
+- Securitate: route protection este doar UX; backend RBAC ramane sursa de adevar.
+- Audit: fara audit nou; logout ramane comportamentul AUTH-001.
+- Testare: component/route tests pentru auth loading, unauthorized redirect, permission-aware nav si logout.
+
+### DASHBOARD-001 - Operational dashboard
+
+- Status: NOT STARTED.
+- Obiectiv: ecran initial cu indicatori operationali pentru utilizatori autentificati.
+- Scope: sumar lucrari, urgente, termene apropiate, linkuri rapide si stari goale.
+- Non-goals: rapoarte financiare, grafice complexe, exporturi, notificari realtime.
+- Dependente: SHELL-001, WORKS-001, RBAC-001.
+- Acceptance criteria: dashboardul afiseaza doar date permise si ramane utilizabil pe mobile.
+- Backend: endpoint sumar dashboard sau compunere din endpointuri existente, fara date financiare fara `pricing.read`.
+- Frontend: ruta dashboard in shell, carduri responsive, loading/error states.
+- Securitate: respecta RBAC server-side si mascare pricing.
+- Audit: fara audit nou pentru citire.
+- Testare: API/unit unde exista agregari, frontend permission states si responsive smoke.
+
+### FORMS-001 - Form patterns and validation UX
+
+- Status: NOT STARTED.
+- Obiectiv: standardizare formulare pentru utilizatori atehnici.
+- Scope: patternuri pentru erori, required markers, field groups, submit states, reset/cancel si validare Zod/RHF coerenta.
+- Non-goals: schimbarea regulilor business, wizard complex, autosave.
+- Dependente: UI-002, SHELL-001.
+- Acceptance criteria: formularele principale au erori clare, stari de saving consistente si layout mobile-first.
+- Backend: fara endpointuri noi.
+- Frontend: helperi/componente compuse peste UI primitives si aplicare pe formularele existente prioritare.
+- Securitate: nu inlocuieste validarea server-side.
+- Audit: fara audit nou.
+- Testare: component tests pentru erori, disabled states si submit.
+
+### FORMS-002 - Form performance and reuse hardening
+
+- Status: NOT STARTED.
+- Obiectiv: reducerea duplicarii si imbunatatirea performantei formularelor existente.
+- Scope: extragere compozitii reutilizabile, query enabling coerent, evitarea rerenderelor inutile.
+- Non-goals: refactor major de domeniu, schimbare UX vizibila fara cerinta.
+- Dependente: FORMS-001.
+- Acceptance criteria: duplicarea comuna scade fara regresii de comportament.
+- Backend: fara endpointuri noi.
+- Frontend: refactor concentrat pe formulare existente si teste.
+- Securitate: contractele de validare raman sincronizate cu serverul.
+- Audit: fara audit nou.
+- Testare: typecheck, teste existente si teste focalizate pe formulare refactorizate.
+
 ### FILES-001 - Private file upload
 
 - Scop: atasamente foto/document/STL.
@@ -1111,6 +1167,35 @@ Decizie concreta SETTINGS-001:
 - Nu modifica: storage productie final.
 - DoD: storage abstractizat.
 - Estimare: L.
+- Status: NOT STARTED.
+
+### FILES-002 - File preview and lifecycle controls
+
+- Status: NOT STARTED.
+- Obiectiv: previzualizare si control operational pentru fisierele private.
+- Scope: listare atasamente, preview pentru tipuri suportate, rename/replace/archive unde este permis.
+- Non-goals: editor fisiere, OCR, procesare STL avansata, storage productie final.
+- Dependente: FILES-001, SHELL-001.
+- Acceptance criteria: fisierele raman private si pot fi inspectate/gestionate conform permisiunilor.
+- Backend: endpointuri metadata si lifecycle cu validare DTO si RBAC.
+- Frontend: preview drawer/modal, stari de incarcare si erori clare.
+- Securitate: download/preview prin endpoint autorizat, fara URL public permanent.
+- Audit: audit pentru archive/replace si actiuni critice.
+- Testare: API permissions, file metadata lifecycle si UI states.
+
+### LABELS-001 - Printable labels and document templates
+
+- Status: NOT STARTED.
+- Obiectiv: etichete si documente printabile consistente pentru lucrari.
+- Scope: template eticheta QR, format print, date minime operationale, optiuni de print.
+- Non-goals: facturi PDF, rapoarte, editor vizual template.
+- Dependente: QR-001, SHELL-001.
+- Acceptance criteria: etichetele se printeaza lizibil si nu includ date interzise.
+- Backend: endpointuri de date printabile daca este necesar; reutilizeaza QR metadata unde e suficient.
+- Frontend: UI print labels si CSS print stabil.
+- Securitate: fara date pacient sensibile peste minimul aprobat; fara preturi.
+- Audit: audit print unde exista actiuni critice.
+- Testare: unit/component pentru render, manual print preview.
 
 ### WORKFLOW-001 - Workflow templates
 
@@ -1126,6 +1211,7 @@ Decizie concreta SETTINGS-001:
 - Nu modifica: execution.
 - DoD: template-uri seed.
 - Estimare: L.
+- Status: NOT STARTED.
 
 ### WORKFLOW-002 - Workflow execution snapshot
 
@@ -1141,6 +1227,21 @@ Decizie concreta SETTINGS-001:
 - Nu modifica: technician UI.
 - DoD: execution model stabil.
 - Estimare: L.
+- Status: NOT STARTED.
+
+### SCAN-002 - Scan actions and operational handoffs
+
+- Status: NOT STARTED.
+- Obiectiv: folosirea scanarii QR pentru actiuni operationale controlate.
+- Scope: resolve scan plus actiuni permise contextual, precum handoff sau deschidere etapa, fara automatism periculos.
+- Non-goals: camera library noua daca `BarcodeDetector` este suficient, workflow complet daca nu exista dependentele.
+- Dependente: QR-001, WORKFLOW-002, LOGISTICS-001.
+- Acceptance criteria: scanarea nu schimba status fara confirmare si permisiune explicita.
+- Backend: endpointuri action-by-scan autorizate, DTO validate, tranzactii unde se schimba stare.
+- Frontend: UI scan action sheet, confirmari clare, fallback manual.
+- Securitate: RBAC server-side si token opac; fara acces anonim.
+- Audit: audit pentru fiecare actiune declansata din scan.
+- Testare: API permissions/state transitions, frontend camera/manual action states.
 
 ### LOGISTICS-001 - Planning and assignment
 
@@ -1156,6 +1257,7 @@ Decizie concreta SETTINGS-001:
 - Nu modifica: invoices.
 - DoD: lucrari intra in productie.
 - Estimare: L.
+- Status: NOT STARTED.
 
 ### TECH-001 - Technician workbench
 
@@ -1171,6 +1273,7 @@ Decizie concreta SETTINGS-001:
 - Nu modifica: QC.
 - DoD: etapa executabila.
 - Estimare: L.
+- Status: NOT STARTED.
 
 ### QC-001 - Quality control
 
@@ -1186,8 +1289,9 @@ Decizie concreta SETTINGS-001:
 - Nu modifica: delivery.
 - DoD: QC controleaza statusul.
 - Estimare: M.
+- Status: NOT STARTED.
 
-### COURIER-001 - Delivery routes and courier mobile UI
+### DELIVERY-001 - Delivery routes and courier mobile UI
 
 - Scop: ridicari/livrari mobile-first.
 - Motiv: livrare controlata.
@@ -1201,6 +1305,35 @@ Decizie concreta SETTINGS-001:
 - Nu modifica: GPS.
 - DoD: livrare end-to-end.
 - Estimare: XL.
+- Status: NOT STARTED.
+
+### SIGNATURES-001 - Delivery signatures and proof capture
+
+- Status: NOT STARTED.
+- Obiectiv: dovada livrarii prin semnatura si/sau fotografie.
+- Scope: capturare semnatura, dovada foto optionala, atasare la livrare, audit.
+- Non-goals: verificare identitate avansata, GPS obligatoriu, semnatura calificata.
+- Dependente: DELIVERY-001, FILES-001.
+- Acceptance criteria: dovada este privata, legata de livrare si vizibila doar autorizat.
+- Backend: endpointuri private pentru proof metadata si upload/legare fisiere.
+- Frontend: canvas/signature pad sau input compatibil mobil, confirmare explicita.
+- Securitate: storage privat, RBAC, validare server-side.
+- Audit: audit capture/update/delete proof.
+- Testare: component tests pentru semnatura, API permissions si manual mobile.
+
+### NOTIFICATIONS-001 - Operational notifications
+
+- Status: NOT STARTED.
+- Obiectiv: notificari operationale pentru evenimente importante.
+- Scope: notificari in-app si/sau email localizate pentru statusuri relevante.
+- Non-goals: realtime complex, SMS, push mobile nativ, marketing.
+- Dependente: SHELL-001, WORKFLOW-002, DELIVERY-001.
+- Acceptance criteria: utilizatorii primesc doar notificari permise si utile.
+- Backend: model notificari, service emitere, preferinte minime daca sunt definite.
+- Frontend: centru notificari in shell si stari unread/read.
+- Securitate: filtrare per utilizator/rol, fara date financiare nepermise.
+- Audit: audit pentru notificari critice trimise sau esuate.
+- Testare: unit service, API permissions, UI unread/read.
 
 ### PAYMENTS-001 - Payments and balances
 
@@ -1246,8 +1379,9 @@ Decizie concreta SETTINGS-001:
 - Nu modifica: dashboard decorativ.
 - DoD: rapoarte MVP.
 - Estimare: L.
+- Status: NOT STARTED.
 
-### AUDIT-001 - Audit viewer
+### AUDIT-UI-001 - Audit viewer UI
 
 - Scop: vizualizare audit autorizata.
 - Motiv: trasabilitate completa.
@@ -1261,6 +1395,7 @@ Decizie concreta SETTINGS-001:
 - Nu modifica: audit write events existente.
 - DoD: audit lizibil.
 - Estimare: M.
+- Status: NOT STARTED.
 
 ### SECURITY-001 - Security hardening
 
@@ -1320,10 +1455,10 @@ RBAC-001 -> CLINICS-001 -> WORKS-001
 RBAC-001 -> WORKTYPES-001 -> WORKFLOW-001
 WORKS-001 -> QR-001
 WORKS-001 -> FILES-001
-WORKFLOW-001 -> WORKFLOW-002 -> LOGISTICS-001 -> TECH-001 -> QC-001 -> COURIER-001
+WORKFLOW-001 -> WORKFLOW-002 -> LOGISTICS-001 -> TECH-001 -> QC-001 -> DELIVERY-001
 WORKS-001 -> PAYMENTS-001 -> INVOICE-001
 WORKS-001 -> REPORTS-001
-RBAC-001 -> AUDIT-001
+RBAC-001 -> AUDIT-UI-001
 Core modules -> SECURITY-001 -> E2E-001 -> DEPLOY-001
 ```
 

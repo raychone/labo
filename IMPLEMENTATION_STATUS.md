@@ -46,18 +46,40 @@
 
 - [x] QR-001 - QR generation and scan
 
+## SHELL
+
+- [ ] SHELL-001 - Authenticated application shell and navigation (APPROVED)
+
+## DASHBOARD
+
+- [ ] DASHBOARD-001 - Operational dashboard (NOT STARTED)
+
+## FORMS
+
+- [ ] FORMS-001 - Form patterns and validation UX (NOT STARTED)
+- [ ] FORMS-002 - Form performance and reuse hardening (NOT STARTED)
+
 ## FILES
 
-- [ ] FILES-001 - Private file upload
+- [ ] FILES-001 - Private file upload (NOT STARTED)
+- [ ] FILES-002 - File preview and lifecycle controls (NOT STARTED)
+
+## LABELS
+
+- [ ] LABELS-001 - Printable labels and document templates (NOT STARTED)
 
 ## WORKFLOW
 
-- [ ] WORKFLOW-001 - Workflow templates
-- [ ] WORKFLOW-002 - Workflow execution snapshot
+- [ ] WORKFLOW-001 - Workflow templates (NOT STARTED)
+- [ ] WORKFLOW-002 - Workflow execution snapshot (NOT STARTED)
+
+## SCAN
+
+- [ ] SCAN-002 - Scan actions and operational handoffs (NOT STARTED)
 
 ## LOGISTICS
 
-- [ ] LOGISTICS-001 - Planning and assignment
+- [ ] LOGISTICS-001 - Planning and assignment (NOT STARTED)
 
 ## TECHNICIAN
 
@@ -65,11 +87,19 @@
 
 ## QUALITY
 
-- [ ] QC-001 - Quality control
+- [ ] QC-001 - Quality control (NOT STARTED)
 
-## COURIER
+## DELIVERY
 
-- [ ] COURIER-001 - Delivery routes and courier mobile UI
+- [ ] DELIVERY-001 - Delivery routes and courier mobile UI (NOT STARTED)
+
+## SIGNATURES
+
+- [ ] SIGNATURES-001 - Delivery signatures and proof capture (NOT STARTED)
+
+## NOTIFICATIONS
+
+- [ ] NOTIFICATIONS-001 - Operational notifications (NOT STARTED)
 
 ## PAYMENTS
 
@@ -81,11 +111,11 @@
 
 ## REPORTS
 
-- [ ] REPORTS-001 - Operational and financial reports
+- [ ] REPORTS-001 - Operational and financial reports (NOT STARTED)
 
 ## AUDIT
 
-- [ ] AUDIT-001 - Audit viewer
+- [ ] AUDIT-UI-001 - Audit viewer UI (NOT STARTED)
 
 ## SECURITY
 
@@ -101,13 +131,13 @@
 
 ## Current Task
 
-NONE / AWAITING APPROVAL
+SHELL-001 - Authenticated application shell and navigation
 
-Status: AWAITING APPROVAL
+Status: APPROVED
 
-## Next Task
+## Next Recommended Task
 
-FILES-001 - Private file upload
+FORMS-001 - Form patterns and validation UX
 
 ## Known Technical Debt
 
@@ -146,7 +176,7 @@ None.
 - Keep UI-002 components framework-free and token-driven inside `packages/ui`.
 - Use native controls for select, checkbox, radio, switch, file input, and table semantics where possible.
 - Use internal portal/focus management for Modal and Drawer instead of adding an overlay dependency.
-- Keep QRScanner and SignaturePad out of UI-002 because they depend on device/browser functional flows.
+- Keep QRScanner and SignaturePad out of UI-002 because they depend on device/browser functional flows; QR scan now exists as a feature-specific `/scan` route from QR-001.
 - Store work orders in `work_orders` with a generated stable `WO-YYYY-NNNNNN` code backed by `work_order_code_seq`.
 - WORKS-001 creates work orders directly as `REGISTERED`; draft and workflow status transitions remain deferred.
 - Keep patient identity minimal in WORKS-001 with `patientName` and optional `patientReference`; no patient model is introduced.
@@ -158,6 +188,246 @@ None.
 - Keep QR resolve behind cookie authentication, CSRF, `works.read_all`, and server-side rate limiting.
 - Implement browser camera scan in the works feature route `/scan` with native `BarcodeDetector` feature detection and manual fallback; do not add a frontend scanner dependency until browser support requires it.
 - Keep QR-001 limited to traceability lookup and label printing; workflow transitions, assignments, QC, delivery, files, notifications, and public/anonymous portals remain deferred.
+
+## Planned Task Definitions
+
+### SHELL-001 - Authenticated application shell and navigation
+
+- Status: APPROVED.
+- Obiectiv: experienta unitara pentru utilizatorii autentificati, cu layout, navigare si protectie vizibila a rutelor.
+- Scope: app shell responsive, top bar/mobile nav, desktop sidebar, linkuri catre paginile existente, user menu, logout, stari loading/unauthorized si redirect login.
+- Non-goals: dashboard operational, redesign pagini existente, permisiuni noi, business logic nou.
+- Dependente: AUTH-001, RBAC-001, UI-002, QR-001.
+- Acceptance criteria: utilizatorul autentificat navigheaza intre `/works`, `/scan`, `/clinics`, `/work-types`, `/users`, `/settings`; utilizatorul neautentificat este trimis la `/login`; linkurile nepermise nu sunt promovate in navigatie.
+- Backend: fara endpointuri noi estimate; reutilizeaza `/auth/me`, `/auth/permissions`, `/auth/logout`.
+- Frontend: layout shell, route protection, navigation responsive, logout flow, login polish.
+- Securitate: route protection este doar UX; backend RBAC ramane sursa de adevar.
+- Audit: fara audit nou; logout ramane comportamentul AUTH-001.
+- Testare: component/route tests pentru auth loading, unauthorized redirect, permission-aware nav si logout.
+
+### DASHBOARD-001 - Operational dashboard
+
+- Status: NOT STARTED.
+- Obiectiv: ecran initial cu indicatori operationali pentru utilizatori autentificati.
+- Scope: sumar lucrari, urgente, termene apropiate, linkuri rapide si stari goale.
+- Non-goals: rapoarte financiare, grafice complexe, exporturi, notificari realtime.
+- Dependente: SHELL-001, WORKS-001, RBAC-001.
+- Acceptance criteria: dashboardul afiseaza doar date permise si ramane utilizabil pe mobile.
+- Backend: endpoint sumar dashboard sau compunere din endpointuri existente, fara date financiare fara `pricing.read`.
+- Frontend: ruta dashboard in shell, carduri responsive, loading/error states.
+- Securitate: respecta RBAC server-side si mascare pricing.
+- Audit: fara audit nou pentru citire.
+- Testare: API/unit unde exista agregari, frontend permission states si responsive smoke.
+
+### FORMS-001 - Form patterns and validation UX
+
+- Status: NOT STARTED.
+- Obiectiv: standardizare formulare pentru utilizatori atehnici.
+- Scope: patternuri pentru erori, required markers, field groups, submit states, reset/cancel si validare Zod/RHF coerenta.
+- Non-goals: schimbarea regulilor business, wizard complex, autosave.
+- Dependente: UI-002, SHELL-001.
+- Acceptance criteria: formularele principale au erori clare, stari de saving consistente si layout mobile-first.
+- Backend: fara endpointuri noi.
+- Frontend: helperi/componente compuse peste UI primitives si aplicare pe formularele existente prioritare.
+- Securitate: nu inlocuieste validarea server-side.
+- Audit: fara audit nou.
+- Testare: component tests pentru erori, disabled states si submit.
+
+### FORMS-002 - Form performance and reuse hardening
+
+- Status: NOT STARTED.
+- Obiectiv: reducerea duplicarii si imbunatatirea performantei formularelor existente.
+- Scope: extragere compozitii reutilizabile, query enabling coerent, evitarea rerenderelor inutile.
+- Non-goals: refactor major de domeniu, schimbare UX vizibila fara cerinta.
+- Dependente: FORMS-001.
+- Acceptance criteria: duplicarea comuna scade fara regresii de comportament.
+- Backend: fara endpointuri noi.
+- Frontend: refactor concentrat pe formulare existente si teste.
+- Securitate: contractele de validare raman sincronizate cu serverul.
+- Audit: fara audit nou.
+- Testare: typecheck, teste existente si teste focalizate pe formulare refactorizate.
+
+### FILES-001 - Private file upload
+
+- Status: NOT STARTED.
+- Obiectiv: atasamente private pentru lucrari.
+- Scope: upload foto/document/STL, metadata, private download si validari.
+- Non-goals: preview avansat, OCR, storage productie final, fisiere publice.
+- Dependente: WORKS-001, RBAC-001.
+- Acceptance criteria: fisierele pot fi uploadate si accesate doar conform permisiunilor.
+- Backend: FilesModule, DTO validation, storage abstraction, metadata persistence.
+- Frontend: FileUpload flow pe lucrare, stari loading/error.
+- Securitate: storage privat, RBAC server-side, validare tip/marime.
+- Audit: audit upload/delete/archive unde exista actiuni critice.
+- Testare: API permissions, upload validation, UI states.
+
+### FILES-002 - File preview and lifecycle controls
+
+- Status: NOT STARTED.
+- Obiectiv: previzualizare si control operational pentru fisierele private.
+- Scope: listare atasamente, preview pentru tipuri suportate, rename/replace/archive unde este permis.
+- Non-goals: editor fisiere, OCR, procesare STL avansata, storage productie final.
+- Dependente: FILES-001, SHELL-001.
+- Acceptance criteria: fisierele raman private si pot fi inspectate/gestionate conform permisiunilor.
+- Backend: endpointuri metadata si lifecycle cu validare DTO si RBAC.
+- Frontend: preview drawer/modal, stari de incarcare si erori clare.
+- Securitate: download/preview prin endpoint autorizat, fara URL public permanent.
+- Audit: audit pentru archive/replace si actiuni critice.
+- Testare: API permissions, file metadata lifecycle si UI states.
+
+### LABELS-001 - Printable labels and document templates
+
+- Status: NOT STARTED.
+- Obiectiv: etichete si documente printabile consistente pentru lucrari.
+- Scope: template eticheta QR, format print, date minime operationale, optiuni de print.
+- Non-goals: facturi PDF, rapoarte, editor vizual template.
+- Dependente: QR-001, SHELL-001.
+- Acceptance criteria: etichetele se printeaza lizibil si nu includ date interzise.
+- Backend: endpointuri de date printabile daca este necesar; reutilizeaza QR metadata unde e suficient.
+- Frontend: UI print labels si CSS print stabil.
+- Securitate: fara date pacient sensibile peste minimul aprobat; fara preturi.
+- Audit: audit print unde exista actiuni critice.
+- Testare: unit/component pentru render, manual print preview.
+
+### WORKFLOW-001 - Workflow templates
+
+- Status: NOT STARTED.
+- Obiectiv: configurare fluxuri tehnologice versionate.
+- Scope: template, versiuni, stages si checklist.
+- Non-goals: execution pe lucrare, technician UI.
+- Dependente: WORKTYPES-001, RBAC-001.
+- Acceptance criteria: managerul configureaza fluxuri fara sa modifice istoricul lucrarilor.
+- Backend: WorkflowTemplatesModule cu DTO validation si versioning.
+- Frontend: UI manager pentru template/stages/checklist.
+- Securitate: RBAC server-side pentru configurare.
+- Audit: audit create/update/version.
+- Testare: API unit/integration si UI form tests.
+
+### WORKFLOW-002 - Workflow execution snapshot
+
+- Status: NOT STARTED.
+- Obiectiv: instantiere flux pe lucrare fara dependenta de editari ulterioare ale templateului.
+- Scope: assign template, create stage snapshots, status operational initial.
+- Non-goals: technician UI, QC, delivery.
+- Dependente: WORKFLOW-001, WORKS-001.
+- Acceptance criteria: modificarea templateului nu schimba lucrarile deja instantiate.
+- Backend: WorkflowExecutionModule cu tranzactii pentru snapshot.
+- Frontend: actiune clara de alocare template pe lucrare.
+- Securitate: RBAC server-side si validare stare.
+- Audit: audit assign/snapshot.
+- Testare: integration pentru snapshot si regresii template.
+
+### SCAN-002 - Scan actions and operational handoffs
+
+- Status: NOT STARTED.
+- Obiectiv: folosirea scanarii QR pentru actiuni operationale controlate.
+- Scope: resolve scan plus actiuni permise contextual, precum handoff sau deschidere etapa, fara automatism periculos.
+- Non-goals: camera library noua daca `BarcodeDetector` este suficient, workflow complet daca nu exista dependentele.
+- Dependente: QR-001, WORKFLOW-002, LOGISTICS-001.
+- Acceptance criteria: scanarea nu schimba status fara confirmare si permisiune explicita.
+- Backend: endpointuri action-by-scan autorizate, DTO validate, tranzactii unde se schimba stare.
+- Frontend: UI scan action sheet, confirmari clare, fallback manual.
+- Securitate: RBAC server-side si token opac; fara acces anonim.
+- Audit: audit pentru fiecare actiune declansata din scan.
+- Testare: API permissions/state transitions, frontend camera/manual action states.
+
+### LOGISTICS-001 - Planning and assignment
+
+- Status: NOT STARTED.
+- Obiectiv: planificare si alocare tehnicieni.
+- Scope: board, filters, assign stage/user, priority.
+- Non-goals: invoices, QC, delivery.
+- Dependente: WORKFLOW-002, USERS-001.
+- Acceptance criteria: logistica aloca lucrari fara date financiare.
+- Backend: LogisticsModule cu RBAC si validari de stare.
+- Frontend: board responsive si filtre operationale.
+- Securitate: acces fara pricing pentru roluri non-financiare.
+- Audit: audit assignment/reassignment.
+- Testare: API permissions si UI board states.
+
+### QC-001 - Quality control
+
+- Status: NOT STARTED.
+- Obiectiv: approve/reject/rework.
+- Scope: checklist QC, reject reason, rework stage.
+- Non-goals: delivery, payments.
+- Dependente: TECH-001.
+- Acceptance criteria: reject cere motiv si toate tranzitiile sunt validate.
+- Backend: QualityModule cu state transitions tranzactionale.
+- Frontend: QC review UI responsive.
+- Securitate: RBAC server-side pentru QC.
+- Audit: audit approve/reject/rework.
+- Testare: state transitions, API permissions si UI approve/reject.
+
+### DELIVERY-001 - Delivery routes and courier mobile UI
+
+- Status: NOT STARTED.
+- Obiectiv: ridicari/livrari mobile-first.
+- Scope: route, stops, scan, confirm, fail, courier UI.
+- Non-goals: GPS obligatoriu, semnatura avansata, facturare.
+- Dependente: QC-001, QR-001.
+- Acceptance criteria: curierul confirma livrari fara acces financiar.
+- Backend: DeliveriesModule cu validari si RBAC.
+- Frontend: courier mobile UI.
+- Securitate: `OWN_DELIVERY` server-side, fara pricing.
+- Audit: audit confirm/fail/handoff.
+- Testare: API + mobile UI tests.
+
+### SIGNATURES-001 - Delivery signatures and proof capture
+
+- Status: NOT STARTED.
+- Obiectiv: dovada livrarii prin semnatura si/sau fotografie.
+- Scope: capturare semnatura, dovada foto optionala, atasare la livrare, audit.
+- Non-goals: verificare identitate avansata, GPS obligatoriu, semnatura calificata.
+- Dependente: DELIVERY-001, FILES-001.
+- Acceptance criteria: dovada este privata, legata de livrare si vizibila doar autorizat.
+- Backend: endpointuri private pentru proof metadata si upload/legare fisiere.
+- Frontend: canvas/signature pad sau input compatibil mobil, confirmare explicita.
+- Securitate: storage privat, RBAC, validare server-side.
+- Audit: audit capture/update/delete proof.
+- Testare: component tests pentru semnatura, API permissions si manual mobile.
+
+### NOTIFICATIONS-001 - Operational notifications
+
+- Status: NOT STARTED.
+- Obiectiv: notificari operationale pentru evenimente importante.
+- Scope: notificari in-app si/sau email localizate pentru statusuri relevante.
+- Non-goals: realtime complex, SMS, push mobile nativ, marketing.
+- Dependente: SHELL-001, WORKFLOW-002, DELIVERY-001.
+- Acceptance criteria: utilizatorii primesc doar notificari permise si utile.
+- Backend: model notificari, service emitere, preferinte minime daca sunt definite.
+- Frontend: centru notificari in shell si stari unread/read.
+- Securitate: filtrare per utilizator/rol, fara date financiare nepermise.
+- Audit: audit pentru notificari critice trimise sau esuate.
+- Testare: unit service, API permissions, UI unread/read.
+
+### REPORTS-001 - Operational and financial reports
+
+- Status: NOT STARTED.
+- Obiectiv: KPI operationali si financiari MVP.
+- Scope: endpoints agregare, filtre, pagini raport.
+- Non-goals: dashboard decorativ, BI avansat, export contabil complet.
+- Dependente: WORKS-001, TECH-001, PAYMENTS-001.
+- Acceptance criteria: rapoartele sunt rapide si permissioned.
+- Backend: ReportsModule cu query-uri justificate si mascare date.
+- Frontend: pagini raport responsive cu filtre clare.
+- Securitate: RBAC server-side si `pricing.read` pentru date financiare.
+- Audit: fara audit pentru citire standard; audit export daca va exista.
+- Testare: integration pentru agregari si permission tests.
+
+### AUDIT-UI-001 - Audit viewer UI
+
+- Status: NOT STARTED.
+- Obiectiv: vizualizare audit autorizata.
+- Scope: filters, resource view, actor view.
+- Non-goals: modificare audit writes existente, export avansat.
+- Dependente: RBAC-001.
+- Acceptance criteria: managerul vede auditul, alte roluri doar cu permisiune.
+- Backend: AuditModule read endpoints cu filtre si paginare.
+- Frontend: audit viewer UI cu cautare si stari goale.
+- Securitate: RBAC server-side, fara expunere date sensibile peste metadata existenta.
+- Audit: fara audit nou pentru citire standard.
+- Testare: API permission si UI filter states.
 
 ## Completed Tasks
 
@@ -1314,6 +1584,9 @@ None.
   - `POST /works/resolve-qr` with CSRF resolved the QR payload to `WO-2026-000001`.
   - `POST /works/:id/qr/print` with CSRF returned `200` and recorded print intent.
   - Physical mobile camera scan and real printer preview were not verified in this environment; camera behavior is covered by browser-unit tests with mocked media streams.
+- Remaining acceptance checks:
+  - Physical phone scan: pending.
+  - Physical/real print verification: pending.
 - Technical debt introduced:
   - None.
 - Remaining risks:
