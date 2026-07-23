@@ -500,6 +500,21 @@ RBAC uses existing permissions: `finance.read`, `finance.record_payment`, `finan
 
 `BILLING-002` is reserved for printable billing documents and clinic statements.
 
+## Roadmap After Billing
+
+After BILLING-001, the approved order is:
+
+1. `BILLING-002` - printable billing documents and clinic statements.
+2. `DEMO-SEED-001` - realistic demonstration dataset.
+3. `WORKFORMS-001` - work form template builder.
+4. `FORMS-002` - work form completion and immutable snapshot.
+5. `WORKFLOW-001`, `WORKFLOW-002`, `TECH-001`, `SCAN-002`, `LOGISTICS-001`, `DELIVERY-001`, `SIGNATURES-001`.
+6. `DASHBOARD-001`, `SEARCH-001`, `REPORTS-001`, `AUDIT-UI-001`, `DEMO-POLISH-001`, `E2E-001`, `SECURITY-001`, `DEPLOY-001`.
+
+Deferred but preserved in the plan: `FILES-001`, `FILES-002`, `QC-001`, and `NOTIFICATIONS-001`.
+
+Payments in the current MVP are manual evidence only. The application does not process cards, POS transactions, cash register flows, checkout, bank reconciliation, or automated receipt fiscalization.
+
 ## Current Task
 
 See `IMPLEMENTATION_STATUS.md` for task progress and manual testing checklists.

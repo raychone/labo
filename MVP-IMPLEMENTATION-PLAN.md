@@ -1188,20 +1188,35 @@ Decizie concreta SETTINGS-001:
 
 ### BILLING-002 - Printable billing documents and clinic statements
 
-- Status: NOT STARTED.
+- Status: APPROVED.
 - Obiectiv: documente printabile/PDF si situatii pe clinica bazate pe datele BILLING-001.
-- Scope: sabloane print/PDF pentru proforma, factura interna, anexa factura si statement clinica pe perioada.
-- Non-goals: RO e-Factura, SPV, contabilitate generala, semnatura electronica avansata.
+- Scope: proforma printabila, factura interna printabila, anexa factura, situatie clinica, situatie medic, registru lunar, CSV securizat, browser print/PDF si branding.
+- Non-goals: RO e-Factura, SPV, XML fiscal, contabilitate generala, TVA complex, POS, procesare card, casierie, reconciliere bancara, semnatura electronica avansata.
 - Dependente: BILLING-001, SETTINGS-001, FILES-001 optional pentru arhivare PDF privata.
 - Acceptance criteria: managerul poate genera documente clare pentru clinica, cu branding laborator si totaluri reconciliabile cu registrul.
-- Backend: endpointuri de render/export daca PDF server-side este ales.
-- Frontend: print/PDF/statement UI, preview detaliat, filtre pe clinica/perioada.
+- Backend: endpointuri print/statements/export in `BillingModule`, fara migrare Prisma daca schema ramane suficienta.
+- Frontend: print/PDF/statement UI, preview detaliat, filtre pe clinica/perioada/medic, deep links catre lucrari/documente.
 - Securitate: RBAC `invoice.download`/`invoice.read`, date pacient doar unde este justificat.
-- Audit: audit pentru download/print/export.
+- Audit: audit pentru print/export/statements fara pacient sau linii complete in metadata.
 - Testare: render smoke, permisiuni, regresii valori totale.
+
+### DEMO-SEED-001 - Realistic demonstration dataset
+
+- Status: NOT STARTED.
+- Obiectiv: set realist de date pentru demonstratie comerciala.
+- Scope: clinici, medici, tipuri lucrari, lucrari, proforme, facturi si situatii lunare demonstrative.
+- Non-goals: date reale client, productie, import Excel.
+- Dependente: BILLING-002, WORKS-001, CLINICS-001, WORKTYPES-001.
+- Acceptance criteria: demo-ul poate arata fluxuri realiste fara introducere manuala lunga.
+- Backend: seed/fixture idempotent clar separat de seed-ul minim.
+- Frontend: fara schimbari majore, doar suport pentru demo daca e necesar.
+- Securitate: fara date personale reale.
+- Audit: fara audit pentru seed local.
+- Testare: seed smoke si verificari API principale.
 
 ### FILES-001 - Private file upload
 
+- Status: DEFERRED.
 - Scop: atasamente foto/document/STL.
 - Motiv: fisa lucrarii completa.
 - Module: FilesModule, FileUpload UI.
@@ -1214,11 +1229,10 @@ Decizie concreta SETTINGS-001:
 - Nu modifica: storage productie final.
 - DoD: storage abstractizat.
 - Estimare: L.
-- Status: NOT STARTED.
 
 ### FILES-002 - File preview and lifecycle controls
 
-- Status: NOT STARTED.
+- Status: DEFERRED.
 - Obiectiv: previzualizare si control operational pentru fisierele private.
 - Scope: listare atasamente, preview pentru tipuri suportate, rename/replace/archive unde este permis.
 - Non-goals: editor fisiere, OCR, procesare STL avansata, storage productie final.
@@ -1370,7 +1384,7 @@ Decizie concreta SETTINGS-001:
 
 ### NOTIFICATIONS-001 - Operational notifications
 
-- Status: NOT STARTED.
+- Status: DEFERRED.
 - Obiectiv: notificari operationale pentru evenimente importante.
 - Scope: notificari in-app si/sau email localizate pentru statusuri relevante.
 - Non-goals: realtime complex, SMS, push mobile nativ, marketing.
@@ -1426,6 +1440,34 @@ Decizie concreta SETTINGS-001:
 - Nu modifica: dashboard decorativ.
 - DoD: rapoarte MVP.
 - Estimare: L.
+
+### SEARCH-001 - Global search
+
+- Status: NOT STARTED.
+- Obiectiv: cautare globala peste lucrari, clinici, medici, documente si audit permis.
+- Scope: search central in shell, rezultate grupate, deep links si filtrare RBAC.
+- Non-goals: motor extern de cautare, ranking complex, indexare full-text dedicata daca nu este necesara.
+- Dependente: BILLING-002, WORKS-001, CLINICS-001, RBAC-001.
+- Acceptance criteria: utilizatorii gasesc rapid pacient, lucrare, clinica, medic sau document permis.
+- Backend: endpoint agregat permission-aware.
+- Frontend: search global accesibil din shell.
+- Securitate: rezultate filtrate server-side, fara date pacient peste permisiuni.
+- Audit: fara audit pentru simple read/search daca nu este cerut.
+- Testare: query results si permisiuni.
+
+### DEMO-POLISH-001 - Commercial demo polish
+
+- Status: NOT STARTED.
+- Obiectiv: finisare demo comercial dupa date realiste si fluxuri principale.
+- Scope: copy, empty states, micro-polish, ghid demo si verificari de prezentare.
+- Non-goals: functionalitati noi majore.
+- Dependente: DEMO-SEED-001, BILLING-002, DASHBOARD-001.
+- Acceptance criteria: aplicatia poate fi prezentata coerent unei cliente fara pregatire tehnica.
+- Backend: fara schimbari majore.
+- Frontend: polish punctual.
+- Securitate: fara relaxari de autentificare.
+- Audit: fara audit nou.
+- Testare: smoke demo flow.
 - Status: NOT STARTED.
 
 ### AUDIT-UI-001 - Audit viewer UI
@@ -1502,10 +1544,11 @@ RBAC-001 -> CLINICS-001 -> WORKS-001
 RBAC-001 -> WORKTYPES-001 -> WORKFLOW-001
 WORKS-001 -> QR-001
 SHELL-001 -> FORMS-001
-WORKS-001 -> BILLING-001 -> BILLING-002
-FORMS-001 -> WORKFORMS-001 -> FORMS-002
-WORKS-001 -> FILES-001
-WORKFLOW-001 -> WORKFLOW-002 -> LOGISTICS-001 -> TECH-001 -> QC-001 -> DELIVERY-001
+WORKS-001 -> BILLING-001 -> BILLING-002 -> DEMO-SEED-001
+BILLING-002 -> WORKFORMS-001 -> FORMS-002
+WORKFORMS-001 -> WORKFLOW-001 -> WORKFLOW-002 -> TECH-001 -> SCAN-002 -> LOGISTICS-001 -> DELIVERY-001 -> SIGNATURES-001
+BILLING-002 -> DASHBOARD-001 -> SEARCH-001 -> REPORTS-001 -> AUDIT-UI-001 -> DEMO-POLISH-001 -> E2E-001 -> SECURITY-001 -> DEPLOY-001
+Deferred: FILES-001, FILES-002, QC-001, NOTIFICATIONS-001
 WORKS-001 -> PAYMENTS-001 -> INVOICE-001 (legacy split, covered operationally by BILLING-001/BILLING-002)
 WORKS-001 -> REPORTS-001
 RBAC-001 -> AUDIT-UI-001

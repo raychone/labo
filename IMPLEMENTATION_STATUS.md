@@ -63,12 +63,17 @@
 ## BILLING
 
 - [x] BILLING-001 - Billing workspace, proformas, invoices and month-end registry
-- [ ] BILLING-002 - Printable billing documents and clinic statements (NOT STARTED)
+- [ ] BILLING-002 - Printable billing documents and clinic statements (APPROVED)
+
+## DEMO
+
+- [ ] DEMO-SEED-001 - Realistic demonstration dataset (NOT STARTED)
+- [ ] DEMO-POLISH-001 - Commercial demo polish (NOT STARTED)
 
 ## FILES
 
-- [ ] FILES-001 - Private file upload (NOT STARTED)
-- [ ] FILES-002 - File preview and lifecycle controls (NOT STARTED)
+- [ ] FILES-001 - Private file upload (DEFERRED)
+- [ ] FILES-002 - File preview and lifecycle controls (DEFERRED)
 
 ## LABELS
 
@@ -93,7 +98,7 @@
 
 ## QUALITY
 
-- [ ] QC-001 - Quality control (NOT STARTED)
+- [ ] QC-001 - Quality control (DEFERRED)
 
 ## DELIVERY
 
@@ -105,7 +110,7 @@
 
 ## NOTIFICATIONS
 
-- [ ] NOTIFICATIONS-001 - Operational notifications (NOT STARTED)
+- [ ] NOTIFICATIONS-001 - Operational notifications (DEFERRED)
 
 ## PAYMENTS
 
@@ -118,6 +123,10 @@
 ## REPORTS
 
 - [ ] REPORTS-001 - Operational and financial reports (NOT STARTED)
+
+## SEARCH
+
+- [ ] SEARCH-001 - Global search (NOT STARTED)
 
 ## AUDIT
 
@@ -137,15 +146,15 @@
 
 ## Current Task
 
-NONE / AWAITING APPROVAL
+BILLING-002 - Printable billing documents and clinic statements
 
-Status: AWAITING APPROVAL
+Status: APPROVED
 
 Last completed task: BILLING-001 - Billing workspace, proformas, invoices and month-end registry
 
 ## Next Recommended Task
 
-BILLING-002 - Printable billing documents and clinic statements
+DEMO-SEED-001 - Realistic demonstration dataset
 
 ## Known Technical Debt
 
@@ -186,6 +195,8 @@ None.
 - Store billing money as integer minor units only and derive paid/balance from active payments.
 - Use `WorkOrder.invoicedDocumentId` as the active invoice relation instead of a billing boolean.
 - Keep patient names out of billing audit metadata; document line snapshots may contain patient names for internal annex/search views.
+- Keep existing Payment models/endpoints as optional manual evidence only; the MVP does not process money, cards, POS transactions, cash register flows or bank reconciliation.
+- Approved roadmap order after BILLING-001: BILLING-002, DEMO-SEED-001, WORKFORMS-001, FORMS-002, WORKFLOW-001, WORKFLOW-002, TECH-001, SCAN-002, LOGISTICS-001, DELIVERY-001, SIGNATURES-001, DASHBOARD-001, SEARCH-001, REPORTS-001, AUDIT-UI-001, DEMO-POLISH-001, E2E-001, SECURITY-001, DEPLOY-001.
 - Evaluate RBAC from the database so access changes take effect without relogin.
 - Treat `ALL` as the only broad scope; ownership scopes remain distinct.
 - Use plain CSS custom properties in `packages/ui/src/styles.css` as the design token source of truth.
