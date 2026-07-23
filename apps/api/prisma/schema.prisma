@@ -32,6 +32,12 @@ model User {
   archivedWorkTypes WorkType[] @relation("WorkTypeArchivedBy")
   createdWorkOrders WorkOrder[] @relation("WorkOrderCreatedBy")
   updatedWorkOrders WorkOrder[] @relation("WorkOrderUpdatedBy")
+  createdBillingDocuments BillingDocument[] @relation("BillingDocumentCreatedBy")
+  updatedBillingDocuments BillingDocument[] @relation("BillingDocumentUpdatedBy")
+  issuedBillingDocuments BillingDocument[] @relation("BillingDocumentIssuedBy")
+  cancelledBillingDocuments BillingDocument[] @relation("BillingDocumentCancelledBy")
+  createdPayments Payment[] @relation("PaymentCreatedBy")
+  cancelledPayments Payment[] @relation("PaymentCancelledBy")
 
   @@index([isActive])
   @@index([createdAt])
@@ -109,6 +115,8 @@ model Clinic {
   version Int @default(1)
   doctors Doctor[]
   workOrders WorkOrder[]
+  billingDocuments BillingDocument[]
+  payments Payment[]
   createdBy User? @relation("ClinicCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   updatedBy User? @relation("ClinicUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   archivedBy User? @relation("ClinicArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
@@ -141,6 +149,7 @@ model Doctor {
   version Int @default(1)
   clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
   workOrders WorkOrder[]
+  billingDocuments BillingDocument[]
 
   @@index([clinicId])
   @@index([clinicId, isActive])
@@ -209,11 +218,14 @@ model WorkOrder {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   version Int @default(1)
+  invoicedDocumentId String? @map("invoiced_document_id")
   clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
   doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Restrict)
   workType WorkType @relation(fields: [workTypeId], references: [id], onDelete: Restrict)
   createdBy User? @relation("WorkOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   updatedBy User? @relation("WorkOrderUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  billingLines BillingDocumentLine[]
+  invoicedDocument BillingDocument? @relation("WorkOrderInvoicedDocument", fields: [invoicedDocumentId], references: [id], onDelete: SetNull)
 
   @@index([clinicId])
   @@index([doctorId])
@@ -226,7 +238,160 @@ model WorkOrder {
   @@index([updatedAt])
   @@index([createdByUserId])
   @@index([updatedByUserId])
+  @@index([invoicedDocumentId])
   @@map("work_orders")
+}
+
+model BillingDocument {
+  id String @id @default(cuid())
+  type BillingDocumentType
+  status BillingDocumentStatus @default(DRAFT)
+  series String? @db.VarChar(24)
+  number Int? @map("number")
+  formattedNumber String? @map("formatted_number") @db.VarChar(40)
+  issueDate DateTime @map("issue_date")
+  dueDate DateTime? @map("due_date")
+  clinicId String @map("clinic_id")
+  doctorId String? @map("doctor_id")
+  clinicNameSnapshot String @map("clinic_name_snapshot") @db.VarChar(160)
+  clinicLegalNameSnapshot String? @map("clinic_legal_name_snapshot") @db.VarChar(160)
+  clinicTaxIdSnapshot String? @map("clinic_tax_id_snapshot") @db.VarChar(80)
+  clinicRegistrationNumberSnapshot String? @map("clinic_registration_number_snapshot") @db.VarChar(80)
+  clinicAddressSnapshot String? @map("clinic_address_snapshot") @db.VarChar(500)
+  clinicEmailSnapshot String? @map("clinic_email_snapshot") @db.VarChar(254)
+  clinicPhoneSnapshot String? @map("clinic_phone_snapshot") @db.VarChar(40)
+  currency String @db.Char(3)
+  subtotalMinor Int @default(0) @map("subtotal_minor")
+  discountMinor Int @default(0) @map("discount_minor")
+  taxMinor Int @default(0) @map("tax_minor")
+  totalMinor Int @default(0) @map("total_minor")
+  notes String? @db.VarChar(2000)
+  cancelledAt DateTime? @map("cancelled_at")
+  cancelledByUserId String? @map("cancelled_by_user_id")
+  issuedAt DateTime? @map("issued_at")
+  issuedByUserId String? @map("issued_by_user_id")
+  createdByUserId String? @map("created_by_user_id")
+  updatedByUserId String? @map("updated_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  version Int @default(1)
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  doctor Doctor? @relation(fields: [doctorId], references: [id], onDelete: SetNull)
+  createdBy User? @relation("BillingDocumentCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("BillingDocumentUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  issuedBy User? @relation("BillingDocumentIssuedBy", fields: [issuedByUserId], references: [id], onDelete: SetNull)
+  cancelledBy User? @relation("BillingDocumentCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
+  lines BillingDocumentLine[]
+  payments Payment[]
+  invoicedWorkOrders WorkOrder[] @relation("WorkOrderInvoicedDocument")
+
+  @@unique([type, series, number])
+  @@index([clinicId])
+  @@index([doctorId])
+  @@index([type])
+  @@index([status])
+  @@index([issueDate])
+  @@index([formattedNumber])
+  @@index([createdAt])
+  @@index([cancelledAt])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@index([issuedByUserId])
+  @@index([cancelledByUserId])
+  @@map("billing_documents")
+}
+
+model BillingDocumentLine {
+  id String @id @default(cuid())
+  billingDocumentId String @map("billing_document_id")
+  workOrderId String @map("work_order_id")
+  description String @db.VarChar(500)
+  workCode String @map("work_code") @db.VarChar(24)
+  patientNameSnapshot String @map("patient_name_snapshot") @db.VarChar(120)
+  doctorNameSnapshot String @map("doctor_name_snapshot") @db.VarChar(180)
+  workTypeNameSnapshot String @map("work_type_name_snapshot") @db.VarChar(160)
+  toothPositionSnapshot String? @map("tooth_position_snapshot") @db.VarChar(120)
+  quantity Int
+  unitPriceMinor Int @map("unit_price_minor")
+  lineTotalMinor Int @map("line_total_minor")
+  sortOrder Int @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  billingDocument BillingDocument @relation(fields: [billingDocumentId], references: [id], onDelete: Cascade)
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+
+  @@unique([billingDocumentId, workOrderId])
+  @@index([billingDocumentId, sortOrder])
+  @@index([workOrderId])
+  @@index([workCode])
+  @@map("billing_document_lines")
+}
+
+model Payment {
+  id String @id @default(cuid())
+  clinicId String @map("clinic_id")
+  billingDocumentId String @map("billing_document_id")
+  amountMinor Int @map("amount_minor")
+  currency String @db.Char(3)
+  paymentDate DateTime @map("payment_date")
+  method PaymentMethod
+  receiptNumber String? @map("receipt_number") @db.VarChar(80)
+  receiptDate DateTime? @map("receipt_date")
+  reference String? @db.VarChar(160)
+  notes String? @db.VarChar(1000)
+  createdByUserId String? @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  cancelledAt DateTime? @map("cancelled_at")
+  cancelledByUserId String? @map("cancelled_by_user_id")
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  billingDocument BillingDocument @relation(fields: [billingDocumentId], references: [id], onDelete: Restrict)
+  createdBy User? @relation("PaymentCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  cancelledBy User? @relation("PaymentCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
+
+  @@index([clinicId])
+  @@index([billingDocumentId])
+  @@index([paymentDate])
+  @@index([method])
+  @@index([receiptNumber])
+  @@index([cancelledAt])
+  @@index([createdByUserId])
+  @@index([cancelledByUserId])
+  @@map("payments")
+}
+
+model BillingSeries {
+  id String @id @default(cuid())
+  documentType BillingDocumentType @map("document_type")
+  prefix String @db.VarChar(16)
+  currentNumber Int @default(0) @map("current_number")
+  year Int
+  isActive Boolean @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([documentType, prefix, year])
+  @@index([documentType, isActive])
+  @@index([year])
+  @@map("billing_series")
+}
+
+enum BillingDocumentType {
+  PROFORMA
+  INVOICE
+}
+
+enum BillingDocumentStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CARD
+  OTHER
 }
 
 enum WorkStatus {

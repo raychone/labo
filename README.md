@@ -463,6 +463,43 @@ Read-only users see values without false submit actions where the page is not ed
 
 Dynamic work form templates are not part of FORMS-001. They are tracked separately as `WORKFORMS-001`, followed by immutable work form completion/snapshot work in `FORMS-002`.
 
+## Billing Workspace
+
+BILLING-001 adds the first financial workspace at `/billing`.
+
+The backend module exposes:
+
+- `GET /billing/overview`
+- `GET /billing/billable-works`
+- `GET /billing/search`
+- `GET /billing-documents`
+- `GET /billing-documents/:id`
+- `POST /billing-documents/proformas`
+- `POST /billing-documents/invoices`
+- `PATCH /billing-documents/:id`
+- `PUT /billing-documents/:id/lines`
+- `POST /billing-documents/:id/issue`
+- `POST /billing-documents/:id/convert-to-invoice`
+- `POST /billing-documents/:id/cancel`
+- `GET /payments`
+- `POST /billing-documents/:id/payments`
+- `POST /payments/:id/cancel`
+- `GET /billing-series`
+- `POST /billing-series`
+- `PATCH /billing-series/:id`
+
+New persisted models are `BillingDocument`, `BillingDocumentLine`, `Payment`, and `BillingSeries`.
+
+Money is stored only as integer minor units. Billing totals are line snapshots and issued documents are financially immutable. `paidMinor` and `balanceMinor` are derived from active payments instead of persisted separately. Work orders point to the active invoice through `invoicedDocumentId`; proformas remain historical through document lines and do not block later invoice creation.
+
+Numbering is series-based. Issuing a document increments `BillingSeries.currentNumber` inside the same transaction and formats numbers like `PF-2026-000001` or `FACT-2026-000001`. The database enforces uniqueness on document type, series, and number.
+
+The UI includes month filters, billable works selection, document lists, quick issue/convert/payment actions, month-end grouping, series visibility, CSV export, and HTML print preview. BILLING-001 does not claim legal/fiscal PDF compliance and does not implement RO e-Factura, SPV, VAT engines, accounting, bank reconciliation, email, or SMS.
+
+RBAC uses existing permissions: `finance.read`, `finance.record_payment`, `finance.refund`, `finance.read_reports`, `invoice.create`, `invoice.read`, `invoice.download`, `invoice.cancel`, and `invoice.configure_series`. State-changing billing endpoints require CSRF.
+
+`BILLING-002` is reserved for printable billing documents and clinic statements.
+
 ## Current Task
 
 See `IMPLEMENTATION_STATUS.md` for task progress and manual testing checklists.

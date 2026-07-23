@@ -1172,6 +1172,34 @@ Decizie concreta SETTINGS-001:
 - Audit: audit pentru create/update raspunsuri formular pe lucrare.
 - Testare: unit/integration pentru snapshot si validare, frontend pentru completare, erori si compatibilitate cu FORMS-001 patterns.
 
+### BILLING-001 - Billing workspace, proformas, invoices and month-end registry
+
+- Status: COMPLETED.
+- Obiectiv: workspace financiar central pentru inchiderea lunii si eliminarea cautarii manuale intre fise, lucrari, proforme, facturi, chitante si Excel.
+- Scope: registru financiar, lucrari facturabile, proforme, facturi interne, linii document snapshot, serii/numere, plati, solduri, filtre, grupari, cautare, export CSV, print preview HTML si audit.
+- Non-goals: RO e-Factura, SPV, contabilitate generala, TVA complex, note de credit/stornari fiscale complexe, PDF legal final, email/SMS, bank reconciliation, multi-currency conversion, workflow sau formulare dinamice.
+- Dependente: WORKS-001, SETTINGS-001, RBAC-001, SHELL-001, FORMS-001.
+- Acceptance criteria: managerul poate selecta lucrari compatibile, crea/emite proforme, transforma proforma in factura, crea factura directa, inregistra plati partiale/finale, vedea solduri si cauta dupa lucrare/document/chitanta.
+- Backend: `BillingModule` cu `BillingDocument`, `BillingDocumentLine`, `Payment`, `BillingSeries`, endpointuri `/billing`, `/billing-documents`, `/payments`, `/billing-series`, tranzactii pentru issue/convert/payment si numerotare prin increment atomic pe serie.
+- Frontend: ruta lazy `/billing`, navigare Facturare, carduri lunare, lucrari nefacturate, documente, incasari, inchidere luna, serii, CSV si print preview.
+- Securitate: RBAC server-side cu `finance.*` si `invoice.*`, CSRF pe mutatii, fara role checks, fara pacient in audit, valori mascate in billable works fara drept financiar/pricing.
+- Audit: `billing.proforma_created`, `billing.proforma_issued`, `billing.invoice_created`, `billing.invoice_issued`, `billing.proforma_converted`, `billing.document_cancelled`, `billing.payment_recorded`, `billing.payment_cancelled`, `billing.series_created`, `billing.series_updated`.
+- Testare: Prisma validate/generate/migrate/seed, typecheck, teste API/frontend, build si smoke runtime cu proforma, factura si plati.
+
+### BILLING-002 - Printable billing documents and clinic statements
+
+- Status: NOT STARTED.
+- Obiectiv: documente printabile/PDF si situatii pe clinica bazate pe datele BILLING-001.
+- Scope: sabloane print/PDF pentru proforma, factura interna, anexa factura si statement clinica pe perioada.
+- Non-goals: RO e-Factura, SPV, contabilitate generala, semnatura electronica avansata.
+- Dependente: BILLING-001, SETTINGS-001, FILES-001 optional pentru arhivare PDF privata.
+- Acceptance criteria: managerul poate genera documente clare pentru clinica, cu branding laborator si totaluri reconciliabile cu registrul.
+- Backend: endpointuri de render/export daca PDF server-side este ales.
+- Frontend: print/PDF/statement UI, preview detaliat, filtre pe clinica/perioada.
+- Securitate: RBAC `invoice.download`/`invoice.read`, date pacient doar unde este justificat.
+- Audit: audit pentru download/print/export.
+- Testare: render smoke, permisiuni, regresii valori totale.
+
 ### FILES-001 - Private file upload
 
 - Scop: atasamente foto/document/STL.
@@ -1473,10 +1501,12 @@ RBAC-001 -> SETTINGS-001 -> INVOICE-001
 RBAC-001 -> CLINICS-001 -> WORKS-001
 RBAC-001 -> WORKTYPES-001 -> WORKFLOW-001
 WORKS-001 -> QR-001
-SHELL-001 -> FORMS-001 -> WORKFORMS-001 -> FORMS-002
+SHELL-001 -> FORMS-001
+WORKS-001 -> BILLING-001 -> BILLING-002
+FORMS-001 -> WORKFORMS-001 -> FORMS-002
 WORKS-001 -> FILES-001
 WORKFLOW-001 -> WORKFLOW-002 -> LOGISTICS-001 -> TECH-001 -> QC-001 -> DELIVERY-001
-WORKS-001 -> PAYMENTS-001 -> INVOICE-001
+WORKS-001 -> PAYMENTS-001 -> INVOICE-001 (legacy split, covered operationally by BILLING-001/BILLING-002)
 WORKS-001 -> REPORTS-001
 RBAC-001 -> AUDIT-UI-001
 Core modules -> SECURITY-001 -> E2E-001 -> DEPLOY-001

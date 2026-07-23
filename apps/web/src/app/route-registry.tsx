@@ -42,6 +42,15 @@ export const appRoutes = [
     showInNavigation: true,
   },
   {
+    icon: "BI",
+    label: "Facturare",
+    navigationGroup: "Financiar",
+    path: "/billing",
+    permissionMode: "any",
+    requiredPermissions: ["finance.read", "invoice.read", "invoice.create"],
+    showInNavigation: true,
+  },
+  {
     icon: "CL",
     label: "Clinici si medici",
     navigationGroup: "Administrare",

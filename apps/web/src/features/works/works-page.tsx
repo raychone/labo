@@ -165,6 +165,11 @@ export function WorksPage(): ReactNode {
       renderCell: () => <StatusBadge label="Inregistrata" variant="registered" />,
     },
     {
+      header: "Facturare",
+      id: "billing",
+      renderCell: (work) => work.invoicedDocumentId ? "Facturat" : "Nefacturat",
+    },
+    {
       align: "right",
       header: "Total",
       id: "totalPriceMinor",

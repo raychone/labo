@@ -40,6 +40,7 @@ const workSummary = {
   currency: null,
   doctor: { displayName: "Dr. Ana Popescu", id: "doctor_1" },
   id: "work_order_1",
+  invoicedDocumentId: null,
   patientName: "Ion Pop",
   patientReference: "P-100",
   priority: "NORMAL",

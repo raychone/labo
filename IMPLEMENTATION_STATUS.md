@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-50%
+56%
 
 ## FOUNDATION
 
@@ -60,6 +60,11 @@
 - [ ] WORKFORMS-001 - Work form template builder (NOT STARTED)
 - [ ] FORMS-002 - Work form completion and immutable snapshot (NOT STARTED)
 
+## BILLING
+
+- [x] BILLING-001 - Billing workspace, proformas, invoices and month-end registry
+- [ ] BILLING-002 - Printable billing documents and clinic statements (NOT STARTED)
+
 ## FILES
 
 - [ ] FILES-001 - Private file upload (NOT STARTED)
@@ -104,11 +109,11 @@
 
 ## PAYMENTS
 
-- [ ] PAYMENTS-001 - Payments and balances
+- [x] PAYMENTS-001 - Payments and balances (covered by BILLING-001)
 
 ## INVOICE
 
-- [ ] INVOICE-001 - Invoice PDF and numbering
+- [ ] INVOICE-001 - Invoice PDF and numbering (superseded by BILLING-002 for printable documents)
 
 ## REPORTS
 
@@ -136,9 +141,11 @@ NONE / AWAITING APPROVAL
 
 Status: AWAITING APPROVAL
 
+Last completed task: BILLING-001 - Billing workspace, proformas, invoices and month-end registry
+
 ## Next Recommended Task
 
-WORKFORMS-001 - Work form template builder
+BILLING-002 - Printable billing documents and clinic statements
 
 ## Known Technical Debt
 
@@ -174,6 +181,11 @@ None.
 - Use `@dental-lab/ui` form pattern primitives for layout, sections, error summaries, form actions, and confirmation modals.
 - Normalize frontend API errors in `apps/web/src/lib/api-client.ts` and map them to React Hook Form through `apps/web/src/lib/form-utils.tsx`.
 - Protect dirty forms with route blocking where React Router data-router context exists, plus `beforeunload` and modal/drawer close guards.
+- Reprioritize billing before dynamic work forms because the operational pain is month-end reconciliation across works, proformas, invoices, receipts and separate spreadsheets.
+- Keep BILLING-001 as an internal operational billing workspace; printable/legal-grade documents and clinic statements are deferred to BILLING-002.
+- Store billing money as integer minor units only and derive paid/balance from active payments.
+- Use `WorkOrder.invoicedDocumentId` as the active invoice relation instead of a billing boolean.
+- Keep patient names out of billing audit metadata; document line snapshots may contain patient names for internal annex/search views.
 - Evaluate RBAC from the database so access changes take effect without relogin.
 - Treat `ALL` as the only broad scope; ownership scopes remain distinct.
 - Use plain CSS custom properties in `packages/ui/src/styles.css` as the design token source of truth.
@@ -1783,3 +1795,110 @@ None.
   - Linting remains unconfigured.
   - Physical responsive checks at 360px, 390px, 768px, 1024px, 1280px, zoom 150/200%, screen reader behavior, and real mobile keyboard behavior were not fully verified in this terminal-only environment.
   - `UnsavedChangesPrompt` uses React Router blocking only when data-router context exists, with `beforeunload` and close guards as fallback paths.
+
+### BILLING-001 - Billing workspace, proformas, invoices and month-end registry
+
+- Status: COMPLETED.
+- Started: 2026-07-23 23:15:08 CEST.
+- Completed: 2026-07-23 23:34:04 CEST.
+- Commit message: `BILLING-001: add billing workspace and month-end registry`.
+- Pre-flight audit:
+  - Branch: `main`.
+  - Working tree: clean before BILLING-001 changes.
+  - Last completed task commit before BILLING-001: `5751125 FORMS-001: standardize form patterns and validation UX`.
+  - BILLING-001 definition was read from the attached task file and existing documentation.
+  - `MVP-IMPLEMENTATION-PLAN.md`, `IMPLEMENTATION_STATUS.md`, `README.md`, Prisma schema, migrations, seed, WorkOrder, WorkType, Clinic, Doctor, LaboratorySettings, permission registry, AuditService, money helpers, shell and route registry were reviewed.
+  - Existing permissions confirmed: `finance.read`, `finance.record_payment`, `finance.refund`, `finance.read_reports`, `invoice.create`, `invoice.read`, `invoice.download`, `invoice.cancel`, `invoice.configure_series`.
+  - No premature invoice/payment models existed.
+  - Currency source confirmed as singleton LaboratorySettings with `RON` fallback.
+  - WorkOrder already had patient name, clinic, doctor, quantity, price snapshot, currency, createdAt, requested delivery date and work code; `invoicedDocumentId` was added for active invoice relation.
+  - Linting remains unconfigured.
+- Reprioritization:
+  - `WORKFORMS-001` and `FORMS-002` remain NOT STARTED, but are no longer next.
+  - Next recommended task is `BILLING-002 - Printable billing documents and clinic statements`.
+- Summary:
+  - Added billing Prisma models for documents, lines, payments and numbering series.
+  - Added deterministic migration `20260723231500_billing_documents_and_payments`.
+  - Added idempotent development seed for `PF-2026` and `FACT-2026` series.
+  - Added `BillingModule` with overview, billable works, document list/detail, proforma/invoice creation, draft update, line replacement, issue, convert proforma, cancel document, payment record/cancel, search and series endpoints.
+  - Added transactional numbering by incrementing `BillingSeries.currentNumber` during issue/convert; no `count + 1`.
+  - Added active invoice relation on WorkOrder and `/works` billing status display.
+  - Added shared billing contracts in `packages/shared`.
+  - Added lazy `/billing` frontend route, navigation item, month filters, overview cards, billable work selection, documents, payments, month close grouping, series view, CSV export and print preview.
+  - Added audit events with safe metadata excluding patient names.
+- Non-goals:
+  - No RO e-Factura or SPV.
+  - No legal/fiscal final PDF.
+  - No accounting engine, TVA engine, credit notes, bank reconciliation, email/SMS, multi-currency conversion, workflow or dynamic forms.
+  - No hard deletes for financial documents/payments.
+- Prisma models:
+  - `BillingDocument`
+  - `BillingDocumentLine`
+  - `Payment`
+  - `BillingSeries`
+  - `WorkOrder.invoicedDocumentId`
+- Main files modified:
+  - `apps/api/prisma/schema.prisma`
+  - `apps/api/prisma/migrations/20260723231500_billing_documents_and_payments/migration.sql`
+  - `apps/api/prisma/seed.ts`
+  - `apps/api/src/modules/billing/*`
+  - `apps/api/src/modules/app.module.ts`
+  - `apps/api/src/modules/works/works.view.ts`
+  - `apps/api/src/modules/works/works.controller.test.ts`
+  - `apps/web/src/app/app.tsx`
+  - `apps/web/src/app/route-registry.tsx`
+  - `apps/web/src/features/billing/*`
+  - `apps/web/src/features/works/works-page.tsx`
+  - `apps/web/src/features/works/works-page.test.tsx`
+  - `packages/shared/src/billing.ts`
+  - `packages/shared/src/index.ts`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `IMPLEMENTATION_STATUS.md`
+- Dependencies added:
+  - None.
+- Automated verification:
+  - `pnpm --filter @dental-lab/api prisma:validate` passed.
+  - `pnpm --filter @dental-lab/api prisma:generate` passed.
+  - `pnpm --filter @dental-lab/api prisma:migrate:dev --name billing_documents_and_payments` passed and applied `20260723231500_billing_documents_and_payments`.
+  - `pnpm --filter @dental-lab/api prisma:db:seed` passed.
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed with no Vite chunk-size warning.
+- Backend tests:
+  - Billing amount helper derives unpaid, partially paid and paid states from active payments and ignores cancelled payments.
+  - Existing controller/service suites remained green after WorkOrder billing relation.
+- Frontend tests:
+  - Route registry exposes Facturare for finance permissions.
+  - Billing page renders month-end cards, billable works and document actions.
+  - Works page tests cover the updated WorkOrder contract.
+- Manual integration verification:
+  - API built app started on `http://localhost:3010`.
+  - Frontend started on `http://127.0.0.1:5181`.
+  - Manager login with CSRF succeeded.
+  - `GET /health` returned `ok`.
+  - Created two clinics, two doctors, one work type and three work orders.
+  - `GET /billing/overview` returned `200`.
+  - `GET /billing/billable-works` returned `200` and found 3 smoke works.
+  - Created proforma from two compatible works.
+  - Issued proforma `PF-2026-000001`.
+  - Converted proforma to invoice `FACT-2026-000001`.
+  - Recorded a partial cash payment with receipt number; invoice status became `PARTIALLY_PAID`.
+  - Recorded remaining bank transfer; invoice status became `PAID` and balance became `0`.
+  - Attempted invoice creation with works from two clinics; API rejected with `400`.
+  - `GET /billing-documents` found the invoice by number.
+  - `GET /payments` returned the recorded payments.
+  - `GET /billing-series` returned 2 seeded series.
+  - `GET http://127.0.0.1:5181/billing` returned `200`.
+  - `GET http://127.0.0.1:5181/works` returned `200`.
+- Remaining manual checks not fully verified in this terminal environment:
+  - Real browser responsive checks at 360px, 768px, 1280px, zoom 150%.
+  - Browser console inspection.
+  - Real print dialog output.
+- Technical debt introduced:
+  - Billing document detail UI is intentionally compact in BILLING-001; full printable layouts/statements are deferred to BILLING-002.
+- Remaining risks:
+  - Billing status filtering by derived payment status is done after page fetch for document list; large datasets may need DB-level paid/balance projections later.
+  - `finance.refund` is currently used for payment cancellation because no separate payment cancellation permission exists.
+  - Internal invoice preview is not a legal/fiscal final invoice and must not be treated as RO e-Factura compliant.
+  - Linting remains unconfigured.

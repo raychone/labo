@@ -172,6 +172,31 @@ async function main(): Promise<void> {
       key: "default",
     },
   });
+
+  for (const series of [
+    { documentType: "PROFORMA" as const, prefix: "PF", year: 2026 },
+    { documentType: "INVOICE" as const, prefix: "FACT", year: 2026 },
+  ]) {
+    await prisma.billingSeries.upsert({
+      create: {
+        currentNumber: 0,
+        documentType: series.documentType,
+        isActive: true,
+        prefix: series.prefix,
+        year: series.year,
+      },
+      update: {
+        isActive: true,
+      },
+      where: {
+        documentType_prefix_year: {
+          documentType: series.documentType,
+          prefix: series.prefix,
+          year: series.year,
+        },
+      },
+    });
+  }
 }
 
 main()

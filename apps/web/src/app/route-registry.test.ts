@@ -4,11 +4,12 @@ import { getNavigationRoutes, getSafeReturnTo, hasRouteAccess, workReadPermissio
 
 describe("route registry", () => {
   it("filters navigation by permission snapshot", () => {
-    const labels = getNavigationRoutes(["works.read_all", "settings.read"]).map((route) => route.label);
+    const labels = getNavigationRoutes(["works.read_all", "settings.read", "finance.read"]).map((route) => route.label);
 
     expect(labels).toContain("Dashboard");
     expect(labels).toContain("Lucrari");
     expect(labels).toContain("Scanare");
+    expect(labels).toContain("Facturare");
     expect(labels).toContain("Setari");
     expect(labels).not.toContain("Utilizatori");
   });

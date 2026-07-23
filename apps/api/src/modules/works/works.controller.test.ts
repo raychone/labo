@@ -25,6 +25,7 @@ const responseBody = {
   doctor: { displayName: "Dr. Ana Popescu", id: "doctor_1" },
   externalReference: null,
   id: "work_order_1",
+  invoicedDocumentId: null,
   internalNotes: null,
   patientName: "Ion Pop",
   patientReference: null,

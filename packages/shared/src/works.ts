@@ -37,6 +37,7 @@ export interface WorkSummary {
   readonly currency: string | null;
   readonly doctor: WorkDoctorSummary;
   readonly id: string;
+  readonly invoicedDocumentId: string | null;
   readonly patientName: string;
   readonly patientReference: string | null;
   readonly priority: WorkPriority;

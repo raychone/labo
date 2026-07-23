@@ -1,0 +1,189 @@
+export const BILLING_DOCUMENT_TYPES = ["PROFORMA", "INVOICE"] as const;
+export const BILLING_DOCUMENT_STATUSES = ["DRAFT", "ISSUED", "PARTIALLY_PAID", "PAID", "CANCELLED"] as const;
+export const PAYMENT_METHODS = ["CASH", "BANK_TRANSFER", "CARD", "OTHER"] as const;
+export const PAYMENT_STATUSES = ["UNPAID", "PARTIALLY_PAID", "PAID"] as const;
+export const BILLING_GROUP_BY = ["day", "week", "month", "clinic", "doctor", "patient", "workType", "billingStatus", "paymentStatus"] as const;
+export const BILLING_DOCUMENT_SORT_FIELDS = ["createdAt", "issueDate", "formattedNumber", "totalMinor", "status"] as const;
+
+export type BillingDocumentType = (typeof BILLING_DOCUMENT_TYPES)[number];
+export type BillingDocumentStatus = (typeof BILLING_DOCUMENT_STATUSES)[number];
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+export type BillingGroupBy = (typeof BILLING_GROUP_BY)[number];
+export type BillingDocumentSortField = (typeof BILLING_DOCUMENT_SORT_FIELDS)[number];
+
+export interface BillingClinicSnapshot {
+  readonly address: string | null;
+  readonly email: string | null;
+  readonly legalName: string | null;
+  readonly name: string;
+  readonly phone: string | null;
+  readonly registrationNumber: string | null;
+  readonly taxId: string | null;
+}
+
+export interface BillingDocumentLineView {
+  readonly description: string;
+  readonly doctorNameSnapshot: string;
+  readonly id: string;
+  readonly lineTotalMinor: number;
+  readonly patientNameSnapshot: string;
+  readonly quantity: number;
+  readonly sortOrder: number;
+  readonly toothPositionSnapshot: string | null;
+  readonly unitPriceMinor: number;
+  readonly workCode: string;
+  readonly workOrderId: string;
+  readonly workTypeNameSnapshot: string;
+}
+
+export interface PaymentView {
+  readonly amountMinor: number;
+  readonly billingDocumentId: string;
+  readonly cancelledAt: string | null;
+  readonly createdAt: string;
+  readonly currency: string;
+  readonly id: string;
+  readonly method: PaymentMethod;
+  readonly paymentDate: string;
+  readonly receiptDate: string | null;
+  readonly receiptNumber: string | null;
+  readonly reference: string | null;
+}
+
+export interface BillingDocumentSummary {
+  readonly balanceMinor: number;
+  readonly clinicId: string;
+  readonly clinicName: string;
+  readonly currency: string;
+  readonly formattedNumber: string | null;
+  readonly id: string;
+  readonly issueDate: string;
+  readonly paidMinor: number;
+  readonly paymentStatus: PaymentStatus;
+  readonly status: BillingDocumentStatus;
+  readonly totalMinor: number;
+  readonly type: BillingDocumentType;
+  readonly workCount: number;
+}
+
+export interface BillingDocumentDetail extends BillingDocumentSummary {
+  readonly clinicSnapshot: BillingClinicSnapshot;
+  readonly createdAt: string;
+  readonly discountMinor: number;
+  readonly dueDate: string | null;
+  readonly issuedAt: string | null;
+  readonly lines: readonly BillingDocumentLineView[];
+  readonly notes: string | null;
+  readonly payments: readonly PaymentView[];
+  readonly subtotalMinor: number;
+  readonly taxMinor: number;
+}
+
+export interface BillingGroup {
+  readonly balanceMinor: number;
+  readonly count: number;
+  readonly invoicedMinor: number;
+  readonly key: string;
+  readonly label: string;
+  readonly paidMinor: number;
+  readonly uninvoicedMinor: number;
+}
+
+export interface BillingOverview {
+  readonly currency: string;
+  readonly documentCount: number;
+  readonly from: string;
+  readonly groups: readonly BillingGroup[];
+  readonly invoiceCount: number;
+  readonly openProformaCount: number;
+  readonly paidMinor: number;
+  readonly proformaMinor: number;
+  readonly to: string;
+  readonly unpaidInvoiceCount: number;
+  readonly outstandingMinor: number;
+  readonly uninvoicedMinor: number;
+  readonly uninvoicedWorkCount: number;
+  readonly workValueMinor: number;
+}
+
+export interface BillableWork {
+  readonly baseUnitPriceMinor: number | null;
+  readonly clinicId: string;
+  readonly clinicName: string;
+  readonly code: string;
+  readonly createdAt: string;
+  readonly currency: string | null;
+  readonly doctorId: string;
+  readonly doctorName: string;
+  readonly id: string;
+  readonly invoicedDocumentId: string | null;
+  readonly isBillable: boolean;
+  readonly patientName: string;
+  readonly patientReference: string | null;
+  readonly quantity: number;
+  readonly requestedDeliveryDate: string;
+  readonly status: string;
+  readonly totalPriceMinor: number | null;
+  readonly unavailableReason: string | null;
+  readonly workTypeName: string;
+}
+
+export interface BillingSeriesView {
+  readonly currentNumber: number;
+  readonly documentType: BillingDocumentType;
+  readonly id: string;
+  readonly isActive: boolean;
+  readonly prefix: string;
+  readonly year: number;
+}
+
+export interface CreateBillingDocumentInput {
+  readonly dueDate?: string | null;
+  readonly issueDate: string;
+  readonly notes?: string | null;
+  readonly workOrderIds: readonly string[];
+}
+
+export interface UpdateBillingDocumentInput {
+  readonly dueDate?: string | null;
+  readonly issueDate?: string;
+  readonly notes?: string | null;
+}
+
+export interface ReplaceBillingLinesInput {
+  readonly workOrderIds: readonly string[];
+}
+
+export interface RecordPaymentInput {
+  readonly amountMinor: number;
+  readonly method: PaymentMethod;
+  readonly notes?: string | null;
+  readonly paymentDate: string;
+  readonly receiptDate?: string | null;
+  readonly receiptNumber?: string | null;
+  readonly reference?: string | null;
+}
+
+export interface BillingListQuery {
+  readonly clinicId?: string;
+  readonly dateFrom?: string;
+  readonly dateTo?: string;
+  readonly doctorId?: string;
+  readonly page: number;
+  readonly pageSize: number;
+  readonly paymentStatus?: PaymentStatus;
+  readonly search?: string;
+  readonly sortBy: BillingDocumentSortField;
+  readonly sortDirection: "asc" | "desc";
+  readonly status?: BillingDocumentStatus;
+  readonly type?: BillingDocumentType;
+}
+
+export interface PaginatedBillingDocumentsResponse {
+  readonly items: readonly BillingDocumentSummary[];
+  readonly page: number;
+  readonly pageCount: number;
+  readonly pageSize: number;
+  readonly total: number;
+}

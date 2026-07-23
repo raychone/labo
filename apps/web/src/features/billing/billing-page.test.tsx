@@ -1,0 +1,120 @@
+import { ToastProvider } from "@dental-lab/ui";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { BillingPage } from "./billing-page.js";
+
+function renderWithProviders(component: ReactNode): void {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+
+  render(
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>{component}</ToastProvider>
+    </QueryClientProvider>,
+  );
+}
+
+function createJsonResponse(body: unknown, status = 200): Response {
+  return {
+    json: async () => body,
+    ok: status >= 200 && status < 300,
+    status,
+  } as Response;
+}
+
+describe("BillingPage", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("renders month-end cards, billable works and document actions", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/auth/permissions")) {
+        return Promise.resolve(createJsonResponse({
+          permissions: [
+            { key: "finance.read", scopes: ["ALL"] },
+            { key: "finance.record_payment", scopes: ["ALL"] },
+            { key: "invoice.create", scopes: ["ALL"] },
+            { key: "invoice.read", scopes: ["ALL"] },
+            { key: "invoice.configure_series", scopes: ["ALL"] },
+          ],
+        }));
+      }
+      if (url.endsWith("/settings")) {
+        return Promise.resolve(createJsonResponse({ currency: "RON", locale: "ro-RO" }));
+      }
+      if (url.includes("/billing/overview")) {
+        return Promise.resolve(createJsonResponse({
+          currency: "RON",
+          documentCount: 1,
+          from: "2026-07-01",
+          groups: [{ balanceMinor: 35000, count: 1, invoicedMinor: 0, key: "clinic_1", label: "Clinica Test", paidMinor: 0, uninvoicedMinor: 35000 }],
+          invoiceCount: 0,
+          openProformaCount: 0,
+          outstandingMinor: 0,
+          paidMinor: 0,
+          proformaMinor: 0,
+          to: "2026-07-31",
+          unpaidInvoiceCount: 0,
+          uninvoicedMinor: 35000,
+          uninvoicedWorkCount: 1,
+          workValueMinor: 35000,
+        }));
+      }
+      if (url.includes("/billing/billable-works")) {
+        return Promise.resolve(createJsonResponse({
+          items: [{
+            baseUnitPriceMinor: 35000,
+            clinicId: "clinic_1",
+            clinicName: "Clinica Test",
+            code: "WO-2026-000001",
+            createdAt: "2026-07-22T12:00:00.000Z",
+            currency: "RON",
+            doctorId: "doctor_1",
+            doctorName: "Dr. Ana Popescu",
+            id: "work_order_1",
+            invoicedDocumentId: null,
+            isBillable: true,
+            patientName: "Ion Pop",
+            patientReference: null,
+            quantity: 1,
+            requestedDeliveryDate: "2026-08-01T00:00:00.000Z",
+            status: "REGISTERED",
+            totalPriceMinor: 35000,
+            unavailableReason: null,
+            workTypeName: "Coroana zirconiu",
+          }],
+        }));
+      }
+      if (url.includes("/billing-documents")) {
+        return Promise.resolve(createJsonResponse({ items: [], page: 1, pageCount: 1, pageSize: 20, total: 0 }));
+      }
+      if (url.endsWith("/payments")) {
+        return Promise.resolve(createJsonResponse({ items: [] }));
+      }
+      if (url.endsWith("/billing-series")) {
+        return Promise.resolve(createJsonResponse({ items: [{ currentNumber: 0, documentType: "INVOICE", id: "series_1", isActive: true, prefix: "FACT", year: 2026 }] }));
+      }
+
+      return Promise.resolve(createJsonResponse({}, 404));
+    }));
+
+    renderWithProviders(<BillingPage />);
+
+    expect(await screen.findByRole("heading", { name: "Facturare" })).toBeDefined();
+    expect((await screen.findAllByText("Nefacturat")).length).toBeGreaterThan(0);
+    expect(await screen.findByText("WO-2026-000001")).toBeDefined();
+    fireEvent.click(screen.getByLabelText("Selecteaza WO-2026-000001"));
+    expect(await screen.findByText(/1 lucrari selectate/)).toBeDefined();
+    expect(screen.getByRole("button", { name: "Creeaza proforma" })).toBeDefined();
+  });
+});

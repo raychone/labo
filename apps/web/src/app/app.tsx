@@ -37,6 +37,10 @@ const WorkScanPage = lazy(async () => {
   const module = await import("../features/works/work-scan-page.js");
   return { default: module.WorkScanPage };
 });
+const BillingPage = lazy(async () => {
+  const module = await import("../features/billing/billing-page.js");
+  return { default: module.BillingPage };
+});
 
 function LazyRoute({ children }: { readonly children: ReactNode }): ReactNode {
   return <Suspense fallback={<RouteLoading />}>{children}</Suspense>;
@@ -62,6 +66,10 @@ const router = createBrowserRouter([
       {
         element: <PermissionRoute requiredPermissions={workReadPermissions}><LazyRoute><WorkScanPage /></LazyRoute></PermissionRoute>,
         path: "scan",
+      },
+      {
+        element: <PermissionRoute requiredPermissions={["finance.read", "invoice.read", "invoice.create"]}><LazyRoute><BillingPage /></LazyRoute></PermissionRoute>,
+        path: "billing",
       },
       {
         element: <PermissionRoute requiredPermissions={["clinics.read"]}><LazyRoute><ClinicsPage /></LazyRoute></PermissionRoute>,

@@ -81,4 +81,35 @@ export type {
   WorkTypeSnapshot,
   WorksListParams,
 } from "./works.js";
+export {
+  BILLING_DOCUMENT_SORT_FIELDS,
+  BILLING_DOCUMENT_STATUSES,
+  BILLING_DOCUMENT_TYPES,
+  BILLING_GROUP_BY,
+  PAYMENT_METHODS,
+  PAYMENT_STATUSES,
+} from "./billing.js";
+export type {
+  BillableWork,
+  BillingClinicSnapshot,
+  BillingDocumentDetail,
+  BillingDocumentLineView,
+  BillingDocumentSortField,
+  BillingDocumentStatus,
+  BillingDocumentSummary,
+  BillingDocumentType,
+  BillingGroup,
+  BillingGroupBy,
+  BillingListQuery,
+  BillingOverview,
+  BillingSeriesView,
+  CreateBillingDocumentInput,
+  PaginatedBillingDocumentsResponse,
+  PaymentMethod,
+  PaymentStatus,
+  PaymentView,
+  RecordPaymentInput,
+  ReplaceBillingLinesInput,
+  UpdateBillingDocumentInput,
+} from "./billing.js";
 export { formatApplicationTitle } from "./workspace-title.js";

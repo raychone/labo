@@ -29,6 +29,7 @@ export interface WorkSummaryView {
     readonly id: string;
   };
   readonly id: string;
+  readonly invoicedDocumentId: string | null;
   readonly patientName: string;
   readonly patientReference: string | null;
   readonly priority: string;
@@ -86,6 +87,7 @@ export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: bo
       id: workOrder.doctor.id,
     },
     id: workOrder.id,
+    invoicedDocumentId: workOrder.invoicedDocumentId,
     patientName: workOrder.patientName,
     patientReference: workOrder.patientReference,
     priority: workOrder.priority,
