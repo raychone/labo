@@ -7,11 +7,13 @@ const BILLING_DOCUMENT_TYPES = ["PROFORMA", "INVOICE"] as const;
 const BILLING_DOCUMENT_STATUSES = ["DRAFT", "ISSUED", "PARTIALLY_PAID", "PAID", "CANCELLED"] as const;
 const PAYMENT_METHODS = ["CASH", "BANK_TRANSFER", "CARD", "OTHER"] as const;
 const PAYMENT_STATUSES = ["UNPAID", "PARTIALLY_PAID", "PAID"] as const;
+const DOCUMENT_PAYMENT_FILTERS = ["ALL", "UNPAID", "PARTIALLY_PAID", "PAID", "OUTSTANDING", "DUE", "OVERDUE", "CANCELLED"] as const;
 
 type BillingDocumentType = (typeof BILLING_DOCUMENT_TYPES)[number];
 type BillingDocumentStatus = (typeof BILLING_DOCUMENT_STATUSES)[number];
 type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+type DocumentPaymentFilter = (typeof DOCUMENT_PAYMENT_FILTERS)[number];
 
 function trimOptionalString(value: unknown): string | null | undefined {
   if (value === undefined) {
@@ -108,6 +110,10 @@ export class ListBillingDocumentsQueryDto {
   public readonly paymentStatus?: PaymentStatus;
 
   @IsOptional()
+  @IsIn(DOCUMENT_PAYMENT_FILTERS)
+  public readonly paymentFilter?: DocumentPaymentFilter;
+
+  @IsOptional()
   @Transform(({ value }) => trimOptionalString(value))
   @IsString()
   public readonly clinicId?: string | null;
@@ -116,6 +122,36 @@ export class ListBillingDocumentsQueryDto {
   @Transform(({ value }) => trimOptionalString(value))
   @IsString()
   public readonly doctorId?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(120)
+  public readonly patient?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(80)
+  public readonly receiptNumber?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(160)
+  public readonly paymentReference?: string | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  public readonly amountMinMinor?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  public readonly amountMaxMinor?: number;
 
   @IsOptional()
   @IsISO8601({ strict: true })
@@ -224,6 +260,34 @@ export class SearchBillingQueryDto {
   @IsString()
   @MaxLength(120)
   public readonly q!: string;
+}
+
+export class ClinicStatementQueryDto {
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  public readonly clinicId!: string;
+
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  public readonly dateFrom?: string;
+
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  public readonly dateTo?: string;
+}
+
+export class DoctorStatementQueryDto {
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  public readonly doctorId!: string;
+
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  public readonly dateFrom?: string;
+
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  public readonly dateTo?: string;
 }
 
 export class UpsertBillingSeriesDto {

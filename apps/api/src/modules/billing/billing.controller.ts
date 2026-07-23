@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Inject, Param, Patch, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
-import type { Request } from "express";
+import { Body, Controller, Get, Inject, Param, Patch, Post, Put, Query, Req, Res, UseGuards } from "@nestjs/common";
+import type { Request, Response } from "express";
 
 import { AuthGuard } from "../auth/auth.guard.js";
 import { CsrfGuard } from "../auth/csrf.guard.js";
@@ -9,11 +9,16 @@ import type { AuthenticatedUser } from "../auth/auth.types.js";
 import { AuthorizationService } from "../rbac/authorization.service.js";
 import { PermissionsGuard } from "../rbac/permissions.guard.js";
 import { RequirePermission } from "../rbac/require-permission.decorator.js";
+import { BillingExportService } from "./billing-export.service.js";
+import { BillingPrintService } from "./billing-print.service.js";
 import { BillingService } from "./billing.service.js";
+import { BillingStatementService } from "./billing-statement.service.js";
 import {
   BillableWorksQueryDto,
   BillingRangeQueryDto,
+  ClinicStatementQueryDto,
   CreateBillingDocumentDto,
+  DoctorStatementQueryDto,
   ListBillingDocumentsQueryDto,
   RecordPaymentDto,
   ReplaceBillingLinesDto,
@@ -27,7 +32,10 @@ import {
 export class BillingController {
   public constructor(
     @Inject(AuthorizationService) private readonly authorizationService: AuthorizationService,
+    @Inject(BillingExportService) private readonly billingExportService: BillingExportService,
+    @Inject(BillingPrintService) private readonly billingPrintService: BillingPrintService,
     @Inject(BillingService) private readonly billingService: BillingService,
+    @Inject(BillingStatementService) private readonly billingStatementService: BillingStatementService,
   ) {}
 
   @Get("billing/overview")
@@ -48,6 +56,38 @@ export class BillingController {
     return this.billingService.search(query);
   }
 
+  @Get("billing/statements/clinic")
+  @RequirePermission("finance.read_reports", "ALL")
+  public getClinicStatement(@CurrentUser() actor: AuthenticatedUser, @Query() query: ClinicStatementQueryDto, @Req() request: Request) {
+    return this.billingStatementService.getClinicStatement({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, query);
+  }
+
+  @Get("billing/statements/doctor")
+  @RequirePermission("finance.read_reports", "ALL")
+  public getDoctorStatement(@CurrentUser() actor: AuthenticatedUser, @Query() query: DoctorStatementQueryDto, @Req() request: Request) {
+    return this.billingStatementService.getDoctorStatement({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, query);
+  }
+
+  @Get("billing/month-registry")
+  @RequirePermission("finance.read_reports", "ALL")
+  public getMonthRegistry(@CurrentUser() actor: AuthenticatedUser, @Query() query: BillingRangeQueryDto, @Req() request: Request) {
+    return this.billingStatementService.getMonthRegistry({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, query);
+  }
+
+  @Get("billing/exports/registry.csv")
+  @RequirePermission("invoice.download", "ALL")
+  public async exportMonthRegistryCsv(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Query() query: BillingRangeQueryDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    response.setHeader("Content-Type", "text/csv; charset=utf-8");
+    response.setHeader("Content-Disposition", "attachment; filename=\"billing-month-registry.csv\"");
+
+    return this.billingExportService.getMonthRegistryCsv({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, query);
+  }
+
   @Get("billing-documents")
   @RequirePermission("invoice.read", "ALL")
   public listDocuments(@Query() query: ListBillingDocumentsQueryDto) {
@@ -58,6 +98,18 @@ export class BillingController {
   @RequirePermission("invoice.read", "ALL")
   public getDocument(@Param("id") documentId: string) {
     return this.billingService.getDocument(documentId);
+  }
+
+  @Get("billing-documents/:id/print-view")
+  @RequirePermission("invoice.download", "ALL")
+  public getDocumentPrintView(@Param("id") documentId: string, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
+    return this.billingPrintService.getDocumentPrintView({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, documentId);
+  }
+
+  @Get("billing-documents/:id/attachment")
+  @RequirePermission("invoice.download", "ALL")
+  public getDocumentAttachment(@Param("id") documentId: string, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
+    return this.billingPrintService.getAttachmentPrintView({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, documentId);
   }
 
   @Post("billing-documents/proformas")

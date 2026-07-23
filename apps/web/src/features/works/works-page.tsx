@@ -23,7 +23,7 @@ import { formatMoneyMinor, type CreateWorkInput, type UpdateWorkInput, type Work
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
 import { fetchClinicOptions, fetchDoctorOptions } from "../clinics/clinics-api.js";
@@ -107,6 +107,7 @@ export function WorksPage(): ReactNode {
   const canCreate = hasPermission(permissionsQuery.data, "works.create");
   const canUpdate = hasPermission(permissionsQuery.data, "works.update");
   const canReadPricing = hasPermission(permissionsQuery.data, "pricing.read");
+  const canDownloadInvoices = hasPermission(permissionsQuery.data, "invoice.download");
   const worksQuery = useWorks(params, canRead);
   const selectedWorkQuery = useWork(selectedWorkId, canRead);
   const clinicOptionsQuery = useQuery({ enabled: canRead || canCreate, queryFn: fetchClinicOptions, queryKey: ["clinics", "options"], retry: false });
@@ -167,7 +168,11 @@ export function WorksPage(): ReactNode {
     {
       header: "Facturare",
       id: "billing",
-      renderCell: (work) => work.invoicedDocumentId ? "Facturat" : "Nefacturat",
+      renderCell: (work) => work.invoicedDocumentId
+        ? canDownloadInvoices
+          ? <Link to={`/billing/documents/${work.invoicedDocumentId}/print`}>Vezi factura</Link>
+          : "Facturat"
+        : "Nefacturat",
     },
     {
       align: "right",
@@ -182,7 +187,7 @@ export function WorksPage(): ReactNode {
       isSortable: true,
       renderCell: (work) => formatDate(work.requestedDeliveryDate),
     },
-  ], [currency, locale]);
+  ], [canDownloadInvoices, currency, locale]);
 
   function handleCreate(input: WorkFormValues): void {
     createMutation.mutate(toMutationInput(input), {

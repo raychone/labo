@@ -56,6 +56,98 @@
   padding: var(--dl-space-4);
 }
 
+.billing-page__payment-form,
+.billing-print-page,
+.billing-print,
+.billing-print__header,
+.billing-print__parties,
+.billing-print__meta,
+.billing-print__totals {
+  display: grid;
+  gap: var(--dl-space-4);
+}
+
+.billing-page__payment-form {
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  grid-template-columns: 1fr;
+  padding: var(--dl-space-4);
+}
+
+.billing-page__payment-form h3,
+.billing-page__payment-form p,
+.billing-print h1,
+.billing-print h2,
+.billing-print p,
+.billing-print dl {
+  margin: 0;
+}
+
+.billing-print-page {
+  padding: var(--dl-layout-page-padding);
+}
+
+.billing-print-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-3);
+}
+
+.billing-print-page__back-link {
+  align-items: center;
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  color: var(--dl-color-text);
+  display: inline-flex;
+  min-height: var(--dl-size-touch-target);
+  padding-inline: var(--dl-space-4);
+  text-decoration: none;
+}
+
+.billing-print {
+  background: var(--dl-color-surface);
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  padding: var(--dl-space-4);
+}
+
+.billing-print__header {
+  border-bottom: var(--dl-border-width) solid var(--dl-color-border);
+  padding-bottom: var(--dl-space-4);
+}
+
+.billing-print__parties,
+.billing-print__meta,
+.billing-print__totals {
+  grid-template-columns: 1fr;
+}
+
+.billing-print__meta,
+.billing-print__totals {
+  border-top: var(--dl-border-width) solid var(--dl-color-border);
+  padding-top: var(--dl-space-4);
+}
+
+.billing-print__meta div,
+.billing-print__totals div {
+  display: flex;
+  justify-content: space-between;
+}
+
+.billing-print__table {
+  border-collapse: collapse;
+  font-size: var(--dl-font-size-small);
+  width: 100%;
+}
+
+.billing-print__table th,
+.billing-print__table td {
+  border-bottom: var(--dl-border-width) solid var(--dl-color-border);
+  padding: var(--dl-space-2);
+  text-align: left;
+  vertical-align: top;
+}
+
 .billing-page__month-close dl {
   display: grid;
   gap: var(--dl-space-2);
@@ -82,9 +174,29 @@
   .billing-page__month-close {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  .billing-page__payment-form {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .billing-page__payment-form > div:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .billing-print__header,
+  .billing-print__parties,
+  .billing-print__meta,
+  .billing-print__totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media print {
+  .app-shell__sidebar,
+  .app-shell__topbar,
+  .app-shell__header,
+  .billing-print-page__actions,
+  .billing-print-page .dl-tabs__list,
   .billing-page__header,
   .billing-page__filters,
   .billing-page .dl-tabs__list,
@@ -94,12 +206,15 @@
     display: none;
   }
 
-  .billing-page {
+  .app-shell__main,
+  .billing-page,
+  .billing-print-page {
     background: #ffffff;
     padding: 0;
   }
 
-  .billing-page__print-preview {
+  .billing-page__print-preview,
+  .billing-print {
     border: 0;
   }
 }

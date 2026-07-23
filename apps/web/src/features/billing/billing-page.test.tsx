@@ -44,6 +44,7 @@ describe("BillingPage", () => {
             { key: "finance.read", scopes: ["ALL"] },
             { key: "finance.record_payment", scopes: ["ALL"] },
             { key: "invoice.create", scopes: ["ALL"] },
+            { key: "invoice.download", scopes: ["ALL"] },
             { key: "invoice.read", scopes: ["ALL"] },
             { key: "invoice.configure_series", scopes: ["ALL"] },
           ],
@@ -111,10 +112,12 @@ describe("BillingPage", () => {
     renderWithProviders(<BillingPage />);
 
     expect(await screen.findByRole("heading", { name: "Facturare" })).toBeDefined();
+    expect(await screen.findByLabelText("Status incasare")).toBeDefined();
     expect((await screen.findAllByText("Nefacturat")).length).toBeGreaterThan(0);
     expect(await screen.findByText("WO-2026-000001")).toBeDefined();
     fireEvent.click(screen.getByLabelText("Selecteaza WO-2026-000001"));
     expect(await screen.findByText(/1 lucrari selectate/)).toBeDefined();
     expect(screen.getByRole("button", { name: "Creeaza proforma" })).toBeDefined();
+    expect(screen.queryByText("Incaseaza sold")).toBeNull();
   });
 });

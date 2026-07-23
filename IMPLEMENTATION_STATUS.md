@@ -63,7 +63,7 @@
 ## BILLING
 
 - [x] BILLING-001 - Billing workspace, proformas, invoices and month-end registry
-- [ ] BILLING-002 - Printable billing documents and clinic statements (APPROVED)
+- [x] BILLING-002 - Printable billing documents and clinic statements (COMPLETED)
 
 ## DEMO
 
@@ -146,11 +146,13 @@
 
 ## Current Task
 
-BILLING-002 - Printable billing documents and clinic statements
+NONE / AWAITING APPROVAL
 
-Status: APPROVED
+Status: AWAITING APPROVAL
 
-Last completed task: BILLING-001 - Billing workspace, proformas, invoices and month-end registry
+Last completed task: BILLING-002 - Printable billing documents and clinic statements
+
+Completed: 2026-07-24 00:06:00 CEST
 
 ## Next Recommended Task
 
@@ -1913,3 +1915,76 @@ None.
   - `finance.refund` is currently used for payment cancellation because no separate payment cancellation permission exists.
   - Internal invoice preview is not a legal/fiscal final invoice and must not be treated as RO e-Factura compliant.
   - Linting remains unconfigured.
+
+### BILLING-002 - Printable billing documents and clinic statements
+
+- Status: COMPLETED.
+- Started: 2026-07-23 23:54:04 CEST.
+- Completed: 2026-07-24 00:06:00 CEST.
+- Commit message: `BILLING-002: add printable billing documents and clinic statements`.
+- Summary:
+  - Added a deterministic non-destructive migration `20260723235400_billing_line_work_created_at_snapshot` for `BillingDocumentLine.workCreatedAtSnapshot`.
+  - Added printable document and attachment endpoints for billing documents.
+  - Added clinic statement, doctor statement, month registry and audited registry CSV endpoints.
+  - Added CSV formula neutralization for billing exports.
+  - Extended billing document filters/search for derived manual collection status, patient, receipt number, payment reference and amount range.
+  - Added `/billing/documents/:id/print` frontend route with document/anexa views and print CSS.
+  - Updated billing UI wording to “Evidenta incasari”, “Inregistreaza incasare”, “Suma incasata” and “Sold restant”.
+  - Added manual collection form for amount, date, method, receipt number/date, bank reference and notes.
+  - Linked invoiced works to the printable billing document route when `invoice.download` is available.
+- Non-goals:
+  - No RO e-Factura, SPV, legal fiscal receipt, POS integration, card processing, checkout, bank integration or automated reconciliation.
+  - No private archived PDF storage; FILES-001 remains deferred.
+- Main files modified:
+  - `apps/api/prisma/schema.prisma`
+  - `apps/api/prisma/migrations/20260723235400_billing_line_work_created_at_snapshot/migration.sql`
+  - `apps/api/src/modules/billing/*`
+  - `apps/web/src/app/app.tsx`
+  - `apps/web/src/features/billing/*`
+  - `apps/web/src/features/works/works-page.tsx`
+  - `packages/shared/src/billing.ts`
+  - `packages/shared/src/index.ts`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `IMPLEMENTATION_STATUS.md`
+- Dependencies added:
+  - None.
+- Automated verification:
+  - `pnpm --filter @dental-lab/api prisma:validate` passed.
+  - `pnpm --filter @dental-lab/api prisma:generate` passed.
+  - `pnpm --filter @dental-lab/api prisma:migrate:dev --name billing_line_work_created_at_snapshot` passed and applied `20260723235400_billing_line_work_created_at_snapshot`.
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm --filter @dental-lab/api test` passed.
+  - `pnpm build` passed.
+- Manual integration verification:
+  - API started on `http://localhost:3010`.
+  - Frontend started on `http://127.0.0.1:5173`.
+  - `GET /health` returned `200`.
+  - Manager login with CSRF succeeded.
+  - `GET /billing-documents?page=1&pageSize=1` returned an existing invoice.
+  - `GET /billing-documents/:id/print-view` returned `200` with document title, lines and compliance notice.
+  - `GET /billing-documents/:id/attachment` returned `200` with attachment title, lines and total.
+  - `GET /billing/month-registry` returned `200` with rows and reconciled paid/total values.
+  - `GET /billing/exports/registry.csv` returned `200 text/csv` with safe CSV headers and values.
+  - `GET /billing/statements/clinic` returned `200`.
+  - `GET /billing/statements/doctor` returned `200`.
+  - `GET http://127.0.0.1:5173/billing` returned `200`.
+  - `GET http://127.0.0.1:5173/works` returned `200`.
+  - `GET http://127.0.0.1:5173/billing/documents/:id/print` returned `200`.
+- Acceptance checks from the payment clarification:
+  - Partial/full payment status rules are covered by existing BILLING-001 runtime checks and preserved by tests.
+  - Overpayment and zero/negative amounts are refused server-side by service checks and DTO validation.
+  - Cancelled invoices reject new payments.
+  - Cancelling a payment recalculates status/balance through existing payment status recomputation.
+  - Monthly statement totals use active payments only.
+- Remaining manual checks not fully verified in this terminal environment:
+  - Physical printer output.
+  - Browser print dialog/PDF visual inspection.
+  - Physical phone/tablet responsive verification.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Derived payment filters are calculated in the service after fetching matching documents; large datasets may need persisted/payment aggregate projections later.
+  - Linting remains unconfigured.
+  - Backend shutdown still shows the existing `pg` deprecation warning, without request failures.

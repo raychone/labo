@@ -23,6 +23,7 @@ export interface BillingDocumentLineView {
   readonly toothPositionSnapshot: string | null;
   readonly unitPriceMinor: number;
   readonly workCode: string;
+  readonly workCreatedAtSnapshot: string;
   readonly workOrderId: string;
   readonly workTypeNameSnapshot: string;
 }
@@ -230,6 +231,7 @@ export function toBillingDocumentLineView(line: BillingDocumentRecord["lines"][n
     toothPositionSnapshot: line.toothPositionSnapshot,
     unitPriceMinor: line.unitPriceMinor,
     workCode: line.workCode,
+    workCreatedAtSnapshot: line.workCreatedAtSnapshot.toISOString(),
     workOrderId: line.workOrderId,
     workTypeNameSnapshot: line.workTypeNameSnapshot,
   };

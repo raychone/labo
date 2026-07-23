@@ -158,24 +158,18 @@ export class BillingService {
     const pageSize = Math.min(query.pageSize, 100);
     const page = Math.max(query.page, 1);
     const where = this.createDocumentsListWhere(query);
-    const [total, documents] = await this.prisma.$transaction([
-      this.prisma.billingDocument.count({ where }),
-      this.prisma.billingDocument.findMany({
-        include: BILLING_DOCUMENT_INCLUDE,
-        orderBy: {
-          [query.sortBy]: query.sortDirection,
-        },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        where,
-      }),
-    ]);
-    const filteredItems = query.paymentStatus
-      ? documents.filter((document) => calculateBillingAmounts(document).paymentStatus === query.paymentStatus)
-      : documents;
+    const documents = await this.prisma.billingDocument.findMany({
+      include: BILLING_DOCUMENT_INCLUDE,
+      orderBy: {
+        [query.sortBy]: query.sortDirection,
+      },
+      where,
+    });
+    const filteredItems = documents.filter((document) => this.matchesDocumentPaymentFilter(document, query));
+    const total = filteredItems.length;
 
     return {
-      items: filteredItems.map(toBillingDocumentSummary),
+      items: filteredItems.slice((page - 1) * pageSize, page * pageSize).map(toBillingDocumentSummary),
       page,
       pageCount: Math.max(1, Math.ceil(total / pageSize)),
       pageSize,
@@ -324,6 +318,7 @@ export class BillingService {
               toothPositionSnapshot: line.toothPositionSnapshot,
               unitPriceMinor: line.unitPriceMinor,
               workCode: line.workCode,
+              workCreatedAtSnapshot: line.workCreatedAtSnapshot,
               workOrderId: line.workOrderId,
               workTypeNameSnapshot: line.workTypeNameSnapshot,
             })),
@@ -630,6 +625,7 @@ export class BillingService {
       toothPositionSnapshot: work.patientReference,
       unitPriceMinor: work.baseUnitPriceMinor,
       workCode: work.code,
+      workCreatedAtSnapshot: work.createdAt,
       workOrderId: work.id,
       workTypeNameSnapshot: work.workType.name,
     }));
@@ -787,9 +783,26 @@ export class BillingService {
   private createDocumentsListWhere(query: ListBillingDocumentsQueryDto): Prisma.BillingDocumentWhereInput {
     const range = this.resolveDateRange(query);
     const search = query.search?.trim();
+    const filters: Prisma.BillingDocumentWhereInput[] = [];
+
+    if (query.patient) {
+      filters.push({ lines: { some: { patientNameSnapshot: { contains: query.patient, mode: "insensitive" } } } });
+    }
+
+    if (query.paymentReference) {
+      filters.push({ payments: { some: { reference: { contains: query.paymentReference, mode: "insensitive" } } } });
+    }
+
+    if (query.receiptNumber) {
+      filters.push({ payments: { some: { receiptNumber: { contains: query.receiptNumber, mode: "insensitive" } } } });
+    }
 
     return {
       ...this.createDocumentWhere(query, range),
+      ...(query.amountMinMinor !== undefined || query.amountMaxMinor !== undefined
+        ? { totalMinor: { ...(query.amountMinMinor !== undefined ? { gte: query.amountMinMinor } : {}), ...(query.amountMaxMinor !== undefined ? { lte: query.amountMaxMinor } : {}) } }
+        : {}),
+      ...(filters.length > 0 ? { AND: filters } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.type ? { type: query.type } : {}),
       ...(search
@@ -797,6 +810,7 @@ export class BillingService {
             OR: [
               { formattedNumber: { contains: search, mode: "insensitive" } },
               { clinicNameSnapshot: { contains: search, mode: "insensitive" } },
+              { lines: { some: { doctorNameSnapshot: { contains: search, mode: "insensitive" } } } },
               { lines: { some: { workCode: { contains: search, mode: "insensitive" } } } },
               { lines: { some: { patientNameSnapshot: { contains: search, mode: "insensitive" } } } },
               { payments: { some: { receiptNumber: { contains: search, mode: "insensitive" } } } },
@@ -805,6 +819,37 @@ export class BillingService {
           }
         : {}),
     };
+  }
+
+  private matchesDocumentPaymentFilter(document: BillingDocumentRecord, query: Pick<ListBillingDocumentsQueryDto, "paymentFilter" | "paymentStatus">): boolean {
+    const filter = query.paymentFilter ?? query.paymentStatus ?? "ALL";
+    const amounts = calculateBillingAmounts(document);
+
+    if (filter === "ALL") {
+      return true;
+    }
+
+    if (filter === "CANCELLED") {
+      return document.status === "CANCELLED";
+    }
+
+    if (document.status === "CANCELLED") {
+      return false;
+    }
+
+    if (filter === "OUTSTANDING") {
+      return document.type === "INVOICE" && amounts.balanceMinor > 0;
+    }
+
+    if (filter === "DUE") {
+      return document.type === "INVOICE" && amounts.balanceMinor > 0 && document.dueDate !== null;
+    }
+
+    if (filter === "OVERDUE") {
+      return document.type === "INVOICE" && amounts.balanceMinor > 0 && document.dueDate !== null && document.dueDate.getTime() < Date.now();
+    }
+
+    return document.type === "INVOICE" && amounts.paymentStatus === filter;
   }
 
   private resolveDateRange(query: Pick<BillingRangeQueryDto, "dateFrom" | "dateTo">): BillingDateRange {

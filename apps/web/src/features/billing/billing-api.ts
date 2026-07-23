@@ -2,11 +2,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   BillableWork,
   BillingDocumentDetail,
+  BillingDocumentAttachment,
   BillingListQuery,
   BillingOverview,
   BillingSeriesView,
+  ClinicBillingStatement,
   CreateBillingDocumentInput,
+  DoctorBillingStatement,
+  MonthEndRegistry,
   PaginatedBillingDocumentsResponse,
+  PrintableBillingDocument,
   RecordPaymentInput,
 } from "@dental-lab/shared";
 
@@ -18,10 +23,15 @@ export const billingQueryKeys = {
   all: ["billing"] as const,
   billableWorks: (params: BillingWorkspaceParams) => ["billing", "billable-works", params] as const,
   documents: (params: BillingListQuery) => ["billing", "documents", params] as const,
+  documentAttachment: (documentId: string) => ["billing", "documents", documentId, "attachment"] as const,
+  documentPrint: (documentId: string) => ["billing", "documents", documentId, "print"] as const,
+  monthRegistry: (params: BillingWorkspaceParams) => ["billing", "month-registry", params] as const,
   overview: (params: BillingWorkspaceParams) => ["billing", "overview", params] as const,
   payments: ["billing", "payments"] as const,
   search: (q: string) => ["billing", "search", q] as const,
   series: ["billing", "series"] as const,
+  statementClinic: (params: BillingStatementParams) => ["billing", "statements", "clinic", params] as const,
+  statementDoctor: (params: BillingStatementParams) => ["billing", "statements", "doctor", params] as const,
 };
 
 export interface BillingWorkspaceParams {
@@ -32,6 +42,13 @@ export interface BillingWorkspaceParams {
   readonly groupBy?: string;
   readonly search?: string;
   readonly uninvoicedOnly?: boolean;
+}
+
+export interface BillingStatementParams {
+  readonly clinicId?: string;
+  readonly dateFrom?: string;
+  readonly dateTo?: string;
+  readonly doctorId?: string;
 }
 
 export interface BillingPaymentsResponse {
@@ -109,6 +126,16 @@ export async function fetchBillingDocument(documentId: string): Promise<BillingD
   return parseApiResponse<BillingDocumentDetail>(response);
 }
 
+export async function fetchBillingDocumentPrint(documentId: string): Promise<PrintableBillingDocument> {
+  const response = await apiFetch(`/billing-documents/${documentId}/print-view`);
+  return parseApiResponse<PrintableBillingDocument>(response);
+}
+
+export async function fetchBillingDocumentAttachment(documentId: string): Promise<BillingDocumentAttachment> {
+  const response = await apiFetch(`/billing-documents/${documentId}/attachment`);
+  return parseApiResponse<BillingDocumentAttachment>(response);
+}
+
 export async function createProforma(input: CreateBillingDocumentInput): Promise<BillingDocumentDetail> {
   return sendJson<BillingDocumentDetail>("/billing-documents/proformas", "POST", input);
 }
@@ -139,6 +166,30 @@ export async function fetchBillingSeries(): Promise<{ readonly items: readonly B
   return parseApiResponse<{ readonly items: readonly BillingSeriesView[] }>(response);
 }
 
+export async function fetchClinicStatement(params: BillingStatementParams): Promise<ClinicBillingStatement> {
+  const response = await apiFetch(`/billing/statements/clinic?${toQueryString(Object.entries(params))}`);
+  return parseApiResponse<ClinicBillingStatement>(response);
+}
+
+export async function fetchDoctorStatement(params: BillingStatementParams): Promise<DoctorBillingStatement> {
+  const response = await apiFetch(`/billing/statements/doctor?${toQueryString(Object.entries(params))}`);
+  return parseApiResponse<DoctorBillingStatement>(response);
+}
+
+export async function fetchMonthRegistry(params: BillingWorkspaceParams): Promise<MonthEndRegistry> {
+  const response = await apiFetch(`/billing/month-registry?${toQueryString(Object.entries(params))}`);
+  return parseApiResponse<MonthEndRegistry>(response);
+}
+
+export async function downloadMonthRegistryCsv(params: BillingWorkspaceParams): Promise<string> {
+  const response = await apiFetch(`/billing/exports/registry.csv?${toQueryString(Object.entries(params))}`);
+  if (!response.ok) {
+    await parseApiResponse<never>(response);
+  }
+
+  return response.text();
+}
+
 export function useBillingOverview(params: BillingWorkspaceParams, enabled: boolean) {
   return useQuery({ enabled, queryFn: () => fetchBillingOverview(params), queryKey: billingQueryKeys.overview(params), retry: false });
 }
@@ -157,6 +208,10 @@ export function usePayments(enabled: boolean) {
 
 export function useBillingSeries(enabled: boolean) {
   return useQuery({ enabled, queryFn: fetchBillingSeries, queryKey: billingQueryKeys.series, retry: false });
+}
+
+export function useMonthRegistry(params: BillingWorkspaceParams, enabled: boolean) {
+  return useQuery({ enabled, queryFn: () => fetchMonthRegistry(params), queryKey: billingQueryKeys.monthRegistry(params), retry: false });
 }
 
 function useBillingMutation<TVariables>(mutationFn: (variables: TVariables) => Promise<BillingDocumentDetail>) {

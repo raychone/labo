@@ -1188,17 +1188,17 @@ Decizie concreta SETTINGS-001:
 
 ### BILLING-002 - Printable billing documents and clinic statements
 
-- Status: APPROVED.
+- Status: COMPLETED.
 - Obiectiv: documente printabile/PDF si situatii pe clinica bazate pe datele BILLING-001.
-- Scope: proforma printabila, factura interna printabila, anexa factura, situatie clinica, situatie medic, registru lunar, CSV securizat, browser print/PDF si branding.
+- Scope: proforma printabila, factura interna printabila, anexa factura, situatie clinica, situatie medic, registru lunar, CSV securizat, browser print/PDF, branding, filtre financiare si evidenta manuala completa a incasarilor.
 - Non-goals: RO e-Factura, SPV, XML fiscal, contabilitate generala, TVA complex, POS, procesare card, casierie, reconciliere bancara, semnatura electronica avansata.
 - Dependente: BILLING-001, SETTINGS-001, FILES-001 optional pentru arhivare PDF privata.
-- Acceptance criteria: managerul poate genera documente clare pentru clinica, cu branding laborator si totaluri reconciliabile cu registrul.
-- Backend: endpointuri print/statements/export in `BillingModule`, fara migrare Prisma daca schema ramane suficienta.
-- Frontend: print/PDF/statement UI, preview detaliat, filtre pe clinica/perioada/medic, deep links catre lucrari/documente.
-- Securitate: RBAC `invoice.download`/`invoice.read`, date pacient doar unde este justificat.
+- Acceptance criteria: managerul poate genera documente clare pentru clinica, cu branding laborator si totaluri reconciliabile cu registrul; facturile pot primi incasari manuale partiale/finale, refuza overpayment si expun sold/status derivat.
+- Backend: endpointuri print/statements/export in `BillingModule`, migrare nedestructiva pentru `BillingDocumentLine.workCreatedAtSnapshot`, filtre listare documente, CSV securizat.
+- Frontend: ruta `/billing/documents/:id/print`, print/PDF/statement UI, preview detaliat, filtre pe status incasare/perioada/medic/pacient/search, deep links catre lucrari/documente.
+- Securitate: RBAC `invoice.download`/`invoice.read`/`finance.read_reports`, date pacient doar unde este justificat.
 - Audit: audit pentru print/export/statements fara pacient sau linii complete in metadata.
-- Testare: render smoke, permisiuni, regresii valori totale.
+- Testare: Prisma validate/generate/migrate, typecheck, teste API/frontend, build si smoke runtime pe endpointuri print/statements/export.
 
 ### DEMO-SEED-001 - Realistic demonstration dataset
 

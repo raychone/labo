@@ -498,7 +498,9 @@ The UI includes month filters, billable works selection, document lists, quick i
 
 RBAC uses existing permissions: `finance.read`, `finance.record_payment`, `finance.refund`, `finance.read_reports`, `invoice.create`, `invoice.read`, `invoice.download`, `invoice.cancel`, and `invoice.configure_series`. State-changing billing endpoints require CSRF.
 
-`BILLING-002` is reserved for printable billing documents and clinic statements.
+`BILLING-002` adds printable proforma/invoice views, printable billing attachments, clinic/doctor statements, month registry export, CSV formula neutralization, and richer manual collection tracking. The print route is `/billing/documents/:id/print`; print/download/export access is guarded by `invoice.download`, while statements use `finance.read_reports`.
+
+Billing document lines now store `workCreatedAtSnapshot` so printable attachments can show the work entry date from immutable billing snapshots.
 
 ## Roadmap After Billing
 
@@ -513,7 +515,7 @@ After BILLING-001, the approved order is:
 
 Deferred but preserved in the plan: `FILES-001`, `FILES-002`, `QC-001`, and `NOTIFICATIONS-001`.
 
-Payments in the current MVP are manual evidence only. The application does not process cards, POS transactions, cash register flows, checkout, bank reconciliation, or automated receipt fiscalization.
+Payments in the current MVP are manual evidence only. Users can record partial or full collections, receipt numbers, receipt dates, bank references and notes, and the app derives `UNPAID`, `PARTIALLY_PAID` and `PAID` from active records. The application does not process cards, POS transactions, cash register flows, checkout, bank reconciliation, legal fiscal receipts, or automated receipt fiscalization.
 
 ## Current Task
 

@@ -1,8 +1,13 @@
 export const BILLING_AUDIT_ACTIONS = {
+  attachmentPrintViewed: "billing.attachment_print_viewed",
   csvExported: "billing.csv_exported",
   documentCancelled: "billing.document_cancelled",
+  documentPrintViewed: "billing.document_print_viewed",
+  clinicStatementViewed: "billing.clinic_statement_viewed",
+  doctorStatementViewed: "billing.doctor_statement_viewed",
   invoiceCreated: "billing.invoice_created",
   invoiceIssued: "billing.invoice_issued",
+  monthRegistryViewed: "billing.month_registry_viewed",
   paymentCancelled: "billing.payment_cancelled",
   paymentRecorded: "billing.payment_recorded",
   printViewed: "billing.print_viewed",

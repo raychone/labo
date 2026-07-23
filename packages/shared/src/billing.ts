@@ -2,6 +2,7 @@ export const BILLING_DOCUMENT_TYPES = ["PROFORMA", "INVOICE"] as const;
 export const BILLING_DOCUMENT_STATUSES = ["DRAFT", "ISSUED", "PARTIALLY_PAID", "PAID", "CANCELLED"] as const;
 export const PAYMENT_METHODS = ["CASH", "BANK_TRANSFER", "CARD", "OTHER"] as const;
 export const PAYMENT_STATUSES = ["UNPAID", "PARTIALLY_PAID", "PAID"] as const;
+export const DOCUMENT_PAYMENT_FILTERS = ["ALL", "UNPAID", "PARTIALLY_PAID", "PAID", "OUTSTANDING", "DUE", "OVERDUE", "CANCELLED"] as const;
 export const BILLING_GROUP_BY = ["day", "week", "month", "clinic", "doctor", "patient", "workType", "billingStatus", "paymentStatus"] as const;
 export const BILLING_DOCUMENT_SORT_FIELDS = ["createdAt", "issueDate", "formattedNumber", "totalMinor", "status"] as const;
 
@@ -9,6 +10,7 @@ export type BillingDocumentType = (typeof BILLING_DOCUMENT_TYPES)[number];
 export type BillingDocumentStatus = (typeof BILLING_DOCUMENT_STATUSES)[number];
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+export type DocumentPaymentFilter = (typeof DOCUMENT_PAYMENT_FILTERS)[number];
 export type BillingGroupBy = (typeof BILLING_GROUP_BY)[number];
 export type BillingDocumentSortField = (typeof BILLING_DOCUMENT_SORT_FIELDS)[number];
 
@@ -33,6 +35,7 @@ export interface BillingDocumentLineView {
   readonly toothPositionSnapshot: string | null;
   readonly unitPriceMinor: number;
   readonly workCode: string;
+  readonly workCreatedAtSnapshot: string;
   readonly workOrderId: string;
   readonly workTypeNameSnapshot: string;
 }
@@ -170,9 +173,15 @@ export interface BillingListQuery {
   readonly dateFrom?: string;
   readonly dateTo?: string;
   readonly doctorId?: string;
+  readonly amountMaxMinor?: number;
+  readonly amountMinMinor?: number;
   readonly page: number;
   readonly pageSize: number;
   readonly paymentStatus?: PaymentStatus;
+  readonly paymentFilter?: DocumentPaymentFilter;
+  readonly patient?: string;
+  readonly paymentReference?: string;
+  readonly receiptNumber?: string;
   readonly search?: string;
   readonly sortBy: BillingDocumentSortField;
   readonly sortDirection: "asc" | "desc";
@@ -186,4 +195,107 @@ export interface PaginatedBillingDocumentsResponse {
   readonly pageCount: number;
   readonly pageSize: number;
   readonly total: number;
+}
+
+export interface BillingPrintParty {
+  readonly address: string | null;
+  readonly email: string | null;
+  readonly legalName: string | null;
+  readonly name: string;
+  readonly phone: string | null;
+  readonly registrationNumber: string | null;
+  readonly taxId: string | null;
+  readonly website?: string | null;
+}
+
+export interface PrintableBillingDocument extends BillingDocumentDetail {
+  readonly complianceNotice: string;
+  readonly customer: BillingPrintParty;
+  readonly documentTitle: string;
+  readonly generatedAt: string;
+  readonly supplier: BillingPrintParty;
+}
+
+export interface BillingDocumentAttachment {
+  readonly complianceNotice: string;
+  readonly currency: string;
+  readonly customer: BillingPrintParty;
+  readonly documentId: string;
+  readonly documentNumber: string | null;
+  readonly documentTitle: string;
+  readonly generatedAt: string;
+  readonly lines: readonly BillingDocumentLineView[];
+  readonly supplier: BillingPrintParty;
+  readonly totalMinor: number;
+}
+
+export interface BillingStatementRow {
+  readonly balanceMinor: number;
+  readonly documentId: string;
+  readonly documentNumber: string | null;
+  readonly documentType: BillingDocumentType;
+  readonly issueDate: string;
+  readonly paidMinor: number;
+  readonly status: BillingDocumentStatus;
+  readonly totalMinor: number;
+}
+
+export interface BillingStatementWorkRow {
+  readonly clinicName: string;
+  readonly code: string;
+  readonly createdAt: string;
+  readonly doctorName: string;
+  readonly patientName: string;
+  readonly totalPriceMinor: number;
+  readonly workTypeName: string;
+}
+
+export interface ClinicBillingStatement {
+  readonly clinicId: string;
+  readonly clinicName: string;
+  readonly currency: string;
+  readonly dateFrom: string;
+  readonly dateTo: string;
+  readonly documents: readonly BillingStatementRow[];
+  readonly generatedAt: string;
+  readonly paidMinor: number;
+  readonly totalMinor: number;
+  readonly uninvoicedMinor: number;
+  readonly uninvoicedWorks: readonly BillingStatementWorkRow[];
+}
+
+export interface DoctorBillingStatement {
+  readonly currency: string;
+  readonly dateFrom: string;
+  readonly dateTo: string;
+  readonly doctorId: string;
+  readonly doctorName: string;
+  readonly documents: readonly BillingStatementRow[];
+  readonly generatedAt: string;
+  readonly paidMinor: number;
+  readonly totalMinor: number;
+  readonly uninvoicedMinor: number;
+  readonly uninvoicedWorks: readonly BillingStatementWorkRow[];
+}
+
+export interface MonthEndRegistryRow {
+  readonly balanceMinor: number;
+  readonly clinicName: string;
+  readonly documentId: string;
+  readonly documentNumber: string | null;
+  readonly documentType: BillingDocumentType;
+  readonly issueDate: string;
+  readonly paidMinor: number;
+  readonly status: BillingDocumentStatus;
+  readonly totalMinor: number;
+}
+
+export interface MonthEndRegistry {
+  readonly currency: string;
+  readonly dateFrom: string;
+  readonly dateTo: string;
+  readonly generatedAt: string;
+  readonly paidMinor: number;
+  readonly rows: readonly MonthEndRegistryRow[];
+  readonly totalMinor: number;
 }

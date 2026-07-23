@@ -310,6 +310,7 @@ model BillingDocumentLine {
   patientNameSnapshot String @map("patient_name_snapshot") @db.VarChar(120)
   doctorNameSnapshot String @map("doctor_name_snapshot") @db.VarChar(180)
   workTypeNameSnapshot String @map("work_type_name_snapshot") @db.VarChar(160)
+  workCreatedAtSnapshot DateTime @map("work_created_at_snapshot")
   toothPositionSnapshot String? @map("tooth_position_snapshot") @db.VarChar(120)
   quantity Int
   unitPriceMinor Int @map("unit_price_minor")
@@ -323,6 +324,7 @@ model BillingDocumentLine {
   @@index([billingDocumentId, sortOrder])
   @@index([workOrderId])
   @@index([workCode])
+  @@index([workCreatedAtSnapshot])
   @@map("billing_document_lines")
 }
 

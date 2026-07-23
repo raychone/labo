@@ -21,6 +21,9 @@ import {
   type BillingDocumentSummary,
   type BillingListQuery,
   type BillingOverview,
+  type DocumentPaymentFilter,
+  type PaymentMethod,
+  type RecordPaymentInput,
 } from "@dental-lab/shared";
 import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -39,12 +42,23 @@ import {
   useIssueDocument,
   usePayments,
   useRecordPayment,
+  downloadMonthRegistryCsv,
   type BillingWorkspaceParams,
 } from "./billing-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
 import "./billing-page.css";
 
 const pageSize = 20;
+const paymentFilterOptions: readonly { readonly label: string; readonly value: DocumentPaymentFilter }[] = [
+  { label: "Toate", value: "ALL" },
+  { label: "Neachitate", value: "UNPAID" },
+  { label: "Partial incasate", value: "PARTIALLY_PAID" },
+  { label: "Achitate integral", value: "PAID" },
+  { label: "Restante", value: "OUTSTANDING" },
+  { label: "Scadente", value: "DUE" },
+  { label: "Depasite", value: "OVERDUE" },
+  { label: "Anulate", value: "CANCELLED" },
+];
 
 function currentMonthRange(now = new Date()): { readonly dateFrom: string; readonly dateTo: string } {
   const from = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
@@ -62,13 +76,56 @@ function currentYearRange(now = new Date()): { readonly dateFrom: string; readon
   return { dateFrom: `${now.getFullYear()}-01-01`, dateTo: `${now.getFullYear()}-12-31` };
 }
 
+interface ManualPaymentFormState {
+  readonly amount: string;
+  readonly method: PaymentMethod;
+  readonly notes: string;
+  readonly paymentDate: string;
+  readonly receiptDate: string;
+  readonly receiptNumber: string;
+  readonly reference: string;
+}
+
+function createEmptyPaymentForm(paymentDate: string): ManualPaymentFormState {
+  return {
+    amount: "",
+    method: "BANK_TRANSFER",
+    notes: "",
+    paymentDate,
+    receiptDate: "",
+    receiptNumber: "",
+    reference: "",
+  };
+}
+
+function toRecordPaymentInput(form: ManualPaymentFormState): RecordPaymentInput | null {
+  const normalizedAmount = Number.parseFloat(form.amount.replace(",", "."));
+  if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+    return null;
+  }
+
+  return {
+    amountMinor: Math.round(normalizedAmount * 100),
+    method: form.method,
+    notes: form.notes.trim() || null,
+    paymentDate: form.paymentDate,
+    receiptDate: form.receiptDate || null,
+    receiptNumber: form.receiptNumber.trim() || null,
+    reference: form.reference.trim() || null,
+  };
+}
+
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium" }).format(new Date(value));
 }
 
 function toCsv(rows: readonly Readonly<Record<string, string | number | null>>[]): string {
   const headers = Object.keys(rows[0] ?? {});
-  const escape = (value: string | number | null) => `"${String(value ?? "").replaceAll("\"", "\"\"")}"`;
+  const escape = (value: string | number | null) => {
+    const text = String(value ?? "");
+    const safeText = ["=", "+", "-", "@"].some((prefix) => text.trimStart().startsWith(prefix)) ? `'${text}` : text;
+    return `"${safeText.replaceAll("\"", "\"\"")}"`;
+  };
   return [headers.join(","), ...rows.map((row) => headers.map((header) => escape(row[header] ?? null)).join(","))].join("\n");
 }
 
@@ -96,7 +153,9 @@ export function BillingPage(): ReactNode {
   const locale = settingsQuery.data?.locale ?? "ro-RO";
   const [range, setRange] = useState(currentMonthRange);
   const [groupBy, setGroupBy] = useState("clinic");
+  const [paymentFilter, setPaymentFilter] = useState<DocumentPaymentFilter>("ALL");
   const [search, setSearch] = useState("");
+  const [paymentForm, setPaymentForm] = useState<ManualPaymentFormState>(createEmptyPaymentForm(range.dateTo));
   const [selectedWorkIds, setSelectedWorkIds] = useState<readonly string[]>([]);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const overviewParams: BillingWorkspaceParams = { ...range, groupBy };
@@ -105,6 +164,7 @@ export function BillingPage(): ReactNode {
     ...range,
     page: 1,
     pageSize,
+    paymentFilter,
     sortBy: "createdAt",
     sortDirection: "desc",
     ...(search ? { search } : {}),
@@ -180,21 +240,22 @@ export function BillingPage(): ReactNode {
     }
   }
 
-  async function recordQuickPayment(): Promise<void> {
+  async function recordManualPayment(): Promise<void> {
     if (!selectedDocument) {
+      return;
+    }
+    const input = toRecordPaymentInput(paymentForm);
+    if (!input) {
+      toast.showToast({ message: "Introdu o suma incasata mai mare decat 0.", variant: "error" });
       return;
     }
     try {
       await recordPaymentMutation.mutateAsync({
         documentId: selectedDocument.id,
-        input: {
-          amountMinor: selectedDocument.balanceMinor,
-          method: "BANK_TRANSFER",
-          paymentDate: range.dateTo,
-          reference: `OP-${selectedDocument.formattedNumber ?? selectedDocument.id.slice(-6)}`,
-        },
+        input,
       });
-      toast.showToast({ message: "Plata a fost inregistrata.", variant: "success" });
+      setPaymentForm(createEmptyPaymentForm(range.dateTo));
+      toast.showToast({ message: "Incasarea a fost inregistrata manual.", variant: "success" });
     } catch (error) {
       toast.showToast({ message: getErrorMessage(error), variant: "error" });
     }
@@ -223,6 +284,12 @@ export function BillingPage(): ReactNode {
         <DateInput label="De la" value={range.dateFrom} onChange={(event) => setRange((current) => ({ ...current, dateFrom: event.target.value }))} />
         <DateInput label="Pana la" value={range.dateTo} onChange={(event) => setRange((current) => ({ ...current, dateTo: event.target.value }))} />
         <TextInput label="Cautare" placeholder="Cauta pacient, clinica, medic, cod lucrare, factura sau chitanta" value={search} onChange={(event) => setSearch(event.target.value)} />
+        <Select
+          label="Status incasare"
+          options={paymentFilterOptions}
+          value={paymentFilter}
+          onChange={(event) => setPaymentFilter(event.target.value as DocumentPaymentFilter)}
+        />
         <Select
           label="Grupare"
           options={[
@@ -292,16 +359,18 @@ export function BillingPage(): ReactNode {
                   sold: document.balanceMinor,
                 }))))}
                 onIssue={issueSelectedDocument}
-                onPrint={() => window.print()}
-                onRecordPayment={recordQuickPayment}
+                onPrint={(documentId) => window.open(`/billing/documents/${documentId}/print`, "_blank", "noopener,noreferrer")}
+                onRecordPayment={recordManualPayment}
                 onSelect={setSelectedDocumentId}
+                paymentForm={paymentForm}
+                setPaymentForm={setPaymentForm}
                 selectedDocument={selectedDocument}
               />
             ),
           },
           {
             id: "payments",
-            label: "Incasari",
+            label: "Evidenta incasari",
             content: (
               <PaymentsTab
                 currency={currency}
@@ -322,7 +391,18 @@ export function BillingPage(): ReactNode {
           {
             id: "month-close",
             label: "Inchidere luna",
-            content: <MonthCloseTab overview={overviewQuery.data} currency={currency} locale={locale} />,
+            content: <MonthCloseTab
+              overview={overviewQuery.data}
+              currency={currency}
+              locale={locale}
+              onExportRegistry={async () => {
+                try {
+                  downloadCsv("registru-lunar-facturare.csv", await downloadMonthRegistryCsv(overviewParams));
+                } catch (error) {
+                  toast.showToast({ message: getErrorMessage(error), variant: "error" });
+                }
+              }}
+            />,
           },
           {
             id: "series",
@@ -425,6 +505,8 @@ function DocumentsTab({
   onPrint,
   onRecordPayment,
   onSelect,
+  paymentForm,
+  setPaymentForm,
   selectedDocument,
 }: {
   readonly canRecordPayment: boolean;
@@ -437,9 +519,11 @@ function DocumentsTab({
   readonly onConvert: () => void;
   readonly onExport: () => void;
   readonly onIssue: () => void;
-  readonly onPrint: () => void;
+  readonly onPrint: (documentId: string) => void;
   readonly onRecordPayment: () => void;
   readonly onSelect: (documentId: string) => void;
+  readonly paymentForm: ManualPaymentFormState;
+  readonly setPaymentForm: (updater: (current: ManualPaymentFormState) => ManualPaymentFormState) => void;
   readonly selectedDocument: BillingDocumentSummary | null;
 }): ReactNode {
   const columns = useMemo<readonly DataTableColumn<BillingDocumentSummary>[]>(() => [
@@ -448,8 +532,10 @@ function DocumentsTab({
     { id: "status", header: "Status", renderCell: (document) => document.status },
     { id: "clinic", header: "Clinica", renderCell: (document) => document.clinicName },
     { id: "total", header: "Total", align: "right", renderCell: (document) => formatMoneyMinor(document.totalMinor, document.currency, locale) },
-    { id: "balance", header: "Sold", align: "right", renderCell: (document) => formatMoneyMinor(document.balanceMinor, document.currency, locale) },
+    { id: "payment", header: "Incasare", renderCell: (document) => toPaymentStatusLabel(document.paymentStatus) },
+    { id: "balance", header: "Sold restant", align: "right", renderCell: (document) => formatMoneyMinor(document.balanceMinor, document.currency, locale) },
   ], [locale]);
+  const canUsePaymentForm = Boolean(selectedDocument && selectedDocument.type === "INVOICE" && selectedDocument.status !== "CANCELLED" && selectedDocument.balanceMinor > 0);
 
   return (
     <section className="billing-page__tab">
@@ -457,18 +543,56 @@ function DocumentsTab({
         <Button onClick={onExport} variant="outline">Export CSV</Button>
         <Button disabled={!selectedDocument || selectedDocument.status !== "DRAFT" || isMutating} onClick={onIssue}>Emite</Button>
         <Button disabled={!selectedDocument || selectedDocument.type !== "PROFORMA" || selectedDocument.status !== "ISSUED" || isMutating} onClick={onConvert} variant="secondary">Transforma in factura</Button>
-        {canRecordPayment ? <Button disabled={!selectedDocument || selectedDocument.type !== "INVOICE" || selectedDocument.balanceMinor <= 0 || isMutating} onClick={onRecordPayment} variant="secondary">Incaseaza sold</Button> : null}
-        <Button onClick={onPrint} variant="outline">Print</Button>
+        {canRecordPayment ? <Button disabled={!canUsePaymentForm || isMutating} onClick={onRecordPayment} variant="secondary">Inregistreaza incasare</Button> : null}
+        <Button disabled={!selectedDocument} onClick={() => selectedDocument ? onPrint(selectedDocument.id) : undefined} variant="outline">Print / PDF</Button>
       </div>
       <DataTable columns={columns} emptyMessage="Nu exista proforme sau facturi." error={error ? getErrorMessage(error) : undefined} getRowKey={(document) => document.id} isLoading={isLoading} onRowAction={(document) => onSelect(document.id)} rowActionLabel="Selecteaza" rows={documents} />
       {selectedDocument ? (
         <section className="billing-page__print-preview" aria-label="Anexa facturare">
           <h2>{selectedDocument.type === "PROFORMA" ? "PROFORMA" : "FACTURA INTERNA / PREVIEW"} {selectedDocument.formattedNumber ?? "Draft"}</h2>
-          <p>{selectedDocument.clinicName} · Total {formatMoneyMinor(selectedDocument.totalMinor, currency, locale)} · Sold {formatMoneyMinor(selectedDocument.balanceMinor, currency, locale)}</p>
+          <p>{selectedDocument.clinicName} · Total factura {formatMoneyMinor(selectedDocument.totalMinor, currency, locale)} · Incasat manual {formatMoneyMinor(selectedDocument.paidMinor, currency, locale)} · Sold restant {formatMoneyMinor(selectedDocument.balanceMinor, currency, locale)}</p>
+        </section>
+      ) : null}
+      {canRecordPayment ? (
+        <section className="billing-page__payment-form" aria-label="Inregistrare manuala incasare">
+          <div>
+            <h3>Evidenta incasari</h3>
+            <p>Inregistreaza manual o plata efectuata in afara aplicatiei. Aplicatia nu proceseaza bani, nu emite bon fiscal si nu se conecteaza la POS sau banca.</p>
+          </div>
+          <TextInput disabled={!canUsePaymentForm} inputMode="decimal" label="Suma incasata" placeholder="0.00" value={paymentForm.amount} onChange={(event) => setPaymentForm((current) => ({ ...current, amount: event.target.value }))} />
+          <DateInput disabled={!canUsePaymentForm} label="Data incasarii" value={paymentForm.paymentDate} onChange={(event) => setPaymentForm((current) => ({ ...current, paymentDate: event.target.value }))} />
+          <Select
+            disabled={!canUsePaymentForm}
+            label="Metoda informativa"
+            options={[
+              { label: "Cash", value: "CASH" },
+              { label: "Transfer bancar", value: "BANK_TRANSFER" },
+              { label: "Card", value: "CARD" },
+              { label: "Alta metoda", value: "OTHER" },
+            ]}
+            value={paymentForm.method}
+            onChange={(event) => setPaymentForm((current) => ({ ...current, method: event.target.value as PaymentMethod }))}
+          />
+          <TextInput disabled={!canUsePaymentForm} label="Numar chitanta" value={paymentForm.receiptNumber} onChange={(event) => setPaymentForm((current) => ({ ...current, receiptNumber: event.target.value }))} />
+          <DateInput disabled={!canUsePaymentForm} label="Data chitantei" value={paymentForm.receiptDate} onChange={(event) => setPaymentForm((current) => ({ ...current, receiptDate: event.target.value }))} />
+          <TextInput disabled={!canUsePaymentForm} label="Referinta bancara" value={paymentForm.reference} onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))} />
+          <TextInput disabled={!canUsePaymentForm} label="Observatii" value={paymentForm.notes} onChange={(event) => setPaymentForm((current) => ({ ...current, notes: event.target.value }))} />
         </section>
       ) : null}
     </section>
   );
+}
+
+function toPaymentStatusLabel(status: BillingDocumentSummary["paymentStatus"]): string {
+  if (status === "PAID") {
+    return "Achitat integral";
+  }
+
+  if (status === "PARTIALLY_PAID") {
+    return "Plata partiala";
+  }
+
+  return "Neachitat";
 }
 
 function PaymentsTab({ currency, isLoading, locale, onExport, payments }: { readonly currency: string; readonly isLoading: boolean; readonly locale: string; readonly onExport: () => void; readonly payments: readonly { readonly amountMinor: number; readonly documentNumber: string | null; readonly id: string; readonly method: string; readonly paymentDate: string; readonly receiptNumber: string | null; readonly reference: string | null }[] }): ReactNode {
@@ -477,24 +601,28 @@ function PaymentsTab({ currency, isLoading, locale, onExport, payments }: { read
     { id: "document", header: "Document", renderCell: (payment) => payment.documentNumber ?? "-" },
     { id: "method", header: "Metoda", renderCell: (payment) => payment.method },
     { id: "receipt", header: "Chitanta", renderCell: (payment) => payment.receiptNumber ?? payment.reference ?? "-" },
-    { id: "amount", header: "Valoare", align: "right", renderCell: (payment) => formatMoneyMinor(payment.amountMinor, currency, locale) },
+    { id: "amount", header: "Suma incasata", align: "right", renderCell: (payment) => formatMoneyMinor(payment.amountMinor, currency, locale) },
   ], [currency, locale]);
 
   return (
     <section className="billing-page__tab">
+      <p className="billing-page__readonly">Evidenta manuala a incasarilor efectuate in afara aplicatiei.</p>
       <div className="billing-page__toolbar"><Button onClick={onExport} variant="outline">Export CSV</Button></div>
       <DataTable columns={columns} emptyMessage="Nu exista incasari." getRowKey={(payment) => payment.id} isLoading={isLoading} rows={payments} />
     </section>
   );
 }
 
-function MonthCloseTab({ currency, locale, overview }: { readonly currency: string; readonly locale: string; readonly overview: BillingOverview | undefined }): ReactNode {
+function MonthCloseTab({ currency, locale, onExportRegistry, overview }: { readonly currency: string; readonly locale: string; readonly onExportRegistry: () => void; readonly overview: BillingOverview | undefined }): ReactNode {
   if (!overview) {
     return <LoadingState text="Incarc inchiderea lunii" />;
   }
 
   return (
     <section className="billing-page__tab">
+      <div className="billing-page__toolbar">
+        <Button onClick={onExportRegistry} variant="outline">Export registru lunar CSV</Button>
+      </div>
       <div className="billing-page__month-close">
         {overview.groups.map((group) => (
           <Card key={group.key}>
@@ -503,8 +631,8 @@ function MonthCloseTab({ currency, locale, overview }: { readonly currency: stri
               <dl>
                 <div><dt>Nefacturat</dt><dd>{formatMoneyMinor(group.uninvoicedMinor, currency, locale)}</dd></div>
                 <div><dt>Facturat</dt><dd>{formatMoneyMinor(group.invoicedMinor, currency, locale)}</dd></div>
-                <div><dt>Incasat</dt><dd>{formatMoneyMinor(group.paidMinor, currency, locale)}</dd></div>
-                <div><dt>Sold</dt><dd>{formatMoneyMinor(group.balanceMinor, currency, locale)}</dd></div>
+                <div><dt>Incasat manual</dt><dd>{formatMoneyMinor(group.paidMinor, currency, locale)}</dd></div>
+                <div><dt>Sold restant</dt><dd>{formatMoneyMinor(group.balanceMinor, currency, locale)}</dd></div>
               </dl>
             </CardContent>
           </Card>
