@@ -463,6 +463,35 @@ Read-only users see values without false submit actions where the page is not ed
 
 Dynamic work form templates are not part of FORMS-001. They are tracked separately as `WORKFORMS-001`, followed by immutable work form completion/snapshot work in `FORMS-002`.
 
+## Work Form Template Builder
+
+`WORKFORMS-001` adds versioned dynamic form templates per work type without changing work orders or saving form answers.
+
+New persisted models:
+
+- `WorkFormTemplate`
+- `WorkFormFieldDefinition`
+
+Template statuses are `DRAFT`, `ACTIVE`, and `ARCHIVED`. Only draft templates are editable. Activating a draft is transactional: the API validates the work type, validates the field schema, archives the previous active template for that work type, and activates the new version. PostgreSQL enforces one active template per work type with a partial unique index. Template versions are unique per work type and are allocated under a transaction-level advisory lock instead of `count + 1`.
+
+Supported field types are `TEXT`, `TEXTAREA`, `NUMBER`, `DATE`, `CHECKBOX`, `RADIO`, `SELECT`, `MULTISELECT`, `TOOTH`, and `SHADE`. Field keys must match `^[a-z][a-z0-9_]{1,63}$`, must be unique per template, and must not use reserved work/order/patient keys. Options are accepted only for option-based fields, must be plain text, must be ordered, and cannot contain duplicate values. Validation is typed to text length, numeric bounds/step, and date bounds only; no regex, scripts, formulas, HTML, file fields, nested groups, repeaters, or conditional logic are supported in this task.
+
+The backend exposes:
+
+- `GET /work-types/:workTypeId/form-templates`
+- `GET /work-types/:workTypeId/form-template`
+- `GET /work-form-templates/:id`
+- `POST /work-types/:workTypeId/form-templates`
+- `PATCH /work-form-templates/:id`
+- `PUT /work-form-templates/:id/fields`
+- `POST /work-form-templates/:id/activate`
+- `POST /work-form-templates/:id/archive`
+- `POST /work-form-templates/:id/clone`
+
+Read access uses `forms.read`. State-changing endpoints require CSRF and use `forms.create`, `forms.update`, or `forms.archive`. Manager receives all form permissions; Receptie and Tehnician receive read-only access. Audit events are recorded for create, update, replace fields, activate, archive, and clone with safe metadata only.
+
+The frontend builder route is `/work-types/:workTypeId/form`. The work type detail drawer links to it with “Configureaza formularul” when `forms.read` is available. The builder shows version history, draft name/description editing, add/edit/remove fields, move up/down ordering, option editing, typed validation controls, live preview using shared form components, read-only mode, and archived WorkType restrictions. It does not submit values, create WorkOrders, render dynamic fields inside `/works`, or create a submission/snapshot model; that remains `FORMS-002`.
+
 ## Billing Workspace
 
 BILLING-001 adds the first financial workspace at `/billing`.

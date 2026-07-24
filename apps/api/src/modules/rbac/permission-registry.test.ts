@@ -67,6 +67,10 @@ const expectedPermissionKeys = [
   "pricing.read",
   "pricing.create",
   "pricing.update",
+  "forms.read",
+  "forms.create",
+  "forms.update",
+  "forms.archive",
   "reports.operational",
   "reports.financial",
   "reports.productivity",
@@ -131,6 +135,11 @@ describe("PERMISSION_REGISTRY", () => {
     expect(ROLE_PERMISSION_MATRIX.MANAGER["pricing.read"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["pricing.read"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["pricing.read"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.MANAGER["forms.update"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["forms.read"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["forms.update"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["forms.read"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["forms.archive"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.MEDIC["audit.read"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.MANAGER["audit.read"]).toBe("ALL");
   });

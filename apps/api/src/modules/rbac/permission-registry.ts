@@ -73,6 +73,10 @@ export type PermissionKey =
   | "pricing.read"
   | "pricing.create"
   | "pricing.update"
+  | "forms.read"
+  | "forms.create"
+  | "forms.update"
+  | "forms.archive"
   | "reports.operational"
   | "reports.financial"
   | "reports.productivity"
@@ -157,6 +161,10 @@ export const PERMISSION_REGISTRY = [
   definePermission("pricing.read", "Read pricing."),
   definePermission("pricing.create", "Create pricing entries."),
   definePermission("pricing.update", "Update pricing entries."),
+  definePermission("forms.read", "Read work form templates."),
+  definePermission("forms.create", "Create work form templates."),
+  definePermission("forms.update", "Update work form templates."),
+  definePermission("forms.archive", "Archive work form templates."),
   definePermission("reports.operational", "Read operational reports."),
   definePermission("reports.financial", "Read financial reports."),
   definePermission("reports.productivity", "Read productivity reports."),
@@ -263,6 +271,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "comments.read_external": "ALL",
     "comments.read_internal": "ALL",
     "doctors.read": "ALL",
+    "forms.read": "ALL",
     "files.read": "ALL",
     "files.upload": "ALL",
     "logistics.prepare_delivery": "ALL",
@@ -284,6 +293,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "comments.read_internal": "ALL",
     "files.read": "ASSIGNED",
     "files.upload": "ASSIGNED",
+    "forms.read": "ALL",
     "quality.read": "OWN_STAGE",
     "workflow.complete_stage": "OWN_STAGE",
     "workflow.pause_stage": "OWN_STAGE",
@@ -312,6 +322,10 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "doctors.update",
   "files.delete",
   "files.read",
+  "forms.archive",
+  "forms.create",
+  "forms.read",
+  "forms.update",
   "finance.read",
   "invoice.download",
   "invoice.read",

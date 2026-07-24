@@ -31,6 +31,7 @@ import {
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
 import { useSettings } from "../settings/settings-api.js";
@@ -111,6 +112,7 @@ export function WorkTypesPage(): ReactNode {
   const canRead = hasPermission(permissionsQuery.data, "pricing.read");
   const canCreate = hasPermission(permissionsQuery.data, "pricing.create");
   const canUpdate = hasPermission(permissionsQuery.data, "pricing.update");
+  const canReadForms = hasPermission(permissionsQuery.data, "forms.read");
   const settingsQuery = useSettings();
   const workTypesQuery = useWorkTypes(params, canRead);
   const optionsQuery = useWorkTypeOptions(canRead);
@@ -237,6 +239,7 @@ export function WorkTypesPage(): ReactNode {
       />
       <WorkTypeDetailDrawer
         canUpdate={canUpdate}
+        canReadForms={canReadForms}
         currency={currency}
         error={selectedWorkTypeQuery.isError ? getErrorMessage(selectedWorkTypeQuery.error) : undefined}
         isLoading={selectedWorkTypeQuery.isLoading}
@@ -329,6 +332,7 @@ function WorkTypeCreateModal({
 
 function WorkTypeDetailDrawer({
   canUpdate,
+  canReadForms,
   currency,
   error,
   isLoading,
@@ -342,6 +346,7 @@ function WorkTypeDetailDrawer({
   workType,
 }: {
   readonly canUpdate: boolean;
+  readonly canReadForms: boolean;
   readonly currency: string;
   readonly error: string | undefined;
   readonly isLoading: boolean;
@@ -380,6 +385,11 @@ function WorkTypeDetailDrawer({
           <div className="work-types-page__drawer">
             <div className="work-types-page__drawer-toolbar">
               <ActiveBadge isActive={workType.isActive} />
+              {canReadForms ? (
+                <Link className="dl-button dl-button--outline dl-button--medium" to={`/work-types/${workType.id}/form`}>
+                  <span className="dl-button__content"><span>Configureaza formularul</span></span>
+                </Link>
+              ) : null}
               {canUpdate && workType.isActive ? <Button disabled={isSaving} onClick={() => setConfirmAction("archive")} variant="outline">Arhiveaza</Button> : null}
               {canUpdate && !workType.isActive ? <Button disabled={isSaving} onClick={() => setConfirmAction("restore")} variant="outline">Reactiveaza</Button> : null}
             </div>

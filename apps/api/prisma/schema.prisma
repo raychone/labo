@@ -38,6 +38,10 @@ model User {
   cancelledBillingDocuments BillingDocument[] @relation("BillingDocumentCancelledBy")
   createdPayments Payment[] @relation("PaymentCreatedBy")
   cancelledPayments Payment[] @relation("PaymentCancelledBy")
+  createdWorkFormTemplates WorkFormTemplate[] @relation("WorkFormTemplateCreatedBy")
+  updatedWorkFormTemplates WorkFormTemplate[] @relation("WorkFormTemplateUpdatedBy")
+  activatedWorkFormTemplates WorkFormTemplate[] @relation("WorkFormTemplateActivatedBy")
+  archivedWorkFormTemplates WorkFormTemplate[] @relation("WorkFormTemplateArchivedBy")
 
   @@index([isActive])
   @@index([createdAt])
@@ -177,6 +181,7 @@ model WorkType {
   updatedBy User? @relation("WorkTypeUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   archivedBy User? @relation("WorkTypeArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
   workOrders WorkOrder[]
+  formTemplates WorkFormTemplate[]
 
   @@index([name])
   @@index([basePriceMinor])
@@ -191,6 +196,81 @@ model WorkType {
 
 enum WorkTypeUnit {
   UNIT
+}
+
+model WorkFormTemplate {
+  id String @id @default(cuid())
+  workTypeId String @map("work_type_id")
+  name String @db.VarChar(160)
+  description String? @db.VarChar(1000)
+  version Int
+  status WorkFormTemplateStatus @default(DRAFT)
+  activatedAt DateTime? @map("activated_at")
+  archivedAt DateTime? @map("archived_at")
+  createdByUserId String? @map("created_by_user_id")
+  updatedByUserId String? @map("updated_by_user_id")
+  activatedByUserId String? @map("activated_by_user_id")
+  archivedByUserId String? @map("archived_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  workType WorkType @relation(fields: [workTypeId], references: [id], onDelete: Restrict)
+  createdBy User? @relation("WorkFormTemplateCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("WorkFormTemplateUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  activatedBy User? @relation("WorkFormTemplateActivatedBy", fields: [activatedByUserId], references: [id], onDelete: SetNull)
+  archivedBy User? @relation("WorkFormTemplateArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
+  fields WorkFormFieldDefinition[]
+
+  @@unique([workTypeId, version])
+  @@index([workTypeId])
+  @@index([status])
+  @@index([workTypeId, status])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@index([activatedByUserId])
+  @@index([archivedByUserId])
+  @@map("work_form_templates")
+}
+
+model WorkFormFieldDefinition {
+  id String @id @default(cuid())
+  templateId String @map("template_id")
+  key String @db.VarChar(64)
+  label String @db.VarChar(160)
+  helpText String? @map("help_text") @db.VarChar(500)
+  type WorkFormFieldType
+  required Boolean @default(false)
+  sortOrder Int @map("sort_order")
+  placeholder String? @db.VarChar(160)
+  defaultValue Json? @map("default_value")
+  options Json?
+  validation Json?
+  isActive Boolean @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  template WorkFormTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, key])
+  @@index([templateId, sortOrder])
+  @@map("work_form_field_definitions")
+}
+
+enum WorkFormTemplateStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum WorkFormFieldType {
+  TEXT
+  TEXTAREA
+  NUMBER
+  DATE
+  CHECKBOX
+  RADIO
+  SELECT
+  MULTISELECT
+  TOOTH
+  SHADE
 }
 
 model WorkOrder {

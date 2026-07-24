@@ -123,4 +123,33 @@ export type {
   ReplaceBillingLinesInput,
   UpdateBillingDocumentInput,
 } from "./billing.js";
+export {
+  RESERVED_WORK_FORM_FIELD_KEYS,
+  WORK_FORM_FIELD_KEY_PATTERN,
+  WORK_FORM_FIELD_TYPES,
+  WORK_FORM_TEMPLATE_STATUSES,
+  getAllowedValidationKeys,
+  isOptionsFieldType,
+  isWorkFormDefaultCompatible,
+  isWorkFormFieldKey,
+  normalizeWorkFormFieldsOrder,
+  validateWorkFormFieldCompatibility,
+  validateWorkFormOptions,
+} from "./work-forms.js";
+export type {
+  CreateWorkFormTemplateInput,
+  ReplaceWorkFormFieldsInput,
+  UpdateWorkFormTemplateInput,
+  WorkFormDefaultValue,
+  WorkFormFieldDefinition,
+  WorkFormFieldType,
+  WorkFormFieldValidation,
+  WorkFormOption,
+  WorkFormTemplateDetail,
+  WorkFormTemplateListResponse,
+  WorkFormTemplateStatus,
+  WorkFormTemplateSummary,
+  WorkFormValidationResult,
+  WorkFormWorkTypeSummary,
+} from "./work-forms.js";
 export { formatApplicationTitle } from "./workspace-title.js";

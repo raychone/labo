@@ -1146,7 +1146,7 @@ Decizie concreta SETTINGS-001:
 
 ### WORKFORMS-001 - Work form template builder
 
-- Status: NOT STARTED.
+- Status: COMPLETED.
 - Obiectiv: configurarea formularelor dinamice per tip de lucrare fara salvarea valorilor pe WorkOrder.
 - Scope: template activ per WorkType, field definitions, field types MVP, versiuni, preview, activare si arhivare.
 - Non-goals: upload fisiere, scripting, HTML custom, conditional rules engine complex, autosave, completare/snapshot valori pe lucrare.
@@ -1157,6 +1157,8 @@ Decizie concreta SETTINGS-001:
 - Securitate: RBAC server-side pentru citire/modificare/arhivare, validare stricta a optiunilor JSON si a tipurilor de camp.
 - Audit: audit pentru create/update/activate/archive template.
 - Testare: unit si integration pentru servicii/controllere, teste frontend pentru builder, preview, read-only si validare.
+- Implementare: adaugate modelele `WorkFormTemplate` si `WorkFormFieldDefinition`, migrarea `20260724204700_work_form_template_builder`, partial unique index pentru un singur template activ per WorkType, endpointuri REST cu RBAC/CSRF, validare server-side stricta pentru field keys/options/default values/validation, shared contracts si helperi puri, ruta `/work-types/:workTypeId/form`, link “Configureaza formularul” in catalog, builder mobile-first cu versiuni, editor, optiuni, ordonare, preview si read-only mode.
+- Decizie: arhivarea manuala permite doar drafturi; template-ul activ anterior este arhivat automat doar in tranzactia de activare a unei versiuni noi.
 
 ### FORMS-002 - Work form completion and immutable snapshot
 

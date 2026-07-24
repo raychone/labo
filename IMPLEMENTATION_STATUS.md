@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-56%
+59%
 
 ## FOUNDATION
 
@@ -57,7 +57,7 @@
 ## FORMS
 
 - [x] FORMS-001 - Form patterns and validation UX
-- [ ] WORKFORMS-001 - Work form template builder (NOT STARTED)
+- [x] WORKFORMS-001 - Work form template builder (COMPLETED)
 - [ ] FORMS-002 - Work form completion and immutable snapshot (NOT STARTED)
 
 ## BILLING
@@ -150,13 +150,13 @@ NONE / AWAITING APPROVAL
 
 Status: AWAITING APPROVAL
 
-Last completed task: DEMO-SEED-001 - Realistic demonstration dataset
+Last completed task: WORKFORMS-001 - Work form template builder
 
-Completed: 2026-07-24 23:30:27 EEST
+Completed: 2026-07-24T21:03:26Z
 
 ## Next Recommended Task
 
-WORKFORMS-001 - Work form template builder
+FORMS-002 - Work form completion and immutable snapshot
 
 ## Known Technical Debt
 
@@ -271,7 +271,20 @@ None.
 
 ### WORKFORMS-001 - Work form template builder
 
-- Status: NOT STARTED.
+- Status: COMPLETED.
+- Started: 2026-07-24T20:47:38Z.
+- Completed: 2026-07-24T21:03:26Z.
+- Commit message: `WORKFORMS-001: add work form template builder`.
+- Pre-flight audit:
+  - Branch `main` confirmed.
+  - Working tree clean before WORKFORMS-001 changes.
+  - Last commit before task: `fd5c95e DOCS: expand demo presentation guide`.
+  - Task definition, `MVP-IMPLEMENTATION-PLAN.md`, `IMPLEMENTATION_STATUS.md`, `README.md`, Prisma schema and existing migrations were reviewed.
+  - Existing WorkType, WorkTypesModule, FORMS-001 form patterns, `packages/ui`, React Query/API patterns, permission registry, role matrix, AuthorizationService and audit patterns were reviewed.
+  - No premature WorkForm template models or `forms.*` permissions existed.
+  - Plan confirms versioning and keeps submission/snapshot in a separate task.
+  - Approved field types are TEXT, TEXTAREA, NUMBER, DATE, CHECKBOX, RADIO, SELECT, MULTISELECT, TOOTH and SHADE.
+  - Linting remains unconfigured.
 - Obiectiv: configurarea formularelor dinamice per tip de lucrare fara salvarea valorilor pe WorkOrder.
 - Scope: template activ per WorkType, field definitions, field types MVP, versiuni, preview, activare si arhivare.
 - Non-goals: upload fisiere, scripting, HTML custom, conditional rules engine complex, autosave, completare/snapshot valori pe lucrare.
@@ -282,6 +295,75 @@ None.
 - Securitate: RBAC server-side pentru citire/modificare/arhivare, validare stricta a optiunilor JSON si a tipurilor de camp.
 - Audit: audit pentru create/update/activate/archive template.
 - Testare: unit si integration pentru servicii/controllere, teste frontend pentru builder, preview, read-only si validare.
+- Summary:
+  - Added `WorkFormTemplate` and `WorkFormFieldDefinition` Prisma models.
+  - Added deterministic migration `20260724204700_work_form_template_builder`.
+  - Added enum statuses `DRAFT`, `ACTIVE`, `ARCHIVED` and field types `TEXT`, `TEXTAREA`, `NUMBER`, `DATE`, `CHECKBOX`, `RADIO`, `SELECT`, `MULTISELECT`, `TOOTH`, `SHADE`.
+  - Added unique `(workTypeId, version)`, unique `(templateId, key)`, useful indexes and PostgreSQL partial unique index for one active template per WorkType.
+  - Added `WorkFormsModule` with list/detail/active/create/update/replace fields/activate/archive/clone endpoints.
+  - Added strict server-side schema validation for field keys, reserved keys, options, default values and validation rules.
+  - Added transaction-safe version allocation using `pg_advisory_xact_lock(hashtext(workTypeId))`.
+  - Added transactional activation that validates fields, archives previous active template and activates the draft.
+  - Added safe audit events for create/update/fields replaced/activate/archive/clone.
+  - Added `forms.read`, `forms.create`, `forms.update`, `forms.archive` permissions and role matrix grants.
+  - Added shared contracts and pure helpers for key validation, option validation, order normalization and compatibility checks.
+  - Added `/work-types/:workTypeId/form` builder route, lazy-loaded frontend page and “Configureaza formularul” action in WorkType detail.
+  - Added version list, draft metadata editing, field editor, options editor, move up/down ordering, live preview, read-only mode and archived WorkType restrictions.
+- Non-goals:
+  - No WorkOrder model changes.
+  - No work form submission model.
+  - No saved values, immutable snapshot, workflow, files, QC, logistics, delivery, notifications or dashboard changes.
+  - No FILE/IMAGE/SIGNATURE/HTML/RICH_TEXT/SCRIPT/FORMULA/GROUP/REPEATER/conditional fields.
+- Main files modified:
+  - `apps/api/prisma/schema.prisma`
+  - `apps/api/prisma/migrations/20260724204700_work_form_template_builder/migration.sql`
+  - `apps/api/src/modules/work-forms/*`
+  - `apps/api/src/modules/app.module.ts`
+  - `apps/api/src/modules/rbac/permission-registry.ts`
+  - `apps/web/src/app/app.tsx`
+  - `apps/web/src/features/work-forms/*`
+  - `apps/web/src/features/work-types/work-types-page.tsx`
+  - `packages/shared/src/work-forms.ts`
+  - `packages/shared/src/index.ts`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `IMPLEMENTATION_STATUS.md`
+- Dependencies added:
+  - None.
+- Automated verification:
+  - `pnpm --filter @dental-lab/api prisma:validate` passed.
+  - `pnpm --filter @dental-lab/api prisma:generate` passed.
+  - `pnpm --filter @dental-lab/api prisma:migrate:dev --name work_form_template_builder` passed and applied `20260724204700_work_form_template_builder`.
+  - `pnpm --filter @dental-lab/api prisma:db:seed` passed.
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed.
+- Tests added:
+  - Shared work form helper tests for keys, options, order normalization and compatibility.
+  - Backend validation service tests for normalization and invalid schemas.
+  - Frontend builder page test for read-only route, version list and preview.
+  - RBAC registry test updates for `forms.*` permissions.
+- Manual verification:
+  - API started on `http://localhost:3010`.
+  - `GET /health` returned `ok`.
+  - Manager login with CSRF succeeded.
+  - `POST /work-types/:workTypeId/form-templates` created a `DRAFT` smoke template.
+  - `PUT /work-form-templates/:id/fields` replaced 2 fields.
+  - `POST /work-form-templates/:id/activate` returned `ACTIVE`.
+  - `GET /work-types/:workTypeId/form-templates`, `GET /work-types/:workTypeId/form-template` and `GET /work-form-templates/:id` returned expected data.
+  - Frontend started on `http://127.0.0.1:5182`.
+  - `/work-types/:workTypeId/form`, `/work-types`, `/works` and `/billing` returned `200`.
+  - Search confirmed no `WorkFormSubmission` implementation and no WorkOrder form completion/snapshot.
+- Architecture decisions:
+  - API owns runtime validation and Prisma persistence; shared package owns frontend contracts and pure compatibility helpers.
+  - Version allocation uses a transaction-level advisory lock and max version inside the lock, avoiding unsafe `count + 1`.
+  - Manual archive is limited to drafts; previous active templates are archived only during activation of a new draft.
+  - JSON columns remain typed by DTO/service validation; arbitrary unchecked JSON is not accepted.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Real-device responsive checks at 360px/768px/1280px, zoom 150%, keyboard-only navigation and browser console inspection were only partially covered by tests/HTTP smoke in this terminal environment.
+  - Linting remains unconfigured.
 
 ### FORMS-002 - Work form completion and immutable snapshot
 

@@ -29,6 +29,10 @@ const WorkTypesPage = lazy(async () => {
   const module = await import("../features/work-types/work-types-page.js");
   return { default: module.WorkTypesPage };
 });
+const WorkFormBuilderPage = lazy(async () => {
+  const module = await import("../features/work-forms/work-form-builder-page.js");
+  return { default: module.WorkFormBuilderPage };
+});
 const WorksPage = lazy(async () => {
   const module = await import("../features/works/works-page.js");
   return { default: module.WorksPage };
@@ -86,6 +90,10 @@ const router = createBrowserRouter([
       {
         element: <PermissionRoute requiredPermissions={["pricing.read"]}><LazyRoute><WorkTypesPage /></LazyRoute></PermissionRoute>,
         path: "work-types",
+      },
+      {
+        element: <PermissionRoute requiredPermissions={["forms.read"]}><LazyRoute><WorkFormBuilderPage /></LazyRoute></PermissionRoute>,
+        path: "work-types/:workTypeId/form",
       },
       {
         element: <PermissionRoute requiredPermissions={["users.read"]}><LazyRoute><UsersPage /></LazyRoute></PermissionRoute>,
