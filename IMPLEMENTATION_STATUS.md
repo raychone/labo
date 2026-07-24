@@ -67,7 +67,7 @@
 
 ## DEMO
 
-- [ ] DEMO-SEED-001 - Realistic demonstration dataset (NOT STARTED)
+- [x] DEMO-SEED-001 - Realistic demonstration dataset (COMPLETED)
 - [ ] DEMO-POLISH-001 - Commercial demo polish (NOT STARTED)
 
 ## FILES
@@ -150,13 +150,13 @@ NONE / AWAITING APPROVAL
 
 Status: AWAITING APPROVAL
 
-Last completed task: BILLING-002 - Printable billing documents and clinic statements
+Last completed task: DEMO-SEED-001 - Realistic demonstration dataset
 
-Completed: 2026-07-24 00:06:00 CEST
+Completed: 2026-07-24 23:30:27 EEST
 
 ## Next Recommended Task
 
-DEMO-SEED-001 - Realistic demonstration dataset
+WORKFORMS-001 - Work form template builder
 
 ## Known Technical Debt
 
@@ -1986,5 +1986,109 @@ None.
   - None.
 - Remaining risks:
   - Derived payment filters are calculated in the service after fetching matching documents; large datasets may need persisted/payment aggregate projections later.
+  - Linting remains unconfigured.
+  - Backend shutdown still shows the existing `pg` deprecation warning, without request failures.
+
+### DEMO-SEED-001 - Realistic demonstration dataset
+
+- Status: COMPLETED.
+- Started: 2026-07-24 23:23:46 EEST.
+- Completed: 2026-07-24 23:30:27 EEST.
+- Commit message: `DEMO-SEED-001: add realistic demonstration dataset`.
+- Pre-flight audit:
+  - Branch: `main`.
+  - Working tree: clean before DEMO-SEED-001 changes.
+  - Last commit: `d436349 BILLING-002: add printable billing documents and clinic statements`.
+  - Read task attachment, `MVP-IMPLEMENTATION-PLAN.md`, `IMPLEMENTATION_STATUS.md`, `README.md`, Prisma schema, base seed, package scripts and RBAC role definitions.
+  - Reviewed User, Role, Clinic, Doctor, WorkType, WorkOrder, BillingDocument, BillingDocumentLine, Payment, BillingSeries and LaboratorySettings models.
+  - Existing base seed is idempotent and remains limited to permissions, roles, development manager, settings and billing series.
+  - Demo accounts did not exist before the new demo seed.
+  - Existing local smoke data exists but is not deleted by demo reset.
+  - Linting remains unconfigured.
+- Seed architecture:
+  - Base seed remains `apps/api/prisma/seed.ts`.
+  - Demo seed entrypoint: `apps/api/prisma/seed-demo.ts`.
+  - Demo reset entrypoint: `apps/api/prisma/reset-demo.ts`.
+  - Demo modules live in `apps/api/prisma/demo/*`.
+  - Dataset builder is deterministic and tested without database access.
+- Base seed versus demo seed:
+  - Base seed stays small and required for roles/permissions.
+  - Demo seed creates users, settings, clinics, doctors, work types, works, billing documents and manual payments.
+- Production guard:
+  - `ALLOW_DEMO_SEED=true` is required.
+  - `NODE_ENV=production` is refused.
+  - Negative production guard check returned the expected error.
+- Reset strategy:
+  - Deletes only `@demo.local` users, `demo_` IDs and demo billing series `PFD`/`FACTD`.
+  - Does not truncate tables.
+  - Does not delete non-demo users or local smoke data.
+  - Restores settings only when the current settings name is `Laborator Dentar Demo`.
+- Laboratory settings:
+  - `Laborator Dentar Demo`, `Dental Lab Demo SRL`, fictive fiscal data, Bucuresti, RO, `ro-RO`, `RON`, `Europe/Bucharest`.
+- Demo users and roles:
+  - `manager@demo.local` MANAGER.
+  - `receptie@demo.local` RECEPTIE.
+  - `logistica@demo.local` LOGISTICA.
+  - `tehnician1@demo.local` TEHNICIAN.
+  - `tehnician2@demo.local` TEHNICIAN.
+  - `curier@demo.local` CURIER.
+  - `medic@demo.local` MEDIC.
+- Clinics and doctors:
+  - 4 fictive clinics in Bucuresti, Brasov and Cluj-Napoca.
+  - 9 fictive doctors distributed across clinics.
+- Work types and works:
+  - 12 work types, one archived.
+  - 48 work orders over current month, previous month and two months ago.
+  - Work codes use `WO-<year>-900001` and onward.
+  - QR tokens are deterministic demo tokens, not auth/session tokens.
+- Billing:
+  - 4 proformas: 2 draft, 2 issued.
+  - 8 invoices: unpaid, partial, paid, cancelled and converted-proforma scenarios.
+  - 6 manual payment records with cash, bank transfer, card and other methods.
+- Required financial scenarios:
+  - Unpaid overdue invoice: `FACT-<year>-000001`.
+  - Partial invoice: `FACT-<year>-000002`, total 1,000 RON, paid 400 RON, balance 600 RON.
+  - Paid invoices: `FACT-<year>-000004`, `FACT-<year>-000005`, `FACT-<year>-000006`.
+  - Converted proforma: `PF-<year>-000001` and `FACT-<year>-000008`.
+  - Cancelled invoice: `FACT-<year>-000007`.
+- Search fixtures:
+  - `Maria Dumitrescu`, `Clinica Dentară Aurora`, `Dr. Ana Popescu`, `WO-<year>-900001`, `PF-<year>-000001`, `FACT-<year>-000001`, `CH-2026-001`, `OP-DEMO-001`.
+- Documentation:
+  - Added `DEMO.md`.
+  - Added `DEMO-SCRIPT.md`.
+  - Updated `README.md`.
+  - Updated `MVP-IMPLEMENTATION-PLAN.md`.
+- Dependencies added:
+  - None.
+- Automated verification:
+  - `pnpm --filter @dental-lab/api prisma:validate` passed.
+  - `pnpm --filter @dental-lab/api prisma:generate` passed.
+  - `pnpm --filter @dental-lab/api prisma:db:seed` passed.
+  - `pnpm --filter @dental-lab/api prisma:db:seed:demo` passed twice for idempotency, then passed again after reset.
+  - `pnpm --filter @dental-lab/api prisma:db:reset-demo` passed.
+  - `NODE_ENV=production ... tsx prisma/seed-demo.ts` refused as expected.
+  - DB consistency smoke confirmed 7 demo users, 4 clinics, 9 doctors, 12 work types, 48 works, 12 billing documents and 6 payments.
+  - Partial scenario confirmed total 100000, paid 40000, balance 60000.
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed.
+- Manual verification:
+  - API build started on `http://localhost:3010`.
+  - Demo manager login succeeded with `mustChangePassword=false`.
+  - `GET /health` returned `200`.
+  - `GET /works?search=Maria%20Dumitrescu` returned demo works.
+  - `GET /billing/overview` returned `200`.
+  - `GET /billing-documents?search=CH-2026-001` returned `FACT-2026-000002` as `PARTIALLY_PAID` with 600 RON balance.
+  - `GET /payments` returned demo receipt `CH-2026-001`.
+- Manual checks not fully verified in this terminal environment:
+  - Browser menu screenshots for each demo role.
+  - QR visual scan.
+  - Real browser print preview.
+  - CSV download through browser UI.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Demo document display numbers use the current seed year; docs use `<year>` placeholders except the 2026 local smoke values.
+  - Local non-demo smoke data can still appear in broad financial totals until a clean DB or reset of non-demo smoke data is used.
   - Linting remains unconfigured.
   - Backend shutdown still shows the existing `pg` deprecation warning, without request failures.

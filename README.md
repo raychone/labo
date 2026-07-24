@@ -517,6 +517,18 @@ Deferred but preserved in the plan: `FILES-001`, `FILES-002`, `QC-001`, and `NOT
 
 Payments in the current MVP are manual evidence only. Users can record partial or full collections, receipt numbers, receipt dates, bank references and notes, and the app derives `UNPAID`, `PARTIALLY_PAID` and `PAID` from active records. The application does not process cards, POS transactions, cash register flows, checkout, bank reconciliation, legal fiscal receipts, or automated receipt fiscalization.
 
+## Demo Dataset
+
+`DEMO-SEED-001` adds a development-only realistic dataset. It keeps the base seed small and separate.
+
+```bash
+pnpm --filter @dental-lab/api prisma:db:seed
+pnpm --filter @dental-lab/api prisma:db:seed:demo
+pnpm --filter @dental-lab/api prisma:db:reset-demo
+```
+
+The demo scripts require an explicit guard and refuse `NODE_ENV=production`. Demo accounts, stable search values and the presentation flow are documented in `DEMO.md` and `DEMO-SCRIPT.md`.
+
 ## Current Task
 
 See `IMPLEMENTATION_STATUS.md` for task progress and manual testing checklists.

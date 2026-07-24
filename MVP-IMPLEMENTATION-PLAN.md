@@ -1202,17 +1202,17 @@ Decizie concreta SETTINGS-001:
 
 ### DEMO-SEED-001 - Realistic demonstration dataset
 
-- Status: NOT STARTED.
+- Status: COMPLETED.
 - Obiectiv: set realist de date pentru demonstratie comerciala.
 - Scope: clinici, medici, tipuri lucrari, lucrari, proforme, facturi si situatii lunare demonstrative.
 - Non-goals: date reale client, productie, import Excel.
 - Dependente: BILLING-002, WORKS-001, CLINICS-001, WORKTYPES-001.
 - Acceptance criteria: demo-ul poate arata fluxuri realiste fara introducere manuala lunga.
-- Backend: seed/fixture idempotent clar separat de seed-ul minim.
+- Backend: `prisma:db:seed:demo` si `prisma:db:reset-demo`, idempotente, cu guard production si reset limitat la date demo.
 - Frontend: fara schimbari majore, doar suport pentru demo daca e necesar.
 - Securitate: fara date personale reale.
 - Audit: fara audit pentru seed local.
-- Testare: seed smoke si verificari API principale.
+- Testare: seed de baza, seed demo rulat de doua ori, reset demo, guard production, typecheck, teste, build si smoke API.
 
 ### FILES-001 - Private file upload
 

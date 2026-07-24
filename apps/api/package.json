@@ -7,6 +7,8 @@
     "build": "env -u ELECTRON_RUN_AS_NODE nest build",
     "prisma": "dotenv -e ../../.env -- prisma",
     "prisma:db:seed": "dotenv -e ../../.env -- prisma db seed",
+    "prisma:db:reset-demo": "dotenv -e ../../.env -- env -u ELECTRON_RUN_AS_NODE ALLOW_DEMO_SEED=true tsx prisma/reset-demo.ts",
+    "prisma:db:seed:demo": "dotenv -e ../../.env -- env -u ELECTRON_RUN_AS_NODE ALLOW_DEMO_SEED=true tsx prisma/seed-demo.ts",
     "prisma:generate": "dotenv -e ../../.env -- prisma generate",
     "prisma:migrate:dev": "dotenv -e ../../.env -- prisma migrate dev",
     "prisma:validate": "dotenv -e ../../.env -- prisma validate",
