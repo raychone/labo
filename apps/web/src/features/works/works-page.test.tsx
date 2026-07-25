@@ -27,9 +27,21 @@ function renderWithProviders(component: ReactNode): void {
 
 function createJsonResponse(body: unknown, status = 200): Response {
   return {
+    arrayBuffer: async () => new ArrayBuffer(0),
     json: async () => body,
     ok: status >= 200 && status < 300,
     status,
+    headers: new Headers({ "content-type": "application/json" }),
+  } as Response;
+}
+
+function createPngResponse(): Response {
+  return {
+    arrayBuffer: async () => new Uint8Array([137, 80, 78, 71]).buffer,
+    headers: new Headers({ "content-type": "image/png" }),
+    json: async () => ({}),
+    ok: true,
+    status: 200,
   } as Response;
 }
 
@@ -199,6 +211,9 @@ describe("WorksPage", () => {
           ],
         }));
       }
+      if (url.includes("/works/work_order_1/qr-image")) {
+        return Promise.resolve(createPngResponse());
+      }
       if (url.includes("/works/work_order_1/qr")) {
         return Promise.resolve(createJsonResponse(qrResponse));
       }
@@ -224,6 +239,7 @@ describe("WorksPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Vezi QR" }));
 
     const dialog = await screen.findByRole("dialog", { name: "QR lucrare" });
+    expect((await within(dialog).findByRole("img", { name: "QR WO-2026-000001" })).getAttribute("src")).toContain("data:image/png;base64,");
     await waitFor(() => expect(within(dialog).getAllByText("WO-2026-000001")).toHaveLength(2));
     expect(await within(dialog).findByText("P-100")).toBeDefined();
     expect(screen.queryByText("dl-work:secure_token_12345678901234567890")).toBeNull();

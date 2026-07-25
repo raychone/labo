@@ -47,11 +47,21 @@
   justify-items: center;
 }
 
-.work-label__qr img {
+.work-label__qr img,
+.work-label__qr-placeholder {
   background: #fff;
   border: 1px solid var(--dl-color-border);
   inline-size: min(15rem, 100%);
   padding: var(--dl-space-2);
+}
+
+.work-label__qr-placeholder {
+  align-items: center;
+  aspect-ratio: 1;
+  color: var(--dl-color-text-muted);
+  display: flex;
+  justify-content: center;
+  text-align: center;
 }
 
 .work-label__qr code {

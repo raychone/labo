@@ -3,7 +3,7 @@ import type { WorkQrView } from "@dental-lab/shared";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
-import { getWorkQrImageUrl, useRecordWorkQrPrint, useWorkQr } from "./works-api.js";
+import { useRecordWorkQrPrint, useWorkQr, useWorkQrImage } from "./works-api.js";
 import "./work-qr.css";
 
 function getErrorMessage(error: unknown): string {
@@ -24,6 +24,7 @@ export function WorkQrModal({
   readonly workId: string | null;
 }): ReactNode {
   const qrQuery = useWorkQr(workId, isOpen);
+  const qrImageQuery = useWorkQrImage(workId, isOpen && qrQuery.data !== undefined);
   const printMutation = useRecordWorkQrPrint();
   const qr = qrQuery.data;
 
@@ -58,12 +59,25 @@ export function WorkQrModal({
     >
       {qrQuery.isLoading ? <LoadingState text="Se încarcă QR-ul" /> : null}
       {qrQuery.isError ? <ErrorState title="QR-ul nu a fost încărcat" description={getErrorMessage(qrQuery.error)} retryAction={<Button onClick={() => void qrQuery.refetch()} variant="outline">Reîncearcă</Button>} /> : null}
-      {qr ? <WorkLabel qr={qr} workId={workId ?? qr.workId} /> : null}
+      {qr ? (
+        <>
+          {qrImageQuery.isError ? <ErrorState title="Imaginea QR nu a fost încărcată" description={getErrorMessage(qrImageQuery.error)} retryAction={<Button onClick={() => void qrImageQuery.refetch()} variant="outline">Reîncearcă</Button>} /> : null}
+          <WorkLabel imageSrc={qrImageQuery.data} isImageLoading={qrImageQuery.isLoading} qr={qr} />
+        </>
+      ) : null}
     </Modal>
   );
 }
 
-export function WorkLabel({ qr, workId }: { readonly qr: WorkQrView; readonly workId: string }): ReactNode {
+export function WorkLabel({
+  imageSrc,
+  isImageLoading,
+  qr,
+}: {
+  readonly imageSrc: string | undefined;
+  readonly isImageLoading: boolean;
+  readonly qr: WorkQrView;
+}): ReactNode {
   return (
     <section className="work-label" aria-label={`Eticheta ${qr.workCode}`}>
       <div className="work-label__header">
@@ -75,7 +89,11 @@ export function WorkLabel({ qr, workId }: { readonly qr: WorkQrView; readonly wo
       </div>
 
       <div className="work-label__qr">
-        <img alt={`QR ${qr.workCode}`} height="240" src={getWorkQrImageUrl(workId)} width="240" />
+        {imageSrc ? <img alt={`QR ${qr.workCode}`} height="240" src={imageSrc} width="240" /> : (
+          <div className="work-label__qr-placeholder" role="status">
+            {isImageLoading ? "Se generează QR-ul" : "QR indisponibil"}
+          </div>
+        )}
         <code>{qr.workCode}</code>
       </div>
 

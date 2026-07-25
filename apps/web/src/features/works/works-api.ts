@@ -12,13 +12,14 @@ import type {
 } from "@dental-lab/shared";
 
 import { fetchCsrfToken } from "../auth/auth-api.js";
-import { API_BASE_URL, apiFetch, parseApiResponse } from "../../lib/api-client.js";
+import { apiFetch, parseApiResponse } from "../../lib/api-client.js";
 
 export const worksQueryKeys = {
   all: ["works"] as const,
   detail: (workOrderId: string | null) => ["works", "detail", workOrderId] as const,
   list: (params: WorksListParams) => ["works", "list", params] as const,
   qr: (workOrderId: string | null) => ["works", "qr", workOrderId] as const,
+  qrImage: (workOrderId: string | null) => ["works", "qr-image", workOrderId] as const,
   workTypeOptions: ["works", "work-type-options"] as const,
 };
 
@@ -84,8 +85,24 @@ export async function fetchWorkQr(workOrderId: string): Promise<WorkQrView> {
   return parseApiResponse<WorkQrView>(response);
 }
 
-export function getWorkQrImageUrl(workOrderId: string): string {
-  return `${API_BASE_URL}/works/${workOrderId}/qr-image`;
+async function responseToDataUrl(response: Response): Promise<string> {
+  if (!response.ok) {
+    await parseApiResponse<never>(response);
+  }
+
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return `data:${response.headers.get("content-type") ?? "image/png"};base64,${window.btoa(binary)}`;
+}
+
+export async function fetchWorkQrImageDataUrl(workOrderId: string): Promise<string> {
+  const response = await apiFetch(`/works/${workOrderId}/qr-image`);
+
+  return responseToDataUrl(response);
 }
 
 export async function fetchWorkFormWorkTypeOptions(): Promise<readonly WorkTypeFormOption[]> {
@@ -133,6 +150,15 @@ export function useWorkQr(workOrderId: string | null, enabled: boolean) {
     enabled: enabled && workOrderId !== null,
     queryFn: () => fetchWorkQr(workOrderId ?? ""),
     queryKey: worksQueryKeys.qr(workOrderId),
+    retry: false,
+  });
+}
+
+export function useWorkQrImage(workOrderId: string | null, enabled: boolean) {
+  return useQuery({
+    enabled: enabled && workOrderId !== null,
+    queryFn: () => fetchWorkQrImageDataUrl(workOrderId ?? ""),
+    queryKey: worksQueryKeys.qrImage(workOrderId),
     retry: false,
   });
 }
