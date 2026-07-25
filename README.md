@@ -513,6 +513,8 @@ The frontend builder route is `/work-types/:workTypeId/form`. The work type deta
 
 Demo/development login can expose `/auth/demo-login` only when `DEMO_MODE=true` and not in production. The frontend renders “Acces rapid pentru demonstrație” in Vite development or when `VITE_DEMO_MODE=true`; no demo password is sent to or bundled in React. Use `pnpm seed:demo` once to prepare the demo data, then `pnpm dev` to run API and web in demo mode.
 
+Open the demo UI at `http://localhost:3000`. Keeping the frontend and API on the same local hostname family avoids CSRF cookie mismatches between `127.0.0.1` and `localhost`.
+
 ## Billing Workspace
 
 BILLING-001 adds the first financial workspace at `/billing`.

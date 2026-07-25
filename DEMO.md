@@ -23,7 +23,13 @@ pnpm dev
 Deschide aplicația în browser:
 
 ```text
-http://127.0.0.1:3000
+http://localhost:3000
+```
+
+Pentru login demo cu cookie-uri CSRF, folosește `localhost`, nu combina `127.0.0.1` cu `localhost`:
+
+```text
+http://localhost:3000
 ```
 
 Dacă vrei să refaci datasetul demo de la zero:
@@ -78,7 +84,7 @@ Spune clar:
 
 ## 4. Login și shell aplicație
 
-1. Intra pe `http://127.0.0.1:3000`.
+1. Intra pe `http://localhost:3000`.
 2. Folosește “Acces rapid pentru demonstrație” → “Intră ca manager”.
 3. Arată că după login utilizatorul intră în aplicație, nu într-o pagină publică.
 4. Arată navigația principală:

@@ -56,18 +56,29 @@
 }
 
 .auth-page__demo-button {
-  align-items: start;
-  display: grid;
-  gap: var(--dl-space-1);
   height: auto;
-  justify-items: start;
   min-height: 4rem;
   text-align: left;
   white-space: normal;
 }
 
+.auth-page__demo-button .dl-button__content,
+.auth-page__demo-button .dl-button__content > span {
+  align-items: start;
+  display: grid;
+  gap: var(--dl-space-1);
+  justify-items: start;
+  min-width: 0;
+  width: 100%;
+}
+
+.auth-page__demo-button span {
+  overflow-wrap: anywhere;
+}
+
 .auth-page__demo-button small {
   color: var(--dl-color-text-secondary);
+  display: block;
   font-size: var(--dl-font-size-caption);
   font-weight: var(--dl-font-weight-regular);
   line-height: 1.35;
