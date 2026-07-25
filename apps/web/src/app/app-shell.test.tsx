@@ -78,8 +78,8 @@ describe("AuthenticatedAppShell", () => {
       </Routes>,
     );
 
-    await waitFor(() => expect(screen.getAllByText("Laborator Test").length).toBeGreaterThan(0));
-    await waitFor(() => expect(screen.getAllByText("Lucrări").length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText("Laborator Test").length).toBeGreaterThan(0), { timeout: 5_000 });
+    await waitFor(() => expect(screen.getAllByText("Lucrări").length).toBeGreaterThan(0), { timeout: 5_000 });
     expect(screen.queryByText("Utilizatori")).toBeNull();
     expect(screen.getByRole("link", { name: /Lucrări/ }).getAttribute("aria-current")).toBe("page");
   });

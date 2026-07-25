@@ -15,7 +15,7 @@ const serverEnvironmentSchema = z.object({
   PORT: z.coerce.number().int().positive().max(65535).default(3010),
   SESSION_COOKIE_NAME: z.string().min(1).default("dl_session"),
   SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(60 * 60 * 8),
-  WEB_ORIGIN: z.string().url().default("http://localhost:3000"),
+  WEB_ORIGIN: z.string().min(1).default("http://localhost:3000,http://127.0.0.1:3000"),
 });
 
 export interface ServerEnvironment {
@@ -28,7 +28,7 @@ export interface ServerEnvironment {
   readonly sessionTtlSeconds: number;
   readonly csrfCookieName: string;
   readonly csrfHeaderName: string;
-  readonly webOrigin: string;
+  readonly webOrigins: readonly string[];
 }
 
 export function parseServerEnvironment(
@@ -46,8 +46,20 @@ export function parseServerEnvironment(
     sessionTtlSeconds: parsedEnvironment.SESSION_TTL_SECONDS,
     csrfCookieName: parsedEnvironment.CSRF_COOKIE_NAME,
     csrfHeaderName: parsedEnvironment.CSRF_HEADER_NAME.toLowerCase(),
-    webOrigin: parsedEnvironment.WEB_ORIGIN,
+    webOrigins: parseWebOrigins(parsedEnvironment.WEB_ORIGIN),
   };
+}
+
+function parseWebOrigins(value: string): readonly string[] {
+  return value
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0)
+    .map((origin) => {
+      const parsedOrigin = new URL(origin);
+
+      return parsedOrigin.origin;
+    });
 }
 
 export function loadServerEnvironment(): ServerEnvironment {

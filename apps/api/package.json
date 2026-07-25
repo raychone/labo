@@ -14,7 +14,7 @@
     "prisma:validate": "dotenv -e ../../.env -- prisma validate",
     "start": "env -u ELECTRON_RUN_AS_NODE node dist/src/main.js",
     "start:dev": "env -u ELECTRON_RUN_AS_NODE nest start --watch",
-    "dev": "env -u ELECTRON_RUN_AS_NODE DEMO_MODE=true PORT=3010 WEB_ORIGIN=http://localhost:3000 nest start --watch",
+    "dev": "env -u ELECTRON_RUN_AS_NODE DEMO_MODE=true PORT=3010 WEB_ORIGIN=http://localhost:3000,http://127.0.0.1:3000 nest start --watch",
     "seed:demo": "pnpm run prisma:db:seed && pnpm run prisma:db:seed:demo",
     "test": "env -u ELECTRON_RUN_AS_NODE vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"

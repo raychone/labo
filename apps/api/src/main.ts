@@ -16,7 +16,7 @@ async function bootstrap(): Promise<void> {
     allowedHeaders: ["Content-Type", environment.csrfHeaderName],
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    origin: environment.webOrigin,
+    origin: [...environment.webOrigins],
   });
   app.useGlobalPipes(
     new ValidationPipe({

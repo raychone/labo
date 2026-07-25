@@ -19,7 +19,7 @@ describe("parseServerEnvironment", () => {
       port: 3001,
       sessionCookieName: "dl_session",
       sessionTtlSeconds: 28800,
-      webOrigin: "http://localhost:3000",
+      webOrigins: ["http://localhost:3000", "http://127.0.0.1:3000"],
     });
   });
 
@@ -30,6 +30,18 @@ describe("parseServerEnvironment", () => {
     });
 
     expect(environment.demoMode).toBe(true);
+  });
+
+  it("parses multiple allowed web origins", () => {
+    const environment = parseServerEnvironment({
+      DATABASE_URL: "postgresql://user:password@localhost:5432/database",
+      WEB_ORIGIN: "http://localhost:3000, http://127.0.0.1:3000",
+    });
+
+    expect(environment.webOrigins).toStrictEqual([
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+    ]);
   });
 
   it("uses the default port when PORT is not provided", () => {
