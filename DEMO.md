@@ -17,9 +17,11 @@ pnpm --filter @dental-lab/web dev --host 127.0.0.1
 Pentru butoanele “Acces rapid pentru demonstrație”, pornește explicit demo mode:
 
 ```bash
-DEMO_MODE=true PORT=3010 pnpm --filter @dental-lab/api start
-VITE_DEMO_MODE=true pnpm --filter @dental-lab/web dev --host 127.0.0.1
+PORT=3010 pnpm dev:api:demo
+pnpm dev:web:demo --host 127.0.0.1
 ```
+
+În development, frontend-ul afișează automat butoanele demo. API-ul trebuie pornit cu `DEMO_MODE=true` sau cu scriptul `pnpm dev:api:demo`, altfel autentificarea rapidă va fi refuzată de backend.
 
 Deschide aplicația în browser:
 

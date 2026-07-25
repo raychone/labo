@@ -508,7 +508,7 @@ The frontend builder route is `/work-types/:workTypeId/form`. The work type deta
 
 `WORKFORMS-002` adds completed work form submissions on WorkOrders. `POST /works` accepts `workFormSubmission` with `templateId`, `templateVersion` and `values`; the backend loads the active template, validates values, builds the immutable schema snapshot and saves WorkOrder plus submission in one transaction. `PATCH /works/:id` validates edits against the saved snapshot for the same WorkType. `GET /works/:id` returns `workForm` with the saved template name/version, ordered fields and values; the UI renders readable values instead of raw JSON.
 
-Demo/development login can expose `/auth/demo-login` only when `DEMO_MODE=true` and not in production. The frontend renders “Acces rapid pentru demonstrație” only when `VITE_DEMO_MODE=true`; no demo password is sent to or bundled in React.
+Demo/development login can expose `/auth/demo-login` only when `DEMO_MODE=true` and not in production. The frontend renders “Acces rapid pentru demonstrație” in Vite development or when `VITE_DEMO_MODE=true`; no demo password is sent to or bundled in React. Use `pnpm dev:api:demo` and `pnpm dev:web:demo` for presentation mode.
 
 ## Billing Workspace
 

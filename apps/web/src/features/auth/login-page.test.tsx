@@ -51,6 +51,18 @@ describe("LoginPage", () => {
     expect(await screen.findByRole("button", { name: "Autentificare" })).toBeDefined();
   });
 
+  it("renders demo role shortcuts in development", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(createJsonResponse({ csrfToken: "csrf-token" }))
+      .mockResolvedValueOnce(createJsonResponse({ message: "Unauthorized" }, 401)));
+
+    renderWithQueryClient(<LoginPage />);
+
+    expect(await screen.findByRole("heading", { name: "Acces rapid pentru demonstrație" })).toBeDefined();
+    expect(await screen.findByRole("button", { name: /Intră ca manager/i })).toBeDefined();
+    expect(await screen.findByRole("button", { name: /Intră ca recepție/i })).toBeDefined();
+  });
+
   it("clears the password and keeps the email after failed login", async () => {
     vi.stubGlobal("fetch", vi.fn()
       .mockResolvedValueOnce(createJsonResponse({ message: "Unauthorized" }, 401))

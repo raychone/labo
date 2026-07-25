@@ -392,7 +392,7 @@ None.
   - Added shared contracts/helpers for snapshot fields, values, display formatting, FDI codes and changed key detection.
   - Added dynamic work form UI in `/works`, field renderers, FDI tooth selector, multiselect, read-only snapshot display and template loading/error/empty states.
   - Added demo templates and submissions for Coroană zirconiu, Proteză totală and Bont personalizat implant.
-  - Added `/auth/demo-login` guarded by `DEMO_MODE=true` and frontend quick-access demo buttons guarded by `VITE_DEMO_MODE=true`.
+  - Added `/auth/demo-login` guarded by `DEMO_MODE=true` and frontend quick-access demo buttons visible in Vite development or with `VITE_DEMO_MODE=true`.
 - Main files modified:
   - `apps/api/prisma/schema.prisma`
   - `apps/api/prisma/migrations/20260726004000_work_form_submission_snapshot/migration.sql`

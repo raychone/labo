@@ -45,7 +45,7 @@ const loginFieldLabels: Record<keyof LoginFormValues, string> = {
   password: "Parola",
 };
 
-const isDemoMode = import.meta.env.VITE_DEMO_MODE === "true";
+const isDemoMode = import.meta.env.DEV || import.meta.env.VITE_DEMO_MODE === "true";
 
 const demoRoles: readonly {
   readonly description: string;

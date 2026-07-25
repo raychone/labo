@@ -13,7 +13,9 @@
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck",
     "dev:web": "pnpm --filter @dental-lab/web dev",
-    "dev:api": "pnpm --filter @dental-lab/api start:dev"
+    "dev:web:demo": "VITE_DEMO_MODE=true pnpm --filter @dental-lab/web dev",
+    "dev:api": "pnpm --filter @dental-lab/api start:dev",
+    "dev:api:demo": "DEMO_MODE=true pnpm --filter @dental-lab/api start:dev"
   },
   "devDependencies": {
     "typescript": "^5.9.2"
