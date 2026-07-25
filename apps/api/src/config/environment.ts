@@ -12,10 +12,10 @@ const serverEnvironmentSchema = z.object({
   DEMO_MODE: z.enum(["true", "false"]).default("false"),
   LOGIN_RATE_LIMIT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   LOGIN_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
-  PORT: z.coerce.number().int().positive().max(65535).default(3000),
+  PORT: z.coerce.number().int().positive().max(65535).default(3010),
   SESSION_COOKIE_NAME: z.string().min(1).default("dl_session"),
   SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(60 * 60 * 8),
-  WEB_ORIGIN: z.string().url().default("http://localhost:5173"),
+  WEB_ORIGIN: z.string().url().default("http://localhost:3000"),
 });
 
 export interface ServerEnvironment {

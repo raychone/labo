@@ -8,32 +8,29 @@ Pornește baza de date, API-ul și frontend-ul:
 
 ```bash
 docker compose up -d
-pnpm --filter @dental-lab/api prisma:db:seed
-pnpm --filter @dental-lab/api prisma:db:seed:demo
-PORT=3010 pnpm --filter @dental-lab/api start
-pnpm --filter @dental-lab/web dev --host 127.0.0.1
+pnpm seed:demo
+pnpm dev
 ```
 
-Pentru butoanele “Acces rapid pentru demonstrație”, pornește explicit demo mode:
+După primul seed, pentru pornirile următoare rulează doar:
 
 ```bash
-PORT=3010 pnpm dev:api:demo
-pnpm dev:web:demo --host 127.0.0.1
+pnpm dev
 ```
 
-În development, frontend-ul afișează automat butoanele demo. API-ul trebuie pornit cu `DEMO_MODE=true` sau cu scriptul `pnpm dev:api:demo`, altfel autentificarea rapidă va fi refuzată de backend.
+În development, frontend-ul afișează automat butoanele demo. Scriptul `pnpm dev` pornește API-ul cu `DEMO_MODE=true` pe `3010` și web-ul pe `3000`.
 
 Deschide aplicația în browser:
 
 ```text
-http://127.0.0.1:5173
+http://127.0.0.1:3000
 ```
 
 Dacă vrei să refaci datasetul demo de la zero:
 
 ```bash
 pnpm --filter @dental-lab/api prisma:db:reset-demo
-pnpm --filter @dental-lab/api prisma:db:seed:demo
+pnpm seed:demo
 ```
 
 ## 2. Conturi demo
@@ -81,7 +78,7 @@ Spune clar:
 
 ## 4. Login și shell aplicație
 
-1. Intra pe `http://127.0.0.1:5173`.
+1. Intra pe `http://127.0.0.1:3000`.
 2. Folosește “Acces rapid pentru demonstrație” → “Intră ca manager”.
 3. Arată că după login utilizatorul intră în aplicație, nu într-o pagină publică.
 4. Arată navigația principală:

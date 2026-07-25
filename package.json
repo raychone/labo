@@ -10,12 +10,14 @@
   },
   "scripts": {
     "build": "pnpm -r --if-present build",
+    "dev": "pnpm -r --parallel --filter @dental-lab/api --filter @dental-lab/web dev",
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck",
     "dev:web": "pnpm --filter @dental-lab/web dev",
-    "dev:web:demo": "VITE_DEMO_MODE=true pnpm --filter @dental-lab/web dev",
-    "dev:api": "pnpm --filter @dental-lab/api start:dev",
-    "dev:api:demo": "DEMO_MODE=true pnpm --filter @dental-lab/api start:dev"
+    "dev:web:demo": "pnpm --filter @dental-lab/web dev",
+    "dev:api": "pnpm --filter @dental-lab/api dev",
+    "dev:api:demo": "pnpm --filter @dental-lab/api dev",
+    "seed:demo": "pnpm --filter @dental-lab/api seed:demo"
   },
   "devDependencies": {
     "typescript": "^5.9.2"

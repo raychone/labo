@@ -28,6 +28,8 @@ pnpm install
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm seed:demo
+pnpm dev
 pnpm dev:web
 pnpm dev:api
 ```
@@ -59,8 +61,9 @@ docker compose ps
 Start the API after PostgreSQL is healthy:
 
 ```bash
+pnpm seed:demo
 pnpm dev:api
-curl http://localhost:3000/health
+curl http://localhost:3010/health
 ```
 
 The health response includes `database: "ok"` when the API can connect to PostgreSQL.
@@ -171,7 +174,7 @@ The backend never returns `passwordHash`, raw session tokens, or temporary passw
 The user management UI is available at:
 
 ```text
-http://localhost:5173/users
+http://localhost:3000/users
 ```
 
 The page is mobile-first and uses the shared UI components for controls, table, drawer, modal, badges, and toasts.
@@ -245,7 +248,7 @@ Archived clinics and doctors remain in history but are excluded from option endp
 The clinic management UI is available at:
 
 ```text
-http://localhost:5173/clinics
+http://localhost:3000/clinics
 ```
 
 The page is mobile-first and uses shared UI components for filters, styled selectors, tables, drawer, modals, badges, forms, and toasts.
@@ -296,7 +299,7 @@ Audit events:
 The frontend route is:
 
 ```text
-http://localhost:5173/work-types
+http://localhost:3000/work-types
 ```
 
 Categories, clinic-specific pricing, discounts, VAT, invoices, quotations, price books, and price history tables are intentionally not implemented in WORKTYPES-001.
@@ -339,7 +342,7 @@ Audit events:
 The frontend route is:
 
 ```text
-http://localhost:5173/works
+http://localhost:3000/works
 ```
 
 Workflow execution, barcode, files, assignments, archive behavior, and a dedicated patient model are intentionally deferred to later tasks.
@@ -367,8 +370,8 @@ The frontend shows QR actions inside the work detail drawer and opens a printabl
 Browser access points:
 
 ```text
-http://localhost:5173/works
-http://localhost:5173/scan
+http://localhost:3000/works
+http://localhost:3000/scan
 ```
 
 ## Authenticated App Shell
@@ -398,7 +401,7 @@ Design tokens and base styles live in `packages/ui/src/styles.css` and are impor
 The internal style preview is available at:
 
 ```text
-http://localhost:5173/style-preview
+http://localhost:3000/style-preview
 ```
 
 The preview demonstrates semantic colors, operational status colors, typography, spacing, native control states, focus behavior, and elevation tokens. It is not the reusable component library; that is reserved for `UI-002`.
@@ -418,7 +421,7 @@ import {
 
 Component styles use the design tokens in `packages/ui/src/styles.css`. Components are generic, accessible where implemented, and contain no business logic.
 
-The internal preview at `http://localhost:5173/style-preview` now demonstrates the core UI components.
+The internal preview at `http://localhost:3000/style-preview` now demonstrates the core UI components.
 
 Current UI-002 limits:
 
@@ -508,7 +511,7 @@ The frontend builder route is `/work-types/:workTypeId/form`. The work type deta
 
 `WORKFORMS-002` adds completed work form submissions on WorkOrders. `POST /works` accepts `workFormSubmission` with `templateId`, `templateVersion` and `values`; the backend loads the active template, validates values, builds the immutable schema snapshot and saves WorkOrder plus submission in one transaction. `PATCH /works/:id` validates edits against the saved snapshot for the same WorkType. `GET /works/:id` returns `workForm` with the saved template name/version, ordered fields and values; the UI renders readable values instead of raw JSON.
 
-Demo/development login can expose `/auth/demo-login` only when `DEMO_MODE=true` and not in production. The frontend renders “Acces rapid pentru demonstrație” in Vite development or when `VITE_DEMO_MODE=true`; no demo password is sent to or bundled in React. Use `pnpm dev:api:demo` and `pnpm dev:web:demo` for presentation mode.
+Demo/development login can expose `/auth/demo-login` only when `DEMO_MODE=true` and not in production. The frontend renders “Acces rapid pentru demonstrație” in Vite development or when `VITE_DEMO_MODE=true`; no demo password is sent to or bundled in React. Use `pnpm seed:demo` once to prepare the demo data, then `pnpm dev` to run API and web in demo mode.
 
 ## Billing Workspace
 
@@ -569,8 +572,7 @@ Payments in the current MVP are manual evidence only. Users can record partial o
 `DEMO-SEED-001` adds a development-only realistic dataset. It keeps the base seed small and separate.
 
 ```bash
-pnpm --filter @dental-lab/api prisma:db:seed
-pnpm --filter @dental-lab/api prisma:db:seed:demo
+pnpm seed:demo
 pnpm --filter @dental-lab/api prisma:db:reset-demo
 ```
 

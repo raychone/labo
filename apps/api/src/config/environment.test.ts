@@ -19,7 +19,7 @@ describe("parseServerEnvironment", () => {
       port: 3001,
       sessionCookieName: "dl_session",
       sessionTtlSeconds: 28800,
-      webOrigin: "http://localhost:5173",
+      webOrigin: "http://localhost:3000",
     });
   });
 
@@ -37,7 +37,7 @@ describe("parseServerEnvironment", () => {
       DATABASE_URL: "postgresql://user:password@localhost:5432/database",
     });
 
-    expect(environment.port).toBe(3000);
+    expect(environment.port).toBe(3010);
   });
 
   it("rejects a missing database URL", () => {
