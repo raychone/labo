@@ -7,7 +7,7 @@ import { getWorkQrImageUrl, useRecordWorkQrPrint, useWorkQr } from "./works-api.
 import "./work-qr.css";
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Actiunea a esuat.";
+  return error instanceof Error ? error.message : "Acțiunea a eșuat.";
 }
 
 function formatDate(value: string): string {
@@ -39,15 +39,15 @@ export function WorkQrModal({
   return (
     <Modal
       className="work-qr-modal"
-      description="Codul QR contine doar un identificator opac si cere autentificare pentru rezolvare."
+      description="Codul QR conține doar un identificator opac și cere autentificare pentru rezolvare."
       footer={qr ? (
         <div className="work-qr__actions">
           <Button disabled={printMutation.isPending} isLoading={printMutation.isPending} onClick={() => void handlePrint()}>
-            Printeaza eticheta
+            Printează eticheta
           </Button>
           <Link className="dl-button dl-button--outline dl-button--medium" to="/scan">
             <span className="dl-button__content">
-              <span>Scaneaza lucrare</span>
+              <span>Scanează lucrare</span>
             </span>
           </Link>
         </div>
@@ -56,8 +56,8 @@ export function WorkQrModal({
       onOpenChange={onOpenChange}
       title="QR lucrare"
     >
-      {qrQuery.isLoading ? <LoadingState text="Incarc QR" /> : null}
-      {qrQuery.isError ? <ErrorState title="QR-ul nu a fost incarcat" description={getErrorMessage(qrQuery.error)} /> : null}
+      {qrQuery.isLoading ? <LoadingState text="Se încarcă QR-ul" /> : null}
+      {qrQuery.isError ? <ErrorState title="QR-ul nu a fost încărcat" description={getErrorMessage(qrQuery.error)} retryAction={<Button onClick={() => void qrQuery.refetch()} variant="outline">Reîncearcă</Button>} /> : null}
       {qr ? <WorkLabel qr={qr} workId={workId ?? qr.workId} /> : null}
     </Modal>
   );
@@ -71,7 +71,7 @@ export function WorkLabel({ qr, workId }: { readonly qr: WorkQrView; readonly wo
           <span className="work-label__eyebrow">Dental Lab</span>
           <h3>{qr.workCode}</h3>
         </div>
-        <StatusBadge label="Inregistrata" variant="registered" />
+        <StatusBadge label="Înregistrată" variant="registered" />
       </div>
 
       <div className="work-label__qr">

@@ -29,17 +29,17 @@ export function BillingPrintPage(): ReactNode {
   });
 
   if (!documentId) {
-    return <main className="billing-print-page"><ErrorState title="Document invalid" description="Lipseste identificatorul documentului." /></main>;
+    return <main className="billing-print-page"><ErrorState title="Document invalid" description="Lipsește identificatorul documentului." /></main>;
   }
 
   if (documentQuery.isLoading || attachmentQuery.isLoading) {
-    return <main className="billing-print-page"><LoadingState text="Incarc documentul pentru print" /></main>;
+    return <main className="billing-print-page"><LoadingState text="Se încarcă documentul pentru print" /></main>;
   }
 
   if (documentQuery.error || attachmentQuery.error || !documentQuery.data || !attachmentQuery.data) {
     return (
       <main className="billing-print-page">
-        <ErrorState title="Documentul nu poate fi incarcat" description={getErrorMessage(documentQuery.error ?? attachmentQuery.error)} />
+        <ErrorState title="Documentul nu poate fi încărcat" description={getErrorMessage(documentQuery.error ?? attachmentQuery.error)} />
       </main>
     );
   }
@@ -47,8 +47,8 @@ export function BillingPrintPage(): ReactNode {
   return (
     <main className="billing-print-page">
       <div className="billing-print-page__actions">
-        <Button onClick={() => window.print()}>Printeaza / Salveaza PDF</Button>
-        <Link className="billing-print-page__back-link" to="/billing">Inapoi la facturare</Link>
+        <Button onClick={() => window.print()}>Printează / Salvează PDF</Button>
+        <Link className="billing-print-page__back-link" to="/billing">Înapoi la facturare</Link>
       </div>
       <Tabs
         tabs={[
@@ -66,7 +66,7 @@ function PrintableDocumentView({ document }: { readonly document: PrintableBilli
       <PrintHeader complianceNotice={document.complianceNotice} customer={document.customer} generatedAt={document.generatedAt} supplier={document.supplier} title={`${document.documentTitle} ${document.formattedNumber ?? "Draft"}`} />
       <dl className="billing-print__meta">
         <div><dt>Data emiterii</dt><dd>{formatDate(document.issueDate)}</dd></div>
-        <div><dt>Scadenta</dt><dd>{document.dueDate ? formatDate(document.dueDate) : "-"}</dd></div>
+        <div><dt>Scadență</dt><dd>{document.dueDate ? formatDate(document.dueDate) : "-"}</dd></div>
         <div><dt>Status</dt><dd>{document.status}</dd></div>
       </dl>
       <LinesTable currency={document.currency} lines={document.lines} />
@@ -132,7 +132,7 @@ function LinesTable({ currency, lines }: { readonly currency: string; readonly l
       <thead>
         <tr>
           <th>Cod lucrare</th>
-          <th>Data intrarii</th>
+          <th>Data intrării</th>
           <th>Pacient</th>
           <th>Medic</th>
           <th>Tip lucrare</th>
@@ -160,8 +160,8 @@ function LinesTable({ currency, lines }: { readonly currency: string; readonly l
 function Totals({ balanceMinor, currency, paidMinor, totalMinor }: { readonly balanceMinor: number; readonly currency: string; readonly paidMinor: number; readonly totalMinor: number }): ReactNode {
   return (
     <dl className="billing-print__totals">
-      <div><dt>Total factura</dt><dd>{formatMoneyMinor(totalMinor, currency, "ro-RO")}</dd></div>
-      <div><dt>Incasat manual</dt><dd>{formatMoneyMinor(paidMinor, currency, "ro-RO")}</dd></div>
+      <div><dt>Total factură</dt><dd>{formatMoneyMinor(totalMinor, currency, "ro-RO")}</dd></div>
+      <div><dt>Încasat manual</dt><dd>{formatMoneyMinor(paidMinor, currency, "ro-RO")}</dd></div>
       <div><dt>Sold restant</dt><dd>{formatMoneyMinor(balanceMinor, currency, "ro-RO")}</dd></div>
     </dl>
   );

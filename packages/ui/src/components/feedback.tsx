@@ -7,7 +7,7 @@ export interface LoadingStateProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 export const LoadingState = forwardRef<HTMLDivElement, LoadingStateProps>(function LoadingState(
-  { className, size = "medium", text = "Loading", ...props },
+  { className, size = "medium", text = "Se încarcă", ...props },
   ref,
 ) {
   return (

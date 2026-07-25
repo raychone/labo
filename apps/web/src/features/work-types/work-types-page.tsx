@@ -128,7 +128,7 @@ export function WorkTypesPage(): ReactNode {
     { header: "Denumire", id: "name", isSortable: true, renderCell: (workType) => workType.name },
     {
       align: "right",
-      header: "Pret baza",
+      header: "Preț bază",
       id: "basePriceMinor",
       isSortable: true,
       renderCell: (workType) => formatMoneyMinor(workType.basePriceMinor, currency, locale),
@@ -138,7 +138,7 @@ export function WorkTypesPage(): ReactNode {
   ], [currency, locale]);
 
   if (permissionsQuery.isLoading || settingsQuery.isLoading) {
-    return <PageState><LoadingState text="Incarc catalogul" /></PageState>;
+    return <PageState><LoadingState text="Se încarcă catalogul" /></PageState>;
   }
 
   if (!canRead) {
@@ -150,17 +150,17 @@ export function WorkTypesPage(): ReactNode {
       <section className="dl-container work-types-page__layout" aria-labelledby="work-types-title">
         <header className="work-types-page__header">
           <div>
-            <h1 id="work-types-title">Tipuri de lucrari</h1>
-            <p>Catalogul intern de lucrari dentare si pretul standard de baza al laboratorului.</p>
+            <h1 id="work-types-title">Tipuri de lucrări</h1>
+            <p>Catalogul intern de lucrări dentare și prețul standard de bază al laboratorului.</p>
           </div>
-          <Button disabled={!canCreate} onClick={() => setIsCreateOpen(true)}>Adauga tip de lucrare</Button>
+          <Button disabled={!canCreate} onClick={() => setIsCreateOpen(true)}>Adaugă tip de lucrare</Button>
         </header>
-        {!canUpdate ? <p className="work-types-page__readonly">Ai acces de citire, dar nu poti modifica preturi sau tipuri de lucrari.</p> : null}
+        {!canUpdate ? <p className="work-types-page__readonly">Ai acces de citire, dar nu poți modifica prețuri sau tipuri de lucrări.</p> : null}
 
         <Card>
           <CardHeader>
-            <CardTitle>Selector pentru lucrari viitoare</CardTitle>
-            <CardDescription>Optiunile includ doar tipuri active.</CardDescription>
+            <CardTitle>Selector pentru lucrări viitoare</CardTitle>
+            <CardDescription>Opțiunile includ doar tipuri active.</CardDescription>
           </CardHeader>
           <CardContent>
             <Select
@@ -184,7 +184,7 @@ export function WorkTypesPage(): ReactNode {
           <CardContent className="work-types-page__table-card">
             <div className="work-types-page__filters">
               <TextInput
-                label="Cautare"
+                label="Căutare"
                 onChange={(event) => setParams((current) => ({ ...current, page: 1, search: event.target.value || undefined }))}
                 placeholder="Cod, denumire, descriere"
                 type="search"
@@ -199,7 +199,7 @@ export function WorkTypesPage(): ReactNode {
             </div>
             <DataTable
               columns={columns}
-              emptyMessage="Nu exista tipuri de lucrari pentru filtrele curente."
+              emptyMessage="Nu există tipuri de lucrări pentru filtrele curente."
               error={workTypesQuery.isError ? getErrorMessage(workTypesQuery.error) : undefined}
               getRowKey={(workType) => workType.id}
               isLoading={workTypesQuery.isLoading}
@@ -309,7 +309,7 @@ function WorkTypeCreateModal({
     <>
       <UnsavedChangesPrompt when={isOpen && form.formState.isDirty && !isSaving} />
       <Modal
-        footer={<WorkTypeFormActions canReset={form.formState.isDirty} formId="work-type-create-form" isSaving={isSaving} onReset={() => form.reset(defaultWorkTypeFormValues)} submitLabel="Creeaza" />}
+        footer={<WorkTypeFormActions canReset={form.formState.isDirty} formId="work-type-create-form" isSaving={isSaving} onReset={() => form.reset(defaultWorkTypeFormValues)} submitLabel="Creează" />}
         isOpen={isOpen}
         onOpenChange={closeGuard.handleOpenChange}
         title="Tip de lucrare nou"
@@ -379,21 +379,21 @@ function WorkTypeDetailDrawer({
     <>
       <UnsavedChangesPrompt when={isOpen && form.formState.isDirty && !isSaving} />
       <Drawer isOpen={isOpen} onOpenChange={closeGuard.handleOpenChange} title={workType ? `${workType.code} · ${workType.name}` : "Detalii tip lucrare"}>
-        {isLoading ? <LoadingState text="Incarc tipul de lucrare" /> : null}
-        {error ? <ErrorState title="Tipul nu poate fi incarcat" description={error} /> : null}
+        {isLoading ? <LoadingState text="Se încarcă tipul de lucrare" /> : null}
+        {error ? <ErrorState title="Tipul nu poate fi încărcat" description={error} /> : null}
         {workType ? (
           <div className="work-types-page__drawer">
             <div className="work-types-page__drawer-toolbar">
               <ActiveBadge isActive={workType.isActive} />
               {canReadForms ? (
                 <Link className="dl-button dl-button--outline dl-button--medium" to={`/work-types/${workType.id}/form`}>
-                  <span className="dl-button__content"><span>Configureaza formularul</span></span>
+                  <span className="dl-button__content"><span>Configurează formularul</span></span>
                 </Link>
               ) : null}
-              {canUpdate && workType.isActive ? <Button disabled={isSaving} onClick={() => setConfirmAction("archive")} variant="outline">Arhiveaza</Button> : null}
-              {canUpdate && !workType.isActive ? <Button disabled={isSaving} onClick={() => setConfirmAction("restore")} variant="outline">Reactiveaza</Button> : null}
+              {canUpdate && workType.isActive ? <Button disabled={isSaving} onClick={() => setConfirmAction("archive")} variant="outline">Arhivează</Button> : null}
+              {canUpdate && !workType.isActive ? <Button disabled={isSaving} onClick={() => setConfirmAction("restore")} variant="outline">Reactivează</Button> : null}
             </div>
-            {!workType.isActive ? <p className="work-types-page__readonly">Tipul arhivat este read-only pana la reactivare.</p> : null}
+            {!workType.isActive ? <p className="work-types-page__readonly">Tipul arhivat este read-only până la reactivare.</p> : null}
             <WorkTypeForm
               currency={currency}
               form={form}
@@ -410,7 +410,7 @@ function WorkTypeDetailDrawer({
                 formId="work-type-detail-form"
                 isSaving={isSaving}
                 onReset={() => form.reset(toWorkTypeFormValues(workType))}
-                submitLabel="Salveaza"
+                submitLabel="Salvează"
               />
             ) : null}
           </div>
@@ -418,8 +418,8 @@ function WorkTypeDetailDrawer({
       </Drawer>
       {workType ? (
         <ConfirmActionModal
-          confirmLabel={confirmAction === "archive" ? "Arhiveaza" : "Reactiveaza"}
-          description={confirmAction === "archive" ? "Tipul arhivat nu va mai aparea in selectoarele pentru lucrari noi." : "Tipul va redeveni disponibil pentru lucrari noi."}
+          confirmLabel={confirmAction === "archive" ? "Arhivează" : "Reactivează"}
+          description={confirmAction === "archive" ? "Tipul arhivat nu va mai apărea în selectoarele pentru lucrări noi." : "Tipul va redeveni disponibil pentru lucrări noi."}
           isLoading={isSaving}
           isOpen={confirmAction !== null}
           onCancel={() => setConfirmAction(null)}
@@ -431,7 +431,7 @@ function WorkTypeDetailDrawer({
             }
             setConfirmAction(null);
           }}
-          title={confirmAction === "archive" ? "Arhiveaza tipul de lucrare" : "Reactiveaza tipul de lucrare"}
+          title={confirmAction === "archive" ? "Arhivează tipul de lucrare" : "Reactivează tipul de lucrare"}
           variant={confirmAction === "archive" ? "danger" : "primary"}
         />
       ) : null}

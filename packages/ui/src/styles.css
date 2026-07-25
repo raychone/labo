@@ -347,8 +347,8 @@ select:hover:not(:disabled) {
 }
 
 textarea {
-  min-height: 7rem;
-  padding-block: var(--dl-space-3);
+  min-height: 5.5rem;
+  padding-block: var(--dl-space-2);
   resize: vertical;
 }
 
@@ -566,7 +566,7 @@ th {
 .dl-field,
 .dl-choice-field {
   display: grid;
-  gap: var(--dl-space-2);
+  gap: var(--dl-space-1);
 }
 
 .dl-field__label {
@@ -604,7 +604,7 @@ th {
 
 .dl-form {
   display: grid;
-  gap: var(--dl-space-5);
+  gap: var(--dl-space-4);
 }
 
 .dl-form-section {
@@ -612,10 +612,10 @@ th {
   border: var(--dl-border-width) solid var(--dl-color-border);
   border-radius: var(--dl-radius-md);
   display: grid;
-  gap: var(--dl-space-4);
+  gap: var(--dl-space-3);
   margin: 0;
   min-inline-size: 0;
-  padding: var(--dl-space-4);
+  padding: var(--dl-space-3);
 }
 
 .dl-form-section__legend {
@@ -632,12 +632,12 @@ th {
 
 .dl-form-section__content {
   display: grid;
-  gap: var(--dl-space-4);
+  gap: var(--dl-space-3);
 }
 
 .dl-form-grid {
   display: grid;
-  gap: var(--dl-space-4);
+  gap: var(--dl-space-3);
   grid-template-columns: 1fr;
 }
 
@@ -941,7 +941,7 @@ th {
   display: flex;
   inset: 0;
   justify-content: center;
-  padding: var(--dl-space-4);
+  padding: max(var(--dl-space-3), env(safe-area-inset-top)) max(var(--dl-space-3), env(safe-area-inset-right)) max(var(--dl-space-3), env(safe-area-inset-bottom)) max(var(--dl-space-3), env(safe-area-inset-left));
   position: fixed;
   z-index: var(--dl-z-modal);
 }
@@ -952,14 +952,35 @@ th {
   border: var(--dl-border-width) solid var(--dl-color-border);
   box-shadow: var(--dl-shadow-md);
   display: grid;
-  max-height: min(44rem, calc(100vh - var(--dl-space-8)));
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  max-height: calc(100dvh - 2rem);
   overflow: hidden;
 }
 
 .dl-modal {
   border-radius: var(--dl-radius-lg);
-  max-width: 36rem;
-  width: min(100%, 36rem);
+  width: min(100%, var(--dl-modal-width, 36rem));
+}
+
+.dl-modal--sm {
+  --dl-modal-width: 28rem;
+}
+
+.dl-modal--md {
+  --dl-modal-width: 36rem;
+}
+
+.dl-modal--lg {
+  --dl-modal-width: 48rem;
+}
+
+.dl-modal--xl {
+  --dl-modal-width: 64rem;
+}
+
+.dl-modal--full {
+  --dl-modal-width: calc(100vw - 2rem);
+  max-height: calc(100dvh - 1rem);
 }
 
 .dl-drawer {
@@ -978,7 +999,7 @@ th {
   border-radius: var(--dl-radius-lg) var(--dl-radius-lg) 0 0;
   bottom: 0;
   left: 0;
-  max-height: 80vh;
+  max-height: 80dvh;
   right: 0;
 }
 
@@ -989,7 +1010,7 @@ th {
   display: flex;
   gap: var(--dl-space-4);
   justify-content: space-between;
-  padding: var(--dl-space-4);
+  padding: var(--dl-space-3);
 }
 
 .dl-overlay__footer {
@@ -999,8 +1020,11 @@ th {
 }
 
 .dl-overlay__content {
-  overflow: auto;
-  padding: var(--dl-space-4);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--dl-space-3);
+  -webkit-overflow-scrolling: touch;
 }
 
 .dl-overlay__close {
@@ -1010,6 +1034,18 @@ th {
   color: var(--dl-color-text-secondary);
   min-height: var(--dl-size-touch-target);
   min-width: var(--dl-size-touch-target);
+}
+
+@media (max-width: 47.99rem) {
+  .dl-overlay {
+    align-items: stretch;
+    padding: max(var(--dl-space-2), env(safe-area-inset-top)) max(var(--dl-space-2), env(safe-area-inset-right)) max(var(--dl-space-2), env(safe-area-inset-bottom)) max(var(--dl-space-2), env(safe-area-inset-left));
+  }
+
+  .dl-modal {
+    max-height: calc(100dvh - var(--dl-space-4));
+    width: 100%;
+  }
 }
 
 .dl-toast-region {

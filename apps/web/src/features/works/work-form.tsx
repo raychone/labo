@@ -41,7 +41,7 @@ const workFieldLabels: Record<keyof WorkFormValues, string> = {
   clinicId: "Cabinet",
   clinicalNotes: "Note clinice",
   doctorId: "Medic",
-  externalReference: "Referinta externa",
+  externalReference: "Referință externă",
   internalNotes: "Note interne",
   patientName: "Pacient",
   patientReference: "Identificator pacient",
@@ -101,7 +101,7 @@ export function WorkForm({
     <FormLayout className="works-page__form" id={formId} onSubmit={(event) => void form.handleSubmit(onSubmit)(event)}>
       <FormErrorSummary errors={summaryItems} ref={summaryRef} />
 
-      <FormSection title="Clinica si medic" description="Alege sursa lucrarii. Medicul este resetat daca schimbi clinica.">
+      <FormSection title="Clinică și medic" description="Alege sursa lucrării. Medicul este resetat dacă schimbi clinica.">
         <FormGrid>
           <Select
             disabled={isDisabled}
@@ -119,7 +119,7 @@ export function WorkForm({
           <Select
             disabled={isDisabled || form.watch("clinicId") === ""}
             error={form.formState.errors.doctorId?.message}
-            hint={form.watch("clinicId") === "" ? "Alege mai intai cabinetul." : doctorOptions.length === 0 ? "Nu exista medici activi pentru clinica selectata." : undefined}
+            hint={form.watch("clinicId") === "" ? "Alege mai întâi cabinetul." : doctorOptions.length === 0 ? "Nu există medici activi pentru clinica selectată." : undefined}
             id="doctorId"
             label="Medic"
             options={doctorOptions.map((doctor) => ({ label: doctor.displayName, value: doctor.id }))}
@@ -130,7 +130,7 @@ export function WorkForm({
         </FormGrid>
       </FormSection>
 
-      <FormSection title="Pacient" description="Foloseste identificatorul minim necesar pentru receptie.">
+      <FormSection title="Pacient" description="Folosește identificatorul minim necesar pentru recepție.">
         <FormGrid>
           <TextInput disabled={isDisabled} error={form.formState.errors.patientName?.message} id="patientName" label="Pacient" required {...form.register("patientName")} />
           <TextInput
@@ -143,7 +143,7 @@ export function WorkForm({
         </FormGrid>
       </FormSection>
 
-      <FormSection title="Lucrare" description="Selecteaza tipul si volumul. Pretul este doar preview pentru utilizatorii autorizati.">
+      <FormSection title="Lucrare" description="Selectează tipul și volumul. Prețul este doar preview pentru utilizatorii autorizați.">
         <FormGrid>
           <Select
             disabled={isDisabled}
@@ -151,7 +151,7 @@ export function WorkForm({
             id="workTypeId"
             label="Tip lucrare"
             options={workTypeOptions.map((workType) => ({ label: `${workType.code} · ${workType.name}`, value: workType.id }))}
-            placeholder="Alege tipul lucrarii"
+            placeholder="Alege tipul lucrării"
             required
             {...form.register("workTypeId")}
           />
@@ -168,7 +168,7 @@ export function WorkForm({
         </FormGrid>
       </FormSection>
 
-      <FormSection title="Termen si prioritate" description="Termenul este salvat ca data calendaristica, fara conversie de fus orar in frontend.">
+      <FormSection title="Termen și prioritate" description="Termenul este salvat ca dată calendaristică, fără conversie de fus orar în frontend.">
         <FormGrid>
           <DateInput
             disabled={isDisabled}
@@ -182,9 +182,9 @@ export function WorkForm({
         </FormGrid>
       </FormSection>
 
-      <FormSection title="Observatii" description="Notele interne raman vizibile doar personalului autorizat.">
+      <FormSection title="Observații" description="Notele interne rămân vizibile doar personalului autorizat.">
         <FormGrid>
-          <TextInput disabled={isDisabled} error={form.formState.errors.externalReference?.message} id="externalReference" label="Referinta externa" {...form.register("externalReference")} />
+          <TextInput disabled={isDisabled} error={form.formState.errors.externalReference?.message} id="externalReference" label="Referință externă" {...form.register("externalReference")} />
           <FormGridFull>
             <Textarea disabled={isDisabled} error={form.formState.errors.clinicalNotes?.message} id="clinicalNotes" label="Note clinice" rows={4} {...form.register("clinicalNotes")} />
           </FormGridFull>
@@ -217,7 +217,7 @@ export function WorkFormActions({
       formId={formId}
       isSubmitting={isSaving}
       onReset={onReset}
-      submitDisabled={submitLabel === "Salveaza" && !canReset}
+      submitDisabled={submitLabel === "Salvează" && !canReset}
       submitLabel={submitLabel}
     />
   );

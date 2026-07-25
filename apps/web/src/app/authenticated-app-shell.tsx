@@ -34,6 +34,7 @@ export function AuthenticatedAppShell(): ReactNode {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const previousUserIdRef = useRef<string | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const canReadSettings = auth.permissionKeys.includes("settings.read");
@@ -41,7 +42,7 @@ export function AuthenticatedAppShell(): ReactNode {
   const laboratoryName = settingsQuery.data?.laboratoryName ?? fallbackLaboratoryName;
   const brandColor = getSafeBrandColor(settingsQuery.data?.primaryColor);
   const currentRoute = getRouteByPath(location.pathname);
-  const pageTitle = currentRoute?.label ?? (location.pathname === "/forbidden" ? "Acces restrictionat" : "Pagina");
+  const pageTitle = currentRoute?.label ?? (location.pathname === "/forbidden" ? "Acces restricționat" : "Pagina");
   const routes = useMemo(() => getNavigationRoutes(auth.permissionKeys), [auth.permissionKeys]);
   usePageTitle(pageTitle, laboratoryName);
   const logoutMutation = useMutation({
@@ -51,39 +52,49 @@ export function AuthenticatedAppShell(): ReactNode {
     },
     onError: (error) => {
       if (isUnauthorizedError(error)) {
+        toast.clearToasts();
         queryClient.clear();
-        navigate("/login", { replace: true, state: { message: "Sesiunea a expirat. Autentifica-te din nou." } });
+        navigate("/login", { replace: true, state: { message: "Sesiunea a expirat. Autentifică-te din nou." } });
         return;
       }
 
       toast.showToast({
-        message: error instanceof Error ? error.message : "Logout-ul a esuat.",
-        title: "Logout esuat",
+        message: error instanceof Error ? error.message : "Deconectarea a eșuat.",
+        title: "Deconectare eșuată",
         variant: "error",
       });
     },
     onSuccess: () => {
+      toast.clearToasts();
       queryClient.clear();
       navigate("/login", { replace: true });
-      toast.showToast({ message: "Ai fost delogat.", variant: "success" });
     },
   });
+
+  useEffect(() => {
+    const currentUserId = auth.user?.id ?? null;
+    if (previousUserIdRef.current !== null && previousUserIdRef.current !== currentUserId) {
+      toast.clearToasts();
+    }
+    previousUserIdRef.current = currentUserId;
+  }, [auth.user?.id, toast]);
 
   useEffect(() => {
     setIsMobileNavOpen(false);
   }, [location.pathname]);
 
   useEffect(() => addUnauthorizedListener(() => {
+    toast.clearToasts();
     queryClient.clear();
     navigate(`/login?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`, {
       replace: true,
-      state: { message: "Sesiunea a expirat. Autentifica-te din nou." },
+      state: { message: "Sesiunea a expirat. Autentifică-te din nou." },
     });
-  }), [location.pathname, location.search, navigate, queryClient]);
+  }), [location.pathname, location.search, navigate, queryClient, toast]);
 
   return (
     <div className="app-shell" style={{ "--app-brand-primary": brandColor } as React.CSSProperties}>
-      <a className="app-shell__skip-link" href="#main-content">Sari la continut</a>
+      <a className="app-shell__skip-link" href="#main-content">Sari la conținut</a>
       <AppSidebar
         currentPath={location.pathname}
         isLoggingOut={logoutMutation.isPending}
@@ -97,7 +108,7 @@ export function AuthenticatedAppShell(): ReactNode {
         <header className="app-shell__topbar">
           <button
             aria-expanded={isMobileNavOpen}
-            aria-label="Deschide navigatia"
+            aria-label="Deschide navigația"
             className="app-shell__menu-button"
             onClick={() => setIsMobileNavOpen(true)}
             ref={menuButtonRef}
@@ -114,10 +125,10 @@ export function AuthenticatedAppShell(): ReactNode {
         <AppHeader pageTitle={pageTitle} pathname={location.pathname} />
         {settingsQuery.isError && canReadSettings ? (
           <div className="app-shell__notice">
-            <ErrorState title="Branding indisponibil" description="Setarile laboratorului nu au putut fi incarcate. Se foloseste fallback-ul." />
+            <ErrorState title="Branding indisponibil" description="Setările laboratorului nu au putut fi încărcate. Se folosește fallback-ul." />
           </div>
         ) : null}
-        {settingsQuery.isLoading && canReadSettings ? <div className="app-shell__notice"><LoadingState size="small" text="Incarc branding" /></div> : null}
+        {settingsQuery.isLoading && canReadSettings ? <div className="app-shell__notice"><LoadingState size="small" text="Se încarcă brandingul" /></div> : null}
         <main className="app-shell__main" id="main-content" tabIndex={-1}>
           <ShellErrorBoundary>
             <Outlet />
@@ -128,14 +139,14 @@ export function AuthenticatedAppShell(): ReactNode {
         isOpen={isMobileNavOpen}
         onOpenChange={setIsMobileNavOpen}
         position="right"
-        title="Navigatie"
+        title="Navigație"
       >
         <div className="app-shell__mobile-drawer">
           <BrandBlock laboratoryName={laboratoryName} />
           <NavigationList currentPath={location.pathname} routes={routes} />
           <div className="app-shell__drawer-user">
             <UserSummary email={auth.user?.email ?? ""} name={auth.user?.displayName ?? ""} />
-            <Button fullWidth isLoading={logoutMutation.isPending} onClick={() => logoutMutation.mutate()} variant="secondary">Logout</Button>
+            <Button fullWidth isLoading={logoutMutation.isPending} onClick={() => logoutMutation.mutate()} variant="secondary">Deconectare</Button>
           </div>
         </div>
       </Drawer>
@@ -166,7 +177,7 @@ function AppSidebar({
       <NavigationList currentPath={currentPath} routes={routes} />
       <div className="app-shell__sidebar-footer">
         <UserSummary email={userEmail} name={userName} />
-        <Button fullWidth isLoading={isLoggingOut} onClick={onLogout} variant="secondary">Logout</Button>
+        <Button fullWidth isLoading={isLoggingOut} onClick={onLogout} variant="secondary">Deconectare</Button>
       </div>
     </aside>
   );
@@ -178,7 +189,7 @@ function BrandBlock({ laboratoryName }: { readonly laboratoryName: string }): Re
       <span className="app-brand-mark" aria-hidden="true">{getBrandInitials(laboratoryName)}</span>
       <span>
         <strong>{laboratoryName}</strong>
-        <small>Dental Lab</small>
+        <small>Laborator dentar</small>
       </span>
     </Link>
   );
@@ -194,7 +205,7 @@ function NavigationList({
   let currentGroup = "";
 
   return (
-    <nav aria-label="Navigatie principala" className="app-shell__nav">
+    <nav aria-label="Navigație principală" className="app-shell__nav">
       {routes.map((route) => {
         const shouldRenderGroup = route.navigationGroup !== undefined && route.navigationGroup !== currentGroup;
         currentGroup = route.navigationGroup ?? currentGroup;
@@ -250,7 +261,7 @@ function Breadcrumbs({ pageTitle, pathname }: { readonly pageTitle: string; read
     <nav aria-label="Breadcrumb" className="app-shell__breadcrumbs">
       <ol>
         <li>
-          {isDashboard ? <span>Dashboard</span> : <Link to="/dashboard">Dashboard</Link>}
+          {isDashboard ? <span>Panou principal</span> : <Link to="/dashboard">Panou principal</Link>}
         </li>
         {!isDashboard ? <li><span>{pageTitle}</span></li> : null}
       </ol>

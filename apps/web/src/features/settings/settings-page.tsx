@@ -8,7 +8,6 @@ import {
   FormLayout,
   FormSection,
   LoadingState,
-  Select,
   TextInput,
   Textarea,
   useToast,
@@ -20,13 +19,7 @@ import { useForm } from "react-hook-form";
 
 import { fetchPermissions } from "../auth/auth-api.js";
 import { hasPermission } from "../users/users-api.js";
-import {
-  currencyOptions,
-  localeOptions,
-  timezoneOptions,
-  useSettings,
-  useUpdateSettings,
-} from "./settings-api.js";
+import { useSettings, useUpdateSettings } from "./settings-api.js";
 import { settingsFormSchema, type SettingsFormValues } from "./settings-page.schema.js";
 import { applyApiErrorsToForm, getErrorMessage, getFormErrorSummaryItems, UnsavedChangesPrompt, useBeforeUnloadPrompt, useErrorSummaryFocus } from "../../lib/form-utils.js";
 import "./settings-page.css";
@@ -56,22 +49,22 @@ function toFormValues(settings: LaboratorySettings): SettingsFormValues {
 
 const settingsFieldLabels: Record<keyof SettingsFormValues, string> = {
   addressLine1: "Adresa",
-  addressLine2: "Adresa secundara",
-  city: "Oras",
-  companyRegistrationNumber: "Numar registru/comercial",
-  countryCode: "Tara",
-  countyOrRegion: "Judet / regiune",
+  addressLine2: "Adresă secundară",
+  city: "Oraș",
+  companyRegistrationNumber: "Număr registru/comerț",
+  countryCode: "Țară",
+  countyOrRegion: "Județ",
   currency: "Moneda",
   documentFooter: "Footer documente",
   email: "Email",
   laboratoryName: "Nume laborator",
-  legalName: "Denumire legala",
-  locale: "Locale",
+  legalName: "Denumire legală",
+  locale: "Limbă și format",
   phone: "Telefon",
-  postalCode: "Cod postal",
-  primaryColor: "Culoare principala",
+  postalCode: "Cod poștal",
+  primaryColor: "Culoare principală",
   taxId: "Cod fiscal",
-  timezone: "Timezone",
+  timezone: "Fus orar",
   website: "Website",
 };
 
@@ -107,7 +100,7 @@ export function SettingsPage(): ReactNode {
     return (
       <main className="settings-page">
         <section className="dl-container">
-          <LoadingState text="Incarc setarile laboratorului" />
+          <LoadingState text="Se încarcă setările laboratorului" />
         </section>
       </main>
     );
@@ -127,7 +120,7 @@ export function SettingsPage(): ReactNode {
     return (
       <main className="settings-page">
         <section className="dl-container">
-          <ErrorState title="Setarile nu pot fi incarcate" description={getErrorMessage(settingsQuery.error)} />
+          <ErrorState title="Setările nu pot fi încărcate" description={getErrorMessage(settingsQuery.error)} />
         </section>
       </main>
     );
@@ -135,14 +128,20 @@ export function SettingsPage(): ReactNode {
 
   function submit(values: SettingsFormValues): void {
     form.clearErrors("root");
-    updateMutation.mutate(values, {
+    updateMutation.mutate({
+      ...values,
+      countryCode: "RO",
+      currency: "RON",
+      locale: "ro-RO",
+      timezone: "Europe/Bucharest",
+    }, {
       onError: (error) => {
         applyApiErrorsToForm(form, error);
-        toast.showToast({ message: getErrorMessage(error), title: "Setarile nu au fost salvate", variant: "error" });
+        toast.showToast({ message: getErrorMessage(error), title: "Setările nu au fost salvate", variant: "error" });
       },
       onSuccess: (settings) => {
         form.reset(toFormValues(settings));
-        toast.showToast({ durationMs: 3500, message: "Setarile au fost salvate.", variant: "success" });
+        toast.showToast({ message: "Setările au fost salvate.", variant: "success" });
       },
     });
   }
@@ -152,11 +151,11 @@ export function SettingsPage(): ReactNode {
       <section className="dl-container settings-page__layout" aria-labelledby="settings-title">
         <header className="settings-page__header">
           <div>
-            <h1 id="settings-title">Setari laborator</h1>
-            <p>Profil global, date fiscale, contact, localizare si branding minimal.</p>
+            <h1 id="settings-title">Setări laborator</h1>
+            <p>Profilul laboratorului, date de contact, adresă și branding.</p>
           </div>
           {!canUpdate ? (
-            <p className="settings-page__readonly">Ai acces de citire, dar nu poti modifica aceste setari.</p>
+            <p className="settings-page__readonly">Ai acces de citire, dar nu poți modifica aceste setări.</p>
           ) : null}
         </header>
 
@@ -164,11 +163,11 @@ export function SettingsPage(): ReactNode {
 
         <FormLayout className="settings-page__form" onSubmit={(event) => void form.handleSubmit(submit)(event)}>
           <FormErrorSummary errors={summaryItems} ref={summaryRef} />
-          <FormSection title="Profil laborator" description="Date folosite in anteturi si documente viitoare.">
+          <FormSection title="Profil laborator" description="Date afișate în aplicație și pe documente.">
             <FormGrid>
               <TextInput error={form.formState.errors.laboratoryName?.message} id="laboratoryName" label="Nume laborator" required {...form.register("laboratoryName")} />
-              <TextInput error={form.formState.errors.legalName?.message} id="legalName" label="Denumire legala" {...form.register("legalName")} />
-              <TextInput error={form.formState.errors.companyRegistrationNumber?.message} id="companyRegistrationNumber" label="Numar registru/comercial" {...form.register("companyRegistrationNumber")} />
+              <TextInput error={form.formState.errors.legalName?.message} id="legalName" label="Denumire legală" {...form.register("legalName")} />
+              <TextInput error={form.formState.errors.companyRegistrationNumber?.message} id="companyRegistrationNumber" label="Număr registru/comerț" {...form.register("companyRegistrationNumber")} />
               <TextInput error={form.formState.errors.taxId?.message} id="taxId" label="Cod fiscal" {...form.register("taxId")} />
             </FormGrid>
           </FormSection>
@@ -184,25 +183,25 @@ export function SettingsPage(): ReactNode {
           <FormSection title="Adresa" description="Adresa principala a laboratorului.">
             <FormGrid>
               <TextInput error={form.formState.errors.addressLine1?.message} id="addressLine1" label="Adresa" {...form.register("addressLine1")} />
-              <TextInput error={form.formState.errors.addressLine2?.message} id="addressLine2" label="Adresa secundara" {...form.register("addressLine2")} />
-              <TextInput error={form.formState.errors.city?.message} id="city" label="Oras" {...form.register("city")} />
-              <TextInput error={form.formState.errors.countyOrRegion?.message} id="countyOrRegion" label="Judet / regiune" {...form.register("countyOrRegion")} />
-              <TextInput error={form.formState.errors.postalCode?.message} id="postalCode" label="Cod postal" {...form.register("postalCode")} />
-              <TextInput error={form.formState.errors.countryCode?.message} id="countryCode" label="Tara" maxLength={2} required {...form.register("countryCode")} />
+              <TextInput error={form.formState.errors.addressLine2?.message} id="addressLine2" label="Adresă secundară" {...form.register("addressLine2")} />
+              <TextInput error={form.formState.errors.city?.message} id="city" label="Oraș" {...form.register("city")} />
+              <TextInput error={form.formState.errors.countyOrRegion?.message} id="countyOrRegion" label="Județ" {...form.register("countyOrRegion")} />
+              <TextInput error={form.formState.errors.postalCode?.message} id="postalCode" label="Cod poștal" {...form.register("postalCode")} />
+              <ReadOnlySetting label="Țară" value="România (RO)" />
             </FormGrid>
           </FormSection>
 
-          <FormSection title="Localizare" description="Valori controlate pentru formatari viitoare.">
+          <FormSection title="Format România" description="Aplicația este configurată pentru laborator din România.">
             <FormGrid>
-              <Select error={form.formState.errors.timezone?.message} id="timezone" label="Timezone" options={timezoneOptions} required {...form.register("timezone")} />
-              <Select error={form.formState.errors.locale?.message} id="locale" label="Locale" options={localeOptions} required {...form.register("locale")} />
-              <Select error={form.formState.errors.currency?.message} id="currency" label="Moneda" options={currencyOptions} required {...form.register("currency")} />
+              <ReadOnlySetting label="Fus orar" value="Europe/Bucharest" />
+              <ReadOnlySetting label="Limbă și format" value="Română (ro-RO)" />
+              <ReadOnlySetting label="Monedă" value="RON" />
             </FormGrid>
           </FormSection>
 
-          <FormSection title="Branding" description="Upload-ul de logo ramane pentru task-ul de fisiere private.">
+          <FormSection title="Branding" description="Culoarea este folosită în navigație și elementele principale.">
             <FormGrid>
-              <TextInput error={form.formState.errors.primaryColor?.message} id="primaryColor" label="Culoare principala" required {...form.register("primaryColor")} />
+              <TextInput error={form.formState.errors.primaryColor?.message} id="primaryColor" label="Culoare principală" required {...form.register("primaryColor")} />
               <div className="settings-page__swatch" aria-label="Previzualizare culoare" style={{ background: form.watch("primaryColor") }} />
               <FormGridFull>
                 <Textarea error={form.formState.errors.documentFooter?.message} id="documentFooter" label="Footer documente" rows={4} {...form.register("documentFooter")} />
@@ -217,11 +216,20 @@ export function SettingsPage(): ReactNode {
               isSubmitting={updateMutation.isPending}
               onReset={() => settingsQuery.data && form.reset(toFormValues(settingsQuery.data))}
               submitDisabled={!form.formState.isDirty}
-              submitLabel="Salveaza"
+              submitLabel="Salvează"
             />
           ) : null}
         </FormLayout>
       </section>
     </main>
+  );
+}
+
+function ReadOnlySetting({ label, value }: { readonly label: string; readonly value: string }): ReactNode {
+  return (
+    <div className="settings-page__readonly-field">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
   );
 }

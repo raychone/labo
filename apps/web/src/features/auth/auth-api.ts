@@ -74,6 +74,6 @@ export async function logout(csrfToken: string): Promise<void> {
   });
 
   if (!response.ok) {
-    throw new ApiError("Logout-ul a esuat.", response.status);
+    throw new ApiError("Logout-ul a eșuat.", response.status);
   }
 }

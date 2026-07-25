@@ -72,7 +72,7 @@ function getMessageFromBody(body: ApiErrorBody | undefined, status: number): str
     return body.error;
   }
 
-  return status === 401 ? "Sesiunea a expirat." : "Request-ul a esuat.";
+  return status === 401 ? "Sesiunea a expirat." : "Request-ul a eșuat.";
 }
 
 async function getResponseError(response: Response): Promise<ApiError> {

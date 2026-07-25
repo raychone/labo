@@ -19,9 +19,9 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(functi
     <div className="dl-search-input">
       <span className="dl-search-input__icon" aria-hidden="true">search</span>
       <TextInput className={clsx("dl-search-input__control", className)} ref={ref} type="search" value={value} {...props} />
-      {isLoading ? <span className="dl-search-input__loading" aria-label="Search loading" role="status" /> : null}
+      {isLoading ? <span className="dl-search-input__loading" aria-label="Se caută" role="status" /> : null}
       {canClear ? (
-        <button aria-label="Clear search" className="dl-search-input__clear" onClick={onClear} type="button">
+        <button aria-label="Șterge căutarea" className="dl-search-input__clear" onClick={onClear} type="button">
           x
         </button>
       ) : null}
@@ -47,7 +47,7 @@ export const FilterBar = forwardRef<HTMLDivElement, FilterBarProps>(function Fil
       <div className="dl-filter-bar__actions">
         {onClearFilters ? (
           <Button onClick={onClearFilters} variant="ghost">
-            Clear filters
+            Șterge filtrele
           </Button>
         ) : null}
         {actions}

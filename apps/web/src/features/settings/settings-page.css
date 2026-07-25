@@ -1,7 +1,7 @@
 .settings-page {
   background: var(--dl-color-background);
-  min-height: 100vh;
-  padding-block: var(--dl-space-5);
+  min-height: 100%;
+  padding-block: var(--dl-space-4);
 }
 
 .settings-page__layout,
@@ -16,6 +16,10 @@
   display: flex;
   flex-direction: column;
   gap: var(--dl-space-3);
+}
+
+.settings-page__layout {
+  max-width: 62rem;
 }
 
 .settings-page__header h1 {
@@ -39,9 +43,34 @@
   min-height: 2.75rem;
 }
 
+.settings-page__readonly-field {
+  background: var(--dl-color-background-secondary);
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  display: grid;
+  gap: var(--dl-space-1);
+  min-height: var(--dl-size-touch-target);
+  padding: var(--dl-space-3);
+}
+
+.settings-page__readonly-field span {
+  color: var(--dl-color-text-secondary);
+  font-size: var(--dl-font-size-label);
+  font-weight: var(--dl-font-weight-semibold);
+}
+
+.settings-page__actions {
+  background: color-mix(in srgb, var(--dl-color-background) 94%, transparent);
+  border-top: var(--dl-border-width) solid var(--dl-color-border);
+  bottom: 0;
+  padding-block: var(--dl-space-3);
+  position: sticky;
+  z-index: var(--dl-z-sticky);
+}
+
 @media (min-width: 48rem) {
   .settings-page {
-    padding-block: var(--dl-space-8);
+    padding-block: var(--dl-space-5);
   }
 
   .settings-page__header,

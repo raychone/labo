@@ -12,7 +12,7 @@ import { useResolveWorkQr } from "./works-api.js";
 import "./work-scan-page.css";
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Actiunea a esuat.";
+  return error instanceof Error ? error.message : "Acțiunea a eșuat.";
 }
 
 export function WorkScanPage(): ReactNode {
@@ -28,13 +28,13 @@ export function WorkScanPage(): ReactNode {
     }
 
     resolveMutation.mutate({ payload, source }, {
-      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost gasita", variant: "error" }),
-      onSuccess: (result) => toast.showToast({ durationMs: 3500, message: `Lucrare ${result.work.code} gasita.`, variant: "success" }),
+      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost găsită", variant: "error" }),
+      onSuccess: (result) => toast.showToast({ durationMs: 3500, message: `Lucrare ${result.work.code} găsită.`, variant: "success" }),
     });
   }
 
   if (permissionsQuery.isLoading) {
-    return <PageState><LoadingState text="Incarc scannerul" /></PageState>;
+    return <PageState><LoadingState text="Se încarcă scannerul" /></PageState>;
   }
 
   if (!canRead) {
@@ -46,12 +46,12 @@ export function WorkScanPage(): ReactNode {
       <section className="dl-container work-scan-page__layout" aria-labelledby="scan-title">
         <header className="work-scan-page__header">
           <div>
-            <h1 id="scan-title">Scaneaza lucrare</h1>
-            <p>Camera porneste doar dupa actiunea ta. Payload-ul QR este rezolvat prin backend autorizat.</p>
+            <h1 id="scan-title">Scanează lucrare</h1>
+            <p>Camera pornește doar după acțiunea ta. Payload-ul QR este rezolvat prin backend autorizat.</p>
           </div>
           <Link className="dl-button dl-button--outline dl-button--medium" to="/works">
             <span className="dl-button__content">
-              <span>Inapoi la lucrari</span>
+              <span>Înapoi la lucrări</span>
             </span>
           </Link>
         </header>
@@ -59,7 +59,7 @@ export function WorkScanPage(): ReactNode {
         <Card>
           <CardHeader>
             <CardTitle>Camera</CardTitle>
-            <CardDescription>Scaneaza un QR de lucrare cu browser compatibil.</CardDescription>
+            <CardDescription>Scanează un QR de lucrare cu browser compatibil.</CardDescription>
           </CardHeader>
           <CardContent>
             <CameraScanner onDetected={(payload) => resolvePayload(payload, "camera")} />
@@ -68,8 +68,8 @@ export function WorkScanPage(): ReactNode {
 
         <Card>
           <CardHeader>
-            <CardTitle>Cautare manuala</CardTitle>
-            <CardDescription>Fallback pentru desktop, camera refuzata sau QR deteriorat.</CardDescription>
+            <CardTitle>Căutare manuală</CardTitle>
+            <CardDescription>Fallback pentru desktop, cameră refuzată sau QR deteriorat.</CardDescription>
           </CardHeader>
           <CardContent>
             <ManualScanForm isLoading={resolveMutation.isPending} onSubmit={(payload) => resolvePayload(payload, "manual")} />
@@ -86,11 +86,11 @@ function ScanResult({ work }: { readonly work: WorkDetail }): ReactNode {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Lucrare gasita</CardTitle>
+        <CardTitle>Lucrare găsită</CardTitle>
         <CardDescription>{work.code}</CardDescription>
       </CardHeader>
       <CardContent className="work-scan-page__result">
-        <StatusBadge label="Inregistrata" variant="registered" />
+        <StatusBadge label="Înregistrată" variant="registered" />
         <div>
           <strong>{work.patientName}</strong>
           <p>{work.clinic.name} · {work.doctor.displayName}</p>

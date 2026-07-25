@@ -92,10 +92,10 @@ describe("ClinicsPage", () => {
 
     renderWithProviders(<ClinicsPage />);
 
-    expect(await screen.findByRole("heading", { name: "Clinici si medici" })).toBeDefined();
+    expect(await screen.findByRole("heading", { name: "Clinici și medici" })).toBeDefined();
     expect(await screen.findByText("Clinica Test")).toBeDefined();
 
-    const clinicSelect = await screen.findByLabelText("Clinica");
+    const clinicSelect = await screen.findByLabelText("Clinică");
     const doctorSelect = await screen.findByLabelText("Medic");
 
     fireEvent.change(clinicSelect, { target: { value: "clinic_1" } });

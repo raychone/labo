@@ -914,6 +914,29 @@ Decizie concreta UI-002:
 - `QRScanner` si `SignaturePad` nu sunt incluse in UI-002 deoarece depind de task-uri functionale cu browser/device capabilities.
 - Nu s-au adaugat dependinte noi sau framework UI.
 
+### UX-HARDENING-001 - Romanian UX, modal, sidebar, toast, QR and export hardening
+
+- Scop: intarirea experientei existente fara taskuri functionale noi.
+- Motiv: aplicatia trebuie sa fie coerenta pentru utilizatori non-tehnici, mobile-first si pregatita pentru demo/client.
+- Module: `packages/ui`, shell frontend, auth/login, settings, works/QR/scan, billing exports, pagini operationale existente, documentatie.
+- Dependinte: UI-002, AUTH-001, RBAC-001, SHELL-001, QR-001, BILLING-002, WORKFORMS-001.
+- Scope: toast lifecycle, modal/drawer responsive si focus behavior, sidebar stabil, localizare romana cu diacritice, setari RO-only pentru laborator, QR UI hardening, CSV export hardening, texte si densitate UI.
+- Non-goals: workflow execution, fisiere, dashboard operational, calcule noi de billing, reguli fiscale noi, permisiuni noi, FORMS-002.
+- Acceptance criteria:
+  - Notificarile au durata finita, curatare manuala, limita de vizibilitate si se sterg la schimbari de auth.
+  - Modalurile/drawerele au header/body/footer stabile, body scrollabil, focus return, Escape si comportament mobil `100dvh`.
+  - Sidebarul desktop ramane pe viewport, navigatia si continutul principal scrolleaza independent.
+  - Textele vizibile principale sunt in romana cu diacritice si nu afiseaza enumuri brute unde exista etichete user-facing.
+  - Setarile laboratorului permit doar `RO`, `ro-RO`, `Europe/Bucharest`, `RON`.
+  - QR-ul nu afiseaza tokenul brut, camera are placeholder inainte de pornire, iar modalul QR are loading/error/retry.
+  - CSV-urile folosesc UTF-8 BOM, CRLF, separator `;`, quoting, neutralizare formule, date romanesti si coloana moneda.
+- Backend: limitat la validare setari RO-only si CSV headers/content-type/filename.
+- Frontend: componente UI reutilizabile, shell, pagini existente, QR/scan si exporturi client.
+- Securitate: nu expune ID-uri interne in QR label; curata toasts pe auth lifecycle; nu slabeste RBAC.
+- Audit: nu introduce evenimente noi inutile; pastreaza audit QR existent.
+- Testare: `pnpm typecheck`, `pnpm test`, `pnpm build`, plus smoke manual pe shell, QR, CSV si pagini cheie.
+- Status: COMPLETED.
+
 ### AUTH-001 - Auth backend
 
 - Scop: login/logout securizat.

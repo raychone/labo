@@ -83,7 +83,7 @@ describe("UsersPage", () => {
     expect(await screen.findByRole("heading", { name: "Utilizatori" })).toBeDefined();
     expect(await screen.findByText("Development Manager")).toBeDefined();
     expect(await screen.findByText("manager.dev@example.test")).toBeDefined();
-    expect(await screen.findByRole("button", { name: "Adauga utilizator" })).toBeDefined();
+    expect(await screen.findByRole("button", { name: "Adaugă utilizator" })).toBeDefined();
     expect(await screen.findByLabelText("Rol")).toBeDefined();
   });
 
@@ -100,6 +100,6 @@ describe("UsersPage", () => {
     renderWithProviders(<UsersPage />);
 
     expect(await screen.findByText("Development Manager")).toBeDefined();
-    expect(screen.queryByRole("button", { name: "Adauga utilizator" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Adaugă utilizator" })).toBeNull();
   });
 });

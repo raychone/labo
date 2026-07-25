@@ -427,6 +427,20 @@ Current UI-002 limits:
 - `DataTable` uses controlled sorting/pagination and horizontal scroll on small screens; it does not implement querying, virtualization, resizing, editing, or export.
 - `FileUpload` only handles local selection/removal; it does not upload files.
 
+## UX Hardening
+
+`UX-HARDENING-001` hardens the existing Romanian application experience without adding new business features.
+
+The shared UI package provides toast lifecycle controls with finite default durations, max visible toasts, manual close, timer cleanup and `clearToasts()`. The authenticated shell clears stale toasts on logout, expired session and authenticated identity changes.
+
+`Modal` and `Drawer` remain dependency-free in `@dental-lab/ui`, but now use size variants, body lock, focus return, Escape handling, scrollable bodies, stable footers, safe-area padding and mobile `100dvh` sizing. The desktop shell keeps the sidebar fixed to the viewport while navigation and main content scroll independently.
+
+Laboratory settings are Romania-only for the current MVP: `RO`, `ro-RO`, `Europe/Bucharest` and `RON`. Frontend controls show these values as fixed settings, while backend DTO validation rejects unsupported values.
+
+Billing CSV exports are spreadsheet-friendly for Romanian workflows: UTF-8 BOM, CRLF line endings, semicolon delimiter, quoting, formula neutralization, Romanian dates, localized headers/statuses/payment methods and explicit currency columns.
+
+QR scan/print UX shows a stopped-camera placeholder before camera access, keeps QR resolution behind the authenticated backend, avoids exposing raw QR tokens in the label, and provides loading/error/retry states in the QR modal.
+
 ## Form Patterns
 
 FORMS-001 standardizes existing frontend form UX without adding new backend business models.

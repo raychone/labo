@@ -238,12 +238,25 @@ describe("feedback", () => {
   function ToastHarness(): ReactNode {
     const toast = useToast();
     return (
-      <button
-        onClick={() => toast.showToast({ durationMs: 1000, message: "Saved", variant: "success" })}
-        type="button"
-      >
-        Show toast
-      </button>
+      <>
+        <button
+          onClick={() => toast.showToast({ durationMs: 1000, message: "Saved", variant: "success" })}
+          type="button"
+        >
+          Show toast
+        </button>
+        <button
+          onClick={() => {
+            toast.showToast({ message: "One", persist: true });
+            toast.showToast({ message: "Two", persist: true });
+            toast.showToast({ message: "Three", persist: true });
+          }}
+          type="button"
+        >
+          Show many
+        </button>
+        <button onClick={() => toast.clearToasts()} type="button">Clear all</button>
+      </>
     );
   }
 
@@ -275,6 +288,25 @@ describe("feedback", () => {
       vi.advanceTimersByTime(1000);
     });
     expect(screen.queryByText("Saved")).toBeNull();
+  });
+
+  it("supports manual toast dismiss, max visible toasts, and clear all", () => {
+    render(
+      <ToastProvider maxToasts={2}>
+        <ToastHarness />
+      </ToastProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Show many" }));
+    expect(screen.queryByText("One")).toBeNull();
+    expect(screen.getByText("Two")).toBeDefined();
+    expect(screen.getByText("Three")).toBeDefined();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Închide notificarea" })[0] as HTMLElement);
+    expect(screen.queryByText("Three")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
+    expect(screen.queryByText("Two")).toBeNull();
   });
 
   it("opens Tooltip on focus and closes on Escape", () => {
@@ -318,7 +350,7 @@ describe("navigation and composition", () => {
   it("renders SearchInput and clears controlled text", () => {
     const clearHandler = vi.fn();
     render(<SearchInput label="Search" onClear={clearHandler} readOnly value="abc" />);
-    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    fireEvent.click(screen.getByRole("button", { name: "Șterge căutarea" }));
     expect(clearHandler).toHaveBeenCalled();
   });
 });
@@ -357,7 +389,7 @@ describe("FileUpload and DataTable", () => {
 
     expect(screen.getByText("Alpha")).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: /Name/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Următor" }));
     expect(sortHandler).toHaveBeenCalledWith({ columnId: "name", direction: "ascending" });
     expect(pageHandler).toHaveBeenCalledWith(2);
   });
@@ -366,12 +398,12 @@ describe("FileUpload and DataTable", () => {
     const columns = [{ header: "Name", id: "name", renderCell: (row: { readonly name: string }) => row.name }];
 
     const { rerender } = render(<DataTable columns={columns} getRowKey={(row) => row.name} isLoading rows={[]} />);
-    expect(screen.getByText("Loading table")).toBeDefined();
+    expect(screen.getByText("Se încarcă tabelul")).toBeDefined();
 
     rerender(<DataTable columns={columns} getRowKey={(row) => row.name} rows={[]} />);
-    expect(screen.getByText("No data")).toBeDefined();
+    expect(screen.getByText("Nu există date")).toBeDefined();
 
     rerender(<DataTable columns={columns} error="Network" getRowKey={(row) => row.name} rows={[]} />);
-    expect(screen.getByText("Table could not be loaded")).toBeDefined();
+    expect(screen.getByText("Tabelul nu a putut fi încărcat")).toBeDefined();
   });
 });

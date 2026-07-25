@@ -1,8 +1,8 @@
 # Demo script
 
 1. Log in with `manager@demo.local`.
-2. Open Dashboard and show the authenticated shell.
-3. Open Works.
+2. Open Panou principal and show the authenticated shell.
+3. Open Lucrări.
 4. Search `Maria Dumitrescu`.
 5. Filter by `Clinica Dentară Aurora`.
 6. Filter by `Dr. Ana Popescu`.

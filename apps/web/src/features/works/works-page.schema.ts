@@ -15,7 +15,7 @@ export const workFormSchema = z.object({
   priority: z.enum(WORK_PRIORITIES),
   quantity: z.number().int().min(1, "Cantitatea minima este 1.").max(99, "Cantitatea maxima este 99."),
   requestedDeliveryDate: z.string().min(1, "Alege termenul promis."),
-  workTypeId: z.string().min(1, "Alege tipul lucrarii."),
+  workTypeId: z.string().min(1, "Alege tipul lucrării."),
 });
 
 export type WorkFormValues = z.infer<typeof workFormSchema>;

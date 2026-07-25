@@ -241,22 +241,22 @@ export function UsersPage(): ReactNode {
         <header className="users-page__header">
           <div>
             <h1 id="users-title">Utilizatori</h1>
-            <p>Administrare conturi interne, roluri, status si resetare parola.</p>
+            <p>Administrare conturi interne, roluri, status și resetare parolă.</p>
           </div>
-          {canCreate ? <Button onClick={() => setCreateOpen(true)}>Adauga utilizator</Button> : null}
+          {canCreate ? <Button onClick={() => setCreateOpen(true)}>Adaugă utilizator</Button> : null}
         </header>
 
         <Card>
           <CardHeader className="users-page__panel-header">
             <div>
               <CardTitle>Lista utilizatori</CardTitle>
-              <CardDescription>{usersQuery.data?.total ?? 0} conturi gasite</CardDescription>
+              <CardDescription>{usersQuery.data?.total ?? 0} conturi găsite</CardDescription>
             </div>
           </CardHeader>
           <CardContent className="users-page__panel">
             <div className="users-page__toolbar">
               <TextInput
-                label="Cautare"
+                label="Căutare"
                 onChange={(event) => setParams((current) => ({ ...current, page: 1, search: event.target.value }))}
                 placeholder="Nume sau email"
                 type="search"
@@ -281,7 +281,7 @@ export function UsersPage(): ReactNode {
 
             <DataTable
               columns={columns}
-              emptyMessage="Nu exista utilizatori pentru filtrele curente."
+              emptyMessage="Nu există utilizatori pentru filtrele curente."
               error={usersQuery.isError ? getErrorMessage(usersQuery.error) : undefined}
               getRowKey={(user) => user.id}
               isLoading={usersQuery.isLoading}
@@ -343,8 +343,8 @@ export function UsersPage(): ReactNode {
       />
 
       <ConfirmActionModal
-        confirmLabel="Dezactiveaza"
-        description={`${selectedUser?.displayName ?? "Utilizatorul selectat"} nu va mai putea folosi aplicatia. Sesiunile active vor fi invalidate imediat.`}
+        confirmLabel="Dezactivează"
+        description={`${selectedUser?.displayName ?? "Utilizatorul selectat"} nu va mai putea folosi aplicația. Sesiunile active vor fi invalidate imediat.`}
         isLoading={disableMutation.isPending}
         isOpen={isDisableOpen}
         onCancel={() => setDisableOpen(false)}
@@ -405,7 +405,7 @@ function CreateUserModal({
   return (
     <>
       <UnsavedChangesPrompt when={isOpen && form.formState.isDirty && !isSubmitting} />
-      <Modal isOpen={isOpen} onOpenChange={closeGuard.handleOpenChange} title="Adauga utilizator">
+      <Modal isOpen={isOpen} onOpenChange={closeGuard.handleOpenChange} title="Adaugă utilizator">
         <FormLayout
           className="users-page__form"
           onSubmit={(event) => void form.handleSubmit((values) => {
@@ -419,7 +419,7 @@ function CreateUserModal({
           <TextInput
             error={form.formState.errors.temporaryPassword?.message}
             id="temporaryPassword"
-            label="Parola temporara"
+            label="Parolă temporară"
             required
             type="password"
             {...form.register("temporaryPassword")}
@@ -430,7 +430,7 @@ function CreateUserModal({
             roleKeys={form.watch("roleKeys")}
             roles={roles}
           />
-          <FormActions canReset={form.formState.isDirty} isSubmitting={isSubmitting} onReset={() => form.reset()} submitLabel="Creeaza" />
+          <FormActions canReset={form.formState.isDirty} isSubmitting={isSubmitting} onReset={() => form.reset()} submitLabel="Creează" />
         </FormLayout>
       </Modal>
       {closeGuard.confirmModal}
@@ -510,14 +510,14 @@ function UserDetailsDrawer({
     <>
       <UnsavedChangesPrompt when={isOpen && (form.formState.isDirty || rolesForm.formState.isDirty) && !isSubmitting && !isRoleLoading} />
       <Drawer isOpen={isOpen} onOpenChange={closeGuard.handleOpenChange} title={user?.displayName ?? "Utilizator"}>
-        {userLoading ? <LoadingState text="Incarc utilizatorul" /> : null}
+        {userLoading ? <LoadingState text="Se încarcă utilizatorul" /> : null}
         {userError ? <ErrorState title="Utilizator indisponibil" description={getErrorMessage(userError)} /> : null}
         {user ? (
           <div className="users-page__drawer">
             <dl className="users-page__details">
               <div><dt>Status</dt><dd>{user.isActive ? "Activ" : "Dezactivat"}</dd></div>
               <div><dt>Sesiuni active</dt><dd>{user.activeSessionCount}</dd></div>
-              <div><dt>Parola</dt><dd>{user.mustChangePassword ? "Schimbare necesara" : "OK"}</dd></div>
+              <div><dt>Parola</dt><dd>{user.mustChangePassword ? "Schimbare necesară" : "OK"}</dd></div>
             </dl>
 
             {canUpdate ? (
@@ -531,7 +531,7 @@ function UserDetailsDrawer({
                 <FormErrorSummary errors={summaryItems} ref={summaryRef} />
                 <TextInput error={form.formState.errors.displayName?.message} id="displayName" label="Nume" required {...form.register("displayName")} />
                 <TextInput error={form.formState.errors.email?.message} id="email" label="Email" required type="email" {...form.register("email")} />
-                <FormActions canReset={form.formState.isDirty} isSubmitting={isSubmitting} onReset={() => form.reset({ displayName: user.displayName, email: user.email })} submitDisabled={!form.formState.isDirty} submitLabel="Salveaza datele" />
+                <FormActions canReset={form.formState.isDirty} isSubmitting={isSubmitting} onReset={() => form.reset({ displayName: user.displayName, email: user.email })} submitDisabled={!form.formState.isDirty} submitLabel="Salvează datele" />
               </FormLayout>
             ) : null}
 
@@ -542,14 +542,14 @@ function UserDetailsDrawer({
                   roleKeys={rolesForm.watch("roleKeys")}
                   roles={roles}
                 />
-                <FormActions canReset={rolesForm.formState.isDirty} isSubmitting={isRoleLoading} onReset={() => rolesForm.reset({ roleKeys: roleKeysFromUser(user) })} submitDisabled={!rolesForm.formState.isDirty} submitLabel="Salveaza rolurile" submitVariant="secondary" />
+                <FormActions canReset={rolesForm.formState.isDirty} isSubmitting={isRoleLoading} onReset={() => rolesForm.reset({ roleKeys: roleKeysFromUser(user) })} submitDisabled={!rolesForm.formState.isDirty} submitLabel="Salvează rolurile" submitVariant="secondary" />
               </FormLayout>
             ) : null}
 
             <div className="users-page__drawer-actions">
-              {canUpdate ? <Button onClick={onResetPassword} variant="outline">Reseteaza parola</Button> : null}
-              {canDisable && user.isActive ? <Button onClick={onDisable} variant="danger">Dezactiveaza</Button> : null}
-              {canDisable && !user.isActive ? <Button isLoading={isEnableLoading} onClick={onEnable} variant="secondary">Reactiveaza</Button> : null}
+              {canUpdate ? <Button onClick={onResetPassword} variant="outline">Resetează parola</Button> : null}
+              {canDisable && user.isActive ? <Button onClick={onDisable} variant="danger">Dezactivează</Button> : null}
+              {canDisable && !user.isActive ? <Button isLoading={isEnableLoading} onClick={onEnable} variant="secondary">Reactivează</Button> : null}
             </div>
           </div>
         ) : null}
@@ -629,10 +629,10 @@ function ResetPasswordModal({
     <>
       <UnsavedChangesPrompt when={isOpen && form.formState.isDirty && !isSubmitting} />
       <Modal
-        description="Parola nu este afisata sau salvata in audit. Sesiunile existente vor fi invalidate."
+        description="Parola nu este afișată sau salvată în audit. Sesiunile existente vor fi invalidate."
         isOpen={isOpen}
         onOpenChange={closeGuard.handleOpenChange}
-        title="Resetare parola"
+        title="Resetare parolă"
       >
         <FormLayout
           className="users-page__form"
@@ -645,7 +645,7 @@ function ResetPasswordModal({
           <TextInput
             error={form.formState.errors.temporaryPassword?.message}
             id="temporaryPassword"
-            label="Parola temporara"
+            label="Parolă temporară"
             required
             type="password"
             {...form.register("temporaryPassword")}
@@ -653,12 +653,12 @@ function ResetPasswordModal({
           <TextInput
             error={form.formState.errors.confirmTemporaryPassword?.message}
             id="confirmTemporaryPassword"
-            label="Confirma parola temporara"
+            label="Confirmă parola temporară"
             required
             type="password"
             {...form.register("confirmTemporaryPassword")}
           />
-          <FormActions isSubmitting={isSubmitting} submitLabel="Seteaza parola temporara" submitVariant="danger" />
+          <FormActions isSubmitting={isSubmitting} submitLabel="Setează parola temporară" submitVariant="danger" />
         </FormLayout>
       </Modal>
       {closeGuard.confirmModal}

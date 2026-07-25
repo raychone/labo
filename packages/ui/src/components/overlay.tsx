@@ -16,6 +16,7 @@ import { getFocusableElements } from "../utils/dom.js";
 export interface OverlayBaseProps {
   readonly children: ReactNode;
   readonly closeOnBackdrop?: boolean;
+  readonly closeOnEscape?: boolean;
   readonly description?: ReactNode;
   readonly initialFocusRef?: React.RefObject<HTMLElement | null>;
   readonly isOpen: boolean;
@@ -77,6 +78,7 @@ function handleFocusTrap(event: KeyboardEvent<HTMLElement>, container: HTMLEleme
 
 export interface ModalProps extends OverlayBaseProps, Omit<HTMLAttributes<HTMLDivElement>, "children" | "title"> {
   readonly footer?: ReactNode;
+  readonly size?: "full" | "lg" | "md" | "sm" | "xl";
 }
 
 export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal(
@@ -84,11 +86,13 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal(
     children,
     className,
     closeOnBackdrop = true,
+    closeOnEscape = true,
     description,
     footer,
     initialFocusRef,
     isOpen,
     onOpenChange,
+    size = "md",
     title,
     ...props
   },
@@ -116,9 +120,9 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal(
         aria-describedby={description ? descriptionId : undefined}
         aria-labelledby={titleId}
         aria-modal="true"
-        className={clsx("dl-modal", className)}
+        className={clsx("dl-modal", `dl-modal--${size}`, className)}
         onKeyDown={(event) => {
-          if (event.key === "Escape") {
+          if (event.key === "Escape" && closeOnEscape) {
             onOpenChange(false);
           }
           handleFocusTrap(event, dialogRef.current);
@@ -139,8 +143,8 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal(
             <h2 id={titleId}>{title}</h2>
             {description ? <p id={descriptionId}>{description}</p> : null}
           </div>
-          <button aria-label="Close dialog" className="dl-overlay__close" onClick={() => onOpenChange(false)} type="button">
-            x
+          <button aria-label="Închide dialogul" className="dl-overlay__close" onClick={() => onOpenChange(false)} type="button">
+            ×
           </button>
         </header>
         <div className="dl-overlay__content">{children}</div>
@@ -160,6 +164,7 @@ export const Drawer = forwardRef<HTMLElement, DrawerProps>(function Drawer(
     children,
     className,
     closeOnBackdrop = true,
+    closeOnEscape = true,
     description,
     initialFocusRef,
     isOpen,
@@ -194,7 +199,7 @@ export const Drawer = forwardRef<HTMLElement, DrawerProps>(function Drawer(
         aria-modal="true"
         className={clsx("dl-drawer", `dl-drawer--${position}`, className)}
         onKeyDown={(event) => {
-          if (event.key === "Escape") {
+          if (event.key === "Escape" && closeOnEscape) {
             onOpenChange(false);
           }
           handleFocusTrap(event, drawerRef.current);
@@ -215,8 +220,8 @@ export const Drawer = forwardRef<HTMLElement, DrawerProps>(function Drawer(
             <h2 id={titleId}>{title}</h2>
             {description ? <p id={descriptionId}>{description}</p> : null}
           </div>
-          <button aria-label="Close drawer" className="dl-overlay__close" onClick={() => onOpenChange(false)} type="button">
-            x
+          <button aria-label="Închide panoul" className="dl-overlay__close" onClick={() => onOpenChange(false)} type="button">
+            ×
           </button>
         </header>
         <div className="dl-overlay__content">{children}</div>

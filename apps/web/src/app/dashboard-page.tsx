@@ -14,7 +14,7 @@ export function DashboardPage(): ReactNode {
   const routes = getNavigationRoutes(auth.permissionKeys).filter((route) => route.path !== "/dashboard");
   const canCreateWork = auth.permissionKeys.includes("works.create");
   const canReadWork = auth.permissionKeys.includes("works.read_all") || auth.permissionKeys.includes("works.read_assigned");
-  usePageTitle("Dashboard", laboratoryName);
+  usePageTitle("Panou principal", laboratoryName);
 
   return (
     <section className="dashboard-page" aria-labelledby="dashboard-title">
@@ -22,11 +22,11 @@ export function DashboardPage(): ReactNode {
         <div>
           <p className="dashboard-page__eyebrow">{laboratoryName}</p>
           <h1 id="dashboard-title">Bun venit, {auth.user?.displayName ?? "utilizator"}</h1>
-          <p>Indicatorii operationali vor fi disponibili in Dashboard-ul operational.</p>
+          <p>Indicatorii operaționali vor fi disponibili într-un task dedicat. Până atunci, folosește acțiunile rapide și modulele disponibile.</p>
         </div>
         <div className="dashboard-page__actions">
-          {canCreateWork ? <Link className="dl-button dl-button--primary dl-button--medium" to="/works"><span className="dl-button__content"><span>Lucrare noua</span></span></Link> : null}
-          {canReadWork ? <Link className="dl-button dl-button--outline dl-button--medium" to="/scan"><span className="dl-button__content"><span>Scaneaza QR</span></span></Link> : null}
+          {canCreateWork ? <Link className="dl-button dl-button--primary dl-button--medium" to="/works"><span className="dl-button__content"><span>Lucrare nouă</span></span></Link> : null}
+          {canReadWork ? <Link className="dl-button dl-button--outline dl-button--medium" to="/scan"><span className="dl-button__content"><span>Scanează QR</span></span></Link> : null}
         </div>
       </div>
 
@@ -35,7 +35,7 @@ export function DashboardPage(): ReactNode {
           <Card key={route.path}>
             <CardHeader>
               <CardTitle>{route.label}</CardTitle>
-              <CardDescription>{route.navigationGroup ?? "Aplicatie"}</CardDescription>
+              <CardDescription>{route.navigationGroup ?? "Aplicație"}</CardDescription>
             </CardHeader>
             <CardContent>
               <Link className="dashboard-page__card-link" to={route.path}>Deschide</Link>

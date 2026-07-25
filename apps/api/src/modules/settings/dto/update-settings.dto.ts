@@ -11,6 +11,7 @@ import {
 import { Transform } from "class-transformer";
 import {
   SETTINGS_SUPPORTED_CURRENCIES,
+  SETTINGS_SUPPORTED_COUNTRY_CODES,
   SETTINGS_SUPPORTED_LOCALES,
   SETTINGS_SUPPORTED_TIMEZONES,
 } from "../settings.constants.js";
@@ -154,7 +155,7 @@ export class UpdateSettingsDto {
 
   @IsOptional()
   @Transform(({ value }) => uppercaseOptionalString(value))
-  @Matches(/^[A-Z]{2}$/)
+  @IsIn(SETTINGS_SUPPORTED_COUNTRY_CODES)
   public readonly countryCode?: string | null;
 
   @IsOptional()

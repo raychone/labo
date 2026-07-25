@@ -27,7 +27,7 @@ export const defaultWorkTypeFormValues: WorkTypeFormValues = {
 };
 
 const workTypeFieldLabels: Record<keyof WorkTypeFormValues, string> = {
-  basePriceDecimal: "Pret de baza",
+  basePriceDecimal: "Preț de bază",
   description: "Descriere",
   name: "Denumire",
   unit: "Unitate tarifare",
@@ -67,21 +67,21 @@ export function WorkTypeForm({
   return (
     <FormLayout className="work-types-page__form" id={formId} onSubmit={(event) => void form.handleSubmit(onSubmit)(event)}>
       <FormErrorSummary errors={summaryItems} ref={summaryRef} />
-      <FormSection title="Identificare" description="Codul este generat de backend si ramane nemodificabil.">
+      <FormSection title="Identificare" description="Codul este generat de backend și rămâne nemodificabil.">
         <FormGrid>
           <TextInput disabled={isDisabled} error={form.formState.errors.name?.message} id="name" label="Denumire" required {...form.register("name")} />
           <Select disabled={isDisabled} error={form.formState.errors.unit?.message} id="unit" label="Unitate tarifare" options={workTypeUnitOptions} required {...form.register("unit")} />
         </FormGrid>
       </FormSection>
-      <FormSection title="Pricing" description="Pretul este introdus strict in unitati majore si salvat in minor units, fara rotunjiri ascunse.">
+      <FormSection title="Preț" description="Prețul este introdus strict în unități majore și salvat în bani, fără rotunjiri ascunse.">
         <FormGrid>
           <TextInput
             disabled={isDisabled}
             error={form.formState.errors.basePriceDecimal?.message}
-            hint="Maximum doua zecimale. Valorile negative sunt respinse."
+            hint="Maximum două zecimale. Valorile negative sunt respinse."
             id="basePriceDecimal"
             inputMode="decimal"
-            label={`Pret de baza (${currency})`}
+            label={`Preț de bază (${currency})`}
             required
             {...form.register("basePriceDecimal")}
           />

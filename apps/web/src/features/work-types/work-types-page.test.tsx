@@ -100,11 +100,11 @@ describe("WorkTypesPage", () => {
 
     renderWithProviders(<WorkTypesPage />);
 
-    expect(await screen.findByRole("heading", { name: "Tipuri de lucrari" })).toBeDefined();
+    expect(await screen.findByRole("heading", { name: "Tipuri de lucrări" })).toBeDefined();
     expect(await screen.findByText("WT-0001")).toBeDefined();
     expect(await screen.findByText("Coroana zirconiu")).toBeDefined();
     expect(await screen.findByRole("option", { name: /WT-0001 · Coroana zirconiu/ })).toBeDefined();
-    expect(await screen.findByRole("button", { name: "Adauga tip de lucrare" })).toBeDefined();
+    expect(await screen.findByRole("button", { name: "Adaugă tip de lucrare" })).toBeDefined();
   });
 
   it("shows read-only copy without pricing.update", async () => {
@@ -128,7 +128,7 @@ describe("WorkTypesPage", () => {
 
     renderWithProviders(<WorkTypesPage />);
 
-    expect(await screen.findByText("Ai acces de citire, dar nu poti modifica preturi sau tipuri de lucrari.")).toBeDefined();
+    expect(await screen.findByText("Ai acces de citire, dar nu poți modifica prețuri sau tipuri de lucrări.")).toBeDefined();
   });
 
   it("shows an access error without pricing.read", async () => {

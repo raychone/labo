@@ -1,10 +1,10 @@
-# Demo aplicatie Dental Lab Management
+# Demo aplicație Dental Lab Management
 
-Acest document este ghidul de prezentare cap-coada pentru stadiul curent al aplicatiei. Toate datele demo sunt fictive si sunt doar pentru development/prezentare.
+Acest document este ghidul de prezentare cap-coadă pentru stadiul curent al aplicației. Toate datele demo sunt fictive și sunt doar pentru development/prezentare.
 
-## 1. Pregatire inainte de prezentare
+## 1. Pregătire înainte de prezentare
 
-Porneste baza de date, API-ul si frontend-ul:
+Pornește baza de date, API-ul și frontend-ul:
 
 ```bash
 docker compose up -d
@@ -14,13 +14,13 @@ PORT=3010 pnpm --filter @dental-lab/api start
 pnpm --filter @dental-lab/web dev --host 127.0.0.1
 ```
 
-Deschide aplicatia in browser:
+Deschide aplicația în browser:
 
 ```text
 http://127.0.0.1:5173
 ```
 
-Daca vrei sa refaci datasetul demo de la zero:
+Dacă vrei să refaci datasetul demo de la zero:
 
 ```bash
 pnpm --filter @dental-lab/api prisma:db:reset-demo
@@ -50,36 +50,36 @@ Conturi utile pentru a demonstra permisiuni si meniuri diferite:
 - `curier@demo.local`
 - `medic@demo.local`
 
-## 3. Mesaj de inceput pentru clienta
+## 3. Mesaj de început pentru clientă
 
-Aplicatia este gandita pentru managementul operational al unui laborator dentar: lucrari primite de la clinici, QR pentru identificare rapida, utilizatori cu roluri, catalog de preturi, setari laborator si zona de facturare/evidenta incasari.
+Aplicația este gândită pentru managementul operațional al unui laborator dentar: lucrări primite de la clinici, QR pentru identificare rapidă, utilizatori cu roluri, catalog de prețuri, setări laborator și zona de facturare/evidență încasări.
 
 Spune clar:
 
 - datele din demo sunt fictive;
-- aplicatia nu proceseaza bani;
-- incasarile sunt inregistrari manuale ale unor plati facute in afara aplicatiei;
+- aplicația nu procesează bani;
+- încasările sunt înregistrări manuale ale unor plăți făcute în afara aplicației;
 - factura printabila este interna/demo, nu integrare RO e-Factura;
-- workflow-ul de productie, fisierele si livrarile sunt taskuri urmatoare, nu sunt gata in acest moment.
+- workflow-ul de producție, fișierele și livrările sunt taskuri următoare, nu sunt gata în acest moment.
 
-## 4. Login si shell aplicatie
+## 4. Login și shell aplicație
 
 1. Intra pe `http://127.0.0.1:5173`.
-2. Logheaza-te cu `manager@demo.local`.
-3. Arata ca dupa login utilizatorul intra in aplicatie, nu intr-o pagina publica.
-4. Arata navigatia principala:
-   - Dashboard;
-   - Lucrari;
+2. Loghează-te cu `manager@demo.local`.
+3. Arată că după login utilizatorul intră în aplicație, nu într-o pagină publică.
+4. Arată navigația principală:
+   - Panou principal;
+   - Lucrări;
    - Scanare;
    - Facturare;
-   - Clinici si medici;
-   - Tipuri de lucrari;
+   - Clinici și medici;
+   - Tipuri de lucrări;
    - Utilizatori;
-   - Setari.
+   - Setări.
 
 Ce explici:
 
-- fiecare utilizator vede meniuri in functie de rol si permisiuni;
+- fiecare utilizator vede meniuri în funcție de rol și permisiuni;
 - autentificarea este pe cookie securizat;
 - validarea si permisiunile sunt aplicate si pe backend, nu doar in UI.
 
@@ -97,48 +97,48 @@ Ce spui:
 
 Dashboard-ul este momentan punctul de intrare. Datele operationale detaliate se vad acum in Lucrari si Facturare.
 
-## 6. Lucrari
+## 6. Lucrări
 
-Deschide `Lucrari`.
+Deschide `Lucrări`.
 
 Ce arati:
 
-1. Registrul de lucrari.
-2. Search dupa pacient:
+1. Registrul de lucrări.
+2. Search după pacient:
 
 ```text
 Maria Dumitrescu
 ```
 
-3. Filtrare dupa clinica:
+3. Filtrare după clinică:
 
 ```text
 Clinica Dentară Aurora
 ```
 
-4. Filtrare dupa medic:
+4. Filtrare după medic:
 
 ```text
 Dr. Ana Popescu
 ```
 
 5. Deschide o lucrare.
-6. Arata detaliile:
+6. Arată detaliile:
    - pacient;
-   - clinica;
+   - clinică;
    - medic;
    - tip lucrare;
    - cantitate;
    - prioritate;
    - termen promis;
    - status;
-   - valoare, daca utilizatorul are drept de pricing.
+   - valoare, dacă utilizatorul are drept de pricing.
 
 Ce explici:
 
-- lucrarea primeste cod unic `WO-<an>-<numar>`;
+- lucrarea primește cod unic `WO-<an>-<număr>`;
 - statusul actual este `REGISTERED`, pentru ca workflow-ul de productie vine intr-un task ulterior;
-- pretul este snapshot pe lucrare;
+- prețul este snapshot pe lucrare;
 - datele sunt filtrabile pentru receptie/manager.
 
 Valoare stabila pentru cautare:
@@ -147,24 +147,25 @@ Valoare stabila pentru cautare:
 WO-2026-900001
 ```
 
-Daca demo-ul este rulat intr-un alt an, codurile devin `WO-<an>-900001`.
+Dacă demo-ul este rulat într-un alt an, codurile devin `WO-<an>-900001`.
 
-## 7. QR si scanare
+## 7. QR și scanare
 
-Din detaliul unei lucrari, arata QR-ul.
+Din detaliul unei lucrări, arată QR-ul.
 
 Ce arati:
 
 - fiecare lucrare are QR privat;
-- QR-ul nu contine nume pacient, preturi sau ID-uri interne;
-- QR-ul poate fi folosit pentru identificarea rapida a lucrarii.
+- QR-ul nu conține nume pacient, prețuri sau ID-uri interne;
+- QR-ul poate fi folosit pentru identificarea rapidă a lucrării.
 
 Deschide `Scanare`.
 
-Ce arati:
+Ce arăți:
 
 - pagina de scanare;
-- fallback manual unde poti introduce codul lucrarii:
+- placeholder clar înainte de pornirea camerei;
+- fallback manual unde poți introduce codul lucrării:
 
 ```text
 WO-2026-900001
@@ -172,21 +173,21 @@ WO-2026-900001
 
 Ce explici:
 
-- scanarea reala cu camera este pregatita in UI;
+- scanarea reală cu camera este pregătită în UI;
 - QR-ul este rezolvat prin backend;
-- accesul ramane autorizat.
+- accesul rămâne autorizat.
 
-## 8. Clinici si medici
+## 8. Clinici și medici
 
-Deschide `Clinici si medici`.
+Deschide `Clinici și medici`.
 
 Ce arati:
 
 - lista clinicilor;
-- cautare/filtre;
+- căutare/filtre;
 - deschiderea unei clinici;
 - date de facturare;
-- medicii asociati clinicii;
+- medicii asociați clinicii;
 - arhivare/restaurare, unde exista permisiune.
 
 Clinici demo:
@@ -198,18 +199,18 @@ Clinici demo:
 
 Ce explici:
 
-- medicii sunt externi, nu utilizatori interni ai aplicatiei;
+- medicii sunt externi, nu utilizatori interni ai aplicației;
 - fiecare medic apartine unei clinici;
-- datele de facturare ale clinicii sunt folosite in documentele printabile.
+- datele de facturare ale clinicii sunt folosite în documentele printabile.
 
-## 9. Tipuri de lucrari si preturi
+## 9. Tipuri de lucrări și prețuri
 
-Deschide `Tipuri de lucrari`.
+Deschide `Tipuri de lucrări`.
 
 Ce arati:
 
-- catalog de lucrari;
-- cod, denumire, descriere, pret de baza;
+- catalog de lucrări;
+- cod, denumire, descriere, preț de bază;
 - activ/inactiv;
 - formular de creare/editare, daca rolul are permisiune.
 

@@ -35,7 +35,8 @@ describe("CameraScanner", () => {
     render(<CameraScanner onDetected={onDetected} />);
 
     expect(getUserMedia).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Porneste camera" }));
+    expect(screen.getByText("Camera este oprită")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Pornește camera" }));
 
     await waitFor(() => expect(onDetected).toHaveBeenCalledWith("dl-work:abcdefghijklmnopqrstuvwxyz123456"));
     expect(stop).toHaveBeenCalled();
@@ -46,6 +47,6 @@ describe("CameraScanner", () => {
 
     render(<CameraScanner onDetected={vi.fn()} />);
 
-    expect(screen.getByText("Camera nesuportata")).toBeDefined();
+    expect(screen.getByText("Cameră nesuportată")).toBeDefined();
   });
 });

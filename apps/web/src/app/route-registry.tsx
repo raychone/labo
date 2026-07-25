@@ -17,7 +17,7 @@ export const workReadPermissions = ["works.read_all", "works.read_assigned"] as 
 export const appRoutes = [
   {
     icon: "DB",
-    label: "Dashboard",
+    label: "Panou principal",
     path: "/dashboard",
     permissionMode: "any",
     requiredPermissions: [],
@@ -25,7 +25,7 @@ export const appRoutes = [
   },
   {
     icon: "WO",
-    label: "Lucrari",
+    label: "Lucrări",
     navigationGroup: "Operare",
     path: "/works",
     permissionMode: "any",
@@ -52,7 +52,7 @@ export const appRoutes = [
   },
   {
     icon: "CL",
-    label: "Clinici si medici",
+    label: "Clinici și medici",
     navigationGroup: "Administrare",
     path: "/clinics",
     permissionMode: "any",
@@ -61,7 +61,7 @@ export const appRoutes = [
   },
   {
     icon: "WT",
-    label: "Tipuri de lucrari",
+    label: "Tipuri de lucrări",
     navigationGroup: "Administrare",
     path: "/work-types",
     permissionMode: "any",
@@ -79,7 +79,7 @@ export const appRoutes = [
   },
   {
     icon: "ST",
-    label: "Setari",
+    label: "Setări",
     navigationGroup: "Administrare",
     path: "/settings",
     permissionMode: "any",

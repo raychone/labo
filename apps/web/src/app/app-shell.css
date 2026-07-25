@@ -12,7 +12,7 @@
   --app-brand-primary: var(--dl-color-accent);
   background: var(--dl-color-background);
   color: var(--dl-color-text);
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .app-shell__skip-link {
@@ -37,7 +37,10 @@
 }
 
 .app-shell__content {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   min-width: 0;
+  min-height: 100dvh;
 }
 
 .app-shell__topbar {
@@ -121,7 +124,10 @@
 
 .app-shell__main {
   min-width: 0;
+  min-height: 0;
+  overflow: auto;
   padding-block-end: var(--dl-space-5);
+  scrollbar-gutter: stable;
 }
 
 .app-shell__main > [class$="-page"] {
@@ -171,6 +177,9 @@
 .app-shell__nav {
   display: grid;
   gap: var(--dl-space-1);
+  min-height: 0;
+  overflow-y: auto;
+  padding-block-end: var(--dl-space-2);
 }
 
 .app-shell__nav-group {
@@ -185,10 +194,16 @@
   align-items: center;
   border-radius: var(--dl-radius-md);
   display: grid;
-  gap: var(--dl-space-3);
+  gap: var(--dl-space-2);
   grid-template-columns: auto minmax(0, 1fr);
   min-height: var(--dl-size-touch-target);
   padding: var(--dl-space-2) var(--dl-space-3);
+}
+
+.app-shell__nav-link span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-shell__nav-link:hover,
@@ -217,7 +232,7 @@
 
 .app-shell__user > span {
   align-items: center;
-  background: var(--dl-color-surface-secondary);
+  background: var(--dl-color-background-secondary);
   border-radius: var(--dl-radius-full);
   display: inline-grid;
   font-size: var(--dl-font-size-caption);
@@ -297,19 +312,20 @@
   .app-shell {
     display: grid;
     grid-template-columns: 17rem minmax(0, 1fr);
+    height: 100dvh;
+    overflow: hidden;
   }
 
   .app-shell__sidebar {
-    align-content: start;
     background: var(--dl-color-surface);
     border-right: var(--dl-border-width) solid var(--dl-color-border);
     display: grid;
-    gap: var(--dl-space-5);
+    gap: var(--dl-space-3);
     grid-template-rows: auto minmax(0, 1fr) auto;
-    min-height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
     padding: var(--dl-space-4);
-    position: sticky;
-    top: 0;
   }
 
   .app-shell__topbar {
@@ -318,6 +334,11 @@
 
   .app-shell__header {
     padding: var(--dl-space-5) var(--dl-space-5) 0;
+  }
+
+  .app-shell__content {
+    height: 100dvh;
+    overflow: hidden;
   }
 
   .app-shell__main .dl-container,

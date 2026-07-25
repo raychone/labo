@@ -23,17 +23,17 @@ function getBarcodeDetector(): BarcodeDetectorConstructor | null {
 function getCameraErrorMessage(error: unknown): string {
   if (error instanceof DOMException) {
     if (error.name === "NotAllowedError") {
-      return "Permisiunea pentru camera a fost refuzata.";
+      return "Permisiunea pentru cameră a fost refuzată.";
     }
     if (error.name === "NotFoundError") {
-      return "Nu exista o camera disponibila.";
+      return "Nu există o cameră disponibilă.";
     }
     if (error.name === "NotReadableError") {
-      return "Camera nu poate fi folosita de browser.";
+      return "Camera nu poate fi folosită de browser.";
     }
   }
 
-  return "Camera nu a putut fi pornita.";
+  return "Camera nu a putut fi pornită.";
 }
 
 export function CameraScanner({
@@ -131,23 +131,32 @@ export function CameraScanner({
     <div className="work-scan-page__camera">
       <div className="work-scan-page__camera-toolbar">
         <Button disabled={state === "scanning"} onClick={() => void startCamera()}>
-          Porneste camera
+          Pornește camera
         </Button>
         <Button disabled={state !== "scanning"} onClick={stopCamera} variant="outline">
-          Opreste camera
+          Oprește camera
         </Button>
       </div>
 
-      {state === "unsupported" ? <ErrorState title="Camera nesuportata" description="Browserul nu expune BarcodeDetector pentru QR. Foloseste cautarea manuala." /> : null}
-      {error ? <ErrorState title="Camera indisponibila" description={error} /> : null}
+      {state === "unsupported" ? <ErrorState title="Cameră nesuportată" description="Browserul nu expune BarcodeDetector pentru QR. Folosește căutarea manuală." /> : null}
+      {error ? <ErrorState title="Cameră indisponibilă" description={error} /> : null}
 
-      <video
-        aria-label="Preview camera"
-        className="work-scan-page__video"
-        muted
-        playsInline
-        ref={videoRef}
-      />
+      <div className="work-scan-page__preview">
+        {state !== "scanning" ? (
+          <div className="work-scan-page__preview-placeholder">
+            <strong>Camera este oprită</strong>
+            <span>Apasă „Pornește camera” când eticheta QR este în fața camerei.</span>
+          </div>
+        ) : null}
+        <video
+          aria-label="Previzualizare cameră"
+          className="work-scan-page__video"
+          data-active={state === "scanning" ? "true" : undefined}
+          muted
+          playsInline
+          ref={videoRef}
+        />
+      </div>
     </div>
   );
 }

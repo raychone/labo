@@ -4,6 +4,7 @@ import {
   formatCurrency,
   formatDateTime,
   isSupportedCurrency,
+  isSupportedCountryCode,
   isSupportedLocale,
   isSupportedTimezone,
 } from "./settings.js";
@@ -12,9 +13,11 @@ describe("settings contracts", () => {
   it("guards supported localization values", () => {
     expect(isSupportedLocale("ro-RO")).toBe(true);
     expect(isSupportedCurrency("RON")).toBe(true);
+    expect(isSupportedCountryCode("RO")).toBe(true);
     expect(isSupportedTimezone("Europe/Bucharest")).toBe(true);
     expect(isSupportedLocale("zz-ZZ")).toBe(false);
     expect(isSupportedCurrency("ABC")).toBe(false);
+    expect(isSupportedCountryCode("DE")).toBe(false);
     expect(isSupportedTimezone("GMT+2")).toBe(false);
   });
 

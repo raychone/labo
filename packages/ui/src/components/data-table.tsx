@@ -41,27 +41,27 @@ export interface DataTableProps<TRow> {
 
 export function DataTable<TRow>({
   columns,
-  emptyMessage = "No records found.",
+  emptyMessage = "Nu există înregistrări.",
   error,
   getRowKey,
   isLoading = false,
   onRowAction,
   onSortChange,
   pagination,
-  rowActionLabel = "Open",
+  rowActionLabel = "Deschide",
   rows,
   sort,
 }: DataTableProps<TRow>): ReactNode {
   if (isLoading) {
-    return <LoadingState text="Loading table" />;
+    return <LoadingState text="Se încarcă tabelul" />;
   }
 
   if (error !== undefined) {
-    return <ErrorState description={error} title="Table could not be loaded" />;
+    return <ErrorState description={error} title="Tabelul nu a putut fi încărcat" />;
   }
 
   if (rows.length === 0) {
-    return <EmptyState description={emptyMessage} title="No data" />;
+    return <EmptyState description={emptyMessage} title="Nu există date" />;
   }
 
   function toggleSort(columnId: string): void {
@@ -95,7 +95,7 @@ export function DataTable<TRow>({
                   )}
                 </th>
               ))}
-              {onRowAction ? <th scope="col">Action</th> : null}
+              {onRowAction ? <th scope="col">Acțiuni</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -126,10 +126,10 @@ export function DataTable<TRow>({
             size="small"
             variant="outline"
           >
-            Previous
+            Anterior
           </Button>
           <span>
-            Page {pagination.page} of {pagination.pageCount}
+            Pagina {pagination.page} din {pagination.pageCount}
           </span>
           <Button
             disabled={pagination.page >= pagination.pageCount}
@@ -137,7 +137,7 @@ export function DataTable<TRow>({
             size="small"
             variant="outline"
           >
-            Next
+            Următor
           </Button>
         </div>
       ) : null}

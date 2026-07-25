@@ -25,6 +25,14 @@ interface CsvDocumentRecord {
   readonly type: string;
 }
 
+const BILLING_DOCUMENT_STATUS_LABELS: Readonly<Record<string, string>> = {
+  CANCELLED: "Anulat",
+  DRAFT: "Draft",
+  ISSUED: "Emis",
+  PAID: "Achitat integral",
+  PARTIALLY_PAID: "Parțial încasat",
+};
+
 const EXPORT_DOCUMENT_INCLUDE = {
   lines: true,
   payments: true,
@@ -69,24 +77,29 @@ export class BillingExportService {
 
 export function createMonthRegistryCsv(documents: readonly CsvDocumentRecord[]): string {
   const rows = [
-    ["Data", "Tip", "Numar", "Clinica", "Status", "Total", "Incasat manual", "Sold"],
+    ["Data", "Tip", "Număr", "Clinică", "Status", "Total", "Încasat manual", "Sold restant", "Monedă"],
     ...documents.map((document) => {
       const amounts = calculateBillingAmounts(document);
 
       return [
-        toDateOnly(document.issueDate),
-        document.type,
+        formatRoDate(document.issueDate),
+        document.type === "INVOICE" ? "Factură" : "Proformă",
         document.formattedNumber ?? "Draft",
         document.clinicNameSnapshot,
-        document.status,
+        formatBillingDocumentStatus(document.status),
         minorToCsvMoney(document.totalMinor),
         minorToCsvMoney(amounts.paidMinor),
         minorToCsvMoney(amounts.balanceMinor),
+        "RON",
       ];
     }),
   ];
 
-  return rows.map((row) => row.map(toSafeCsvCell).join(",")).join("\n");
+  return `\uFEFF${rows.map((row) => row.map(toSafeCsvCell).join(";")).join("\r\n")}\r\n`;
+}
+
+export function formatBillingDocumentStatus(status: string): string {
+  return BILLING_DOCUMENT_STATUS_LABELS[status] ?? status;
 }
 
 export function toSafeCsvCell(value: string): string {
@@ -98,4 +111,10 @@ export function toSafeCsvCell(value: string): string {
 
 function minorToCsvMoney(value: number): string {
   return (value / 100).toFixed(2);
+}
+
+function formatRoDate(value: Date): string {
+  const day = String(value.getDate()).padStart(2, "0");
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  return `${day}.${month}.${value.getFullYear()}`;
 }

@@ -30,7 +30,7 @@ export function ManualScanForm({
         required
         value={payload}
       />
-      <FormActions isSubmitting={isLoading} submitDisabled={payload.trim().length === 0} submitLabel="Cauta" />
+      <FormActions isSubmitting={isLoading} submitDisabled={payload.trim().length === 0} submitLabel="Caută" />
     </FormLayout>
   );
 }

@@ -11,6 +11,7 @@ import {
   FormLayout,
   LoadingState,
   TextInput,
+  useToast,
 } from "@dental-lab/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
@@ -44,6 +45,7 @@ const loginFieldLabels: Record<keyof LoginFormValues, string> = {
 export function LoginPage(): ReactNode {
   const queryClient = useQueryClient();
   const auth = useAuthState();
+  const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -61,6 +63,7 @@ export function LoginPage(): ReactNode {
       passwordRef.current?.focus();
     },
     onSuccess: async () => {
+      toast.clearToasts();
       await queryClient.invalidateQueries({ queryKey: authQueryKeys.all });
       const currentUser = await queryClient.fetchQuery({
         queryFn: fetchCurrentUser,
@@ -92,6 +95,12 @@ export function LoginPage(): ReactNode {
     }
   }, [form, locationState?.message]);
 
+  useEffect(() => {
+    if (auth.status === "anonymous") {
+      toast.clearToasts();
+    }
+  }, [auth.status, toast]);
+
   if (auth.status === "authenticated") {
     return <Navigate replace to={getDefaultAuthorizedRoute()} />;
   }
@@ -109,14 +118,14 @@ export function LoginPage(): ReactNode {
 
         <Card className="auth-page__panel">
           <CardHeader>
-            <CardTitle>Intra in aplicatie</CardTitle>
+          <CardTitle>Intră în aplicație</CardTitle>
             <CardDescription>
-              Foloseste contul intern primit de la administrator.
+              Folosește contul intern primit de la administrator.
             </CardDescription>
           </CardHeader>
           <CardContent>
             {auth.status === "loading" ? (
-              <LoadingState text="Verific sesiunea" />
+              <LoadingState text="Se verifică sesiunea" />
             ) : (
               <FormLayout
                 className="auth-page__form"
@@ -149,20 +158,20 @@ export function LoginPage(): ReactNode {
                 />
                 {form.formState.errors.root?.message ? (
                   <ErrorState
-                    title="Autentificare necesara"
+                    title="Autentificare necesară"
                     description={form.formState.errors.root.message}
                   />
                 ) : null}
                 {loginMutation.isError ? (
                   <ErrorState
-                    title="Login esuat"
-                    description="Email sau parola invalide."
+                    title="Autentificare eșuată"
+                    description="Email sau parolă invalide."
                   />
                 ) : null}
                 <FormActions
                   className="auth-page__actions"
                   isSubmitting={loginMutation.isPending}
-                  submitLabel="Login"
+                  submitLabel="Autentificare"
                 />
               </FormLayout>
             )}

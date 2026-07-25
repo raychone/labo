@@ -52,11 +52,11 @@ const pageSize = 20;
 const paymentFilterOptions: readonly { readonly label: string; readonly value: DocumentPaymentFilter }[] = [
   { label: "Toate", value: "ALL" },
   { label: "Neachitate", value: "UNPAID" },
-  { label: "Partial incasate", value: "PARTIALLY_PAID" },
+  { label: "Parțial încasate", value: "PARTIALLY_PAID" },
   { label: "Achitate integral", value: "PAID" },
   { label: "Restante", value: "OUTSTANDING" },
   { label: "Scadente", value: "DUE" },
-  { label: "Depasite", value: "OVERDUE" },
+  { label: "Depășite", value: "OVERDUE" },
   { label: "Anulate", value: "CANCELLED" },
 ];
 
@@ -119,6 +119,13 @@ function formatDate(value: string): string {
   return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium" }).format(new Date(value));
 }
 
+function formatCsvDate(value: string | null): string {
+  if (!value) {
+    return "";
+  }
+  return new Intl.DateTimeFormat("ro-RO", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
+}
+
 function toCsv(rows: readonly Readonly<Record<string, string | number | null>>[]): string {
   const headers = Object.keys(rows[0] ?? {});
   const escape = (value: string | number | null) => {
@@ -126,7 +133,7 @@ function toCsv(rows: readonly Readonly<Record<string, string | number | null>>[]
     const safeText = ["=", "+", "-", "@"].some((prefix) => text.trimStart().startsWith(prefix)) ? `'${text}` : text;
     return `"${safeText.replaceAll("\"", "\"\"")}"`;
   };
-  return [headers.join(","), ...rows.map((row) => headers.map((header) => escape(row[header] ?? null)).join(","))].join("\n");
+  return `\uFEFF${[headers.join(";"), ...rows.map((row) => headers.map((header) => escape(row[header] ?? null)).join(";"))].join("\r\n")}\r\n`;
 }
 
 function downloadCsv(filename: string, content: string): void {
@@ -137,6 +144,33 @@ function downloadCsv(filename: string, content: string): void {
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+function toDocumentTypeLabel(type: BillingDocumentSummary["type"] | "INVOICE" | "PROFORMA"): string {
+  return type === "INVOICE" ? "Factură" : "Proformă";
+}
+
+function toDocumentStatusLabel(status: BillingDocumentSummary["status"]): string {
+  const labels = {
+    CANCELLED: "Anulat",
+    DRAFT: "Draft",
+    ISSUED: "Emis",
+    PAID: "Achitat integral",
+    PARTIALLY_PAID: "Parțial încasat",
+  } as const satisfies Record<BillingDocumentSummary["status"], string>;
+
+  return labels[status];
+}
+
+function toPaymentMethodLabel(method: PaymentMethod | string): string {
+  const labels = {
+    BANK_TRANSFER: "Transfer bancar",
+    CARD: "Card",
+    CASH: "Numerar",
+    OTHER: "Altă metodă",
+  } as const satisfies Record<PaymentMethod, string>;
+
+  return method in labels ? labels[method as PaymentMethod] : "Altă metodă";
 }
 
 export function BillingPage(): ReactNode {
@@ -193,7 +227,7 @@ export function BillingPage(): ReactNode {
       return;
     }
     if (selectedClinicId && work.clinicId !== selectedClinicId && !selectedWorkIds.includes(work.id)) {
-      toast.showToast({ message: "Selectia pentru un document trebuie sa fie din aceeasi clinica.", variant: "error" });
+      toast.showToast({ message: "Selecția pentru un document trebuie să fie din aceeași clinică.", variant: "error" });
       return;
     }
     setSelectedWorkIds((current) => current.includes(work.id) ? current.filter((id) => id !== work.id) : [...current, work.id]);
@@ -208,7 +242,7 @@ export function BillingPage(): ReactNode {
       });
       setSelectedDocumentId(created.id);
       setSelectedWorkIds([]);
-      toast.showToast({ message: kind === "invoice" ? "Factura draft a fost creata." : "Proforma draft a fost creata.", variant: "success" });
+      toast.showToast({ message: kind === "invoice" ? "Factura draft a fost creată." : "Proforma draft a fost creată.", variant: "success" });
     } catch (error) {
       toast.showToast({ message: getErrorMessage(error), variant: "error" });
     }
@@ -234,7 +268,7 @@ export function BillingPage(): ReactNode {
     try {
       const invoice = await convertMutation.mutateAsync(selectedDocument.id);
       setSelectedDocumentId(invoice.id);
-      toast.showToast({ message: "Proforma a fost transformata in factura.", variant: "success" });
+      toast.showToast({ message: "Proforma a fost transformată în factură.", variant: "success" });
     } catch (error) {
       toast.showToast({ message: getErrorMessage(error), variant: "error" });
     }
@@ -246,7 +280,7 @@ export function BillingPage(): ReactNode {
     }
     const input = toRecordPaymentInput(paymentForm);
     if (!input) {
-      toast.showToast({ message: "Introdu o suma incasata mai mare decat 0.", variant: "error" });
+      toast.showToast({ message: "Introdu o sumă încasată mai mare decât 0.", variant: "error" });
       return;
     }
     try {
@@ -255,7 +289,7 @@ export function BillingPage(): ReactNode {
         input,
       });
       setPaymentForm(createEmptyPaymentForm(range.dateTo));
-      toast.showToast({ message: "Incasarea a fost inregistrata manual.", variant: "success" });
+      toast.showToast({ message: "Încasarea a fost înregistrată manual.", variant: "success" });
     } catch (error) {
       toast.showToast({ message: getErrorMessage(error), variant: "error" });
     }
@@ -271,21 +305,21 @@ export function BillingPage(): ReactNode {
         <div>
           <p className="billing-page__eyebrow">Workspace financiar</p>
           <h1>Facturare</h1>
-          <p>Registru lunar pentru lucrari, proforme, facturi, incasari si solduri.</p>
+          <p>Registru lunar pentru lucrări, proforme, facturi, încasări și solduri.</p>
         </div>
         <div className="billing-page__quick-actions">
-          <Button onClick={() => setRange(currentMonthRange())} variant="secondary">Luna curenta</Button>
-          <Button onClick={() => setRange(previousMonthRange())} variant="secondary">Luna anterioara</Button>
+          <Button onClick={() => setRange(currentMonthRange())} variant="secondary">Luna curentă</Button>
+          <Button onClick={() => setRange(previousMonthRange())} variant="secondary">Luna anterioară</Button>
           <Button onClick={() => setRange(currentYearRange())} variant="secondary">Anul curent</Button>
         </div>
       </section>
 
       <section className="billing-page__filters" aria-label="Filtre facturare">
         <DateInput label="De la" value={range.dateFrom} onChange={(event) => setRange((current) => ({ ...current, dateFrom: event.target.value }))} />
-        <DateInput label="Pana la" value={range.dateTo} onChange={(event) => setRange((current) => ({ ...current, dateTo: event.target.value }))} />
-        <TextInput label="Cautare" placeholder="Cauta pacient, clinica, medic, cod lucrare, factura sau chitanta" value={search} onChange={(event) => setSearch(event.target.value)} />
+        <DateInput label="Până la" value={range.dateTo} onChange={(event) => setRange((current) => ({ ...current, dateTo: event.target.value }))} />
+        <TextInput label="Căutare" placeholder="Caută pacient, clinică, medic, cod lucrare, factură sau chitanță" value={search} onChange={(event) => setSearch(event.target.value)} />
         <Select
-          label="Status incasare"
+          label="Status încasare"
           options={paymentFilterOptions}
           value={paymentFilter}
           onChange={(event) => setPaymentFilter(event.target.value as DocumentPaymentFilter)}
@@ -293,28 +327,28 @@ export function BillingPage(): ReactNode {
         <Select
           label="Grupare"
           options={[
-            { label: "Clinica", value: "clinic" },
+            { label: "Clinică", value: "clinic" },
             { label: "Medic", value: "doctor" },
             { label: "Zi", value: "day" },
-            { label: "Luna", value: "month" },
+            { label: "Lună", value: "month" },
             { label: "Pacient", value: "patient" },
             { label: "Status facturare", value: "billingStatus" },
-            { label: "Status incasare", value: "paymentStatus" },
+            { label: "Status încasare", value: "paymentStatus" },
           ]}
           value={groupBy}
           onChange={(event) => setGroupBy(event.target.value)}
         />
       </section>
 
-      {overviewQuery.isLoading ? <LoadingState text="Incarc situatia financiara" /> : null}
-      {overviewQuery.error ? <ErrorState title="Situatia nu poate fi incarcata" description={getErrorMessage(overviewQuery.error)} /> : null}
+      {overviewQuery.isLoading ? <LoadingState text="Se încarcă situația financiară" /> : null}
+      {overviewQuery.error ? <ErrorState title="Situația nu poate fi încărcată" description={getErrorMessage(overviewQuery.error)} /> : null}
       {overviewQuery.data ? <OverviewCards overview={overviewQuery.data} currency={currency} locale={locale} /> : null}
 
       <Tabs
         tabs={[
           {
             id: "uninvoiced",
-            label: "Lucrari nefacturate",
+            label: "Lucrări nefacturate",
             content: (
               <BillableWorksTab
                 canCreateInvoice={canCreateInvoice}
@@ -324,11 +358,12 @@ export function BillingPage(): ReactNode {
                 onCreateInvoice={() => void createDocument("invoice")}
                 onCreateProforma={() => void createDocument("proforma")}
                 onExport={() => downloadCsv("lucrari-nefacturate.csv", toCsv((billableWorksQuery.data?.items ?? []).map((work) => ({
-                  cod: work.code,
-                  clinica: work.clinicName,
-                  medic: work.doctorName,
-                  pacient: work.patientName,
-                  valoare: work.totalPriceMinor ?? "",
+                  "Cod lucrare": work.code,
+                  "Clinică": work.clinicName,
+                  "Medic": work.doctorName,
+                  "Pacient": work.patientName,
+                  "Valoare": work.totalPriceMinor === null ? "" : (work.totalPriceMinor / 100).toFixed(2),
+                  "Monedă": currency,
                 }))))}
                 onToggleWork={toggleWork}
                 query={billableWorksQuery}
@@ -339,7 +374,7 @@ export function BillingPage(): ReactNode {
           },
           {
             id: "documents",
-            label: "Proforme si facturi",
+            label: "Proforme și facturi",
             content: (
               <DocumentsTab
                 canRecordPayment={canRecordPayment}
@@ -351,12 +386,13 @@ export function BillingPage(): ReactNode {
                 locale={locale}
                 onConvert={convertSelectedProforma}
                 onExport={() => downloadCsv("documente-facturare.csv", toCsv((documentsQuery.data?.items ?? []).map((document) => ({
-                  numar: document.formattedNumber,
-                  tip: document.type,
-                  status: document.status,
-                  clinica: document.clinicName,
-                  total: document.totalMinor,
-                  sold: document.balanceMinor,
+                  "Număr": document.formattedNumber,
+                  "Tip": document.type === "INVOICE" ? "Factură" : "Proformă",
+                  "Status": toDocumentStatusLabel(document.status),
+                  "Clinică": document.clinicName,
+                  "Valoare totală": (document.totalMinor / 100).toFixed(2),
+                  "Sold restant": (document.balanceMinor / 100).toFixed(2),
+                  "Monedă": currency,
                 }))))}
                 onIssue={issueSelectedDocument}
                 onPrint={(documentId) => window.open(`/billing/documents/${documentId}/print`, "_blank", "noopener,noreferrer")}
@@ -370,19 +406,20 @@ export function BillingPage(): ReactNode {
           },
           {
             id: "payments",
-            label: "Evidenta incasari",
+            label: "Evidență încasări",
             content: (
               <PaymentsTab
                 currency={currency}
                 isLoading={paymentsQuery.isLoading}
                 locale={locale}
                 onExport={() => downloadCsv("incasari.csv", toCsv((paymentsQuery.data?.items ?? []).map((payment) => ({
-                  data: payment.paymentDate,
-                  document: payment.documentNumber,
-                  metoda: payment.method,
-                  chitanta: payment.receiptNumber,
-                  referinta: payment.reference,
-                  valoare: payment.amountMinor,
+                  "Factură": payment.documentNumber,
+                  "Data încasării": formatCsvDate(payment.paymentDate),
+                  "Sumă": (payment.amountMinor / 100).toFixed(2),
+                  "Monedă": payment.currency,
+                  "Metodă": toPaymentMethodLabel(payment.method),
+                  "Număr chitanță": payment.receiptNumber,
+                  "Referință": payment.reference,
                 }))))}
                 payments={paymentsQuery.data?.items ?? []}
               />
@@ -390,7 +427,7 @@ export function BillingPage(): ReactNode {
           },
           {
             id: "month-close",
-            label: "Inchidere luna",
+            label: "Închidere lună",
             content: <MonthCloseTab
               overview={overviewQuery.data}
               currency={currency}
@@ -419,10 +456,10 @@ function OverviewCards({ currency, locale, overview }: { readonly currency: stri
   const cards = [
     { label: "Nefacturat", value: overview.uninvoicedMinor, count: overview.uninvoicedWorkCount },
     { label: "Facturat", value: overview.proformaMinor + overview.outstandingMinor + overview.paidMinor, count: overview.invoiceCount },
-    { label: "Incasat", value: overview.paidMinor, count: overview.documentCount },
+    { label: "Încasat", value: overview.paidMinor, count: overview.documentCount },
     { label: "Sold restant", value: overview.outstandingMinor, count: overview.unpaidInvoiceCount },
     { label: "Proforme deschise", value: overview.proformaMinor, count: overview.openProformaCount },
-    { label: "Facturi neincasate", value: overview.outstandingMinor, count: overview.unpaidInvoiceCount },
+    { label: "Facturi neîncasate", value: overview.outstandingMinor, count: overview.unpaidInvoiceCount },
   ];
 
   return (
@@ -431,7 +468,7 @@ function OverviewCards({ currency, locale, overview }: { readonly currency: stri
         <Card key={card.label}>
           <CardHeader>
             <CardTitle>{card.label}</CardTitle>
-            <CardDescription>{card.count} inregistrari</CardDescription>
+            <CardDescription>{card.count} înregistrări</CardDescription>
           </CardHeader>
           <CardContent><strong>{formatMoneyMinor(card.value, currency, locale)}</strong></CardContent>
         </Card>
@@ -466,27 +503,27 @@ function BillableWorksTab({
   readonly selectedWorkIds: readonly string[];
 }): ReactNode {
   const columns = useMemo<readonly DataTableColumn<BillableWork>[]>(() => [
-    { id: "select", header: "", renderCell: (work) => <input aria-label={`Selecteaza ${work.code}`} checked={selectedWorkIds.includes(work.id)} disabled={!work.isBillable} onChange={() => onToggleWork(work)} type="checkbox" /> },
+    { id: "select", header: "", renderCell: (work) => <input aria-label={`Selectează ${work.code}`} checked={selectedWorkIds.includes(work.id)} disabled={!work.isBillable} onChange={() => onToggleWork(work)} type="checkbox" /> },
     { id: "code", header: "Cod", renderCell: (work) => work.code },
     { id: "createdAt", header: "Intrare", renderCell: (work) => formatDate(work.createdAt) },
-    { id: "clinic", header: "Clinica", renderCell: (work) => work.clinicName },
+    { id: "clinic", header: "Clinică", renderCell: (work) => work.clinicName },
     { id: "doctor", header: "Medic", renderCell: (work) => work.doctorName },
     { id: "patient", header: "Pacient", renderCell: (work) => work.patientName },
     { id: "type", header: "Tip", renderCell: (work) => work.workTypeName },
     { id: "quantity", header: "Elemente", align: "right", renderCell: (work) => work.quantity },
-    { id: "total", header: "Valoare", align: "right", renderCell: (work) => work.totalPriceMinor === null ? "Restrictionat" : formatMoneyMinor(work.totalPriceMinor, work.currency ?? currency, locale) },
+    { id: "total", header: "Valoare", align: "right", renderCell: (work) => work.totalPriceMinor === null ? "Restricționat" : formatMoneyMinor(work.totalPriceMinor, work.currency ?? currency, locale) },
     { id: "status", header: "Facturare", renderCell: (work) => work.isBillable ? "Nefacturat" : work.unavailableReason },
   ], [currency, locale, onToggleWork, selectedWorkIds]);
 
   return (
     <section className="billing-page__tab">
       <div className="billing-page__toolbar">
-        <p>{selectedWorkIds.length} lucrari selectate · {formatMoneyMinor(selectedTotal, currency, locale)}</p>
+        <p>{selectedWorkIds.length} lucrări selectate · {formatMoneyMinor(selectedTotal, currency, locale)}</p>
         <Button onClick={onExport} variant="outline">Export CSV</Button>
-        {canCreateInvoice ? <Button disabled={selectedWorkIds.length === 0 || isCreating} onClick={onCreateProforma}>Creeaza proforma</Button> : null}
-        {canCreateInvoice ? <Button disabled={selectedWorkIds.length === 0 || isCreating} onClick={onCreateInvoice} variant="secondary">Creeaza factura</Button> : null}
+        {canCreateInvoice ? <Button disabled={selectedWorkIds.length === 0 || isCreating} onClick={onCreateProforma}>Creează proformă</Button> : null}
+        {canCreateInvoice ? <Button disabled={selectedWorkIds.length === 0 || isCreating} onClick={onCreateInvoice} variant="secondary">Creează factură</Button> : null}
       </div>
-      <DataTable columns={columns} emptyMessage="Nu exista lucrari nefacturate in perioada selectata." error={query.error ? getErrorMessage(query.error) : undefined} getRowKey={(work) => work.id} isLoading={query.isLoading} rows={query.data?.items ?? []} />
+      <DataTable columns={columns} emptyMessage="Nu există lucrări nefacturate în perioada selectată." error={query.error ? getErrorMessage(query.error) : undefined} getRowKey={(work) => work.id} isLoading={query.isLoading} rows={query.data?.items ?? []} />
     </section>
   );
 }
@@ -527,12 +564,12 @@ function DocumentsTab({
   readonly selectedDocument: BillingDocumentSummary | null;
 }): ReactNode {
   const columns = useMemo<readonly DataTableColumn<BillingDocumentSummary>[]>(() => [
-    { id: "number", header: "Numar", renderCell: (document) => document.formattedNumber ?? "Draft" },
-    { id: "type", header: "Tip", renderCell: (document) => document.type },
-    { id: "status", header: "Status", renderCell: (document) => document.status },
-    { id: "clinic", header: "Clinica", renderCell: (document) => document.clinicName },
+    { id: "number", header: "Număr", renderCell: (document) => document.formattedNumber ?? "Draft" },
+    { id: "type", header: "Tip", renderCell: (document) => toDocumentTypeLabel(document.type) },
+    { id: "status", header: "Status", renderCell: (document) => toDocumentStatusLabel(document.status) },
+    { id: "clinic", header: "Clinică", renderCell: (document) => document.clinicName },
     { id: "total", header: "Total", align: "right", renderCell: (document) => formatMoneyMinor(document.totalMinor, document.currency, locale) },
-    { id: "payment", header: "Incasare", renderCell: (document) => toPaymentStatusLabel(document.paymentStatus) },
+    { id: "payment", header: "Încasare", renderCell: (document) => toPaymentStatusLabel(document.paymentStatus) },
     { id: "balance", header: "Sold restant", align: "right", renderCell: (document) => formatMoneyMinor(document.balanceMinor, document.currency, locale) },
   ], [locale]);
   const canUsePaymentForm = Boolean(selectedDocument && selectedDocument.type === "INVOICE" && selectedDocument.status !== "CANCELLED" && selectedDocument.balanceMinor > 0);
@@ -542,41 +579,41 @@ function DocumentsTab({
       <div className="billing-page__toolbar">
         <Button onClick={onExport} variant="outline">Export CSV</Button>
         <Button disabled={!selectedDocument || selectedDocument.status !== "DRAFT" || isMutating} onClick={onIssue}>Emite</Button>
-        <Button disabled={!selectedDocument || selectedDocument.type !== "PROFORMA" || selectedDocument.status !== "ISSUED" || isMutating} onClick={onConvert} variant="secondary">Transforma in factura</Button>
-        {canRecordPayment ? <Button disabled={!canUsePaymentForm || isMutating} onClick={onRecordPayment} variant="secondary">Inregistreaza incasare</Button> : null}
+        <Button disabled={!selectedDocument || selectedDocument.type !== "PROFORMA" || selectedDocument.status !== "ISSUED" || isMutating} onClick={onConvert} variant="secondary">Transformă în factură</Button>
+        {canRecordPayment ? <Button disabled={!canUsePaymentForm || isMutating} onClick={onRecordPayment} variant="secondary">Înregistrează încasare</Button> : null}
         <Button disabled={!selectedDocument} onClick={() => selectedDocument ? onPrint(selectedDocument.id) : undefined} variant="outline">Print / PDF</Button>
       </div>
-      <DataTable columns={columns} emptyMessage="Nu exista proforme sau facturi." error={error ? getErrorMessage(error) : undefined} getRowKey={(document) => document.id} isLoading={isLoading} onRowAction={(document) => onSelect(document.id)} rowActionLabel="Selecteaza" rows={documents} />
+      <DataTable columns={columns} emptyMessage="Nu există proforme sau facturi." error={error ? getErrorMessage(error) : undefined} getRowKey={(document) => document.id} isLoading={isLoading} onRowAction={(document) => onSelect(document.id)} rowActionLabel="Selectează" rows={documents} />
       {selectedDocument ? (
         <section className="billing-page__print-preview" aria-label="Anexa facturare">
-          <h2>{selectedDocument.type === "PROFORMA" ? "PROFORMA" : "FACTURA INTERNA / PREVIEW"} {selectedDocument.formattedNumber ?? "Draft"}</h2>
-          <p>{selectedDocument.clinicName} · Total factura {formatMoneyMinor(selectedDocument.totalMinor, currency, locale)} · Incasat manual {formatMoneyMinor(selectedDocument.paidMinor, currency, locale)} · Sold restant {formatMoneyMinor(selectedDocument.balanceMinor, currency, locale)}</p>
+          <h2>{selectedDocument.type === "PROFORMA" ? "PROFORMĂ" : "FACTURĂ INTERNĂ / PREVIEW"} {selectedDocument.formattedNumber ?? "Draft"}</h2>
+          <p>{selectedDocument.clinicName} · Total factură {formatMoneyMinor(selectedDocument.totalMinor, currency, locale)} · Încasat manual {formatMoneyMinor(selectedDocument.paidMinor, currency, locale)} · Sold restant {formatMoneyMinor(selectedDocument.balanceMinor, currency, locale)}</p>
         </section>
       ) : null}
       {canRecordPayment ? (
-        <section className="billing-page__payment-form" aria-label="Inregistrare manuala incasare">
+        <section className="billing-page__payment-form" aria-label="Înregistrare manuală încasare">
           <div>
-            <h3>Evidenta incasari</h3>
-            <p>Inregistreaza manual o plata efectuata in afara aplicatiei. Aplicatia nu proceseaza bani, nu emite bon fiscal si nu se conecteaza la POS sau banca.</p>
+            <h3>Evidență încasări</h3>
+            <p>Înregistrează manual o plată efectuată în afara aplicației. Aplicația nu procesează bani, nu emite bon fiscal și nu se conectează la POS sau bancă.</p>
           </div>
-          <TextInput disabled={!canUsePaymentForm} inputMode="decimal" label="Suma incasata" placeholder="0.00" value={paymentForm.amount} onChange={(event) => setPaymentForm((current) => ({ ...current, amount: event.target.value }))} />
-          <DateInput disabled={!canUsePaymentForm} label="Data incasarii" value={paymentForm.paymentDate} onChange={(event) => setPaymentForm((current) => ({ ...current, paymentDate: event.target.value }))} />
+          <TextInput disabled={!canUsePaymentForm} inputMode="decimal" label="Sumă încasată" placeholder="0.00" value={paymentForm.amount} onChange={(event) => setPaymentForm((current) => ({ ...current, amount: event.target.value }))} />
+          <DateInput disabled={!canUsePaymentForm} label="Data încasării" value={paymentForm.paymentDate} onChange={(event) => setPaymentForm((current) => ({ ...current, paymentDate: event.target.value }))} />
           <Select
             disabled={!canUsePaymentForm}
             label="Metoda informativa"
             options={[
-              { label: "Cash", value: "CASH" },
+              { label: "Numerar", value: "CASH" },
               { label: "Transfer bancar", value: "BANK_TRANSFER" },
               { label: "Card", value: "CARD" },
-              { label: "Alta metoda", value: "OTHER" },
+              { label: "Altă metodă", value: "OTHER" },
             ]}
             value={paymentForm.method}
             onChange={(event) => setPaymentForm((current) => ({ ...current, method: event.target.value as PaymentMethod }))}
           />
-          <TextInput disabled={!canUsePaymentForm} label="Numar chitanta" value={paymentForm.receiptNumber} onChange={(event) => setPaymentForm((current) => ({ ...current, receiptNumber: event.target.value }))} />
-          <DateInput disabled={!canUsePaymentForm} label="Data chitantei" value={paymentForm.receiptDate} onChange={(event) => setPaymentForm((current) => ({ ...current, receiptDate: event.target.value }))} />
-          <TextInput disabled={!canUsePaymentForm} label="Referinta bancara" value={paymentForm.reference} onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))} />
-          <TextInput disabled={!canUsePaymentForm} label="Observatii" value={paymentForm.notes} onChange={(event) => setPaymentForm((current) => ({ ...current, notes: event.target.value }))} />
+          <TextInput disabled={!canUsePaymentForm} label="Număr chitanță" value={paymentForm.receiptNumber} onChange={(event) => setPaymentForm((current) => ({ ...current, receiptNumber: event.target.value }))} />
+          <DateInput disabled={!canUsePaymentForm} label="Data chitanței" value={paymentForm.receiptDate} onChange={(event) => setPaymentForm((current) => ({ ...current, receiptDate: event.target.value }))} />
+          <TextInput disabled={!canUsePaymentForm} label="Referință bancară" value={paymentForm.reference} onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))} />
+          <TextInput disabled={!canUsePaymentForm} label="Observații" value={paymentForm.notes} onChange={(event) => setPaymentForm((current) => ({ ...current, notes: event.target.value }))} />
         </section>
       ) : null}
     </section>
@@ -589,7 +626,7 @@ function toPaymentStatusLabel(status: BillingDocumentSummary["paymentStatus"]): 
   }
 
   if (status === "PARTIALLY_PAID") {
-    return "Plata partiala";
+    return "Plată parțială";
   }
 
   return "Neachitat";
@@ -599,23 +636,23 @@ function PaymentsTab({ currency, isLoading, locale, onExport, payments }: { read
   const columns = useMemo<readonly DataTableColumn<(typeof payments)[number]>[]>(() => [
     { id: "date", header: "Data", renderCell: (payment) => formatDate(payment.paymentDate) },
     { id: "document", header: "Document", renderCell: (payment) => payment.documentNumber ?? "-" },
-    { id: "method", header: "Metoda", renderCell: (payment) => payment.method },
-    { id: "receipt", header: "Chitanta", renderCell: (payment) => payment.receiptNumber ?? payment.reference ?? "-" },
-    { id: "amount", header: "Suma incasata", align: "right", renderCell: (payment) => formatMoneyMinor(payment.amountMinor, currency, locale) },
+    { id: "method", header: "Metodă", renderCell: (payment) => toPaymentMethodLabel(payment.method) },
+    { id: "receipt", header: "Chitanță", renderCell: (payment) => payment.receiptNumber ?? payment.reference ?? "-" },
+    { id: "amount", header: "Sumă încasată", align: "right", renderCell: (payment) => formatMoneyMinor(payment.amountMinor, currency, locale) },
   ], [currency, locale]);
 
   return (
     <section className="billing-page__tab">
-      <p className="billing-page__readonly">Evidenta manuala a incasarilor efectuate in afara aplicatiei.</p>
+      <p className="billing-page__readonly">Evidența manuală a încasărilor efectuate în afara aplicației.</p>
       <div className="billing-page__toolbar"><Button onClick={onExport} variant="outline">Export CSV</Button></div>
-      <DataTable columns={columns} emptyMessage="Nu exista incasari." getRowKey={(payment) => payment.id} isLoading={isLoading} rows={payments} />
+      <DataTable columns={columns} emptyMessage="Nu există încasări." getRowKey={(payment) => payment.id} isLoading={isLoading} rows={payments} />
     </section>
   );
 }
 
 function MonthCloseTab({ currency, locale, onExportRegistry, overview }: { readonly currency: string; readonly locale: string; readonly onExportRegistry: () => void; readonly overview: BillingOverview | undefined }): ReactNode {
   if (!overview) {
-    return <LoadingState text="Incarc inchiderea lunii" />;
+    return <LoadingState text="Se încarcă închiderea lunii" />;
   }
 
   return (
@@ -626,12 +663,12 @@ function MonthCloseTab({ currency, locale, onExportRegistry, overview }: { reado
       <div className="billing-page__month-close">
         {overview.groups.map((group) => (
           <Card key={group.key}>
-            <CardHeader><CardTitle>{group.label}</CardTitle><CardDescription>{group.count} lucrari</CardDescription></CardHeader>
+            <CardHeader><CardTitle>{group.label}</CardTitle><CardDescription>{group.count} lucrări</CardDescription></CardHeader>
             <CardContent>
               <dl>
                 <div><dt>Nefacturat</dt><dd>{formatMoneyMinor(group.uninvoicedMinor, currency, locale)}</dd></div>
                 <div><dt>Facturat</dt><dd>{formatMoneyMinor(group.invoicedMinor, currency, locale)}</dd></div>
-                <div><dt>Incasat manual</dt><dd>{formatMoneyMinor(group.paidMinor, currency, locale)}</dd></div>
+                <div><dt>Încasat manual</dt><dd>{formatMoneyMinor(group.paidMinor, currency, locale)}</dd></div>
                 <div><dt>Sold restant</dt><dd>{formatMoneyMinor(group.balanceMinor, currency, locale)}</dd></div>
               </dl>
             </CardContent>
@@ -647,14 +684,14 @@ function SeriesTab({ canConfigure, isLoading, series }: { readonly canConfigure:
     { id: "type", header: "Tip", renderCell: (row) => row.documentType },
     { id: "prefix", header: "Serie", renderCell: (row) => row.prefix },
     { id: "year", header: "An", renderCell: (row) => row.year },
-    { id: "current", header: "Ultimul numar", align: "right", renderCell: (row) => row.currentNumber },
-    { id: "active", header: "Status", renderCell: (row) => row.isActive ? "Activa" : "Inactiva" },
+    { id: "current", header: "Ultimul număr", align: "right", renderCell: (row) => row.currentNumber },
+    { id: "active", header: "Status", renderCell: (row) => row.isActive ? "Activă" : "Inactivă" },
   ], []);
 
   return (
     <section className="billing-page__tab">
-      {!canConfigure ? <p className="billing-page__readonly">Ai acces de citire, dar nu poti configura seriile.</p> : null}
-      <DataTable columns={columns} emptyMessage="Nu exista serii configurate." getRowKey={(row) => row.id} isLoading={isLoading} rows={series} />
+      {!canConfigure ? <p className="billing-page__readonly">Ai acces de citire, dar nu poți configura seriile.</p> : null}
+      <DataTable columns={columns} emptyMessage="Nu există serii configurate." getRowKey={(row) => row.id} isLoading={isLoading} rows={series} />
     </section>
   );
 }

@@ -13,6 +13,7 @@
 
 - [x] UI-001 - Design tokens and base styles
 - [x] UI-002 - Core UI components
+- [x] UX-HARDENING-001 - Romanian UX, modal, sidebar, toast, QR and export hardening (COMPLETED)
 
 ## AUTH
 
@@ -148,11 +149,15 @@
 
 NONE / AWAITING APPROVAL
 
-Status: AWAITING APPROVAL
+Status: COMPLETED
 
-Last completed task: WORKFORMS-001 - Work form template builder
+Started: 2026-07-25T20:54:23Z
 
-Completed: 2026-07-24T21:03:26Z
+Completed: 2026-07-25T21:15:48Z
+
+Last completed task: UX-HARDENING-001 - Romanian UX, modal, sidebar, toast, QR and export hardening
+
+Completed: 2026-07-25T21:15:48Z
 
 ## Next Recommended Task
 
@@ -207,6 +212,10 @@ None.
 - Keep UI-002 components framework-free and token-driven inside `packages/ui`.
 - Use native controls for select, checkbox, radio, switch, file input, and table semantics where possible.
 - Use internal portal/focus management for Modal and Drawer instead of adding an overlay dependency.
+- Use finite toast durations by default, cap visible toast count, and clear auth-scoped toasts on logout, expired session, and authenticated identity change.
+- Keep Modal and Drawer as shared `@dental-lab/ui` overlays with body lock, focus management, escape close, scrollable body, stable footer, and mobile `100dvh` behavior.
+- Keep Romanian deployment defaults constrained to `ro-RO`, `Europe/Bucharest`, `RON`, and `RO` for laboratory settings.
+- Export CSV files with UTF-8 BOM, CRLF, semicolon delimiter, formula neutralization, Romanian date formatting, and explicit currency columns.
 - Keep QRScanner and SignaturePad out of UI-002 because they depend on device/browser functional flows; QR scan now exists as a feature-specific `/scan` route from QR-001.
 - Store work orders in `work_orders` with a generated stable `WO-YYYY-NNNNNN` code backed by `work_order_code_seq`.
 - WORKS-001 creates work orders directly as `REGISTERED`; draft and workflow status transitions remain deferred.
@@ -720,6 +729,60 @@ None.
   - None.
 - Remaining risks:
   - Linting remains unconfigured in project scripts and should be addressed in a future tooling task.
+
+### UX-HARDENING-001 - Romanian UX, modal, sidebar, toast, QR and export hardening
+
+- Status: COMPLETED.
+- Started: 2026-07-25T20:54:23Z.
+- Completed: 2026-07-25T21:15:48Z.
+- Commit message: `UX-HARDENING-001: harden Romanian UX and exports`.
+- Summary:
+  - Hardened toast lifecycle with finite default durations, `createdAt`, max visible toasts, manual close, cleanup timers, `clearToasts()`, and auth-scoped clearing on logout, expired session, anonymous login state, and identity change.
+  - Hardened shared Modal/Drawer behavior with size variants, scrollable body, stable footer, focus return, Escape handling, body lock, `100dvh`, and safe-area responsive layout.
+  - Stabilized authenticated shell/sidebar scrolling and localized navigation, route states, login, dashboard, works, scan, QR, clinics, work types, users, settings, billing and work form builder wording with Romanian diacritics.
+  - Restricted laboratory settings country/locale/timezone/currency to Romania defaults: `RO`, `ro-RO`, `Europe/Bucharest`, and `RON`.
+  - Hardened QR scan UI with an explicit stopped-camera placeholder, localized camera states, QR modal retry action, and no raw QR token display in the label.
+  - Hardened billing CSV exports with UTF-8 BOM, CRLF, semicolon delimiter, quoting, formula neutralization, Romanian dates, localized headers/statuses/payment methods, and explicit currency fields.
+- Main files modified:
+  - `packages/ui/src/components/toast.tsx`
+  - `packages/ui/src/components/overlay.tsx`
+  - `packages/ui/src/components/data-table.tsx`
+  - `packages/ui/src/components/composition.tsx`
+  - `packages/ui/src/styles.css`
+  - `apps/web/src/app/*`
+  - `apps/web/src/features/auth/*`
+  - `apps/web/src/features/billing/*`
+  - `apps/web/src/features/clinics/*`
+  - `apps/web/src/features/settings/*`
+  - `apps/web/src/features/users/*`
+  - `apps/web/src/features/work-forms/*`
+  - `apps/web/src/features/work-types/*`
+  - `apps/web/src/features/works/*`
+  - `apps/api/src/modules/billing/*`
+  - `apps/api/src/modules/settings/*`
+  - `packages/shared/src/settings.ts`
+- Tests executed:
+  - `pnpm typecheck` - passed.
+  - `pnpm test` - passed.
+  - `pnpm build` - passed.
+- Manual verification:
+  - API smoke on `http://127.0.0.1:3011/health` returned `200 OK`.
+  - Frontend route smoke on `http://127.0.0.1:5181/scan` and `/works` returned `200 OK` HTML.
+  - Authenticated login with the demo manager succeeded and `/settings` returned `countryCode: RO`, `currency: RON`, `locale: ro-RO`, and `timezone: Europe/Bucharest`.
+  - Billing registry CSV export returned `200 OK`, `Content-Type: text/csv; charset=utf-8`, filename `registru-lunar-facturare.csv`, UTF-8 BOM, semicolon delimiters, CRLF rows, Romanian headers, and localized status labels.
+- Dependencies added:
+  - None.
+- Architecture decisions:
+  - Keep overlay behavior in `@dental-lab/ui` instead of adding a dependency.
+  - Keep toast state in the UI provider and clear it from auth lifecycle hooks.
+  - Keep Romanian locale/currency/timezone/country as constrained settings values until multi-country requirements are explicitly approved.
+  - Keep CSV export plain and deterministic for Romanian spreadsheet workflows.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Linting remains unconfigured.
+  - Physical phone QR scan and physical/real print verification remain accepted pending checks from QR-001.
+  - Some internal test fixture strings and shared enum constants intentionally remain raw because they are contracts, not user-facing labels.
 
 ### AUTH-001 - Auth backend
 

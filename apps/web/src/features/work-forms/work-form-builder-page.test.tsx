@@ -137,6 +137,6 @@ describe("WorkFormBuilderPage", () => {
     expect(await screen.findByRole("heading", { name: "WT-0001 · Coroana zirconiu" })).toBeDefined();
     expect(await screen.findByText("v1 · Coroana zirconiu")).toBeDefined();
     expect(await screen.findByLabelText("Nuanta *")).toBeDefined();
-    expect(await screen.findByText("Ai acces de citire. Poti vedea versiunile si preview-ul, dar nu poti modifica formularul.")).toBeDefined();
+    expect(await screen.findByText("Ai acces de citire. Poți vedea versiunile și preview-ul, dar nu poți modifica formularul.")).toBeDefined();
   });
 });

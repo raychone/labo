@@ -23,7 +23,12 @@ describe("billing CSV export", () => {
     ]);
 
     expect(csv).toContain("\"FACT-2026-000001\"");
+    expect(csv).toContain("\"Parțial încasat\"");
+    expect(csv).not.toContain("PARTIALLY_PAID");
     expect(csv).toContain("\"400.00\"");
     expect(csv).toContain("\"600.00\"");
+    expect(csv.startsWith("\uFEFF")).toBe(true);
+    expect(csv).toContain(";");
+    expect(csv).toContain("\r\n");
   });
 });

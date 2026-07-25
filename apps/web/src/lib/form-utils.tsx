@@ -28,7 +28,7 @@ export function normalizeApiError(error: unknown): NormalizedApiError {
     return {
       code: "NETWORK_ERROR",
       fieldErrors: {},
-      message: "Conexiunea la server a esuat. Verifica reteaua si incearca din nou.",
+      message: "Conexiunea la server a eșuat. Verifică rețeaua și încearcă din nou.",
       status: undefined,
     };
   }
@@ -45,7 +45,7 @@ export function normalizeApiError(error: unknown): NormalizedApiError {
   return {
     code: undefined,
     fieldErrors: {},
-    message: "Actiunea a esuat.",
+    message: "Acțiunea a eșuat.",
     status: undefined,
   };
 }
@@ -198,7 +198,7 @@ export function useCloseGuard(
   return {
     confirmModal: (
       <ConfirmActionModal
-        confirmLabel="Inchide fara salvare"
+        confirmLabel="Închide fără salvare"
         description={unsavedChangesMessage}
         isOpen={isConfirmOpen}
         onCancel={() => setIsConfirmOpen(false)}

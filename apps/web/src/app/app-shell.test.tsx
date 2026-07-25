@@ -79,9 +79,9 @@ describe("AuthenticatedAppShell", () => {
     );
 
     await waitFor(() => expect(screen.getAllByText("Laborator Test").length).toBeGreaterThan(0));
-    await waitFor(() => expect(screen.getAllByText("Lucrari").length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText("Lucrări").length).toBeGreaterThan(0));
     expect(screen.queryByText("Utilizatori")).toBeNull();
-    expect(screen.getByRole("link", { name: /Lucrari/ }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: /Lucrări/ }).getAttribute("aria-current")).toBe("page");
   });
 
   it("opens and closes the mobile drawer with Escape", async () => {
@@ -95,11 +95,11 @@ describe("AuthenticatedAppShell", () => {
       </Routes>,
     );
 
-    const menuButton = await screen.findByRole("button", { name: "Deschide navigatia" });
+    const menuButton = await screen.findByRole("button", { name: "Deschide navigația" });
     fireEvent.click(menuButton);
-    expect(await screen.findByRole("dialog", { name: "Navigatie" })).toBeDefined();
-    fireEvent.keyDown(screen.getByRole("dialog", { name: "Navigatie" }), { key: "Escape" });
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Navigatie" })).toBeNull());
+    expect(await screen.findByRole("dialog", { name: "Navigație" })).toBeDefined();
+    fireEvent.keyDown(screen.getByRole("dialog", { name: "Navigație" }), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Navigație" })).toBeNull());
   });
 });
 

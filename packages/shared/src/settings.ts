@@ -1,17 +1,19 @@
-export const SUPPORTED_LOCALES = ["ro-RO", "en-US", "fr-FR"] as const;
-export const SUPPORTED_CURRENCIES = ["RON", "EUR"] as const;
-export const SUPPORTED_TIMEZONES = ["Europe/Bucharest", "Europe/Paris", "UTC"] as const;
+export const SUPPORTED_LOCALES = ["ro-RO"] as const;
+export const SUPPORTED_CURRENCIES = ["RON"] as const;
+export const SUPPORTED_TIMEZONES = ["Europe/Bucharest"] as const;
+export const SUPPORTED_COUNTRY_CODES = ["RO"] as const;
 
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
 export type SupportedTimezone = (typeof SUPPORTED_TIMEZONES)[number];
+export type SupportedCountryCode = (typeof SUPPORTED_COUNTRY_CODES)[number];
 
 export interface LaboratorySettings {
   readonly addressLine1: string | null;
   readonly addressLine2: string | null;
   readonly city: string | null;
   readonly companyRegistrationNumber: string | null;
-  readonly countryCode: string;
+  readonly countryCode: SupportedCountryCode;
   readonly countyOrRegion: string | null;
   readonly createdAt: string;
   readonly currency: SupportedCurrency;
@@ -66,6 +68,10 @@ export function isSupportedCurrency(value: string): value is SupportedCurrency {
 
 export function isSupportedTimezone(value: string): value is SupportedTimezone {
   return (SUPPORTED_TIMEZONES as readonly string[]).includes(value);
+}
+
+export function isSupportedCountryCode(value: string): value is SupportedCountryCode {
+  return (SUPPORTED_COUNTRY_CODES as readonly string[]).includes(value);
 }
 
 export function formatDateTime(

@@ -146,11 +146,11 @@ export function WorkFormBuilderPage(): ReactNode {
   }, [draftFields]);
 
   if (!workTypeId) {
-    return <PageState><ErrorState title="Ruta invalida" description="Lipseste tipul de lucrare." /></PageState>;
+    return <PageState><ErrorState title="Rută invalidă" description="Lipsește tipul de lucrare." /></PageState>;
   }
 
   if (permissionsQuery.isLoading || listQuery.isLoading) {
-    return <PageState><LoadingState text="Incarc builder-ul de formular" /></PageState>;
+    return <PageState><LoadingState text="Se încarcă builderul de formular" /></PageState>;
   }
 
   if (!canRead) {
@@ -158,11 +158,11 @@ export function WorkFormBuilderPage(): ReactNode {
   }
 
   if (listQuery.isError) {
-    return <PageState><ErrorState title="Formularele nu pot fi incarcate" description={getErrorMessage(listQuery.error)} /></PageState>;
+    return <PageState><ErrorState title="Formularele nu pot fi încărcate" description={getErrorMessage(listQuery.error)} /></PageState>;
   }
 
   function selectTemplate(templateId: string): void {
-    if (isDirty && !window.confirm("Ai modificari nesalvate. Schimbi versiunea fara salvare?")) {
+    if (isDirty && !window.confirm("Ai modificări nesalvate. Schimbi versiunea fără salvare?")) {
       return;
     }
 
@@ -189,7 +189,7 @@ export function WorkFormBuilderPage(): ReactNode {
           input: { fields: draftFields },
           templateId: template.id,
         }, {
-          onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Campurile nu au fost salvate", variant: "error" }),
+          onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Câmpurile nu au fost salvate", variant: "error" }),
           onSuccess: (saved) => {
             setSelectedTemplateId(saved.id);
             setIsDirty(false);
@@ -206,12 +206,12 @@ export function WorkFormBuilderPage(): ReactNode {
       <section className="dl-container work-form-builder-page__layout">
         <header className="work-form-builder-page__header">
           <div>
-            <Link to="/work-types">Tipuri de lucrari</Link>
+            <Link to="/work-types">Tipuri de lucrări</Link>
             <h1>{listQuery.data?.workType.code} · {listQuery.data?.workType.name}</h1>
-            <p>Configureaza formularul folosit pentru lucrarile viitoare ale acestui tip.</p>
+            <p>Configurează formularul folosit pentru lucrările viitoare ale acestui tip.</p>
           </div>
           <div className="work-form-builder-page__header-actions">
-            <StatusBadge label={listQuery.data?.workType.isActive ? "WorkType activ" : "WorkType arhivat"} variant={listQuery.data?.workType.isActive ? "registered" : "cancelled"} />
+            <StatusBadge label={listQuery.data?.workType.isActive ? "Tip activ" : "Tip arhivat"} variant={listQuery.data?.workType.isActive ? "registered" : "cancelled"} />
             <Button
               disabled={!canCreate || !canMutateWorkType || isSaving}
               onClick={() => createMutation.mutate({
@@ -225,23 +225,23 @@ export function WorkFormBuilderPage(): ReactNode {
                 },
               })}
             >
-              Creeaza draft
+              Creează draft
             </Button>
           </div>
         </header>
 
-        {!canUpdate ? <p className="work-form-builder-page__readonly">Ai acces de citire. Poti vedea versiunile si preview-ul, dar nu poti modifica formularul.</p> : null}
-        {!canMutateWorkType ? <p className="work-form-builder-page__readonly">Tipul de lucrare este arhivat. Template-urile raman vizibile, dar managementul revine dupa reactivare.</p> : null}
+        {!canUpdate ? <p className="work-form-builder-page__readonly">Ai acces de citire. Poți vedea versiunile și preview-ul, dar nu poți modifica formularul.</p> : null}
+        {!canMutateWorkType ? <p className="work-form-builder-page__readonly">Tipul de lucrare este arhivat. Template-urile rămân vizibile, dar managementul revine după reactivare.</p> : null}
 
         <div className="work-form-builder-page__grid">
           <Card>
             <CardHeader>
               <CardTitle>Versiuni</CardTitle>
-              <CardDescription>Maximum o versiune activa per tip de lucrare.</CardDescription>
+              <CardDescription>Maximum o versiune activă per tip de lucrare.</CardDescription>
             </CardHeader>
             <CardContent>
               {listQuery.data?.templates.length === 0 ? (
-                <EmptyState title="Nu exista template-uri" description="Creeaza primul draft pentru acest tip de lucrare." />
+                <EmptyState title="Nu există template-uri" description="Creează primul draft pentru acest tip de lucrare." />
               ) : (
                 <div className="work-form-builder-page__versions">
                   {listQuery.data?.templates.map((template) => (
@@ -252,7 +252,7 @@ export function WorkFormBuilderPage(): ReactNode {
                       type="button"
                     >
                       <span>v{template.version} · {template.name}</span>
-                      <span>{statusLabel(template.status)} · {template.fieldCount} campuri</span>
+                      <span>{statusLabel(template.status)} · {template.fieldCount} câmpuri</span>
                     </button>
                   ))}
                 </div>
@@ -263,11 +263,11 @@ export function WorkFormBuilderPage(): ReactNode {
           <Card>
             <CardHeader>
               <CardTitle>{selectedTemplate ? `Builder v${selectedTemplate.version}` : "Builder"}</CardTitle>
-              <CardDescription>{selectedTemplate ? statusLabel(selectedTemplate.status) : "Alege sau creeaza o versiune."}</CardDescription>
+              <CardDescription>{selectedTemplate ? statusLabel(selectedTemplate.status) : "Alege sau creează o versiune."}</CardDescription>
             </CardHeader>
             <CardContent>
-              {selectedQuery.isLoading ? <LoadingState text="Incarc versiunea" /> : null}
-              {selectedQuery.isError ? <ErrorState title="Versiunea nu poate fi incarcata" description={getErrorMessage(selectedQuery.error)} /> : null}
+              {selectedQuery.isLoading ? <LoadingState text="Se încarcă versiunea" /> : null}
+              {selectedQuery.isError ? <ErrorState title="Versiunea nu poate fi încărcată" description={getErrorMessage(selectedQuery.error)} /> : null}
               {selectedTemplate ? (
                 <div className="work-form-builder-page__editor">
                   <TextInput
@@ -290,7 +290,7 @@ export function WorkFormBuilderPage(): ReactNode {
                   />
 
                   <div className="work-form-builder-page__field-toolbar">
-                    <h2>Campuri</h2>
+                    <h2>Câmpuri</h2>
                     <Button
                       disabled={!canEditSelected || isSaving}
                       onClick={() => {
@@ -300,13 +300,13 @@ export function WorkFormBuilderPage(): ReactNode {
                       type="button"
                       variant="outline"
                     >
-                      Adauga camp
+                      Adaugă câmp
                     </Button>
                   </div>
 
                   {validationErrors.length > 0 ? (
                     <div className="work-form-builder-page__errors" role="alert">
-                      <strong>Verifica schema:</strong>
+                      <strong>Verifică schema:</strong>
                       <ul>{validationErrors.map((error) => <li key={error}>{error}</li>)}</ul>
                     </div>
                   ) : null}
@@ -362,34 +362,34 @@ export function WorkFormBuilderPage(): ReactNode {
                         setIsDirty(false);
                       }}
                       submitDisabled={validationErrors.length > 0 || !isDirty}
-                      submitLabel="Salveaza draft"
+                      submitLabel="Salvează draft"
                       onCancel={() => undefined}
                     />
                   ) : null}
 
                   <div className="work-form-builder-page__actions">
                     <Button disabled={!canEditSelected || isSaving || validationErrors.length > 0 || draftFields.length === 0} onClick={saveDraft} type="button">
-                      Salveaza schema
+                      Salvează schema
                     </Button>
                     <Button disabled={!canEditSelected || isSaving || draftFields.length === 0} onClick={() => setConfirmActivate(true)} type="button" variant="outline">
-                      Activeaza
+                      Activează
                     </Button>
                     <Button disabled={!canArchive || selectedTemplate.status !== "DRAFT" || isSaving} onClick={() => setConfirmArchive(true)} type="button" variant="outline">
-                      Arhiveaza
+                      Arhivează
                     </Button>
                     <Button
                       disabled={!canCreate || !canMutateWorkType || isSaving}
                       onClick={() => cloneMutation.mutate(selectedTemplate.id, {
-                        onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Versiunea nu a fost clonata", variant: "error" }),
+                        onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Versiunea nu a fost clonată", variant: "error" }),
                         onSuccess: (template) => {
                           setSelectedTemplateId(template.id);
-                          toast.showToast({ message: "Versiunea a fost clonata in draft.", variant: "success" });
+                          toast.showToast({ message: "Versiunea a fost clonată în draft.", variant: "success" });
                         },
                       })}
                       type="button"
                       variant="outline"
                     >
-                      Cloneaza
+                      Clonează
                     </Button>
                   </div>
                 </div>
@@ -400,7 +400,7 @@ export function WorkFormBuilderPage(): ReactNode {
           <Card>
             <CardHeader>
               <CardTitle>Preview</CardTitle>
-              <CardDescription>Preview-ul nu salveaza valori si nu creeaza lucrare.</CardDescription>
+              <CardDescription>Preview-ul nu salvează valori și nu creează lucrare.</CardDescription>
             </CardHeader>
             <CardContent>
               <Preview fields={draftFields} />
@@ -412,7 +412,7 @@ export function WorkFormBuilderPage(): ReactNode {
       {selectedTemplate ? (
         <>
           <ConfirmActionModal
-            confirmLabel="Activeaza versiunea"
+            confirmLabel="Activează versiunea"
             description={activationMessage}
             isLoading={activateMutation.isPending}
             isOpen={confirmActivate}
@@ -427,12 +427,12 @@ export function WorkFormBuilderPage(): ReactNode {
                 },
               });
             }}
-            title="Activeaza formularul"
+            title="Activează formularul"
             variant="primary"
           />
           <ConfirmActionModal
-            confirmLabel="Arhiveaza"
-            description="Draftul arhivat devine read-only si ramane disponibil in istoric."
+            confirmLabel="Arhivează"
+            description="Draftul arhivat devine read-only și rămâne disponibil în istoric."
             isLoading={archiveMutation.isPending}
             isOpen={confirmArchive}
             onCancel={() => setConfirmArchive(false)}
@@ -446,7 +446,7 @@ export function WorkFormBuilderPage(): ReactNode {
                 },
               });
             }}
-            title="Arhiveaza draftul"
+            title="Arhivează draftul"
           />
         </>
       ) : null}
@@ -487,7 +487,7 @@ function FieldEditor({
         <div>
           <Button disabled={!canEdit || isFirst} onClick={onMoveUp} type="button" variant="outline">Sus</Button>
           <Button disabled={!canEdit || isLast} onClick={onMoveDown} type="button" variant="outline">Jos</Button>
-          <Button disabled={!canEdit} onClick={onRemove} type="button" variant="outline">Sterge</Button>
+          <Button disabled={!canEdit} onClick={onRemove} type="button" variant="outline">Șterge</Button>
         </div>
       </div>
       <div className="work-form-builder-page__field-grid">
@@ -577,7 +577,7 @@ function ValidationEditor({
       ))}
       <TextInput
         disabled={!canEdit}
-        label="Default value"
+        label="Valoare implicită"
         onChange={(event) => onChange({ ...field, defaultValue: toDefaultValue(field.type, event.target.value) })}
         value={defaultValueToString(field.defaultValue)}
       />
@@ -601,9 +601,9 @@ function OptionsEditor({
   return (
     <div className="work-form-builder-page__options">
       <div className="work-form-builder-page__field-toolbar">
-        <h4>Optiuni</h4>
-        <Button disabled={!canEdit} onClick={() => onChange({ ...field, options: [...field.options, { label: "Optiune noua", value: `optiune_${field.options.length + 1}` }] })} type="button" variant="outline">
-          Adauga optiune
+        <h4>Opțiuni</h4>
+        <Button disabled={!canEdit} onClick={() => onChange({ ...field, options: [...field.options, { label: "Opțiune nouă", value: `optiune_${field.options.length + 1}` }] })} type="button" variant="outline">
+          Adaugă opțiune
         </Button>
       </div>
       {field.options.map((option, index) => (
@@ -612,7 +612,7 @@ function OptionsEditor({
           <TextInput disabled={!canEdit} label="Value" onChange={(event) => updateOption(index, { ...option, value: event.target.value.trim() })} value={option.value} />
           <Button disabled={!canEdit || index === 0} onClick={() => onChange({ ...field, options: swap(field.options, index, index - 1) })} type="button" variant="outline">Sus</Button>
           <Button disabled={!canEdit || index === field.options.length - 1} onClick={() => onChange({ ...field, options: swap(field.options, index, index + 1) })} type="button" variant="outline">Jos</Button>
-          <Button disabled={!canEdit} onClick={() => onChange({ ...field, options: field.options.filter((_, currentIndex) => currentIndex !== index) })} type="button" variant="outline">Sterge</Button>
+          <Button disabled={!canEdit} onClick={() => onChange({ ...field, options: field.options.filter((_, currentIndex) => currentIndex !== index) })} type="button" variant="outline">Șterge</Button>
         </div>
       ))}
     </div>
@@ -621,7 +621,7 @@ function OptionsEditor({
 
 function Preview({ fields }: { readonly fields: readonly WorkFormFieldDefinition[] }): ReactNode {
   if (fields.length === 0) {
-    return <EmptyState title="Preview gol" description="Adauga campuri in draft pentru a vedea formularul." />;
+    return <EmptyState title="Preview gol" description="Adaugă câmpuri în draft pentru a vedea formularul." />;
   }
 
   return (

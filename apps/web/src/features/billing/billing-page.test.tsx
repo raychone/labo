@@ -112,12 +112,12 @@ describe("BillingPage", () => {
     renderWithProviders(<BillingPage />);
 
     expect(await screen.findByRole("heading", { name: "Facturare" })).toBeDefined();
-    expect(await screen.findByLabelText("Status incasare")).toBeDefined();
+    expect(await screen.findByLabelText("Status încasare")).toBeDefined();
     expect((await screen.findAllByText("Nefacturat")).length).toBeGreaterThan(0);
     expect(await screen.findByText("WO-2026-000001")).toBeDefined();
-    fireEvent.click(screen.getByLabelText("Selecteaza WO-2026-000001"));
-    expect(await screen.findByText(/1 lucrari selectate/)).toBeDefined();
-    expect(screen.getByRole("button", { name: "Creeaza proforma" })).toBeDefined();
+    fireEvent.click(screen.getByLabelText("Selectează WO-2026-000001"));
+    expect(await screen.findByText(/1 lucrări selectate/)).toBeDefined();
+    expect(screen.getByRole("button", { name: "Creează proformă" })).toBeDefined();
     expect(screen.queryByText("Incaseaza sold")).toBeNull();
   });
 });

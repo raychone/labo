@@ -83,7 +83,7 @@ export class BillingController {
     @Res({ passthrough: true }) response: Response,
   ) {
     response.setHeader("Content-Type", "text/csv; charset=utf-8");
-    response.setHeader("Content-Disposition", "attachment; filename=\"billing-month-registry.csv\"");
+    response.setHeader("Content-Disposition", "attachment; filename=\"registru-lunar-facturare.csv\"");
 
     return this.billingExportService.getMonthRegistryCsv({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, query);
   }

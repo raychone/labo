@@ -26,9 +26,9 @@ export class ShellErrorBoundary extends Component<ErrorBoundaryProps, ErrorBound
     if (this.state.error) {
       return (
         <ErrorState
-          title="Pagina nu a putut fi afisata"
-          description="Reincarca pagina sau revino la dashboard."
-          retryAction={<Button onClick={() => window.location.reload()}>Reincarca</Button>}
+          title="Pagina nu a putut fi afișată"
+          description="Reîncarcă pagina sau revino la panoul principal."
+          retryAction={<Button onClick={() => window.location.reload()}>Reîncarcă</Button>}
         />
       );
     }

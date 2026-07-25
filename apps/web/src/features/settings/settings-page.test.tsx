@@ -33,13 +33,13 @@ function createJsonResponse(body: unknown, status = 200): Response {
 const settingsResponse = {
   addressLine1: "Strada Laboratorului 1",
   addressLine2: null,
-  city: "Bucuresti",
+  city: "București",
   companyRegistrationNumber: "J40/123/2026",
   countryCode: "RO",
-  countyOrRegion: "Bucuresti",
+  countyOrRegion: "București",
   createdAt: "2026-01-01T00:00:00.000Z",
   currency: "RON",
-  documentFooter: "Multumim pentru colaborare.",
+  documentFooter: "Mulțumim pentru colaborare.",
   email: "contact@example.test",
   id: "settings_1",
   laboratoryName: "Dental Lab",
@@ -73,10 +73,10 @@ describe("SettingsPage", () => {
 
     renderWithProviders(<SettingsPage />);
 
-    expect(await screen.findByRole("heading", { name: "Setari laborator" })).toBeDefined();
+    expect(await screen.findByRole("heading", { name: "Setări laborator" })).toBeDefined();
     expect(await screen.findByDisplayValue("Dental Lab")).toBeDefined();
-    expect(await screen.findByDisplayValue("Europe/Bucharest")).toBeDefined();
-    expect(await screen.findByRole("button", { name: "Salveaza" })).toBeDefined();
+    expect(await screen.findByText("Europe/Bucharest")).toBeDefined();
+    expect(await screen.findByRole("button", { name: "Salvează" })).toBeDefined();
   });
 
   it("shows read-only mode without settings.update", async () => {
@@ -90,8 +90,8 @@ describe("SettingsPage", () => {
 
     renderWithProviders(<SettingsPage />);
 
-    expect(await screen.findByText("Ai acces de citire, dar nu poti modifica aceste setari.")).toBeDefined();
-    expect(screen.queryByRole("button", { name: "Salveaza" })).toBeNull();
+    expect(await screen.findByText("Ai acces de citire, dar nu poți modifica aceste setări.")).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Salvează" })).toBeNull();
   });
 
   it("renders an access error without settings.read", async () => {

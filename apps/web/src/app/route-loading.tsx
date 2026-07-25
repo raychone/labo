@@ -5,11 +5,11 @@ export function GlobalAuthLoading(): ReactNode {
   return (
     <main className="global-auth-loading">
       <div className="app-brand-mark" aria-hidden="true">DL</div>
-      <LoadingState size="large" text="Se verifica sesiunea..." />
+      <LoadingState size="large" text="Se verifică sesiunea..." />
     </main>
   );
 }
 
 export function RouteLoading(): ReactNode {
-  return <LoadingState text="Incarc pagina" />;
+  return <LoadingState text="Se încarcă pagina" />;
 }

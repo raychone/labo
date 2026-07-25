@@ -151,17 +151,17 @@ function toDoctorFormValues(doctor: DoctorDetail | undefined, clinicId: string):
 }
 
 const clinicFieldLabels: Partial<Record<keyof ClinicFormValues, string>> = {
-  billingCountryCode: "Tara facturare",
+  billingCountryCode: "Țară facturare",
   contactPersonEmail: "Email contact",
-  countryCode: "Tara",
-  email: "Email clinica",
-  name: "Nume clinica",
-  phone: "Telefon clinica",
+  countryCode: "Țară",
+  email: "Email clinică",
+  name: "Nume clinică",
+  phone: "Telefon clinică",
   website: "Website",
 };
 
 const doctorFieldLabels: Partial<Record<keyof DoctorFormValues, string>> = {
-  clinicId: "Clinica",
+  clinicId: "Clinică",
   email: "Email",
   firstName: "Prenume",
   lastName: "Nume",
@@ -265,28 +265,28 @@ export function ClinicsPage(): ReactNode {
       await invalidateClinics();
       setIsCreateOpen(false);
       setSelectedClinicId(clinic.id);
-      toast.showToast({ message: "Clinica a fost creata.", variant: "success" });
+      toast.showToast({ message: "Clinica a fost creată.", variant: "success" });
     },
   });
   const updateClinicMutation = useMutation({
     mutationFn: ({ clinicId, input }: { readonly clinicId: string; readonly input: UpdateClinicInput }) => updateClinic(clinicId, input),
     onSuccess: async () => {
       await invalidateClinics();
-      toast.showToast({ message: "Clinica a fost salvata.", variant: "success" });
+      toast.showToast({ message: "Clinica a fost salvată.", variant: "success" });
     },
   });
   const archiveClinicMutation = useMutation({
     mutationFn: archiveClinic,
     onSuccess: async () => {
       await invalidateClinics();
-      toast.showToast({ message: "Clinica a fost arhivata.", variant: "success" });
+      toast.showToast({ message: "Clinica a fost arhivată.", variant: "success" });
     },
   });
   const restoreClinicMutation = useMutation({
     mutationFn: restoreClinic,
     onSuccess: async () => {
       await invalidateClinics();
-      toast.showToast({ message: "Clinica a fost reactivata.", variant: "success" });
+      toast.showToast({ message: "Clinica a fost reactivată.", variant: "success" });
     },
   });
   const createDoctorMutation = useMutation({
@@ -294,7 +294,7 @@ export function ClinicsPage(): ReactNode {
     onSuccess: async () => {
       await invalidateClinics();
       setDoctorModal(null);
-      toast.showToast({ message: "Medicul a fost adaugat.", variant: "success" });
+      toast.showToast({ message: "Medicul a fost adăugat.", variant: "success" });
     },
   });
   const updateDoctorMutation = useMutation({
@@ -322,14 +322,14 @@ export function ClinicsPage(): ReactNode {
 
   const clinicColumns = useMemo<readonly DataTableColumn<ClinicSummary>[]>(() => [
     { header: "Cod", id: "code", isSortable: true, renderCell: (clinic) => clinic.code },
-    { header: "Clinica", id: "name", isSortable: true, renderCell: (clinic) => clinic.name },
-    { header: "Oras", id: "city", isSortable: true, renderCell: (clinic) => clinic.city ?? "-" },
+    { header: "Clinică", id: "name", isSortable: true, renderCell: (clinic) => clinic.name },
+    { header: "Oraș", id: "city", isSortable: true, renderCell: (clinic) => clinic.city ?? "-" },
     { header: "Contact", id: "contact", renderCell: (clinic) => clinic.contactPersonName ?? clinic.email ?? clinic.phone ?? "-" },
     { header: "Status", id: "status", renderCell: (clinic) => <ActiveBadge isActive={clinic.isActive} /> },
   ], []);
 
   if (permissionsQuery.isLoading) {
-    return <PageState><LoadingState text="Verific permisiunile" /></PageState>;
+    return <PageState><LoadingState text="Se verifică permisiunile" /></PageState>;
   }
 
   if (!canReadClinics) {
@@ -341,22 +341,22 @@ export function ClinicsPage(): ReactNode {
       <section className="dl-container clinics-page__layout" aria-labelledby="clinics-title">
         <header className="clinics-page__header">
           <div>
-            <h1 id="clinics-title">Clinici si medici</h1>
-            <p>Cabinete partenere, contacte, date de facturare si medici externi pentru selectie operationala.</p>
+            <h1 id="clinics-title">Clinici și medici</h1>
+            <p>Cabinete partenere, contacte, date de facturare și medici externi pentru selecție operațională.</p>
           </div>
           <Button disabled={!canCreateClinics} onClick={() => setIsCreateOpen(true)}>
-            Adauga clinica
+            Adaugă clinică
           </Button>
         </header>
 
         <Card>
           <CardHeader>
             <CardTitle>Selector clinică-medic</CardTitle>
-            <CardDescription>Optiunile includ doar clinici active si medici activi.</CardDescription>
+            <CardDescription>Opțiunile includ doar clinici active și medici activi.</CardDescription>
           </CardHeader>
           <CardContent className="clinics-page__selector">
             <Select
-              label="Clinica"
+              label="Clinică"
               onChange={(event) => {
                 setSelectorClinicId(event.target.value);
                 setSelectorDoctorId("");
@@ -370,7 +370,7 @@ export function ClinicsPage(): ReactNode {
               label="Medic"
               onChange={(event) => setSelectorDoctorId(event.target.value)}
               options={toDoctorSelectOptions(selectorDoctorOptionsQuery.data ?? [])}
-              placeholder={selectorClinicId ? "Alege medicul" : "Alege intai clinica"}
+              placeholder={selectorClinicId ? "Alege medicul" : "Alege întâi clinica"}
               value={selectorDoctorId}
             />
           </CardContent>
@@ -378,20 +378,20 @@ export function ClinicsPage(): ReactNode {
 
         <Card>
           <CardHeader>
-            <CardTitle>Lista clinici</CardTitle>
-            <CardDescription>Cauta dupa cod, nume, date fiscale, contact sau oras.</CardDescription>
+            <CardTitle>Listă clinici</CardTitle>
+            <CardDescription>Caută după cod, nume, date fiscale, contact sau oraș.</CardDescription>
           </CardHeader>
           <CardContent className="clinics-page__table-card">
             <div className="clinics-page__filters">
               <TextInput
-                label="Cautare"
+                label="Căutare"
                 onChange={(event) => setParams((current) => ({ ...current, page: 1, search: event.target.value || undefined }))}
                 placeholder="Cod, nume, email"
                 type="search"
                 value={params.search ?? ""}
               />
               <TextInput
-                label="Oras"
+                label="Oraș"
                 onChange={(event) => setParams((current) => ({ ...current, city: event.target.value || undefined, page: 1 }))}
                 value={params.city ?? ""}
               />
@@ -404,7 +404,7 @@ export function ClinicsPage(): ReactNode {
             </div>
             <DataTable
               columns={clinicColumns}
-              emptyMessage="Nu exista clinici pentru filtrele curente."
+              emptyMessage="Nu există clinici pentru filtrele curente."
               error={clinicsQuery.isError ? getErrorMessage(clinicsQuery.error) : undefined}
               getRowKey={(clinic) => clinic.id}
               isLoading={clinicsQuery.isLoading}
@@ -432,7 +432,7 @@ export function ClinicsPage(): ReactNode {
         isOpen={isCreateOpen}
         isSaving={createClinicMutation.isPending}
         onOpenChange={setIsCreateOpen}
-        onSubmit={(values) => createClinicMutation.mutate(values, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Clinica nu a fost creata", variant: "error" }) })}
+        onSubmit={(values) => createClinicMutation.mutate(values, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Clinica nu a fost creată", variant: "error" }) })}
         submitError={createClinicMutation.error}
       />
 
@@ -448,13 +448,13 @@ export function ClinicsPage(): ReactNode {
         error={selectedClinicQuery.isError ? getErrorMessage(selectedClinicQuery.error) : undefined}
         isLoading={selectedClinicQuery.isLoading}
         isOpen={selectedClinicId !== null}
-        onArchive={(clinicId) => archiveClinicMutation.mutate(clinicId, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Clinica nu a fost arhivata", variant: "error" }) })}
+        onArchive={(clinicId) => archiveClinicMutation.mutate(clinicId, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Clinica nu a fost arhivată", variant: "error" }) })}
         onDoctorArchive={(doctorId) => archiveDoctorMutation.mutate(doctorId, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Medicul nu a fost arhivat", variant: "error" }) })}
         onDoctorEdit={(doctorId) => setDoctorModal({ doctorId, mode: "edit" })}
         onDoctorRestore={(doctorId) => restoreDoctorMutation.mutate(doctorId, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Medicul nu a fost reactivat", variant: "error" }) })}
         onOpenChange={(isOpen) => setSelectedClinicId(isOpen ? selectedClinicId : null)}
-        onRestore={(clinicId) => restoreClinicMutation.mutate(clinicId, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Clinica nu a fost reactivata", variant: "error" }) })}
-        onSubmit={(clinicId, values) => updateClinicMutation.mutate({ clinicId, input: values }, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Clinica nu a fost salvata", variant: "error" }) })}
+        onRestore={(clinicId) => restoreClinicMutation.mutate(clinicId, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Clinica nu a fost reactivată", variant: "error" }) })}
+        onSubmit={(clinicId, values) => updateClinicMutation.mutate({ clinicId, input: values }, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Clinica nu a fost salvată", variant: "error" }) })}
         onCreateDoctor={() => setDoctorModal({ doctorId: null, mode: "create" })}
         restoreMutationPending={restoreClinicMutation.isPending}
         submitError={updateClinicMutation.error}
@@ -490,7 +490,7 @@ function PageState({ children }: { readonly children: ReactNode }): ReactNode {
 }
 
 function ActiveBadge({ isActive }: { readonly isActive: boolean }): ReactNode {
-  return <StatusBadge label={isActive ? "Activa" : "Arhivata"} variant={isActive ? "registered" : "cancelled"} />;
+  return <StatusBadge label={isActive ? "Activă" : "Arhivată"} variant={isActive ? "registered" : "cancelled"} />;
 }
 
 function toClinicSelectOptions(clinics: readonly ClinicOption[]) {
@@ -538,10 +538,10 @@ function ClinicCreateModal({
     <>
       <UnsavedChangesPrompt when={isOpen && form.formState.isDirty && !isSaving} />
       <Modal
-        footer={<FormActions canReset={form.formState.isDirty} formId="clinic-create-form" isSubmitting={isSaving} onReset={() => form.reset(defaultClinicValues)} submitLabel="Creeaza clinica" />}
+        footer={<FormActions canReset={form.formState.isDirty} formId="clinic-create-form" isSubmitting={isSaving} onReset={() => form.reset(defaultClinicValues)} submitLabel="Creează clinică" />}
         isOpen={isOpen}
         onOpenChange={closeGuard.handleOpenChange}
-        title="Clinica noua"
+        title="Clinică nouă"
       >
         <ClinicForm
           formId="clinic-create-form"
@@ -627,17 +627,17 @@ function ClinicDetailDrawer({
   return (
     <>
       <UnsavedChangesPrompt when={isOpen && form.formState.isDirty && !updateMutationPending} />
-      <Drawer isOpen={isOpen} onOpenChange={closeGuard.handleOpenChange} title={clinic ? `${clinic.code} · ${clinic.name}` : "Detalii clinica"}>
-        {isLoading ? <LoadingState text="Incarc clinica" /> : null}
-        {error ? <ErrorState title="Clinica nu poate fi incarcata" description={error} /> : null}
+      <Drawer isOpen={isOpen} onOpenChange={closeGuard.handleOpenChange} title={clinic ? `${clinic.code} · ${clinic.name}` : "Detalii clinică"}>
+        {isLoading ? <LoadingState text="Se încarcă clinica" /> : null}
+        {error ? <ErrorState title="Clinica nu poate fi încărcată" description={error} /> : null}
         {clinic ? (
           <div className="clinics-page__drawer">
             <div className="clinics-page__drawer-toolbar">
               <ActiveBadge isActive={clinic.isActive} />
-              {canArchive && clinic.isActive ? <Button disabled={archiveMutationPending} onClick={() => setConfirmAction("archive")} variant="outline">Arhiveaza</Button> : null}
-              {canArchive && !clinic.isActive ? <Button disabled={restoreMutationPending} onClick={() => setConfirmAction("restore")} variant="outline">Reactiveaza</Button> : null}
+              {canArchive && clinic.isActive ? <Button disabled={archiveMutationPending} onClick={() => setConfirmAction("archive")} variant="outline">Arhivează</Button> : null}
+              {canArchive && !clinic.isActive ? <Button disabled={restoreMutationPending} onClick={() => setConfirmAction("restore")} variant="outline">Reactivează</Button> : null}
             </div>
-            {!clinic.isActive ? <p className="clinics-page__readonly">Clinica arhivata este read-only pana la reactivare.</p> : null}
+            {!clinic.isActive ? <p className="clinics-page__readonly">Clinica arhivată este read-only până la reactivare.</p> : null}
             <ClinicForm
               formId="clinic-detail-form"
               form={form}
@@ -654,7 +654,7 @@ function ClinicDetailDrawer({
                 formId="clinic-detail-form"
                 isSubmitting={updateMutationPending}
                 onReset={() => form.reset(toClinicFormValues(clinic))}
-                submitLabel="Salveaza clinica"
+                submitLabel="Salvează clinica"
               />
             ) : null}
             <DoctorsSection
@@ -673,8 +673,8 @@ function ClinicDetailDrawer({
       </Drawer>
       {clinic ? (
         <ConfirmActionModal
-          confirmLabel={confirmAction === "archive" ? "Arhiveaza" : "Reactiveaza"}
-          description={confirmAction === "archive" ? "Clinica arhivata nu va mai aparea in selectoarele pentru lucrari noi." : "Clinica va redeveni disponibila pentru selectie."}
+          confirmLabel={confirmAction === "archive" ? "Arhivează" : "Reactivează"}
+          description={confirmAction === "archive" ? "Clinica arhivată nu va mai apărea în selectoarele pentru lucrări noi." : "Clinica va redeveni disponibilă pentru selecție."}
           isLoading={archiveMutationPending || restoreMutationPending}
           isOpen={confirmAction !== null}
           onCancel={() => setConfirmAction(null)}
@@ -686,7 +686,7 @@ function ClinicDetailDrawer({
             }
             setConfirmAction(null);
           }}
-          title={confirmAction === "archive" ? "Arhiveaza clinica" : "Reactiveaza clinica"}
+          title={confirmAction === "archive" ? "Arhivează clinica" : "Reactivează clinica"}
           variant={confirmAction === "archive" ? "danger" : "primary"}
         />
       ) : null}
@@ -715,14 +715,14 @@ function ClinicForm({
     <FormLayout className="clinics-page__form" id={formId} onSubmit={(event) => void form.handleSubmit(onSubmit)(event)}>
       <FormErrorSummary errors={summaryItems} ref={summaryRef} />
       <FormSection title="Profil">
-        <TextInput disabled={isDisabled} error={form.formState.errors.name?.message} id="name" label="Nume clinica" required {...form.register("name")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.legalName?.message} id="legalName" label="Denumire legala" {...form.register("legalName")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.name?.message} id="name" label="Nume clinică" required {...form.register("name")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.legalName?.message} id="legalName" label="Denumire legală" {...form.register("legalName")} />
         <TextInput disabled={isDisabled} error={form.formState.errors.taxId?.message} id="taxId" label="Cod fiscal" {...form.register("taxId")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.registrationNumber?.message} id="registrationNumber" label="Numar registru" {...form.register("registrationNumber")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.registrationNumber?.message} id="registrationNumber" label="Număr registru" {...form.register("registrationNumber")} />
       </FormSection>
       <FormSection title="Contact">
-        <TextInput disabled={isDisabled} error={form.formState.errors.email?.message} id="email" label="Email clinica" type="email" {...form.register("email")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.phone?.message} id="phone" label="Telefon clinica" type="tel" {...form.register("phone")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.email?.message} id="email" label="Email clinică" type="email" {...form.register("email")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.phone?.message} id="phone" label="Telefon clinică" type="tel" {...form.register("phone")} />
         <TextInput disabled={isDisabled} error={form.formState.errors.website?.message} id="website" label="Website" type="url" {...form.register("website")} />
         <TextInput disabled={isDisabled} error={form.formState.errors.contactPersonName?.message} id="contactPersonName" label="Persoana contact" {...form.register("contactPersonName")} />
         <TextInput disabled={isDisabled} error={form.formState.errors.contactPersonRole?.message} id="contactPersonRole" label="Rol contact" {...form.register("contactPersonRole")} />
@@ -731,22 +731,22 @@ function ClinicForm({
       </FormSection>
       <FormSection title="Adresa">
         <TextInput disabled={isDisabled} error={form.formState.errors.addressLine1?.message} id="addressLine1" label="Adresa" {...form.register("addressLine1")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.addressLine2?.message} id="addressLine2" label="Adresa secundara" {...form.register("addressLine2")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.city?.message} id="city" label="Oras" {...form.register("city")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.countyOrRegion?.message} id="countyOrRegion" label="Judet / regiune" {...form.register("countyOrRegion")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.postalCode?.message} id="postalCode" label="Cod postal" {...form.register("postalCode")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.countryCode?.message} id="countryCode" label="Tara" maxLength={2} required {...form.register("countryCode")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.addressLine2?.message} id="addressLine2" label="Adresă secundară" {...form.register("addressLine2")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.city?.message} id="city" label="Oraș" {...form.register("city")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.countyOrRegion?.message} id="countyOrRegion" label="Județ / regiune" {...form.register("countyOrRegion")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.postalCode?.message} id="postalCode" label="Cod poștal" {...form.register("postalCode")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.countryCode?.message} id="countryCode" label="Țară" maxLength={2} required {...form.register("countryCode")} />
       </FormSection>
       <FormSection title="Facturare">
         <TextInput disabled={isDisabled} error={form.formState.errors.billingName?.message} label="Denumire facturare" {...form.register("billingName")} />
         <TextInput disabled={isDisabled} error={form.formState.errors.billingTaxId?.message} label="Cod fiscal facturare" {...form.register("billingTaxId")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.billingRegistrationNumber?.message} label="Numar registru facturare" {...form.register("billingRegistrationNumber")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.billingAddressLine1?.message} label="Adresa facturare" {...form.register("billingAddressLine1")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.billingAddressLine2?.message} label="Adresa secundara facturare" {...form.register("billingAddressLine2")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.billingCity?.message} label="Oras facturare" {...form.register("billingCity")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.billingCountyOrRegion?.message} label="Judet / regiune facturare" {...form.register("billingCountyOrRegion")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.billingPostalCode?.message} label="Cod postal facturare" {...form.register("billingPostalCode")} />
-        <TextInput disabled={isDisabled} error={form.formState.errors.billingCountryCode?.message} id="billingCountryCode" label="Tara facturare" maxLength={2} required {...form.register("billingCountryCode")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.billingRegistrationNumber?.message} label="Număr registru facturare" {...form.register("billingRegistrationNumber")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.billingAddressLine1?.message} label="Adresă facturare" {...form.register("billingAddressLine1")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.billingAddressLine2?.message} label="Adresă secundară facturare" {...form.register("billingAddressLine2")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.billingCity?.message} label="Oraș facturare" {...form.register("billingCity")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.billingCountyOrRegion?.message} label="Județ / regiune facturare" {...form.register("billingCountyOrRegion")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.billingPostalCode?.message} label="Cod poștal facturare" {...form.register("billingPostalCode")} />
+        <TextInput disabled={isDisabled} error={form.formState.errors.billingCountryCode?.message} id="billingCountryCode" label="Țară facturare" maxLength={2} required {...form.register("billingCountryCode")} />
       </FormSection>
       <Textarea disabled={isDisabled} error={form.formState.errors.internalNotes?.message} id="internalNotes" label="Note interne" rows={4} {...form.register("internalNotes")} />
     </FormLayout>
@@ -814,17 +814,17 @@ function DoctorsSection({
   }
 
   return (
-    <section className="clinics-page__doctors" aria-label="Medici clinica">
+    <section className="clinics-page__doctors" aria-label="Medici clinică">
       <div className="clinics-page__subheader">
         <div>
           <h3>Medici</h3>
-          <p>Medici externi asociati clinicii curente.</p>
+          <p>Medici externi asociați clinicii curente.</p>
         </div>
-        <Button disabled={!canCreate} onClick={onCreate} size="small">Adauga medic</Button>
+        <Button disabled={!canCreate} onClick={onCreate} size="small">Adaugă medic</Button>
       </div>
       <div className="clinics-page__filters">
         <TextInput
-          label="Cautare medici"
+          label="Căutare medici"
           onChange={(event) => setParams((current) => ({ ...current, page: 1, search: event.target.value || undefined }))}
           type="search"
           value={params.search ?? ""}
@@ -838,7 +838,7 @@ function DoctorsSection({
       </div>
       <DataTable
         columns={columns}
-        emptyMessage="Clinica nu are medici in filtrul curent."
+        emptyMessage="Clinica nu are medici în filtrul curent."
         error={doctorsQuery.isError ? getErrorMessage(doctorsQuery.error) : undefined}
         getRowKey={(doctor) => doctor.id}
         isLoading={doctorsQuery.isLoading}
@@ -854,7 +854,7 @@ function DoctorsSection({
           page: doctorsQuery.data?.page ?? params.page,
           pageCount: doctorsQuery.data?.pageCount ?? 1,
         }}
-        rowActionLabel="Editeaza"
+        rowActionLabel="Editează"
         rows={doctorsQuery.data?.items ?? []}
         sort={fromApiSort(params.sortBy, params.sortDirection)}
       />
@@ -867,7 +867,7 @@ function DoctorsSection({
             size="small"
             variant="ghost"
           >
-            {doctor.isActive ? `Arhiveaza ${doctor.displayName}` : `Reactiveaza ${doctor.displayName}`}
+            {doctor.isActive ? `Arhivează ${doctor.displayName}` : `Reactivează ${doctor.displayName}`}
           </Button>
         ))}
       </div>
@@ -924,12 +924,12 @@ function DoctorModal({
     <>
       <UnsavedChangesPrompt when={isOpen && form.formState.isDirty && !isSaving} />
       <Modal
-        footer={<FormActions canReset={form.formState.isDirty} formId="doctor-form" isSubmitting={isSaving || doctorQuery.isLoading} onReset={() => form.reset(toDoctorFormValues(doctorQuery.data, clinicId))} submitLabel={mode === "edit" ? "Salveaza medic" : "Adauga medic"} />}
+        footer={<FormActions canReset={form.formState.isDirty} formId="doctor-form" isSubmitting={isSaving || doctorQuery.isLoading} onReset={() => form.reset(toDoctorFormValues(doctorQuery.data, clinicId))} submitLabel={mode === "edit" ? "Salvează medic" : "Adaugă medic"} />}
         isOpen={isOpen}
         onOpenChange={closeGuard.handleOpenChange}
         title={mode === "edit" ? "Editare medic" : "Medic nou"}
       >
-        {doctorQuery.isLoading ? <LoadingState text="Incarc medicul" /> : null}
+        {doctorQuery.isLoading ? <LoadingState text="Se încarcă medicul" /> : null}
         <FormLayout
           className="clinics-page__form"
           id="doctor-form"

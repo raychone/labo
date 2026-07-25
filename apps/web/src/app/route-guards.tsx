@@ -23,9 +23,9 @@ export function AuthenticatedRoute({ children }: { readonly children: ReactNode 
     return (
       <main className="global-auth-loading">
         <ErrorState
-          title="Sesiunea nu a putut fi verificata"
-          description="Verifica conexiunea la API si incearca din nou."
-          retryAction={<Button onClick={() => void auth.refetch()}>Reincearca</Button>}
+          title="Sesiunea nu a putut fi verificată"
+          description="Verifică conexiunea la API și încearcă din nou."
+          retryAction={<Button onClick={() => void auth.refetch()}>Reîncearcă</Button>}
         />
       </main>
     );
@@ -82,8 +82,8 @@ export function PermissionRoute({
     return (
       <ErrorState
         title="Accesul nu poate fi verificat"
-        description="Permisiunile nu au putut fi incarcate."
-        retryAction={<Button onClick={() => void auth.refetch()}>Reincearca</Button>}
+        description="Permisiunile nu au putut fi încărcate."
+        retryAction={<Button onClick={() => void auth.refetch()}>Reîncearcă</Button>}
       />
     );
   }

@@ -92,7 +92,7 @@ function formatDate(value: string): string {
 }
 
 function formatPrice(value: number | null, currency: string, locale: string): string {
-  return value === null ? "Restrictionat" : formatMoneyMinor(value, currency, locale);
+  return value === null ? "Restricționat" : formatMoneyMinor(value, currency, locale);
 }
 
 export function WorksPage(): ReactNode {
@@ -146,7 +146,7 @@ export function WorksPage(): ReactNode {
       renderCell: (work) => (
         <div>
           <strong>{work.patientName}</strong>
-          <div className="works-page__muted">{work.patientReference ?? "Fara identificator"}</div>
+          <div className="works-page__muted">{work.patientReference ?? "Fără identificator"}</div>
         </div>
       ),
     },
@@ -163,7 +163,7 @@ export function WorksPage(): ReactNode {
       header: "Status",
       id: "status",
       isSortable: true,
-      renderCell: () => <StatusBadge label="Inregistrata" variant="registered" />,
+      renderCell: () => <StatusBadge label="Înregistrată" variant="registered" />,
     },
     {
       header: "Facturare",
@@ -191,11 +191,11 @@ export function WorksPage(): ReactNode {
 
   function handleCreate(input: WorkFormValues): void {
     createMutation.mutate(toMutationInput(input), {
-      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost creata", variant: "error" }),
+      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost creată", variant: "error" }),
       onSuccess: (work) => {
         setIsCreateOpen(false);
         setSelectedWorkId(work.id);
-        toast.showToast({ durationMs: 3500, message: `Lucrare ${work.code} creata.`, variant: "success" });
+        toast.showToast({ durationMs: 3500, message: `Lucrare ${work.code} creată.`, variant: "success" });
       },
     });
   }
@@ -203,15 +203,15 @@ export function WorksPage(): ReactNode {
   function handleUpdate(input: WorkFormValues): void {
     const updateInput: UpdateWorkInput = toMutationInput(input);
     updateMutation.mutate({ input: updateInput, workOrderId: selectedWorkId ?? "" }, {
-      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost salvata", variant: "error" }),
+      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost salvată", variant: "error" }),
       onSuccess: (work) => {
-        toast.showToast({ durationMs: 3500, message: `Lucrare ${work.code} actualizata.`, variant: "success" });
+        toast.showToast({ durationMs: 3500, message: `Lucrare ${work.code} actualizată.`, variant: "success" });
       },
     });
   }
 
   if (permissionsQuery.isLoading) {
-    return <PageState><LoadingState text="Incarc lucrarile" /></PageState>;
+    return <PageState><LoadingState text="Se încarcă lucrările" /></PageState>;
   }
 
   if (!canRead) {
@@ -223,23 +223,23 @@ export function WorksPage(): ReactNode {
       <section className="dl-container works-page__layout" aria-labelledby="works-title">
         <header className="works-page__header">
           <div>
-            <h1 id="works-title">Lucrari</h1>
-            <p>Receptia si urmarirea lucrarilor inregistrate in laborator.</p>
+            <h1 id="works-title">Lucrări</h1>
+            <p>Recepția și urmărirea lucrărilor înregistrate în laborator.</p>
           </div>
-          {canCreate ? <Button onClick={() => setIsCreateOpen(true)}>Adauga lucrare</Button> : null}
+          {canCreate ? <Button onClick={() => setIsCreateOpen(true)}>Adaugă lucrare</Button> : null}
         </header>
 
         <Card>
           <CardHeader>
-            <CardTitle>Registru lucrari</CardTitle>
+            <CardTitle>Registru lucrări</CardTitle>
             <CardDescription>Total: {worksQuery.data?.total ?? 0}</CardDescription>
           </CardHeader>
           <CardContent className="works-page__table-card">
             <div className="works-page__filters">
               <TextInput
-                label="Cautare"
+                label="Căutare"
                 onChange={(event) => setParams((current) => ({ ...current, page: 1, search: event.target.value || undefined }))}
-                placeholder="Cod, pacient, referinta"
+                placeholder="Cod, pacient, referință"
                 type="search"
                 value={params.search ?? ""}
               />
@@ -255,7 +255,7 @@ export function WorksPage(): ReactNode {
                 label="Medic"
                 onChange={(event) => setParams((current) => ({ ...current, doctorId: event.target.value || undefined, page: 1 }))}
                 options={(doctorOptionsQuery.data ?? []).map((doctor) => ({ label: doctor.displayName, value: doctor.id }))}
-                placeholder="Toti medicii"
+                placeholder="Toți medicii"
                 value={params.doctorId ?? ""}
               />
               <Select
@@ -267,7 +267,7 @@ export function WorksPage(): ReactNode {
             </div>
             <DataTable
               columns={columns}
-              emptyMessage="Nu exista lucrari pentru filtrele curente."
+              emptyMessage="Nu există lucrări pentru filtrele curente."
               error={worksQuery.isError ? getErrorMessage(worksQuery.error) : undefined}
               getRowKey={(work) => work.id}
               isLoading={worksQuery.isLoading}
@@ -395,11 +395,11 @@ function CreateWorkModal({
     <>
       <UnsavedChangesPrompt when={isOpen && form.formState.isDirty && !isSaving} />
       <Modal
-        description="Completeaza datele minime pentru statusul REGISTERED."
-        footer={<WorkFormActions canReset={form.formState.isDirty} formId="create-work-form" isSaving={isSaving} onReset={() => form.reset(defaultWorkFormValues)} submitLabel="Creeaza lucrare" />}
+        description="Completează datele minime pentru statusul Înregistrată."
+        footer={<WorkFormActions canReset={form.formState.isDirty} formId="create-work-form" isSaving={isSaving} onReset={() => form.reset(defaultWorkFormValues)} submitLabel="Creează lucrare" />}
         isOpen={isOpen}
         onOpenChange={closeGuard.handleOpenChange}
-        title="Lucrare noua"
+        title="Lucrare nouă"
       >
         <WorkForm
           clinicOptions={clinicOptions}
@@ -496,11 +496,11 @@ function WorkDetailsDrawer({
         onOpenChange={closeGuard.handleOpenChange}
         title="Detalii lucrare"
       >
-        {workError ? <ErrorState title="Lucrarea nu a fost incarcata" description={getErrorMessage(workError)} /> : null}
+        {workError ? <ErrorState title="Lucrarea nu a fost încărcată" description={getErrorMessage(workError)} /> : null}
         {work ? (
           <div className="works-page__drawer">
             <div className="works-page__meta">
-              <StatusBadge label="Inregistrata" variant="registered" />
+              <StatusBadge label="Înregistrată" variant="registered" />
               <PriorityBadge label={work.priority === "URGENT" ? "Urgent" : "Normal"} variant={work.priority === "URGENT" ? "urgent" : "normal"} />
               <span>Termen: {formatDate(work.requestedDeliveryDate)}</span>
               {canReadPricing ? <span>Total: {formatPrice(work.totalPriceMinor, work.currency ?? currency, locale)}</span> : null}
@@ -508,7 +508,7 @@ function WorkDetailsDrawer({
             <div className="works-page__actions">
               <Button onClick={() => onShowQr(work.id)} variant="outline">Vezi QR</Button>
             </div>
-            {workTypeOptionsError ? <ErrorState title="Optiunile nu au fost incarcate" description={getErrorMessage(workTypeOptionsError)} /> : null}
+            {workTypeOptionsError ? <ErrorState title="Opțiunile nu au fost încărcate" description={getErrorMessage(workTypeOptionsError)} /> : null}
             <WorkForm
               clinicOptions={clinicOptions}
               doctorOptions={doctorsQuery.data ?? []}
@@ -528,11 +528,11 @@ function WorkDetailsDrawer({
               formId="update-work-form"
               isSaving={isSaving}
               onReset={() => form.reset(toWorkFormValues(work))}
-              submitLabel="Salveaza lucrarea"
+              submitLabel="Salvează lucrarea"
             />
-            {!canUpdate ? <p className="works-page__muted">Ai acces de citire, dar nu poti modifica lucrarea.</p> : null}
+            {!canUpdate ? <p className="works-page__muted">Ai acces de citire, dar nu poți modifica lucrarea.</p> : null}
           </div>
-        ) : !workError ? <LoadingState text="Incarc detaliile" /> : null}
+        ) : !workError ? <LoadingState text="Se încarcă detaliile" /> : null}
       </Drawer>
       {closeGuard.confirmModal}
     </>

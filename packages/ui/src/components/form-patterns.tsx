@@ -123,7 +123,7 @@ export interface FormActionsProps extends HTMLAttributes<HTMLDivElement> {
 
 export const FormActions = forwardRef<HTMLDivElement, FormActionsProps>(function FormActions(
   {
-    cancelLabel = "Anuleaza",
+    cancelLabel = "Renunță",
     canReset = false,
     className,
     formId,
@@ -149,8 +149,8 @@ export const FormActions = forwardRef<HTMLDivElement, FormActionsProps>(function
         </Button>
       ) : null}
       {onCancel ? (
-        <Button disabled={isSubmitting} onClick={onCancel} type="button" variant="secondary">
-          {cancelLabel}
+          <Button disabled={isSubmitting} onClick={onCancel} type="button" variant="secondary">
+            {cancelLabel}
         </Button>
       ) : null}
     </div>
@@ -183,7 +183,7 @@ export function ConfirmActionModal({
       footer={(
         <div className="dl-form-confirm-actions">
           <Button disabled={isLoading} onClick={onCancel} type="button" variant="secondary">
-            Anuleaza
+            Renunță
           </Button>
           <Button isLoading={isLoading} onClick={onConfirm} type="button" variant={variant}>
             {confirmLabel}

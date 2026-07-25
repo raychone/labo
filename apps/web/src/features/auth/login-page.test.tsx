@@ -1,3 +1,4 @@
+import { ToastProvider } from "@dental-lab/ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -18,7 +19,7 @@ function renderWithQueryClient(component: ReactNode): void {
   render(
     <MemoryRouter>
       <QueryClientProvider client={queryClient}>
-        {component}
+        <ToastProvider>{component}</ToastProvider>
       </QueryClientProvider>
     </MemoryRouter>,
   );
@@ -47,7 +48,7 @@ describe("LoginPage", () => {
     expect(await screen.findByRole("heading", { name: "Autentificare" })).toBeDefined();
     expect(await screen.findByLabelText("Email")).toBeDefined();
     expect(await screen.findByLabelText("Parola")).toBeDefined();
-    expect(await screen.findByRole("button", { name: "Login" })).toBeDefined();
+    expect(await screen.findByRole("button", { name: "Autentificare" })).toBeDefined();
   });
 
   it("clears the password and keeps the email after failed login", async () => {
@@ -61,9 +62,9 @@ describe("LoginPage", () => {
     const password = await screen.findByLabelText("Parola");
     fireEvent.change(email, { target: { value: "manager.dev@example.test" } });
     fireEvent.change(password, { target: { value: "wrong-password" } });
-    fireEvent.click(screen.getByRole("button", { name: "Login" }));
+    fireEvent.click(screen.getByRole("button", { name: "Autentificare" }));
 
-    expect(await screen.findByText("Login esuat")).toBeDefined();
+    expect(await screen.findByText("Autentificare eșuată")).toBeDefined();
     expect(email).toHaveProperty("value", "manager.dev@example.test");
     expect(password).toHaveProperty("value", "");
   });

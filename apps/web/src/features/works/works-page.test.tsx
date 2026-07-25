@@ -126,9 +126,9 @@ describe("WorksPage", () => {
 
     renderWithProviders(<WorksPage />);
 
-    expect(await screen.findByRole("heading", { name: "Lucrari" })).toBeDefined();
+    expect(await screen.findByRole("heading", { name: "Lucrări" })).toBeDefined();
     expect(await screen.findByText("WO-2026-000001")).toBeDefined();
-    expect(await screen.findByText("Restrictionat")).toBeDefined();
+    expect(await screen.findByText("Restricționat")).toBeDefined();
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/work-types/options"), expect.anything());
   });
 
@@ -163,7 +163,7 @@ describe("WorksPage", () => {
 
     renderWithProviders(<WorksPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Adauga lucrare" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Adaugă lucrare" }));
     const clinicSelect = screen.getAllByLabelText("Cabinet").at(-1);
     const doctorSelect = screen.getAllByLabelText("Medic").at(-1);
 

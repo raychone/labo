@@ -87,9 +87,9 @@ describe("WorkScanPage", () => {
     renderWithProviders(<WorkScanPage />);
 
     fireEvent.change(await screen.findByLabelText("Cod lucrare sau payload QR"), { target: { value: "WO-2026-000001" } });
-    fireEvent.click(screen.getByRole("button", { name: "Cauta" }));
+    fireEvent.click(screen.getByRole("button", { name: "Caută" }));
 
-    expect(await screen.findByText("Lucrare gasita")).toBeDefined();
+    expect(await screen.findByText("Lucrare găsită")).toBeDefined();
     expect(await screen.findByText("WO-2026-000001")).toBeDefined();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/works/resolve-qr"), expect.anything()));
   });
