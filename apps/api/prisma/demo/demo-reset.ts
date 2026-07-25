@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 
 import { DEMO_EMAIL_DOMAIN, DEMO_ID_PREFIX, DEMO_INVOICE_SERIES, DEMO_PROFORMA_SERIES } from "./demo.constants.js";
 
@@ -6,28 +6,51 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
   await prisma.$transaction(async (tx) => {
     await tx.workOrder.updateMany({
       data: { invoicedDocumentId: null },
-      where: { id: { startsWith: `${DEMO_ID_PREFIX}work_` } },
+      where: {
+        OR: [
+          demoWorkOrderWhere(),
+          { invoicedDocumentId: { startsWith: DEMO_ID_PREFIX } },
+        ],
+      },
     });
 
     await tx.payment.deleteMany({
       where: {
         OR: [
           { id: { startsWith: `${DEMO_ID_PREFIX}payment_` } },
+          { clinicId: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
           { billingDocumentId: { startsWith: `${DEMO_ID_PREFIX}invoice_` } },
+          { billingDocumentId: { startsWith: `${DEMO_ID_PREFIX}proforma_` } },
+          { billingDocument: demoBillingDocumentWhere() },
         ],
       },
     });
 
     await tx.billingDocumentLine.deleteMany({
-      where: { billingDocumentId: { startsWith: DEMO_ID_PREFIX } },
+      where: {
+        OR: [
+          { billingDocumentId: { startsWith: DEMO_ID_PREFIX } },
+          { billingDocument: demoBillingDocumentWhere() },
+          { workOrder: demoWorkOrderWhere() },
+        ],
+      },
     });
 
     await tx.billingDocument.deleteMany({
-      where: { id: { startsWith: DEMO_ID_PREFIX } },
+      where: demoBillingDocumentWhere(),
+    });
+
+    await tx.workFormSubmission.deleteMany({
+      where: {
+        OR: [
+          { templateId: { startsWith: `${DEMO_ID_PREFIX}form_template_` } },
+          { workOrder: demoWorkOrderWhere() },
+        ],
+      },
     });
 
     await tx.workOrder.deleteMany({
-      where: { id: { startsWith: `${DEMO_ID_PREFIX}work_` } },
+      where: demoWorkOrderWhere(),
     });
 
     await tx.workFormTemplate.deleteMany({
@@ -111,4 +134,26 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
       },
     });
   });
+}
+
+function demoBillingDocumentWhere(): Prisma.BillingDocumentWhereInput {
+  return {
+    OR: [
+      { id: { startsWith: DEMO_ID_PREFIX } },
+      { clinicId: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
+      { doctorId: { startsWith: `${DEMO_ID_PREFIX}doctor_` } },
+      { series: { in: [DEMO_PROFORMA_SERIES, DEMO_INVOICE_SERIES] } },
+    ],
+  };
+}
+
+function demoWorkOrderWhere(): Prisma.WorkOrderWhereInput {
+  return {
+    OR: [
+      { id: { startsWith: `${DEMO_ID_PREFIX}work_` } },
+      { clinicId: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
+      { doctorId: { startsWith: `${DEMO_ID_PREFIX}doctor_` } },
+      { workTypeId: { startsWith: `${DEMO_ID_PREFIX}wt_` } },
+    ],
+  };
 }
