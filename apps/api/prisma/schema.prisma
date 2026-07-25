@@ -44,6 +44,10 @@ model User {
   archivedWorkFormTemplates WorkFormTemplate[] @relation("WorkFormTemplateArchivedBy")
   submittedWorkFormSubmissions WorkFormSubmission[] @relation("WorkFormSubmissionSubmittedBy")
   updatedWorkFormSubmissions WorkFormSubmission[] @relation("WorkFormSubmissionUpdatedBy")
+  createdWorkflowTemplates WorkflowTemplate[] @relation("WorkflowTemplateCreatedBy")
+  updatedWorkflowTemplates WorkflowTemplate[] @relation("WorkflowTemplateUpdatedBy")
+  activatedWorkflowTemplates WorkflowTemplate[] @relation("WorkflowTemplateActivatedBy")
+  archivedWorkflowTemplates WorkflowTemplate[] @relation("WorkflowTemplateArchivedBy")
 
   @@index([isActive])
   @@index([createdAt])
@@ -184,6 +188,7 @@ model WorkType {
   archivedBy User? @relation("WorkTypeArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
   workOrders WorkOrder[]
   formTemplates WorkFormTemplate[]
+  workflowTemplates WorkflowTemplate[]
 
   @@index([name])
   @@index([basePriceMinor])
@@ -274,6 +279,65 @@ enum WorkFormFieldType {
   MULTISELECT
   TOOTH
   SHADE
+}
+
+model WorkflowTemplate {
+  id String @id @default(cuid())
+  workTypeId String @map("work_type_id")
+  name String @db.VarChar(160)
+  description String? @db.VarChar(1000)
+  version Int
+  status WorkflowTemplateStatus @default(DRAFT)
+  activatedAt DateTime? @map("activated_at")
+  archivedAt DateTime? @map("archived_at")
+  createdByUserId String? @map("created_by_user_id")
+  updatedByUserId String? @map("updated_by_user_id")
+  activatedByUserId String? @map("activated_by_user_id")
+  archivedByUserId String? @map("archived_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  workType WorkType @relation(fields: [workTypeId], references: [id], onDelete: Restrict)
+  createdBy User? @relation("WorkflowTemplateCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("WorkflowTemplateUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  activatedBy User? @relation("WorkflowTemplateActivatedBy", fields: [activatedByUserId], references: [id], onDelete: SetNull)
+  archivedBy User? @relation("WorkflowTemplateArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
+  stages WorkflowStageDefinition[]
+
+  @@unique([workTypeId, version])
+  @@index([workTypeId])
+  @@index([status])
+  @@index([workTypeId, status])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@index([activatedByUserId])
+  @@index([archivedByUserId])
+  @@map("workflow_templates")
+}
+
+model WorkflowStageDefinition {
+  id String @id @default(cuid())
+  workflowTemplateId String @map("workflow_template_id")
+  key String @db.VarChar(64)
+  name String @db.VarChar(160)
+  description String? @db.VarChar(1000)
+  sortOrder Int @map("sort_order")
+  estimatedDurationMinutes Int? @map("estimated_duration_minutes")
+  allowedRoleCodes Json @map("allowed_role_codes")
+  isInitial Boolean @default(false) @map("is_initial")
+  isFinal Boolean @default(false) @map("is_final")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  workflowTemplate WorkflowTemplate @relation(fields: [workflowTemplateId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowTemplateId, key])
+  @@index([workflowTemplateId, sortOrder])
+  @@map("workflow_stage_definitions")
+}
+
+enum WorkflowTemplateStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
 }
 
 model WorkOrder {

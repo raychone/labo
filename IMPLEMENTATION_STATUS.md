@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-59%
+61%
 
 ## FOUNDATION
 
@@ -82,7 +82,7 @@
 
 ## WORKFLOW
 
-- [ ] WORKFLOW-001 - Workflow templates (NOT STARTED)
+- [x] WORKFLOW-001 - Workflow templates (COMPLETED)
 - [ ] WORKFLOW-002 - Workflow execution snapshot (NOT STARTED)
 
 ## SCAN
@@ -151,17 +151,17 @@ NONE / AWAITING APPROVAL
 
 Status: COMPLETED
 
-Started: 2026-07-26T00:37:00+03:00
+Started: 2026-07-26T02:10:00+03:00
 
-Completed: 2026-07-26T01:01:00+03:00
+Completed: 2026-07-26T02:23:34+03:00
 
-Last completed task: WORKFORMS-002 - Work form completion and immutable snapshot
+Last completed task: WORKFLOW-001 - Workflow templates
 
-Completed: 2026-07-26T01:01:00+03:00
+Completed: 2026-07-26T02:23:34+03:00
 
 ## Next Recommended Task
 
-WORKFLOW-001 - Workflow templates
+WORKFLOW-002 - Workflow execution snapshot
 
 ## Known Technical Debt
 
@@ -204,6 +204,7 @@ None.
 - Keep patient names out of billing audit metadata; document line snapshots may contain patient names for internal annex/search views.
 - Keep existing Payment models/endpoints as optional manual evidence only; the MVP does not process money, cards, POS transactions, cash register flows or bank reconciliation.
 - Approved roadmap order after BILLING-001: BILLING-002, DEMO-SEED-001, WORKFORMS-001, WORKFORMS-002, WORKFLOW-001, WORKFLOW-002, TECH-001, SCAN-002, LOGISTICS-001, DELIVERY-001, SIGNATURES-001, DASHBOARD-001, SEARCH-001, REPORTS-001, AUDIT-UI-001, DEMO-POLISH-001, E2E-001, SECURITY-001, DEPLOY-001.
+- Workflow templates are linear and versioned per WorkType; initial/final stages are derived from order, and the database enforces at most one ACTIVE workflow template per WorkType.
 - Evaluate RBAC from the database so access changes take effect without relogin.
 - Treat `ALL` as the only broad scope; ownership scopes remain distinct.
 - Use plain CSS custom properties in `packages/ui/src/styles.css` as the design token source of truth.
@@ -474,17 +475,76 @@ None.
 
 ### WORKFLOW-001 - Workflow templates
 
-- Status: NOT STARTED.
-- Obiectiv: configurare fluxuri tehnologice versionate.
-- Scope: template, versiuni, stages si checklist.
-- Non-goals: execution pe lucrare, technician UI.
-- Dependente: WORKTYPES-001, RBAC-001.
-- Acceptance criteria: managerul configureaza fluxuri fara sa modifice istoricul lucrarilor.
-- Backend: WorkflowTemplatesModule cu DTO validation si versioning.
-- Frontend: UI manager pentru template/stages/checklist.
-- Securitate: RBAC server-side pentru configurare.
-- Audit: audit create/update/version.
-- Testare: API unit/integration si UI form tests.
+- Status: COMPLETED.
+- Started: 2026-07-26T02:10:00+03:00.
+- Completed: 2026-07-26T02:23:34+03:00.
+- Commit message: `WORKFLOW-001: add workflow templates and stages`.
+- Obiectiv: configurare fluxuri tehnologice liniare, versionate, per tip de lucrare.
+- Scope: template-uri workflow, versiuni, etape ordonate, roluri permise pe etapa, durata estimata, activare/arhivare/clonare si seed demo.
+- Non-goals: executie workflow pe lucrare, snapshot pe WorkOrder, asignari, tranzitii, drag-and-drop, ramificari, etape paralele, checklist runtime, technician UI, QC, logistica si livrare.
+- Dependente: WORKTYPES-001, RBAC-001, SHELL-001.
+- Summary:
+  - Added `WorkflowTemplate` and `WorkflowStageDefinition` Prisma models with deterministic migration `20260726021000_workflow_template_builder`.
+  - Added a partial unique PostgreSQL index so only one `ACTIVE` workflow template can exist per WorkType.
+  - Added `WorkflowTemplatesModule` with list/detail/active/create/update/replace stages/activate/archive/clone endpoints.
+  - Added DTO validation, service-level validation, transaction use and advisory lock for version allocation and activation.
+  - Added RBAC permissions `workflow.create`, `workflow.update` and `workflow.archive`; read uses existing `workflow.read`.
+  - Added safe audit events for create, update, stage replacement, activation, archive and clone.
+  - Added shared workflow contracts and pure helpers for stage keys, role validation, ordering, durations and changed stage keys.
+  - Added `/work-types/:workTypeId/workflow` frontend builder and “Configurează fluxul” link in the work type drawer.
+  - Added demo workflow templates for zirconia crowns, total prosthesis and implant abutments.
+- Main files modified:
+  - `apps/api/prisma/schema.prisma`
+  - `apps/api/prisma/migrations/20260726021000_workflow_template_builder/migration.sql`
+  - `apps/api/src/modules/workflow-templates/*`
+  - `apps/api/src/modules/rbac/permission-registry.ts`
+  - `apps/api/prisma/demo/*`
+  - `apps/web/src/app/app.tsx`
+  - `apps/web/src/features/workflow-templates/*`
+  - `apps/web/src/features/work-types/work-types-page.tsx`
+  - `packages/shared/src/workflow-templates.ts`
+  - `packages/shared/src/index.ts`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `IMPLEMENTATION_STATUS.md`
+  - `DEMO.md`
+  - `DEMO-SCRIPT.md`
+- Dependencies added:
+  - None.
+- Automated verification:
+  - `pnpm --filter @dental-lab/api prisma:validate` passed.
+  - `pnpm --filter @dental-lab/api prisma:generate` passed.
+  - `pnpm --filter @dental-lab/api prisma:migrate:dev` passed and applied `20260726021000_workflow_template_builder`.
+  - `pnpm --filter @dental-lab/api prisma:db:seed` passed.
+  - `pnpm --filter @dental-lab/api prisma:db:seed:demo` passed twice for idempotency, then passed again after smoke reset.
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed.
+- Tests added:
+  - Shared workflow helper tests.
+  - Backend workflow validation service tests.
+  - Backend workflow templates service tests.
+  - Frontend workflow builder route test.
+  - RBAC registry test updates for new `workflow.*` configuration permissions.
+- Manual verification:
+  - Existing API dev server on `http://localhost:3010` was used; port was already occupied by `node`.
+  - Existing frontend dev server on `http://localhost:3000` was used; port was already occupied by `node`.
+  - Manager demo login through CSRF and `/auth/demo-login` returned `manager@demo.local`.
+  - `GET /work-types/demo_wt_zirconiu/workflow-templates` returned `200`, one template and active ID `demo_workflow_template_zirconiu_v1`.
+  - `GET /work-types/demo_wt_zirconiu/workflow-template` returned `200`, `Flux coroană zirconiu`, 9 stages, first `receptie`, last `pregatire_livrare`.
+  - Smoke create draft returned `201`, replace stages returned `200`, archive returned `201` with `ARCHIVED` and 2 stages.
+  - `GET http://localhost:3000/work-types/demo_wt_zirconiu/workflow` returned `200` HTML.
+  - Demo seed was rerun after smoke to remove temporary workflow data.
+- Architecture decisions:
+  - Keep WORKFLOW-001 limited to template configuration; runtime execution/snapshots remain in WORKFLOW-002.
+  - Keep workflows linear for MVP; initial/final stages are derived from order instead of stored as user-editable business rules.
+  - Use JSON for allowed role codes, guarded by DTO/service/shared validation.
+  - Keep version allocation and activation inside transactions with advisory locks and database uniqueness.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Browser-level visual review and real mobile/tablet inspection were limited to HTTP/component smoke in this terminal environment.
+  - Linting remains unconfigured.
 
 ### WORKFLOW-002 - Workflow execution snapshot
 

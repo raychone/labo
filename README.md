@@ -515,6 +515,32 @@ Demo/development login can expose `/auth/demo-login` only when `DEMO_MODE=true` 
 
 Open the demo UI at `http://localhost:3000`. Keeping the frontend and API on the same local hostname family avoids CSRF cookie mismatches between `127.0.0.1` and `localhost`.
 
+## Workflow Templates
+
+`WORKFLOW-001` adds versioned production workflow templates per work type. New persisted models are `WorkflowTemplate` and `WorkflowStageDefinition`.
+
+The backend exposes:
+
+- `GET /work-types/:workTypeId/workflow-templates`
+- `GET /work-types/:workTypeId/workflow-template`
+- `GET /workflow-templates/:id`
+- `POST /work-types/:workTypeId/workflow-templates`
+- `PATCH /workflow-templates/:id`
+- `PUT /workflow-templates/:id/stages`
+- `POST /workflow-templates/:id/activate`
+- `POST /workflow-templates/:id/archive`
+- `POST /workflow-templates/:id/clone`
+
+Workflow templates are versioned per work type. Draft templates can be edited, activated, archived, or cloned. Active and archived templates are read-only. PostgreSQL enforces at most one `ACTIVE` workflow template per work type with a partial unique index, and the service also uses a transaction-level advisory lock during version allocation and activation.
+
+Stages are linear and ordered. The first saved stage is derived as initial, and the last saved stage is derived as final. Each stage has a stable key, name, optional description, optional estimated duration in minutes, and allowed role codes.
+
+Read access uses `workflow.read`. State-changing endpoints require CSRF and use `workflow.create`, `workflow.update`, or `workflow.archive`. Manager receives workflow configuration permissions; Receptie, Logistica and Tehnician keep read access according to RBAC scope. Audit events are recorded for create, update, replace stages, activate, archive and clone with safe metadata only.
+
+The frontend builder route is `/work-types/:workTypeId/workflow`. The work type detail drawer links to it with “Configurează fluxul” when `workflow.read` is available. The builder shows version history, draft metadata editing, add/edit/remove stages, move up/down ordering, allowed role checkboxes, a linear preview, read-only mode and archived WorkType restrictions.
+
+`WORKFLOW-001` does not instantiate workflows on work orders and does not implement technician execution, assignments, transitions, drag-and-drop, branching, parallel stages, QC, logistics or delivery. Those remain in later workflow/operations tasks.
+
 ## Billing Workspace
 
 BILLING-001 adds the first financial workspace at `/billing`.

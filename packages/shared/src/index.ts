@@ -171,4 +171,32 @@ export type {
   WorkFormValidationResult,
   WorkFormWorkTypeSummary,
 } from "./work-forms.js";
+export {
+  MAX_WORKFLOW_STAGE_DURATION_MINUTES,
+  MAX_WORKFLOW_STAGES,
+  RESERVED_WORKFLOW_STAGE_KEYS,
+  WORKFLOW_STAGE_KEY_PATTERN,
+  WORKFLOW_STAGE_ROLE_CODES,
+  WORKFLOW_TEMPLATE_STATUSES,
+  formatWorkflowDuration,
+  getChangedWorkflowStageKeys,
+  isWorkflowStageKey,
+  isWorkflowStageRoleCode,
+  normalizeWorkflowStagesOrder,
+  validateWorkflowInitialFinal,
+  validateWorkflowRoleCodes,
+} from "./workflow-templates.js";
+export type {
+  CreateWorkflowTemplateInput,
+  ReplaceWorkflowStagesInput,
+  UpdateWorkflowTemplateInput,
+  WorkflowStageDefinition,
+  WorkflowStageRoleCode,
+  WorkflowTemplateDetail,
+  WorkflowTemplateListResponse,
+  WorkflowTemplateStatus,
+  WorkflowTemplateSummary,
+  WorkflowValidationResult,
+  WorkflowWorkTypeSummary,
+} from "./workflow-templates.js";
 export { formatApplicationTitle } from "./workspace-title.js";

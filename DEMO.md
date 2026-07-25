@@ -80,7 +80,7 @@ Spune clar:
 - aplicația nu procesează bani;
 - încasările sunt înregistrări manuale ale unor plăți făcute în afara aplicației;
 - factura printabila este interna/demo, nu integrare RO e-Factura;
-- workflow-ul de producție, fișierele și livrările sunt taskuri următoare, nu sunt gata în acest moment.
+- configurarea template-urilor de workflow este gata, dar execuția etapelor pe lucrări, fișierele și livrările sunt taskuri următoare.
 
 ## 4. Login și shell aplicație
 
@@ -243,6 +243,8 @@ Ce arati:
 - cod, denumire, descriere, preț de bază;
 - activ/inactiv;
 - formular de creare/editare, daca rolul are permisiune.
+- butonul „Configurează formularul” pentru template-ul dinamic de intake;
+- butonul „Configurează fluxul” pentru etapele tehnologice standard.
 
 Exemple demo:
 
@@ -258,6 +260,24 @@ Ce explici:
 - preturile sunt in bani intregi in backend, fara Float;
 - pretul se copiaza ca snapshot pe lucrare;
 - tipurile inactive raman in istoric, dar nu sunt folosite pentru lucrari noi.
+- fluxurile sunt versionate per tip de lucrare; activarea unui draft arhiveaza versiunea activa anterioara.
+
+Deschide „Configurează fluxul” pe `Coroană zirconiu`.
+
+Ce arati:
+
+- lista de versiuni ale fluxului;
+- etapele liniare ale fluxului;
+- rolurile permise pe fiecare etapa;
+- durata estimata;
+- preview-ul fluxului.
+
+Ce explici:
+
+- prima etapa este tratata automat ca etapa initiala;
+- ultima etapa este tratata automat ca etapa finala;
+- template-urile active/arhivate sunt read-only;
+- acest ecran configureaza fluxul standard, dar nu porneste inca executia etapelor pe o lucrare existenta.
 
 ## 10. Facturare
 
@@ -563,4 +583,4 @@ Ordine recomandata:
 
 ## 19. Fraza de inchidere
 
-Aplicatia acopera deja baza operationala: utilizatori, roluri, clinici, medici, catalog de lucrari, receptie lucrari, QR, facturare, incasari manuale si documente printabile. Urmatorul pas natural este workflow-ul de productie, ca fiecare lucrare sa treaca prin etape, tehnicieni, fisiere, control calitate si livrare.
+Aplicatia acopera deja baza operationala: utilizatori, roluri, clinici, medici, catalog de lucrari, receptie lucrari, QR, formulare dinamice, template-uri de workflow, facturare, incasari manuale si documente printabile. Urmatorul pas natural este executia workflow-ului pe lucrari, ca fiecare lucrare sa treaca prin etape, tehnicieni, fisiere, control calitate si livrare.

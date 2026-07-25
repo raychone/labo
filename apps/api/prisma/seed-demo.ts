@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 import { assertDemoSeedAllowed } from "./demo/demo-guard.js";
-import { seedDemoData } from "./demo/demo-seed.js";
+import { getDemoWorkflowTemplateCount, seedDemoData } from "./demo/demo-seed.js";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -18,7 +18,7 @@ const prisma = new PrismaClient({
 
 seedDemoData(prisma)
   .then(async (dataset) => {
-    console.log(`Seeded demo dataset for ${dataset.year}: ${dataset.users.length} users, ${dataset.clinics.length} clinics, ${dataset.doctors.length} doctors, ${dataset.workTypes.length} work types, ${dataset.works.length} works.`);
+    console.log(`Seeded demo dataset for ${dataset.year}: ${dataset.users.length} users, ${dataset.clinics.length} clinics, ${dataset.doctors.length} doctors, ${dataset.workTypes.length} work types, ${getDemoWorkflowTemplateCount()} workflow templates, ${dataset.works.length} works.`);
     await prisma.$disconnect();
   })
   .catch(async (error: unknown) => {

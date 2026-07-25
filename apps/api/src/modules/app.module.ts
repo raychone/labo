@@ -10,9 +10,10 @@ import { SettingsModule } from "./settings/settings.module.js";
 import { UsersModule } from "./users/users.module.js";
 import { WorkTypesModule } from "./work-types/work-types.module.js";
 import { WorkFormsModule } from "./work-forms/work-forms.module.js";
+import { WorkflowTemplatesModule } from "./workflow-templates/workflow-templates.module.js";
 import { WorksModule } from "./works/works.module.js";
 
 @Module({
-  imports: [AuthModule, BillingModule, ClinicsModule, HealthModule, QrModule, RbacModule, SettingsModule, UsersModule, WorkTypesModule, WorkFormsModule, WorksModule],
+  imports: [AuthModule, BillingModule, ClinicsModule, HealthModule, QrModule, RbacModule, SettingsModule, UsersModule, WorkTypesModule, WorkFormsModule, WorkflowTemplatesModule, WorksModule],
 })
 export class AppModule {}

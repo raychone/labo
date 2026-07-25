@@ -19,10 +19,15 @@ export async function seedDemoData(prisma: PrismaClient, now = new Date()): Prom
   await seedDemoDoctors(prisma, dataset);
   await seedDemoWorkTypes(prisma, dataset);
   await seedDemoWorkFormTemplates(prisma);
+  await seedDemoWorkflowTemplates(prisma);
   await seedDemoWorks(prisma, dataset);
   await seedDemoBilling(prisma, dataset);
 
   return dataset;
+}
+
+export function getDemoWorkflowTemplateCount(): number {
+  return demoWorkflowTemplates.length;
 }
 
 interface DemoFormField {
@@ -109,6 +114,68 @@ const demoFormTemplates: readonly DemoFormTemplate[] = [
   },
 ];
 
+interface DemoWorkflowStageSeed {
+  readonly key: string;
+  readonly name: string;
+  readonly estimatedDurationMinutes: number;
+  readonly allowedRoleCodes: readonly string[];
+}
+
+interface DemoWorkflowTemplateSeed {
+  readonly id: string;
+  readonly name: string;
+  readonly workTypeId: string;
+  readonly stages: readonly DemoWorkflowStageSeed[];
+}
+
+const demoWorkflowTemplates: readonly DemoWorkflowTemplateSeed[] = [
+  {
+    id: "demo_workflow_template_zirconiu_v1",
+    name: "Flux coroană zirconiu",
+    stages: [
+      receptionStage(),
+      technicianStage("model", "Model", 120),
+      technicianStage("scanare", "Scanare", 45),
+      technicianStage("cad", "CAD", 180),
+      technicianStage("frezare", "Frezare", 120),
+      technicianStage("sinterizare", "Sinterizare", 480),
+      technicianStage("ceramica", "Ceramică", 240),
+      technicianStage("finisare", "Finisare", 120),
+      deliveryPrepStage(),
+    ],
+    workTypeId: "demo_wt_zirconiu",
+  },
+  {
+    id: "demo_workflow_template_proteza_totala_v1",
+    name: "Flux proteză totală",
+    stages: [
+      receptionStage(),
+      technicianStage("model", "Model", 120),
+      technicianStage("lingura_individuala", "Lingură individuală", 180),
+      technicianStage("sablon_ocluzie", "Șablon ocluzie", 180),
+      technicianStage("montare_dinti", "Montare dinți", 240),
+      technicianStage("proba_ceara", "Probă ceară", 120),
+      technicianStage("acrilare", "Acrilare", 360),
+      technicianStage("finisare", "Finisare", 120),
+      deliveryPrepStage(),
+    ],
+    workTypeId: "demo_wt_proteza_totala",
+  },
+  {
+    id: "demo_workflow_template_bont_v1",
+    name: "Flux bont implant",
+    stages: [
+      receptionStage(),
+      technicianStage("verificare_componente", "Verificare componente", 45),
+      technicianStage("cad", "CAD", 120),
+      technicianStage("frezare", "Frezare", 120),
+      technicianStage("finisare", "Finisare", 90),
+      deliveryPrepStage(),
+    ],
+    workTypeId: "demo_wt_bont",
+  },
+];
+
 async function seedDemoWorkFormTemplates(prisma: PrismaClient): Promise<void> {
   for (const template of demoFormTemplates) {
     await prisma.workFormTemplate.create({
@@ -125,6 +192,60 @@ async function seedDemoWorkFormTemplates(prisma: PrismaClient): Promise<void> {
       },
     });
   }
+}
+
+async function seedDemoWorkflowTemplates(prisma: PrismaClient): Promise<void> {
+  for (const template of demoWorkflowTemplates) {
+    await prisma.workflowTemplate.create({
+      data: {
+        activatedAt: new Date("2026-07-01T10:00:00.000Z"),
+        id: template.id,
+        name: template.name,
+        status: "ACTIVE",
+        version: 1,
+        workTypeId: template.workTypeId,
+        stages: {
+          create: template.stages.map((stage, index) => ({
+            allowedRoleCodes: [...stage.allowedRoleCodes],
+            description: `Etapă demo pentru ${stage.name}.`,
+            estimatedDurationMinutes: stage.estimatedDurationMinutes,
+            isFinal: index === template.stages.length - 1,
+            isInitial: index === 0,
+            key: stage.key,
+            name: stage.name,
+            sortOrder: index + 1,
+          })),
+        },
+      },
+    });
+  }
+}
+
+function receptionStage(): DemoWorkflowStageSeed {
+  return {
+    allowedRoleCodes: ["RECEPTIE", "MANAGER"],
+    estimatedDurationMinutes: 30,
+    key: "receptie",
+    name: "Recepție",
+  };
+}
+
+function technicianStage(key: string, name: string, estimatedDurationMinutes: number): DemoWorkflowStageSeed {
+  return {
+    allowedRoleCodes: ["TEHNICIAN", "MANAGER"],
+    estimatedDurationMinutes,
+    key,
+    name,
+  };
+}
+
+function deliveryPrepStage(): DemoWorkflowStageSeed {
+  return {
+    allowedRoleCodes: ["LOGISTICA", "MANAGER"],
+    estimatedDurationMinutes: 30,
+    key: "pregatire_livrare",
+    name: "Pregătire livrare",
+  };
 }
 
 function toDemoFieldCreateInput(item: DemoFormField): Prisma.WorkFormFieldDefinitionCreateWithoutTemplateInput {

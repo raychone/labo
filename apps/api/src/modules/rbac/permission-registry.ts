@@ -39,6 +39,9 @@ export type PermissionKey =
   | "works.archive"
   | "workflow.read"
   | "workflow.configure"
+  | "workflow.create"
+  | "workflow.update"
+  | "workflow.archive"
   | "workflow.start_stage"
   | "workflow.pause_stage"
   | "workflow.complete_stage"
@@ -127,6 +130,9 @@ export const PERMISSION_REGISTRY = [
   definePermission("works.archive", "Archive work orders."),
   definePermission("workflow.read", "Read workflows."),
   definePermission("workflow.configure", "Configure workflows."),
+  definePermission("workflow.create", "Create workflow templates."),
+  definePermission("workflow.update", "Update workflow templates."),
+  definePermission("workflow.archive", "Archive workflow templates."),
   definePermission("workflow.start_stage", "Start workflow stages."),
   definePermission("workflow.pause_stage", "Pause workflow stages."),
   definePermission("workflow.complete_stage", "Complete workflow stages."),
@@ -339,11 +345,14 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "reports.operational",
   "reports.productivity",
   "settings.read",
+  "workflow.archive",
   "workflow.complete_stage",
   "workflow.configure",
+  "workflow.create",
   "workflow.pause_stage",
   "workflow.reopen_stage",
   "workflow.start_stage",
+  "workflow.update",
   "works.create",
   "works.update",
 ] as const satisfies readonly PermissionKey[];

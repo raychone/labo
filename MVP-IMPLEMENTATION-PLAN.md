@@ -1286,19 +1286,17 @@ Decizie concreta SETTINGS-001:
 
 ### WORKFLOW-001 - Workflow templates
 
-- Scop: configurare fluxuri tehnologice versionate.
-- Motiv: lucrarile nu sunt CRUD.
-- Module: WorkflowTemplatesModule.
-- Dependinte: WORKTYPES-001, RBAC-001.
-- Pasi: template/version/stages/checklist.
-- Acceptare: manager configureaza flux.
-- Teste: API.
-- Manual: editare versiune nu modifica istoric.
-- Riscuri: UI complex.
-- Nu modifica: execution.
-- DoD: template-uri seed.
-- Estimare: L.
-- Status: NOT STARTED.
+- Status: COMPLETED.
+- Obiectiv: configurare fluxuri tehnologice liniare, versionate, per tip de lucrare.
+- Scope: template-uri workflow, versiuni, etape ordonate, roluri permise pe etapa, durata estimata, activare/arhivare/clonare si seed demo.
+- Non-goals: executie workflow pe lucrare, snapshot pe WorkOrder, asignari, tranzitii, drag-and-drop, ramificari, etape paralele, checklist runtime.
+- Dependinte: WORKTYPES-001, RBAC-001, SHELL-001.
+- Acceptance criteria: managerul poate configura fluxuri fara sa modifice istoricul lucrarilor; maximum un template ACTIVE per WorkType; drafturile pot fi editate; ACTIVE/ARCHIVED sunt read-only; activarea unei versiuni arhiveaza versiunea activa anterioara.
+- Backend: `WorkflowTemplatesModule`, DTO validation, Prisma models `WorkflowTemplate` si `WorkflowStageDefinition`, tranzactii si advisory lock per WorkType pentru versiuni/activare.
+- Frontend: ruta `/work-types/:workTypeId/workflow`, builder mobile-first pentru versiuni si etape, link din drawer-ul tipului de lucrare.
+- Securitate: RBAC server-side cu `workflow.read`, `workflow.create`, `workflow.update`, `workflow.archive`; actiunile state-changing necesita CSRF.
+- Audit: create/update/stages replaced/activate/archive/clone pe `workflow_template`.
+- Testare: shared helper tests, backend service/validation tests, frontend builder test, typecheck, test, build si smoke API/UI.
 
 ### WORKFLOW-002 - Workflow execution snapshot
 

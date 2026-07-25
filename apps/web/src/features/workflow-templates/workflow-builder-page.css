@@ -1,0 +1,171 @@
+.workflow-builder-page {
+  background: var(--dl-color-background);
+  min-height: 100%;
+}
+
+.workflow-builder-page__layout {
+  display: grid;
+  gap: var(--dl-space-5);
+  padding-block: var(--dl-space-5);
+}
+
+.workflow-builder-page__header,
+.workflow-builder-page__header-actions,
+.workflow-builder-page__stage-header,
+.workflow-builder-page__stage-toolbar,
+.workflow-builder-page__actions,
+.workflow-builder-page__stage-actions {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-3);
+  justify-content: space-between;
+}
+
+.workflow-builder-page__header h1 {
+  margin-block: var(--dl-space-2) var(--dl-space-1);
+}
+
+.workflow-builder-page__grid,
+.workflow-builder-page__versions,
+.workflow-builder-page__editor,
+.workflow-builder-page__preview,
+.workflow-builder-page__stage,
+.workflow-builder-page__roles {
+  display: grid;
+  gap: var(--dl-space-4);
+}
+
+.workflow-builder-page__versions {
+  gap: var(--dl-space-2);
+}
+
+.workflow-builder-page__version {
+  background: var(--dl-color-surface);
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  color: var(--dl-color-text);
+  cursor: pointer;
+  display: grid;
+  gap: var(--dl-space-1);
+  padding: var(--dl-space-3);
+  text-align: left;
+}
+
+.workflow-builder-page__version--selected {
+  border-color: var(--dl-color-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dl-color-accent), transparent 78%);
+}
+
+.workflow-builder-page__stage {
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  padding: var(--dl-space-3);
+}
+
+.workflow-builder-page__stage-header h3,
+.workflow-builder-page__stage-header p {
+  margin: 0;
+}
+
+.workflow-builder-page__stage-header p {
+  color: var(--dl-color-text-muted);
+  font-size: var(--dl-font-size-sm);
+}
+
+.workflow-builder-page__stage-grid,
+.workflow-builder-page__role-grid {
+  display: grid;
+  gap: var(--dl-space-3);
+}
+
+.workflow-builder-page__roles > span {
+  color: var(--dl-color-text);
+  font-weight: var(--dl-font-weight-semibold);
+}
+
+.workflow-builder-page__readonly,
+.workflow-builder-page__errors {
+  background: var(--dl-color-background-secondary);
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  margin: 0;
+  padding: var(--dl-space-3);
+}
+
+.workflow-builder-page__errors {
+  border-color: var(--dl-color-danger);
+}
+
+.workflow-builder-page__preview {
+  counter-reset: workflow-stage;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.workflow-builder-page__preview li {
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  display: grid;
+  gap: var(--dl-space-2);
+  padding: var(--dl-space-3);
+  position: relative;
+}
+
+.workflow-builder-page__preview li::before {
+  align-items: center;
+  background: var(--dl-color-accent);
+  border-radius: 999px;
+  color: var(--dl-color-surface);
+  content: counter(workflow-stage);
+  counter-increment: workflow-stage;
+  display: inline-flex;
+  font-size: var(--dl-font-size-caption);
+  font-weight: var(--dl-font-weight-semibold);
+  height: 1.5rem;
+  justify-content: center;
+  position: absolute;
+  right: var(--dl-space-3);
+  top: var(--dl-space-3);
+  width: 1.5rem;
+}
+
+.workflow-builder-page__preview strong,
+.workflow-builder-page__preview span,
+.workflow-builder-page__preview p,
+.workflow-builder-page__preview small {
+  display: block;
+  padding-right: var(--dl-space-6);
+}
+
+.workflow-builder-page__preview p,
+.workflow-builder-page__preview small {
+  color: var(--dl-color-text-muted);
+  margin: 0;
+}
+
+@media (min-width: 768px) {
+  .workflow-builder-page__grid {
+    grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.4fr);
+  }
+
+  .workflow-builder-page__grid > :last-child {
+    grid-column: 1 / -1;
+  }
+
+  .workflow-builder-page__stage-grid,
+  .workflow-builder-page__role-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1120px) {
+  .workflow-builder-page__grid {
+    grid-template-columns: minmax(230px, 0.7fr) minmax(0, 1.4fr) minmax(260px, 0.9fr);
+  }
+
+  .workflow-builder-page__grid > :last-child {
+    grid-column: auto;
+  }
+}
