@@ -45,6 +45,11 @@ export async function fetchWorkFormTemplate(templateId: string): Promise<WorkFor
   return parseApiResponse<WorkFormTemplateDetail>(response);
 }
 
+export async function fetchActiveWorkFormTemplate(workTypeId: string): Promise<WorkFormTemplateDetail | null> {
+  const response = await apiFetch(`/work-types/${workTypeId}/form-template`);
+  return parseApiResponse<WorkFormTemplateDetail | null>(response);
+}
+
 export async function createWorkFormTemplate(workTypeId: string, input: CreateWorkFormTemplateInput): Promise<WorkFormTemplateDetail> {
   return sendJson<WorkFormTemplateDetail>(`/work-types/${workTypeId}/form-templates`, "POST", input);
 }
@@ -82,6 +87,15 @@ export function useWorkFormTemplate(templateId: string | null, enabled: boolean)
     enabled: enabled && templateId !== null,
     queryFn: () => fetchWorkFormTemplate(templateId ?? ""),
     queryKey: workFormTemplateQueryKeys.detail(templateId),
+  });
+}
+
+export function useActiveWorkFormTemplate(workTypeId: string | undefined, enabled: boolean) {
+  return useQuery({
+    enabled: enabled && workTypeId !== undefined && workTypeId !== "",
+    queryFn: () => fetchActiveWorkFormTemplate(workTypeId ?? ""),
+    queryKey: workFormTemplateQueryKeys.active(workTypeId),
+    retry: false,
   });
 }
 

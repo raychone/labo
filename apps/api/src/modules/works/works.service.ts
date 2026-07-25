@@ -5,6 +5,7 @@ import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { DEFAULT_LABORATORY_SETTINGS, SETTINGS_SINGLETON_KEY } from "../settings/settings.constants.js";
 import { WorkQrTokenService } from "../qr/work-qr-token.service.js";
+import { WorkFormSubmissionValidationService } from "../work-forms/work-form-submission-validation.service.js";
 import { WORK_ORDER_AUDIT_ACTIONS, WORK_ORDER_RESOURCE_TYPE } from "./works.constants.js";
 import type { CreateWorkDto, ListWorksQueryDto, UpdateWorkDto } from "./dto/works.dto.js";
 import { WorkOrderCodeService } from "./work-order-code.service.js";
@@ -34,6 +35,7 @@ type AuditClient = Pick<Prisma.TransactionClient, "auditLog"> | Pick<PrismaServi
 const WORK_ORDER_INCLUDE = {
   clinic: true,
   doctor: true,
+  workFormSubmission: true,
   workType: true,
 } as const satisfies Prisma.WorkOrderInclude;
 
@@ -57,6 +59,7 @@ export class WorksService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(WorkOrderCodeService) private readonly workOrderCodeService: WorkOrderCodeService,
     @Inject(WorkQrTokenService) private readonly workQrTokenService: WorkQrTokenService,
+    @Inject(WorkFormSubmissionValidationService) private readonly workFormSubmissionValidationService: WorkFormSubmissionValidationService,
   ) {}
 
   public async listWorks(query: ListWorksQueryDto, includePricing: boolean): Promise<PaginatedWorksView> {
@@ -145,6 +148,12 @@ export class WorksService {
       const pricing = await this.createPricingSnapshot(tx, workType.basePriceMinor, dto.quantity);
       const code = await this.workOrderCodeService.generate(tx);
       const qrToken = await this.workQrTokenService.generate(tx);
+      const preparedSubmission = await this.workFormSubmissionValidationService.prepareCreate(tx, {
+        actorUserId: context.actorUserId,
+        submission: dto.workFormSubmission,
+        workCode: code,
+        workTypeId: dto.workTypeId,
+      });
 
       const data: Prisma.WorkOrderUncheckedCreateInput = {
         baseUnitPriceMinor: pricing.baseUnitPriceMinor,
@@ -168,6 +177,11 @@ export class WorksService {
       assignNullableCreateValue(data, "externalReference", dto.externalReference);
       assignNullableCreateValue(data, "internalNotes", dto.internalNotes);
       assignNullableCreateValue(data, "patientReference", dto.patientReference);
+      if (preparedSubmission) {
+        data.workFormSubmission = {
+          create: preparedSubmission.data,
+        };
+      }
 
       const createdWorkOrder = await tx.workOrder.create({
         data,
@@ -181,6 +195,18 @@ export class WorksService {
         requestMetadata: context.requestMetadata,
         resourceId: createdWorkOrder.id,
       });
+      if (preparedSubmission) {
+        await this.workFormSubmissionValidationService.recordSubmissionAudit(tx, {
+          action: preparedSubmission.audit.action,
+          actorUserId: context.actorUserId,
+          metadata: {
+            ...preparedSubmission.audit.metadata,
+            workId: createdWorkOrder.id,
+          },
+          requestMetadata: context.requestMetadata,
+          resourceId: createdWorkOrder.id,
+        });
+      }
 
       return createdWorkOrder;
     });
@@ -191,12 +217,82 @@ export class WorksService {
   public async updateWork(context: ActorContext, workOrderId: string, dto: UpdateWorkDto): Promise<WorkDetailView> {
     const before = await this.findWorkOrderOrThrow(workOrderId);
     const data = await this.toUpdateData(before, dto, context.actorUserId);
+    const isWorkTypeChanging = dto.workTypeId !== undefined && dto.workTypeId !== before.workTypeId;
 
-    if (Object.keys(data).length <= 2) {
+    if (isWorkTypeChanging && dto.confirmWorkTypeChange !== true) {
+      throw new BadRequestException("Schimbarea tipului de lucrare trebuie confirmată explicit.");
+    }
+
+    if (!isWorkTypeChanging && dto.workFormSubmission !== undefined) {
+      throw new BadRequestException("Versiunea formularului nu poate fi schimbată pentru același tip de lucrare.");
+    }
+
+    if (Object.keys(data).length <= 2 && dto.workFormValues === undefined && dto.workFormSubmission === undefined) {
       throw new BadRequestException("No work order fields were provided.");
     }
 
     const after = await this.prisma.$transaction(async (tx) => {
+      if (isWorkTypeChanging) {
+        const replacement = await this.workFormSubmissionValidationService.prepareReplaceForWorkTypeChange(tx, {
+          actorUserId: context.actorUserId,
+          existingSubmission: before.workFormSubmission,
+          newSubmission: dto.workFormSubmission,
+          nextWorkTypeId: dto.workTypeId ?? before.workTypeId,
+          oldWorkTypeId: before.workTypeId,
+          workCode: before.code,
+          workId: workOrderId,
+        });
+
+        if (replacement.deleteExisting) {
+          await tx.workFormSubmission.deleteMany({
+            where: {
+              workOrderId,
+            },
+          });
+        }
+
+        if (replacement.create) {
+          await tx.workFormSubmission.create({
+            data: {
+              ...replacement.create,
+              workOrderId,
+            },
+          });
+        }
+
+        if (replacement.audit) {
+          await this.workFormSubmissionValidationService.recordSubmissionAudit(tx, {
+            action: replacement.audit.action,
+            actorUserId: context.actorUserId,
+            metadata: replacement.audit.metadata,
+            requestMetadata: context.requestMetadata,
+            resourceId: workOrderId,
+          });
+        }
+      } else if (dto.workFormValues !== undefined) {
+        const preparedUpdate = this.workFormSubmissionValidationService.prepareUpdateValues(before.workFormSubmission, dto.workFormValues, {
+          actorUserId: context.actorUserId,
+          workCode: before.code,
+          workId: workOrderId,
+        });
+        await tx.workFormSubmission.update({
+          data: preparedUpdate.data,
+          where: {
+            workOrderId,
+          },
+        });
+
+        if (preparedUpdate.audit) {
+          await this.workFormSubmissionValidationService.recordSubmissionAudit(tx, {
+            action: preparedUpdate.audit.action,
+            actorUserId: context.actorUserId,
+            metadata: preparedUpdate.audit.metadata,
+            requestMetadata: context.requestMetadata,
+            resourceId: workOrderId,
+          });
+        }
+      }
+
       const updatedWorkOrder = await tx.workOrder.update({
         data,
         include: WORK_ORDER_INCLUDE,

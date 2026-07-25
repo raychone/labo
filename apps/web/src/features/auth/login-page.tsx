@@ -1,5 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
+  Button,
   Card,
   CardContent,
   CardDescription,
@@ -22,7 +23,9 @@ import { Navigate, useLocation, useNavigate, useSearchParams } from "react-route
 import {
   fetchCurrentUser,
   fetchPermissions,
+  demoLogin,
   login,
+  type DemoLoginRole,
 } from "./auth-api.js";
 import type { LoginFormValues } from "./login-form.schema.js";
 import { loginFormSchema } from "./login-form.schema.js";
@@ -42,6 +45,21 @@ const loginFieldLabels: Record<keyof LoginFormValues, string> = {
   password: "Parola",
 };
 
+const isDemoMode = import.meta.env.VITE_DEMO_MODE === "true";
+
+const demoRoles: readonly {
+  readonly description: string;
+  readonly label: string;
+  readonly role: DemoLoginRole;
+}[] = [
+  { description: "Administrare, lucrări, facturare și setări", label: "Intră ca manager", role: "MANAGER" },
+  { description: "Înregistrarea și consultarea lucrărilor", label: "Intră ca recepție", role: "RECEPTIE" },
+  { description: "Accesul logistic va fi completat în etapele următoare", label: "Intră ca logistică", role: "LOGISTICA" },
+  { description: "Acces la informațiile operaționale permise", label: "Intră ca tehnician", role: "TEHNICIAN" },
+  { description: "Fluxul de livrare va fi completat ulterior", label: "Intră ca curier", role: "CURIER" },
+  { description: "Acces demonstrativ limitat", label: "Intră ca medic", role: "MEDIC" },
+];
+
 export function LoginPage(): ReactNode {
   const queryClient = useQueryClient();
   const auth = useAuthState();
@@ -56,13 +74,7 @@ export function LoginPage(): ReactNode {
     defaultValues: defaultLoginValues,
     resolver: zodResolver(loginFormSchema),
   });
-  const loginMutation = useMutation({
-    mutationFn: login,
-    onError: () => {
-      form.setValue("password", "");
-      passwordRef.current?.focus();
-    },
-    onSuccess: async () => {
+  async function handleAuthenticated(): Promise<void> {
       toast.clearToasts();
       await queryClient.invalidateQueries({ queryKey: authQueryKeys.all });
       const currentUser = await queryClient.fetchQuery({
@@ -80,8 +92,24 @@ export function LoginPage(): ReactNode {
         .map((permission) => permission.key) ?? [];
 
       navigate(returnTo ?? getFirstAuthorizedRoute(permissionKeys), { replace: true });
+  }
+
+  const loginMutation = useMutation({
+    mutationFn: login,
+    onError: () => {
+      form.setValue("password", "");
+      passwordRef.current?.focus();
     },
+    onSuccess: handleAuthenticated,
   });
+  const demoLoginMutation = useMutation({
+    mutationFn: demoLogin,
+    onError: (error) => {
+      form.setError("root", { message: error instanceof Error ? error.message : "Autentificarea demo a eșuat." });
+    },
+    onSuccess: handleAuthenticated,
+  });
+  const isAuthenticating = loginMutation.isPending || demoLoginMutation.isPending;
   const passwordRegistration = form.register("password");
   const summaryRef = useErrorSummaryFocus(form.formState.errors, form.formState.submitCount);
   const summaryItems = form.formState.submitCount > 0
@@ -170,13 +198,44 @@ export function LoginPage(): ReactNode {
                 ) : null}
                 <FormActions
                   className="auth-page__actions"
-                  isSubmitting={loginMutation.isPending}
+                  isSubmitting={isAuthenticating}
                   submitLabel="Autentificare"
                 />
               </FormLayout>
             )}
           </CardContent>
         </Card>
+        {isDemoMode ? (
+          <Card className="auth-page__panel auth-page__demo">
+            <CardHeader>
+              <CardTitle>Acces rapid pentru demonstrație</CardTitle>
+              <CardDescription>
+                <span className="auth-page__demo-badge">Mod demonstrație</span>
+                Alege un profil demo. Parolele nu sunt expuse în browser.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="auth-page__demo-grid">
+                {demoRoles.map((item) => (
+                  <Button
+                    className="auth-page__demo-button"
+                    disabled={isAuthenticating}
+                    key={item.role}
+                    onClick={() => {
+                      toast.clearToasts();
+                      demoLoginMutation.mutate(item.role);
+                    }}
+                    type="button"
+                    variant="outline"
+                  >
+                    <span>{item.label}</span>
+                    <small>{item.description}</small>
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
       </section>
     </main>
   );

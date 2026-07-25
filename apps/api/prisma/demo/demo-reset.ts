@@ -30,6 +30,15 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
       where: { id: { startsWith: `${DEMO_ID_PREFIX}work_` } },
     });
 
+    await tx.workFormTemplate.deleteMany({
+      where: {
+        OR: [
+          { id: { startsWith: `${DEMO_ID_PREFIX}form_template_` } },
+          { workTypeId: { startsWith: `${DEMO_ID_PREFIX}wt_` } },
+        ],
+      },
+    });
+
     await tx.doctor.deleteMany({
       where: { id: { startsWith: `${DEMO_ID_PREFIX}doctor_` } },
     });

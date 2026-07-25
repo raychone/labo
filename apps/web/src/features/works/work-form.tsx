@@ -1,5 +1,7 @@
 import {
+  Button,
   DateInput,
+  ErrorState,
   FormActions,
   FormErrorSummary,
   FormGrid,
@@ -11,11 +13,12 @@ import {
   TextInput,
   Textarea,
 } from "@dental-lab/ui";
-import type { ClinicOption, DoctorOption, WorkDetail, WorkPriority, WorkTypeFormOption } from "@dental-lab/shared";
+import type { ClinicOption, DoctorOption, WorkDetail, WorkFormTemplateDetail, WorkPriority, WorkTypeFormOption } from "@dental-lab/shared";
 import type { ReactNode } from "react";
 import type { UseFormReturn } from "react-hook-form";
 
 import type { WorkFormValues } from "./works-page.schema.js";
+import { WorkFormEmptyState, WorkFormFields, WorkFormLoadingState } from "./work-dynamic-form.js";
 import { getFormErrorSummaryItems, useErrorSummaryFocus } from "../../lib/form-utils.js";
 
 export const defaultWorkFormValues: WorkFormValues = {
@@ -29,6 +32,7 @@ export const defaultWorkFormValues: WorkFormValues = {
   priority: "NORMAL",
   quantity: 1,
   requestedDeliveryDate: "",
+  workFormValues: {},
   workTypeId: "",
 };
 
@@ -48,12 +52,22 @@ const workFieldLabels: Record<keyof WorkFormValues, string> = {
   priority: "Prioritate",
   quantity: "Cantitate",
   requestedDeliveryDate: "Termen promis",
+  workFormValues: "Detalii specifice lucrării",
   workTypeId: "Tip lucrare",
 };
 
 export function toWorkFormValues(work: WorkDetail | undefined): WorkFormValues {
   if (!work) {
     return defaultWorkFormValues;
+  }
+
+  const workFormValues: WorkFormValues["workFormValues"] = {};
+  for (const [key, value] of Object.entries(work.workForm?.values ?? {})) {
+    if (Array.isArray(value)) {
+      workFormValues[key] = [...value];
+    } else if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      workFormValues[key] = value;
+    }
   }
 
   return {
@@ -67,6 +81,7 @@ export function toWorkFormValues(work: WorkDetail | undefined): WorkFormValues {
     priority: work.priority,
     quantity: work.quantity,
     requestedDeliveryDate: work.requestedDeliveryDate.slice(0, 10),
+    workFormValues,
     workTypeId: work.workType.id,
   };
 }
@@ -77,8 +92,12 @@ export function WorkForm({
   form,
   formId,
   isDisabled,
+  isTemplateError,
+  isTemplateLoading,
   onClinicChange,
+  onRetryTemplate,
   onSubmit,
+  template,
   totalPreview,
   workTypeOptions,
 }: {
@@ -87,8 +106,12 @@ export function WorkForm({
   readonly form: UseFormReturn<WorkFormValues>;
   readonly formId: string;
   readonly isDisabled: boolean;
+  readonly isTemplateError: boolean;
+  readonly isTemplateLoading: boolean;
   readonly onClinicChange: (clinicId: string) => void;
+  readonly onRetryTemplate: () => void;
   readonly onSubmit: (values: WorkFormValues) => void;
+  readonly template: WorkFormTemplateDetail | null | undefined;
   readonly totalPreview?: string | null;
   readonly workTypeOptions: readonly WorkTypeFormOption[];
 }): ReactNode {
@@ -168,6 +191,26 @@ export function WorkForm({
         </FormGrid>
       </FormSection>
 
+      <FormSection title="Detalii specifice lucrării" description="Câmpurile vin din formularul activ al tipului de lucrare selectat.">
+        {form.watch("workTypeId") === "" ? (
+          <p className="works-page__muted">Alege tipul lucrării pentru a verifica formularul specific.</p>
+        ) : isTemplateLoading ? (
+          <WorkFormLoadingState />
+        ) : isTemplateError ? (
+          <div className="works-page__template-error">
+            <ErrorState
+              description="Nu putem determina formularul activ pentru acest tip de lucrare. Salvarea este blocată până la reîncărcare."
+              title="Formularul specific nu a fost încărcat"
+            />
+            <Button onClick={onRetryTemplate} type="button" variant="secondary">Reîncarcă formularul</Button>
+          </div>
+        ) : template ? (
+          <WorkFormFields fields={template.fields} form={form} isDisabled={isDisabled} />
+        ) : (
+          <WorkFormEmptyState />
+        )}
+      </FormSection>
+
       <FormSection title="Termen și prioritate" description="Termenul este salvat ca dată calendaristică, fără conversie de fus orar în frontend.">
         <FormGrid>
           <DateInput
@@ -202,12 +245,14 @@ export function WorkFormActions({
   formId,
   isSaving,
   onReset,
+  submitDisabled,
   submitLabel,
 }: {
   readonly canReset: boolean;
   readonly formId: string;
   readonly isSaving: boolean;
   readonly onReset: () => void;
+  readonly submitDisabled?: boolean;
   readonly submitLabel: string;
 }): ReactNode {
   return (
@@ -217,7 +262,7 @@ export function WorkFormActions({
       formId={formId}
       isSubmitting={isSaving}
       onReset={onReset}
-      submitDisabled={submitLabel === "Salvează" && !canReset}
+      submitDisabled={submitDisabled === true || (submitLabel === "Salvează" && !canReset)}
       submitLabel={submitLabel}
     />
   );

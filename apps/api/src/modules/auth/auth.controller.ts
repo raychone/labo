@@ -13,6 +13,7 @@ import { toAuthUserResponse } from "./auth.view.js";
 import { CurrentUser } from "./current-user.decorator.js";
 import { CsrfGuard } from "./csrf.guard.js";
 import { CsrfService } from "./csrf.service.js";
+import { DemoLoginDto } from "./dto/demo-login.dto.js";
 import { LoginDto } from "./dto/login.dto.js";
 import { getRequestMetadata } from "./request-metadata.js";
 import { SessionService } from "./session.service.js";
@@ -64,6 +65,25 @@ export class AuthController {
       email: loginDto.email,
       password: loginDto.password,
       requestMetadata: getRequestMetadata(request),
+    });
+
+    setSessionCookie(response, environment, loginResult.session.token);
+
+    return toAuthUserResponse(loginResult.user);
+  }
+
+  @Post("demo-login")
+  @HttpCode(200)
+  @UseGuards(CsrfGuard)
+  public async demoLogin(
+    @Body() demoLoginDto: DemoLoginDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<AuthUserResponse> {
+    const environment = loadServerEnvironment();
+    const loginResult = await this.authService.demoLogin({
+      requestMetadata: getRequestMetadata(request),
+      role: demoLoginDto.role,
     });
 
     setSessionCookie(response, environment, loginResult.session.token);

@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import type { Prisma, WorkFormFieldType } from "@prisma/client";
 
 import { hashPassword } from "../../src/modules/auth/password.hashing.js";
 import { DEMO_INVOICE_SERIES, DEMO_PASSWORD, DEMO_PROFORMA_SERIES } from "./demo.constants.js";
@@ -17,10 +18,139 @@ export async function seedDemoData(prisma: PrismaClient, now = new Date()): Prom
   await seedDemoClinics(prisma, dataset);
   await seedDemoDoctors(prisma, dataset);
   await seedDemoWorkTypes(prisma, dataset);
+  await seedDemoWorkFormTemplates(prisma);
   await seedDemoWorks(prisma, dataset);
   await seedDemoBilling(prisma, dataset);
 
   return dataset;
+}
+
+interface DemoFormField {
+  readonly key: string;
+  readonly label: string;
+  readonly helpText: string | null;
+  readonly type: WorkFormFieldType;
+  readonly required: boolean;
+  readonly sortOrder: number;
+  readonly placeholder: string | null;
+  readonly defaultValue: Prisma.InputJsonValue | null;
+  readonly options: readonly { readonly label: string; readonly value: string }[];
+  readonly validation: Prisma.InputJsonObject;
+}
+
+interface DemoFormTemplate {
+  readonly fields: readonly DemoFormField[];
+  readonly id: string;
+  readonly name: string;
+  readonly version: number;
+  readonly workTypeId: string;
+}
+
+const shadeOptions = [
+  { label: "A1", value: "A1" },
+  { label: "A2", value: "A2" },
+  { label: "A3", value: "A3" },
+  { label: "B1", value: "B1" },
+] as const;
+
+const demoFormTemplates: readonly DemoFormTemplate[] = [
+  {
+    fields: [
+      field("teeth", "Dinți", "Selectează codurile FDI relevante.", "TOOTH", true, 1),
+      field("shade", "Nuanță", null, "SHADE", true, 2, null, null, shadeOptions),
+      field("zirconia_type", "Tip zirconiu", null, "SELECT", false, 3, null, null, [
+        { label: "Monolitic", value: "monolitic" },
+        { label: "Multilayer", value: "multilayer" },
+        { label: "Cut-back", value: "cut_back" },
+      ]),
+      field("try_in_required", "Probă solicitată", null, "CHECKBOX", false, 4),
+      field("clinical_notes", "Observații specifice", "Text simplu, fără date medicale sensibile.", "TEXTAREA", false, 5, "Observații pentru laborator", null, [], { maxLength: 5000 }),
+    ],
+    id: "demo_form_template_zirconiu_v1",
+    name: "Formular coroană zirconiu",
+    version: 1,
+    workTypeId: "demo_wt_zirconiu",
+  },
+  {
+    fields: [
+      field("arch", "Arcadă", null, "SELECT", true, 1, null, null, [
+        { label: "Maxilar", value: "maxilar" },
+        { label: "Mandibulă", value: "mandibula" },
+        { label: "Ambele arcade", value: "ambele" },
+      ]),
+      field("teeth_shade", "Nuanță dinți", null, "SHADE", false, 2, null, null, shadeOptions),
+      field("wax_try_in", "Probă machetă ceară", null, "CHECKBOX", false, 3),
+      field("occlusion_notes", "Observații ocluzie", null, "TEXTAREA", false, 4, "Observații de ocluzie", null, [], { maxLength: 5000 }),
+    ],
+    id: "demo_form_template_proteza_totala_v1",
+    name: "Formular proteză totală",
+    version: 1,
+    workTypeId: "demo_wt_proteza_totala",
+  },
+  {
+    fields: [
+      field("implant_system", "Sistem implant", null, "SELECT", true, 1, null, null, [
+        { label: "Straumann", value: "straumann" },
+        { label: "Nobel Biocare", value: "nobel" },
+        { label: "MegaGen", value: "megagen" },
+      ]),
+      field("platform", "Platformă", null, "TEXT", true, 2, "Ex. NC, RC, WP"),
+      field("diameter", "Diametru", null, "NUMBER", false, 3, null, null, [], { min: 2, max: 8, step: 0.1 }),
+      field("restoration_type", "Tip restaurare", null, "RADIO", false, 4, null, null, [
+        { label: "Cimentată", value: "cimentata" },
+        { label: "Înșurubată", value: "insurubata" },
+      ]),
+      field("shade", "Nuanță", null, "SHADE", false, 5, null, null, shadeOptions),
+    ],
+    id: "demo_form_template_bont_v1",
+    name: "Formular bont implant",
+    version: 1,
+    workTypeId: "demo_wt_bont",
+  },
+];
+
+async function seedDemoWorkFormTemplates(prisma: PrismaClient): Promise<void> {
+  for (const template of demoFormTemplates) {
+    await prisma.workFormTemplate.create({
+      data: {
+        activatedAt: new Date("2026-07-01T09:00:00.000Z"),
+        id: template.id,
+        name: template.name,
+        status: "ACTIVE",
+        version: template.version,
+        workTypeId: template.workTypeId,
+        fields: {
+          create: template.fields.map(toDemoFieldCreateInput),
+        },
+      },
+    });
+  }
+}
+
+function toDemoFieldCreateInput(item: DemoFormField): Prisma.WorkFormFieldDefinitionCreateWithoutTemplateInput {
+  const data: Prisma.WorkFormFieldDefinitionCreateWithoutTemplateInput = {
+    helpText: item.helpText,
+    key: item.key,
+    label: item.label,
+    placeholder: item.placeholder,
+    required: item.required,
+    sortOrder: item.sortOrder,
+    type: item.type,
+  };
+
+  if (item.defaultValue !== null) {
+    data.defaultValue = item.defaultValue;
+  }
+
+  if (item.options.length > 0) {
+    data.options = [...item.options];
+  }
+
+  if (Object.keys(item.validation).length > 0) {
+    data.validation = item.validation;
+  }
+
+  return data;
 }
 
 async function seedDemoSettings(prisma: PrismaClient): Promise<void> {
@@ -176,6 +306,7 @@ async function seedDemoWorkTypes(prisma: PrismaClient, dataset: DemoDataset): Pr
 
 async function seedDemoWorks(prisma: PrismaClient, dataset: DemoDataset): Promise<void> {
   for (const work of dataset.works) {
+    const submission = toDemoWorkFormSubmission(work);
     await prisma.workOrder.create({
       data: {
         baseUnitPriceMinor: work.baseUnitPriceMinor,
@@ -198,9 +329,98 @@ async function seedDemoWorks(prisma: PrismaClient, dataset: DemoDataset): Promis
         status: "REGISTERED",
         totalPriceMinor: work.totalPriceMinor,
         workTypeId: work.workTypeId,
+        ...(submission
+          ? {
+              workFormSubmission: {
+                create: submission,
+              },
+            }
+          : {}),
       },
     });
   }
+}
+
+function toDemoWorkFormSubmission(work: DemoWorkSeed): Prisma.WorkFormSubmissionUncheckedCreateWithoutWorkOrderInput | null {
+  const template = demoFormTemplates.find((item) => item.workTypeId === work.workTypeId);
+  if (!template) {
+    return null;
+  }
+
+  return {
+    createdAt: work.createdAt,
+    schemaSnapshot: toSchemaSnapshot(template),
+    submittedAt: work.createdAt,
+    submittedByUserId: "demo_user_receptie",
+    templateId: template.id,
+    templateNameSnapshot: template.name,
+    templateVersion: template.version,
+    updatedAt: work.createdAt,
+    updatedByUserId: "demo_user_receptie",
+    values: toDemoSubmissionValues(work, template),
+  };
+}
+
+function toSchemaSnapshot(template: DemoFormTemplate): Prisma.InputJsonObject {
+  return {
+    fields: template.fields.map((item) => ({
+      defaultValue: item.defaultValue,
+      helpText: item.helpText,
+      key: item.key,
+      label: item.label,
+      options: [...item.options],
+      placeholder: item.placeholder,
+      required: item.required,
+      sortOrder: item.sortOrder,
+      type: item.type,
+      validation: item.validation,
+    })),
+  };
+}
+
+function toDemoSubmissionValues(work: DemoWorkSeed, template: DemoFormTemplate): Prisma.InputJsonObject {
+  const suffix = Number(work.id.slice(-3));
+  if (template.workTypeId === "demo_wt_zirconiu") {
+    return {
+      clinical_notes: "Instrucțiuni demo pentru contur și contact proximal.",
+      shade: suffix % 2 === 0 ? "A2" : "A3",
+      teeth: suffix % 3 === 0 ? ["11", "12"] : ["21"],
+      try_in_required: suffix % 2 === 0,
+      zirconia_type: suffix % 2 === 0 ? "multilayer" : "monolitic",
+    };
+  }
+
+  if (template.workTypeId === "demo_wt_proteza_totala") {
+    return {
+      arch: suffix % 2 === 0 ? "maxilar" : "mandibula",
+      occlusion_notes: "Observații demo pentru probă și plan ocluzal.",
+      teeth_shade: "A2",
+      wax_try_in: true,
+    };
+  }
+
+  return {
+    diameter: 4.2,
+    implant_system: suffix % 2 === 0 ? "straumann" : "megagen",
+    platform: suffix % 2 === 0 ? "RC" : "NC",
+    restoration_type: suffix % 2 === 0 ? "insurubata" : "cimentata",
+    shade: "A2",
+  };
+}
+
+function field(
+  key: string,
+  label: string,
+  helpText: string | null,
+  type: WorkFormFieldType,
+  required: boolean,
+  sortOrder: number,
+  placeholder: string | null = null,
+  defaultValue: Prisma.InputJsonValue | null = null,
+  options: readonly { readonly label: string; readonly value: string }[] = [],
+  validation: Prisma.InputJsonObject = {},
+): DemoFormField {
+  return { defaultValue, helpText, key, label, options, placeholder, required, sortOrder, type, validation };
 }
 
 async function seedDemoBilling(prisma: PrismaClient, dataset: DemoDataset): Promise<void> {

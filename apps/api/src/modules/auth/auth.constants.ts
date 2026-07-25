@@ -2,6 +2,8 @@ export const AUTH_AUDIT_ACTIONS = {
   csrfIssued: "auth.csrf_issued",
   loginFailed: "auth.login_failed",
   loginSucceeded: "auth.login_succeeded",
+  demoLoginFailed: "auth.demo_login_failed",
+  demoLoginSucceeded: "auth.demo_login_success",
   logoutSucceeded: "auth.logout_succeeded",
 } as const;
 

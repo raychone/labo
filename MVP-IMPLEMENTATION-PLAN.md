@@ -921,7 +921,7 @@ Decizie concreta UI-002:
 - Module: `packages/ui`, shell frontend, auth/login, settings, works/QR/scan, billing exports, pagini operationale existente, documentatie.
 - Dependinte: UI-002, AUTH-001, RBAC-001, SHELL-001, QR-001, BILLING-002, WORKFORMS-001.
 - Scope: toast lifecycle, modal/drawer responsive si focus behavior, sidebar stabil, localizare romana cu diacritice, setari RO-only pentru laborator, QR UI hardening, CSV export hardening, texte si densitate UI.
-- Non-goals: workflow execution, fisiere, dashboard operational, calcule noi de billing, reguli fiscale noi, permisiuni noi, FORMS-002.
+- Non-goals: workflow execution, fisiere, dashboard operational, calcule noi de billing, reguli fiscale noi, permisiuni noi, WORKFORMS-002.
 - Acceptance criteria:
   - Notificarile au durata finita, curatare manuala, limita de vizibilitate si se sterg la schimbari de auth.
   - Modalurile/drawerele au header/body/footer stabile, body scrollabil, focus return, Escape si comportament mobil `100dvh`.
@@ -1183,9 +1183,9 @@ Decizie concreta SETTINGS-001:
 - Implementare: adaugate modelele `WorkFormTemplate` si `WorkFormFieldDefinition`, migrarea `20260724204700_work_form_template_builder`, partial unique index pentru un singur template activ per WorkType, endpointuri REST cu RBAC/CSRF, validare server-side stricta pentru field keys/options/default values/validation, shared contracts si helperi puri, ruta `/work-types/:workTypeId/form`, link “Configureaza formularul” in catalog, builder mobile-first cu versiuni, editor, optiuni, ordonare, preview si read-only mode.
 - Decizie: arhivarea manuala permite doar drafturi; template-ul activ anterior este arhivat automat doar in tranzactia de activare a unei versiuni noi.
 
-### FORMS-002 - Work form completion and immutable snapshot
+### WORKFORMS-002 - Work form completion and immutable snapshot
 
-- Status: NOT STARTED.
+- Status: COMPLETED.
 - Obiectiv: completarea formularelor dinamice pe lucrare si salvarea unui snapshot imutabil al template-ului folosit.
 - Scope: completare valori pentru WorkOrder pe baza template-ului activ, validare, snapshot versiune/campuri/raspunsuri si afisare read-only in detalii.
 - Non-goals: editare template, fisiere, workflow execution, conditional rules engine complex.
@@ -1196,6 +1196,7 @@ Decizie concreta SETTINGS-001:
 - Securitate: RBAC pentru citire/modificare lucrari, fara expunere date peste permisiuni.
 - Audit: audit pentru create/update raspunsuri formular pe lucrare.
 - Testare: unit/integration pentru snapshot si validare, frontend pentru completare, erori si compatibilitate cu FORMS-001 patterns.
+- Implementare: adaugat `WorkFormSubmission` 1:1 optional pe `WorkOrder`, migrarea `20260726004000_work_form_submission_snapshot`, validare backend dedicata, snapshot schema construit server-side, create atomic WorkOrder + submission, update values contra snapshot, inlocuire/eliminare submission la schimbare WorkType confirmata, UI dinamic in `/works`, read-only snapshot in drawer, demo seed cu template-uri si submission-uri, plus demo login sigur prin `/auth/demo-login`.
 
 ### BILLING-001 - Billing workspace, proformas, invoices and month-end registry
 
@@ -1570,7 +1571,7 @@ RBAC-001 -> WORKTYPES-001 -> WORKFLOW-001
 WORKS-001 -> QR-001
 SHELL-001 -> FORMS-001
 WORKS-001 -> BILLING-001 -> BILLING-002 -> DEMO-SEED-001
-BILLING-002 -> WORKFORMS-001 -> FORMS-002
+BILLING-002 -> WORKFORMS-001 -> WORKFORMS-002
 WORKFORMS-001 -> WORKFLOW-001 -> WORKFLOW-002 -> TECH-001 -> SCAN-002 -> LOGISTICS-001 -> DELIVERY-001 -> SIGNATURES-001
 BILLING-002 -> DASHBOARD-001 -> SEARCH-001 -> REPORTS-001 -> AUDIT-UI-001 -> DEMO-POLISH-001 -> E2E-001 -> SECURITY-001 -> DEPLOY-001
 Deferred: FILES-001, FILES-002, QC-001, NOTIFICATIONS-001

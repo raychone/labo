@@ -475,7 +475,7 @@ FORMS-001 migrated the current forms for login, users, settings, clinics/doctors
 
 Read-only users see values without false submit actions where the page is not editable. Save actions are disabled when there are no relevant dirty changes where appropriate. Confirmation dialogs use reusable modal-based actions instead of native `window.confirm`.
 
-Dynamic work form templates are not part of FORMS-001. They are tracked separately as `WORKFORMS-001`, followed by immutable work form completion/snapshot work in `FORMS-002`.
+Dynamic work form templates are not part of FORMS-001. They are tracked separately as `WORKFORMS-001`, followed by immutable work form completion/snapshot work in `WORKFORMS-002`.
 
 ## Work Form Template Builder
 
@@ -504,7 +504,11 @@ The backend exposes:
 
 Read access uses `forms.read`. State-changing endpoints require CSRF and use `forms.create`, `forms.update`, or `forms.archive`. Manager receives all form permissions; Receptie and Tehnician receive read-only access. Audit events are recorded for create, update, replace fields, activate, archive, and clone with safe metadata only.
 
-The frontend builder route is `/work-types/:workTypeId/form`. The work type detail drawer links to it with “Configureaza formularul” when `forms.read` is available. The builder shows version history, draft name/description editing, add/edit/remove fields, move up/down ordering, option editing, typed validation controls, live preview using shared form components, read-only mode, and archived WorkType restrictions. It does not submit values, create WorkOrders, render dynamic fields inside `/works`, or create a submission/snapshot model; that remains `FORMS-002`.
+The frontend builder route is `/work-types/:workTypeId/form`. The work type detail drawer links to it with “Configurează formularul” when `forms.read` is available. The builder shows version history, draft name/description editing, add/edit/remove fields, move up/down ordering, option editing, typed validation controls, live preview using shared form components, read-only mode, and archived WorkType restrictions.
+
+`WORKFORMS-002` adds completed work form submissions on WorkOrders. `POST /works` accepts `workFormSubmission` with `templateId`, `templateVersion` and `values`; the backend loads the active template, validates values, builds the immutable schema snapshot and saves WorkOrder plus submission in one transaction. `PATCH /works/:id` validates edits against the saved snapshot for the same WorkType. `GET /works/:id` returns `workForm` with the saved template name/version, ordered fields and values; the UI renders readable values instead of raw JSON.
+
+Demo/development login can expose `/auth/demo-login` only when `DEMO_MODE=true` and not in production. The frontend renders “Acces rapid pentru demonstrație” only when `VITE_DEMO_MODE=true`; no demo password is sent to or bundled in React.
 
 ## Billing Workspace
 
@@ -552,7 +556,7 @@ After BILLING-001, the approved order is:
 1. `BILLING-002` - printable billing documents and clinic statements.
 2. `DEMO-SEED-001` - realistic demonstration dataset.
 3. `WORKFORMS-001` - work form template builder.
-4. `FORMS-002` - work form completion and immutable snapshot.
+4. `WORKFORMS-002` - work form completion and immutable snapshot.
 5. `WORKFLOW-001`, `WORKFLOW-002`, `TECH-001`, `SCAN-002`, `LOGISTICS-001`, `DELIVERY-001`, `SIGNATURES-001`.
 6. `DASHBOARD-001`, `SEARCH-001`, `REPORTS-001`, `AUDIT-UI-001`, `DEMO-POLISH-001`, `E2E-001`, `SECURITY-001`, `DEPLOY-001`.
 

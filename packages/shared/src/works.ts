@@ -57,6 +57,7 @@ export interface WorkDetail extends WorkSummary {
   readonly internalNotes: string | null;
   readonly updatedByUserId: string | null;
   readonly version: number;
+  readonly workForm: WorkFormSubmissionView | null;
 }
 
 export interface CreateWorkInput {
@@ -70,10 +71,15 @@ export interface CreateWorkInput {
   readonly priority: WorkPriority;
   readonly quantity: number;
   readonly requestedDeliveryDate: string;
+  readonly workFormSubmission?: CreateWorkFormSubmissionInput;
   readonly workTypeId: string;
 }
 
-export type UpdateWorkInput = Partial<CreateWorkInput>;
+export type UpdateWorkInput = Partial<Omit<CreateWorkInput, "workFormSubmission">> & {
+  readonly confirmWorkTypeChange?: boolean;
+  readonly workFormSubmission?: CreateWorkFormSubmissionInput;
+  readonly workFormValues?: WorkFormValues;
+};
 
 export interface WorksListParams {
   readonly clinicId: string | undefined;
@@ -129,3 +135,4 @@ export interface ResolveWorkQrResult {
 export function isWorkQrPayload(value: string): boolean {
   return value.startsWith(WORK_QR_PAYLOAD_PREFIX);
 }
+import type { CreateWorkFormSubmissionInput, WorkFormSubmissionView, WorkFormValues } from "./work-forms.js";

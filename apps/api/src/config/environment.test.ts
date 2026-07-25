@@ -13,6 +13,7 @@ describe("parseServerEnvironment", () => {
       csrfCookieName: "dl_csrf",
       csrfHeaderName: "x-csrf-token",
       databaseUrl: "postgresql://user:password@localhost:5432/database",
+      demoMode: false,
       loginRateLimitMaxAttempts: 5,
       loginRateLimitWindowSeconds: 60,
       port: 3001,
@@ -20,6 +21,15 @@ describe("parseServerEnvironment", () => {
       sessionTtlSeconds: 28800,
       webOrigin: "http://localhost:5173",
     });
+  });
+
+  it("parses explicit demo mode", () => {
+    const environment = parseServerEnvironment({
+      DATABASE_URL: "postgresql://user:password@localhost:5432/database",
+      DEMO_MODE: "true",
+    });
+
+    expect(environment.demoMode).toBe(true);
   });
 
   it("uses the default port when PORT is not provided", () => {

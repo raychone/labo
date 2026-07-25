@@ -14,6 +14,13 @@ PORT=3010 pnpm --filter @dental-lab/api start
 pnpm --filter @dental-lab/web dev --host 127.0.0.1
 ```
 
+Pentru butoanele “Acces rapid pentru demonstrație”, pornește explicit demo mode:
+
+```bash
+DEMO_MODE=true PORT=3010 pnpm --filter @dental-lab/api start
+VITE_DEMO_MODE=true pnpm --filter @dental-lab/web dev --host 127.0.0.1
+```
+
 Deschide aplicația în browser:
 
 ```text
@@ -29,7 +36,15 @@ pnpm --filter @dental-lab/api prisma:db:seed:demo
 
 ## 2. Conturi demo
 
-Parola pentru toate conturile demo:
+Pe pagina `/login`, în demo mode, poți folosi secțiunea:
+
+```text
+Acces rapid pentru demonstrație
+```
+
+Butoanele intră ca Manager, Recepție, Logistică, Tehnician, Curier sau Medic fără să expună parola în browser.
+
+Parola fallback pentru toate conturile demo:
 
 ```text
 DemoLab2026!
@@ -65,7 +80,7 @@ Spune clar:
 ## 4. Login și shell aplicație
 
 1. Intra pe `http://127.0.0.1:5173`.
-2. Loghează-te cu `manager@demo.local`.
+2. Folosește “Acces rapid pentru demonstrație” → “Intră ca manager”.
 3. Arată că după login utilizatorul intră în aplicație, nu într-o pagină publică.
 4. Arată navigația principală:
    - Panou principal;
@@ -132,13 +147,15 @@ Dr. Ana Popescu
    - prioritate;
    - termen promis;
    - status;
-   - valoare, dacă utilizatorul are drept de pricing.
+   - valoare, dacă utilizatorul are drept de pricing;
+   - “Detalii specifice lucrării”, cu formularul salvat ca snapshot.
 
 Ce explici:
 
 - lucrarea primește cod unic `WO-<an>-<număr>`;
 - statusul actual este `REGISTERED`, pentru ca workflow-ul de productie vine intr-un task ulterior;
 - prețul este snapshot pe lucrare;
+- formularul specific este snapshot imutabil; dacă template-ul se schimbă ulterior, lucrarea veche păstrează câmpurile și valorile salvate;
 - datele sunt filtrabile pentru receptie/manager.
 
 Valoare stabila pentru cautare:
@@ -148,6 +165,14 @@ WO-2026-900001
 ```
 
 Dacă demo-ul este rulat într-un alt an, codurile devin `WO-<an>-900001`.
+
+Pentru creare lucrare nouă, alege `Coroană zirconiu`. Arată secțiunea “Detalii specifice lucrării”:
+
+- Dinți;
+- Nuanță;
+- Tip zirconiu;
+- Probă solicitată;
+- Observații specifice.
 
 ## 7. QR și scanare
 

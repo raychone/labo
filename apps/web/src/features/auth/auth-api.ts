@@ -22,6 +22,8 @@ export interface LoginCredentials {
   readonly password: string;
 }
 
+export type DemoLoginRole = "CURIER" | "LOGISTICA" | "MANAGER" | "MEDIC" | "RECEPTIE" | "TEHNICIAN";
+
 export interface CsrfResponse {
   readonly csrfToken: string;
 }
@@ -45,6 +47,20 @@ export async function login(credentials: LoginCredentials): Promise<AuthUserResp
   if (response.status === 401) {
     throw new ApiError("Email sau parola invalide.", 401);
   }
+
+  return parseApiResponse<AuthUserResponse>(response);
+}
+
+export async function demoLogin(role: DemoLoginRole): Promise<AuthUserResponse> {
+  const csrfToken = await fetchCsrfToken();
+  const response = await apiFetch("/auth/demo-login", {
+    body: JSON.stringify({ role }),
+    headers: {
+      "Content-Type": "application/json",
+      "x-csrf-token": csrfToken,
+    },
+    method: "POST",
+  });
 
   return parseApiResponse<AuthUserResponse>(response);
 }

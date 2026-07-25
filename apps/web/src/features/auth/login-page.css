@@ -35,6 +35,44 @@
   width: 100%;
 }
 
+.auth-page__demo {
+  align-self: start;
+}
+
+.auth-page__demo-badge {
+  background: var(--dl-color-accent-subtle);
+  border-radius: var(--dl-radius-sm);
+  color: var(--dl-color-accent-active);
+  display: inline-flex;
+  font-size: var(--dl-font-size-caption);
+  font-weight: var(--dl-font-weight-bold);
+  margin-right: var(--dl-space-2);
+  padding: 0.125rem var(--dl-space-2);
+}
+
+.auth-page__demo-grid {
+  display: grid;
+  gap: var(--dl-space-3);
+}
+
+.auth-page__demo-button {
+  align-items: start;
+  display: grid;
+  gap: var(--dl-space-1);
+  height: auto;
+  justify-items: start;
+  min-height: 4rem;
+  text-align: left;
+  white-space: normal;
+}
+
+.auth-page__demo-button small {
+  color: var(--dl-color-text-secondary);
+  font-size: var(--dl-font-size-caption);
+  font-weight: var(--dl-font-weight-regular);
+  line-height: 1.35;
+}
+
 .auth-page__form,
 .auth-page__session {
   display: grid;
@@ -95,5 +133,9 @@
     grid-template-columns: minmax(0, 1fr) minmax(22rem, 28rem);
     min-height: 100vh;
     padding-block: var(--dl-space-10);
+  }
+
+  .auth-page__demo {
+    grid-column: 2;
   }
 }

@@ -1,4 +1,5 @@
 export const WORK_FORMS_RESOURCE_TYPE = "work_form_template";
+export const WORK_FORM_SUBMISSIONS_RESOURCE_TYPE = "work_form_submission";
 
 export const WORK_FORMS_AUDIT_ACTIONS = {
   fieldsReplaced: "work_forms.fields_replaced",
@@ -7,6 +8,9 @@ export const WORK_FORMS_AUDIT_ACTIONS = {
   templateCloned: "work_forms.template_cloned",
   templateCreated: "work_forms.template_created",
   templateUpdated: "work_forms.template_updated",
+  submissionCreated: "work_forms.submission_created",
+  submissionUpdated: "work_forms.submission_updated",
+  submissionReplaced: "work_forms.submission_replaced",
 } as const;
 
 export const WORK_FORM_FIELD_TYPES = [

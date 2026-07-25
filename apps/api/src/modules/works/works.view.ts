@@ -1,9 +1,40 @@
 import type { Prisma } from "@prisma/client";
 
+type WorkFormValue = boolean | number | readonly string[] | string | null;
+type WorkFormValues = Readonly<Record<string, WorkFormValue>>;
+
+interface WorkFormSnapshotField {
+  readonly key: string;
+  readonly label: string;
+  readonly helpText: string | null;
+  readonly type: string;
+  readonly required: boolean;
+  readonly sortOrder: number;
+  readonly placeholder: string | null;
+  readonly defaultValue: WorkFormValue;
+  readonly options: readonly { readonly label: string; readonly value: string }[];
+  readonly validation: Readonly<Record<string, number | string>>;
+}
+
+interface WorkFormSchemaSnapshot {
+  readonly fields: readonly WorkFormSnapshotField[];
+}
+
+export interface WorkFormSubmissionView {
+  readonly fields: readonly WorkFormSnapshotField[];
+  readonly submittedAt: string;
+  readonly templateId: string | null;
+  readonly templateName: string;
+  readonly templateVersion: number;
+  readonly updatedAt: string;
+  readonly values: WorkFormValues;
+}
+
 export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
   include: {
     clinic: true;
     doctor: true;
+    workFormSubmission: true;
     workType: true;
   };
 }>;
@@ -53,6 +84,7 @@ export interface WorkDetailView extends WorkSummaryView {
   readonly internalNotes: string | null;
   readonly updatedByUserId: string | null;
   readonly version: number;
+  readonly workForm: WorkFormSubmissionView | null;
 }
 
 export interface PaginatedWorksView {
@@ -114,5 +146,25 @@ export function toWorkDetailView(workOrder: WorkOrderRecord, includePricing: boo
     internalNotes: workOrder.internalNotes,
     updatedByUserId: workOrder.updatedByUserId,
     version: workOrder.version,
+    workForm: toWorkFormSubmissionView(workOrder.workFormSubmission),
+  };
+}
+
+function toWorkFormSubmissionView(submission: WorkOrderRecord["workFormSubmission"]): WorkFormSubmissionView | null {
+  if (!submission) {
+    return null;
+  }
+
+  const snapshot = submission.schemaSnapshot as unknown as WorkFormSchemaSnapshot;
+  const values = submission.values as unknown as WorkFormValues;
+
+  return {
+    fields: [...snapshot.fields].sort((left, right) => left.sortOrder - right.sortOrder),
+    submittedAt: submission.submittedAt.toISOString(),
+    templateId: submission.templateId,
+    templateName: submission.templateNameSnapshot,
+    templateVersion: submission.templateVersion,
+    updatedAt: submission.updatedAt.toISOString(),
+    values,
   };
 }

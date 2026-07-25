@@ -1,5 +1,5 @@
 import { Transform, Type } from "class-transformer";
-import { IsIn, IsInt, IsISO8601, IsOptional, IsString, Max, MaxLength, Min, MinLength } from "class-validator";
+import { IsBoolean, IsIn, IsInt, IsISO8601, IsObject, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
 
 import { MAX_WORK_ORDER_QUANTITY, SORT_DIRECTIONS, WORK_ORDER_SORT_FIELDS, WORK_PRIORITIES, WORK_STATUSES } from "../works.constants.js";
 
@@ -147,6 +147,20 @@ export class WorkMutationDto {
   public readonly clinicalNotes?: string | null;
 }
 
+export class WorkFormSubmissionDto {
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  public readonly templateId!: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  public readonly templateVersion!: number;
+
+  @IsObject()
+  public readonly values!: Record<string, unknown>;
+}
+
 export class CreateWorkDto extends WorkMutationDto {
   @Transform(({ value }) => trimRequiredString(value))
   @IsString()
@@ -177,6 +191,24 @@ export class CreateWorkDto extends WorkMutationDto {
 
   @IsISO8601({ strict: true })
   public declare readonly requestedDeliveryDate: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => WorkFormSubmissionDto)
+  public readonly workFormSubmission?: WorkFormSubmissionDto;
 }
 
-export class UpdateWorkDto extends WorkMutationDto {}
+export class UpdateWorkDto extends WorkMutationDto {
+  @IsOptional()
+  @IsBoolean()
+  public readonly confirmWorkTypeChange?: boolean;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => WorkFormSubmissionDto)
+  public readonly workFormSubmission?: WorkFormSubmissionDto;
+
+  @IsOptional()
+  @IsObject()
+  public readonly workFormValues?: Record<string, unknown>;
+}

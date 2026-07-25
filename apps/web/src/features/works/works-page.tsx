@@ -15,11 +15,12 @@ import {
   Select,
   StatusBadge,
   TextInput,
+  ConfirmActionModal,
   useToast,
   type DataTableColumn,
   type DataTableSort,
 } from "@dental-lab/ui";
-import { formatMoneyMinor, type CreateWorkInput, type UpdateWorkInput, type WorkSortField, type WorkSummary, type WorksListParams } from "@dental-lab/shared";
+import { formatMoneyMinor, type CreateWorkInput, type UpdateWorkInput, type WorkFormTemplateDetail, type WorkSortField, type WorkSummary, type WorksListParams } from "@dental-lab/shared";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
@@ -30,7 +31,9 @@ import { fetchClinicOptions, fetchDoctorOptions } from "../clinics/clinics-api.j
 import { useSettings } from "../settings/settings-api.js";
 import { hasPermission } from "../users/users-api.js";
 import { useWorkTypeOptions } from "../work-types/work-types-api.js";
+import { useActiveWorkFormTemplate } from "../work-forms/work-form-templates-api.js";
 import { WorkForm, WorkFormActions, defaultWorkFormValues, toWorkFormValues } from "./work-form.js";
+import { WorkFormReadOnlyView } from "./work-dynamic-form.js";
 import { useCreateWork, useUpdateWork, useWork, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
 import { workFormSchema, type WorkFormValues } from "./works-page.schema.js";
 import { WorkQrModal } from "./work-qr-modal.js";
@@ -71,7 +74,7 @@ function fromApiSort(field: string, direction: "asc" | "desc"): DataTableSort {
   };
 }
 
-function toMutationInput(values: WorkFormValues): CreateWorkInput {
+function toMutationInput(values: WorkFormValues, template: WorkFormTemplateDetail | null | undefined): CreateWorkInput {
   return {
     clinicId: values.clinicId,
     clinicalNotes: values.clinicalNotes,
@@ -83,6 +86,15 @@ function toMutationInput(values: WorkFormValues): CreateWorkInput {
     priority: values.priority,
     quantity: values.quantity,
     requestedDeliveryDate: values.requestedDeliveryDate,
+    ...(template
+      ? {
+          workFormSubmission: {
+            templateId: template.id,
+            templateVersion: template.version,
+            values: values.workFormValues,
+          },
+        }
+      : {}),
     workTypeId: values.workTypeId,
   };
 }
@@ -93,6 +105,34 @@ function formatDate(value: string): string {
 
 function formatPrice(value: number | null, currency: string, locale: string): string {
   return value === null ? "Restricționat" : formatMoneyMinor(value, currency, locale);
+}
+
+function hasMeaningfulDynamicValue(value: unknown): boolean {
+  return value !== null && value !== undefined && value !== "" && (!Array.isArray(value) || value.length > 0);
+}
+
+function validateDynamicWorkForm(form: import("react-hook-form").UseFormReturn<WorkFormValues>, template: WorkFormTemplateDetail | null | undefined): boolean {
+  if (!template) {
+    return true;
+  }
+
+  let isValid = true;
+  for (const field of template.fields) {
+    const value = form.getValues(`workFormValues.${field.key}`);
+    if (field.required && !hasMeaningfulDynamicValue(value)) {
+      form.setError(`workFormValues.${field.key}`, { message: `${field.label} este obligatoriu.` });
+      isValid = false;
+    }
+    if ((field.type === "SELECT" || field.type === "RADIO" || field.type === "SHADE") && hasMeaningfulDynamicValue(value)) {
+      const allowed = new Set(field.options.map((option) => option.value));
+      if (typeof value !== "string" || !allowed.has(value)) {
+        form.setError(`workFormValues.${field.key}`, { message: "Alege o opțiune validă." });
+        isValid = false;
+      }
+    }
+  }
+
+  return isValid;
 }
 
 export function WorksPage(): ReactNode {
@@ -189,8 +229,8 @@ export function WorksPage(): ReactNode {
     },
   ], [canDownloadInvoices, currency, locale]);
 
-  function handleCreate(input: WorkFormValues): void {
-    createMutation.mutate(toMutationInput(input), {
+  function handleCreate(input: CreateWorkInput): void {
+    createMutation.mutate(input, {
       onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost creată", variant: "error" }),
       onSuccess: (work) => {
         setIsCreateOpen(false);
@@ -200,8 +240,8 @@ export function WorksPage(): ReactNode {
     });
   }
 
-  function handleUpdate(input: WorkFormValues): void {
-    const updateInput: UpdateWorkInput = toMutationInput(input);
+  function handleUpdate(input: UpdateWorkInput): void {
+    const updateInput = input;
     updateMutation.mutate({ input: updateInput, workOrderId: selectedWorkId ?? "" }, {
       onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost salvată", variant: "error" }),
       onSuccess: (work) => {
@@ -354,7 +394,7 @@ function CreateWorkModal({
   readonly isSaving: boolean;
   readonly locale: string;
   readonly onOpenChange: (isOpen: boolean) => void;
-  readonly onSubmit: (values: WorkFormValues) => void;
+  readonly onSubmit: (input: CreateWorkInput) => void;
   readonly pricingWorkTypeOptions: readonly { readonly basePriceMinor: number; readonly id: string }[];
   readonly submitError: unknown;
 }): ReactNode {
@@ -376,12 +416,18 @@ function CreateWorkModal({
     queryKey: ["doctors", "options", "create-work", selectedClinicId],
     retry: false,
   });
+  const activeTemplateQuery = useActiveWorkFormTemplate(selectedWorkTypeId || undefined, isOpen && selectedWorkTypeId !== "");
+  const submitDisabled = activeTemplateQuery.isLoading || activeTemplateQuery.isError;
 
   useEffect(() => {
     if (!isOpen) {
       form.reset(defaultWorkFormValues);
     }
   }, [form, isOpen]);
+
+  useEffect(() => {
+    form.setValue("workFormValues", {}, { shouldDirty: form.formState.isDirty, shouldValidate: false });
+  }, [form, selectedWorkTypeId]);
 
   useEffect(() => {
     if (submitError) {
@@ -396,7 +442,7 @@ function CreateWorkModal({
       <UnsavedChangesPrompt when={isOpen && form.formState.isDirty && !isSaving} />
       <Modal
         description="Completează datele minime pentru statusul Înregistrată."
-        footer={<WorkFormActions canReset={form.formState.isDirty} formId="create-work-form" isSaving={isSaving} onReset={() => form.reset(defaultWorkFormValues)} submitLabel="Creează lucrare" />}
+        footer={<WorkFormActions canReset={form.formState.isDirty} formId="create-work-form" isSaving={isSaving} onReset={() => form.reset(defaultWorkFormValues)} submitDisabled={submitDisabled} submitLabel="Creează lucrare" />}
         isOpen={isOpen}
         onOpenChange={closeGuard.handleOpenChange}
         title="Lucrare nouă"
@@ -407,11 +453,17 @@ function CreateWorkModal({
           form={form}
           formId="create-work-form"
           isDisabled={isSaving}
+          isTemplateError={activeTemplateQuery.isError}
+          isTemplateLoading={activeTemplateQuery.isLoading}
           onClinicChange={() => form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true })}
+          onRetryTemplate={() => void activeTemplateQuery.refetch()}
           onSubmit={(values) => {
             form.clearErrors("root");
-            onSubmit(values);
+            if (validateDynamicWorkForm(form, activeTemplateQuery.data)) {
+              onSubmit(toMutationInput(values, activeTemplateQuery.data));
+            }
           }}
+          template={activeTemplateQuery.data}
           totalPreview={totalPreview}
           workTypeOptions={formWorkTypeOptions}
         />
@@ -449,7 +501,7 @@ function WorkDetailsDrawer({
   readonly locale: string;
   readonly onOpenChange: (isOpen: boolean) => void;
   readonly onShowQr: (workId: string) => void;
-  readonly onSubmit: (values: WorkFormValues) => void;
+  readonly onSubmit: (input: UpdateWorkInput) => void;
   readonly pricingWorkTypeOptions: readonly { readonly basePriceMinor: number; readonly id: string }[];
   readonly submitError: unknown;
   readonly work: import("@dental-lab/shared").WorkDetail | undefined;
@@ -474,6 +526,10 @@ function WorkDetailsDrawer({
     ? formatMoneyMinor(selectedPriceOption.basePriceMinor * quantity, currency, locale)
     : null;
   const closeGuard = useCloseGuard(form.formState.isDirty, isSaving, onOpenChange);
+  const [pendingWorkTypeChange, setPendingWorkTypeChange] = useState<UpdateWorkInput | null>(null);
+  const isWorkTypeChanging = Boolean(work && selectedWorkTypeId !== "" && selectedWorkTypeId !== work.workType.id);
+  const activeTemplateQuery = useActiveWorkFormTemplate(selectedWorkTypeId || undefined, isOpen && isWorkTypeChanging);
+  const submitDisabled = activeTemplateQuery.isLoading || activeTemplateQuery.isError;
 
   useEffect(() => {
     form.reset(toWorkFormValues(work));
@@ -486,6 +542,26 @@ function WorkDetailsDrawer({
   }, [form, submitError]);
 
   useBeforeUnloadPrompt(isOpen && form.formState.isDirty && !isSaving);
+
+  function buildUpdateInput(values: WorkFormValues): UpdateWorkInput | null {
+    const templateForValidation = isWorkTypeChanging ? activeTemplateQuery.data : null;
+    if (!validateDynamicWorkForm(form, templateForValidation)) {
+      return null;
+    }
+
+    const baseInput = toMutationInput(values, isWorkTypeChanging ? activeTemplateQuery.data : null);
+    return {
+      ...baseInput,
+      ...(isWorkTypeChanging
+        ? {
+            confirmWorkTypeChange: true,
+            ...(baseInput.workFormSubmission ? { workFormSubmission: baseInput.workFormSubmission } : {}),
+          }
+        : {
+            workFormValues: values.workFormValues,
+          }),
+    };
+  }
 
   return (
     <>
@@ -515,25 +591,72 @@ function WorkDetailsDrawer({
               form={form}
               formId="update-work-form"
               isDisabled={!canUpdate || isSaving}
+              isTemplateError={activeTemplateQuery.isError}
+              isTemplateLoading={activeTemplateQuery.isLoading}
               onClinicChange={() => form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true })}
+              onRetryTemplate={() => void activeTemplateQuery.refetch()}
               onSubmit={(values) => {
                 form.clearErrors("root");
-                onSubmit(values);
+                const updateInput = buildUpdateInput(values);
+                if (!updateInput) {
+                  return;
+                }
+                if (isWorkTypeChanging) {
+                  setPendingWorkTypeChange(updateInput);
+                  return;
+                }
+                onSubmit(updateInput);
               }}
+              template={isWorkTypeChanging ? activeTemplateQuery.data : work.workForm ? {
+                activatedAt: null,
+                activatedByUserId: null,
+                archivedAt: null,
+                archivedByUserId: null,
+                createdAt: work.workForm.submittedAt,
+                createdByUserId: null,
+                description: null,
+                fieldCount: work.workForm.fields.length,
+                fields: work.workForm.fields.map((field) => ({ ...field, id: field.key, isActive: true })),
+                id: work.workForm.templateId ?? "snapshot",
+                name: work.workForm.templateName,
+                status: "ACTIVE",
+                updatedAt: work.workForm.updatedAt,
+                updatedByUserId: null,
+                version: work.workForm.templateVersion,
+                workType: { code: work.workType.code, id: work.workType.id, isActive: true, name: work.workType.name },
+                workTypeId: work.workType.id,
+              } : null}
               totalPreview={canReadPricing ? totalPreview : null}
               workTypeOptions={formWorkTypeOptions}
             />
+            <WorkFormReadOnlyView submission={work.workForm} />
             <WorkFormActions
               canReset={form.formState.isDirty}
               formId="update-work-form"
               isSaving={isSaving}
               onReset={() => form.reset(toWorkFormValues(work))}
+              submitDisabled={submitDisabled}
               submitLabel="Salvează lucrarea"
             />
             {!canUpdate ? <p className="works-page__muted">Ai acces de citire, dar nu poți modifica lucrarea.</p> : null}
           </div>
         ) : !workError ? <LoadingState text="Se încarcă detaliile" /> : null}
       </Drawer>
+      <ConfirmActionModal
+        confirmLabel="Continuă"
+        description="Schimbarea tipului de lucrare va elimina detaliile specifice completate pentru tipul actual. Continui?"
+        isLoading={isSaving}
+        isOpen={pendingWorkTypeChange !== null}
+        onCancel={() => setPendingWorkTypeChange(null)}
+        onConfirm={() => {
+          if (pendingWorkTypeChange) {
+            onSubmit(pendingWorkTypeChange);
+            setPendingWorkTypeChange(null);
+          }
+        }}
+        title="Schimbi tipul lucrării?"
+        variant="danger"
+      />
       {closeGuard.confirmModal}
     </>
   );

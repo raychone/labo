@@ -47,6 +47,50 @@ export interface WorkFormFieldDefinition {
   readonly isActive: boolean;
 }
 
+export type WorkFormValue = boolean | number | readonly string[] | string | null;
+export type WorkFormValues = Readonly<Record<string, WorkFormValue>>;
+
+export interface WorkFormSnapshotField {
+  readonly key: string;
+  readonly label: string;
+  readonly helpText: string | null;
+  readonly type: WorkFormFieldType;
+  readonly required: boolean;
+  readonly sortOrder: number;
+  readonly placeholder: string | null;
+  readonly defaultValue: WorkFormDefaultValue;
+  readonly options: readonly WorkFormOption[];
+  readonly validation: WorkFormFieldValidation;
+}
+
+export interface WorkFormSchemaSnapshot {
+  readonly fields: readonly WorkFormSnapshotField[];
+}
+
+export interface CreateWorkFormSubmissionInput {
+  readonly templateId: string;
+  readonly templateVersion: number;
+  readonly values: WorkFormValues;
+}
+
+export type UpdateWorkFormValuesInput = WorkFormValues;
+
+export interface WorkFormSubmissionView {
+  readonly fields: readonly WorkFormSnapshotField[];
+  readonly submittedAt: string;
+  readonly templateId: string | null;
+  readonly templateName: string;
+  readonly templateVersion: number;
+  readonly updatedAt: string;
+  readonly values: WorkFormValues;
+}
+
+export interface WorkFormDisplayValue {
+  readonly fieldKey: string;
+  readonly label: string;
+  readonly value: string;
+}
+
 export interface WorkFormWorkTypeSummary {
   readonly code: string;
   readonly id: string;
@@ -119,8 +163,93 @@ export const RESERVED_WORK_FORM_FIELD_KEYS = [
   "patient_name",
 ] as const;
 
+export const FORBIDDEN_WORK_FORM_VALUE_KEYS = ["__proto__", "constructor", "prototype"] as const;
+
+export const FDI_TOOTH_CODES = [
+  "11", "12", "13", "14", "15", "16", "17", "18",
+  "21", "22", "23", "24", "25", "26", "27", "28",
+  "31", "32", "33", "34", "35", "36", "37", "38",
+  "41", "42", "43", "44", "45", "46", "47", "48",
+  "51", "52", "53", "54", "55",
+  "61", "62", "63", "64", "65",
+  "71", "72", "73", "74", "75",
+  "81", "82", "83", "84", "85",
+] as const;
+
 export function isWorkFormFieldKey(value: string): boolean {
   return WORK_FORM_FIELD_KEY_PATTERN.test(value) && !RESERVED_WORK_FORM_FIELD_KEYS.includes(value as never);
+}
+
+export function isForbiddenWorkFormValueKey(key: string): boolean {
+  return FORBIDDEN_WORK_FORM_VALUE_KEYS.includes(key as never);
+}
+
+export function isFdiToothCode(value: string): boolean {
+  return FDI_TOOTH_CODES.includes(value as never);
+}
+
+export function isDateOnlyString(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const [yearText, monthText, dayText] = value.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+export function getChangedWorkFormValueKeys(before: WorkFormValues, after: WorkFormValues): readonly string[] {
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+
+  return [...keys].filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key])).sort();
+}
+
+export function formatWorkFormValue(field: WorkFormSnapshotField, value: WorkFormValue, locale = "ro-RO"): string {
+  if (value === null || value === "" || (Array.isArray(value) && value.length === 0)) {
+    return "";
+  }
+
+  if (field.type === "CHECKBOX") {
+    return value === true ? "Da" : "Nu";
+  }
+
+  if (field.type === "DATE" && typeof value === "string" && isDateOnlyString(value)) {
+    return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${value}T00:00:00.000Z`));
+  }
+
+  if (field.type === "NUMBER" && typeof value === "number") {
+    return new Intl.NumberFormat(locale, { maximumFractionDigits: 4 }).format(value);
+  }
+
+  if (Array.isArray(value)) {
+    const labels = new Map(field.options.map((option) => [option.value, option.label]));
+    return value.map((item) => labels.get(item) ?? item).join(", ");
+  }
+
+  if (typeof value === "string") {
+    const option = field.options.find((item) => item.value === value);
+    return option?.label ?? value;
+  }
+
+  return String(value);
+}
+
+export function toWorkFormDisplayValues(
+  fields: readonly WorkFormSnapshotField[],
+  values: WorkFormValues,
+  locale = "ro-RO",
+): readonly WorkFormDisplayValue[] {
+  return fields
+    .map((field) => ({
+      fieldKey: field.key,
+      label: field.label,
+      value: formatWorkFormValue(field, values[field.key] ?? null, locale),
+    }))
+    .filter((item) => item.value.length > 0);
 }
 
 function hasMarkup(value: string): boolean {

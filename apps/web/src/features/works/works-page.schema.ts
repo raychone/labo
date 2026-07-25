@@ -4,6 +4,14 @@ import { z } from "zod";
 const nullableTrimmedString = (maxLength: number) =>
   z.string().trim().max(maxLength).transform((value) => value.length === 0 ? null : value).nullable();
 
+const workFormValueSchema = z.union([
+  z.boolean(),
+  z.number().finite(),
+  z.string(),
+  z.array(z.string()),
+  z.null(),
+]);
+
 export const workFormSchema = z.object({
   clinicId: z.string().min(1, "Alege cabinetul."),
   clinicalNotes: nullableTrimmedString(2000),
@@ -15,6 +23,7 @@ export const workFormSchema = z.object({
   priority: z.enum(WORK_PRIORITIES),
   quantity: z.number().int().min(1, "Cantitatea minima este 1.").max(99, "Cantitatea maxima este 99."),
   requestedDeliveryDate: z.string().min(1, "Alege termenul promis."),
+  workFormValues: z.record(z.string(), workFormValueSchema),
   workTypeId: z.string().min(1, "Alege tipul lucrării."),
 });
 

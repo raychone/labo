@@ -42,6 +42,8 @@ model User {
   updatedWorkFormTemplates WorkFormTemplate[] @relation("WorkFormTemplateUpdatedBy")
   activatedWorkFormTemplates WorkFormTemplate[] @relation("WorkFormTemplateActivatedBy")
   archivedWorkFormTemplates WorkFormTemplate[] @relation("WorkFormTemplateArchivedBy")
+  submittedWorkFormSubmissions WorkFormSubmission[] @relation("WorkFormSubmissionSubmittedBy")
+  updatedWorkFormSubmissions WorkFormSubmission[] @relation("WorkFormSubmissionUpdatedBy")
 
   @@index([isActive])
   @@index([createdAt])
@@ -219,6 +221,7 @@ model WorkFormTemplate {
   activatedBy User? @relation("WorkFormTemplateActivatedBy", fields: [activatedByUserId], references: [id], onDelete: SetNull)
   archivedBy User? @relation("WorkFormTemplateArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
   fields WorkFormFieldDefinition[]
+  submissions WorkFormSubmission[]
 
   @@unique([workTypeId, version])
   @@index([workTypeId])
@@ -306,6 +309,7 @@ model WorkOrder {
   updatedBy User? @relation("WorkOrderUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   billingLines BillingDocumentLine[]
   invoicedDocument BillingDocument? @relation("WorkOrderInvoicedDocument", fields: [invoicedDocumentId], references: [id], onDelete: SetNull)
+  workFormSubmission WorkFormSubmission?
 
   @@index([clinicId])
   @@index([doctorId])
@@ -320,6 +324,32 @@ model WorkOrder {
   @@index([updatedByUserId])
   @@index([invoicedDocumentId])
   @@map("work_orders")
+}
+
+model WorkFormSubmission {
+  id String @id @default(cuid())
+  workOrderId String @unique @map("work_order_id")
+  templateId String? @map("template_id")
+  templateVersion Int @map("template_version")
+  templateNameSnapshot String @map("template_name_snapshot") @db.VarChar(160)
+  schemaSnapshot Json @map("schema_snapshot")
+  values Json
+  submittedAt DateTime @default(now()) @map("submitted_at")
+  submittedByUserId String? @map("submitted_by_user_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedByUserId String? @map("updated_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  template WorkFormTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  submittedBy User? @relation("WorkFormSubmissionSubmittedBy", fields: [submittedByUserId], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("WorkFormSubmissionUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([templateId])
+  @@index([templateVersion])
+  @@index([submittedByUserId])
+  @@index([updatedByUserId])
+  @@index([createdAt])
+  @@map("work_form_submissions")
 }
 
 model BillingDocument {

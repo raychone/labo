@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { PrismaService } from "../database/prisma.service.js";
 import type { WorkQrTokenService } from "../qr/work-qr-token.service.js";
+import type { WorkFormSubmissionValidationService } from "../work-forms/work-form-submission-validation.service.js";
 import { CreateWorkDto } from "./dto/works.dto.js";
 import type { WorkOrderCodeService } from "./work-order-code.service.js";
 import { calculateTotalPriceMinor, parseDateOnly, WorksService } from "./works.service.js";
@@ -120,6 +121,7 @@ function workOrder(overrides: Partial<WorkOrder> = {}) {
     updatedAt: new Date("2026-07-22T12:00:00.000Z"),
     updatedByUserId: "actor_1",
     version: 1,
+    workFormSubmission: null,
     workType: workType(),
     workTypeId: "work_type_1",
     ...overrides,
@@ -130,11 +132,18 @@ function createService(
   prisma: unknown,
   codeService: unknown = { generate: vi.fn().mockResolvedValue("WO-2026-000001") },
   qrTokenService: unknown = { generate: vi.fn().mockResolvedValue("qr_token_1") },
+  submissionValidationService: unknown = {
+    prepareCreate: vi.fn().mockResolvedValue(null),
+    prepareReplaceForWorkTypeChange: vi.fn(),
+    prepareUpdateValues: vi.fn(),
+    recordSubmissionAudit: vi.fn(),
+  },
 ): WorksService {
   return new WorksService(
     prisma as PrismaService,
     codeService as WorkOrderCodeService,
     qrTokenService as WorkQrTokenService,
+    submissionValidationService as WorkFormSubmissionValidationService,
   );
 }
 

@@ -59,7 +59,7 @@
 
 - [x] FORMS-001 - Form patterns and validation UX
 - [x] WORKFORMS-001 - Work form template builder (COMPLETED)
-- [ ] FORMS-002 - Work form completion and immutable snapshot (NOT STARTED)
+- [x] WORKFORMS-002 - Work form completion and immutable snapshot (COMPLETED)
 
 ## BILLING
 
@@ -151,17 +151,17 @@ NONE / AWAITING APPROVAL
 
 Status: COMPLETED
 
-Started: 2026-07-25T20:54:23Z
+Started: 2026-07-26T00:37:00+03:00
 
-Completed: 2026-07-25T21:15:48Z
+Completed: 2026-07-26T01:01:00+03:00
 
-Last completed task: UX-HARDENING-001 - Romanian UX, modal, sidebar, toast, QR and export hardening
+Last completed task: WORKFORMS-002 - Work form completion and immutable snapshot
 
-Completed: 2026-07-25T21:15:48Z
+Completed: 2026-07-26T01:01:00+03:00
 
 ## Next Recommended Task
 
-FORMS-002 - Work form completion and immutable snapshot
+WORKFLOW-001 - Workflow templates
 
 ## Known Technical Debt
 
@@ -203,7 +203,7 @@ None.
 - Use `WorkOrder.invoicedDocumentId` as the active invoice relation instead of a billing boolean.
 - Keep patient names out of billing audit metadata; document line snapshots may contain patient names for internal annex/search views.
 - Keep existing Payment models/endpoints as optional manual evidence only; the MVP does not process money, cards, POS transactions, cash register flows or bank reconciliation.
-- Approved roadmap order after BILLING-001: BILLING-002, DEMO-SEED-001, WORKFORMS-001, FORMS-002, WORKFLOW-001, WORKFLOW-002, TECH-001, SCAN-002, LOGISTICS-001, DELIVERY-001, SIGNATURES-001, DASHBOARD-001, SEARCH-001, REPORTS-001, AUDIT-UI-001, DEMO-POLISH-001, E2E-001, SECURITY-001, DEPLOY-001.
+- Approved roadmap order after BILLING-001: BILLING-002, DEMO-SEED-001, WORKFORMS-001, WORKFORMS-002, WORKFLOW-001, WORKFLOW-002, TECH-001, SCAN-002, LOGISTICS-001, DELIVERY-001, SIGNATURES-001, DASHBOARD-001, SEARCH-001, REPORTS-001, AUDIT-UI-001, DEMO-POLISH-001, E2E-001, SECURITY-001, DEPLOY-001.
 - Evaluate RBAC from the database so access changes take effect without relogin.
 - Treat `ALL` as the only broad scope; ownership scopes remain distinct.
 - Use plain CSS custom properties in `packages/ui/src/styles.css` as the design token source of truth.
@@ -374,19 +374,61 @@ None.
   - Real-device responsive checks at 360px/768px/1280px, zoom 150%, keyboard-only navigation and browser console inspection were only partially covered by tests/HTTP smoke in this terminal environment.
   - Linting remains unconfigured.
 
-### FORMS-002 - Work form completion and immutable snapshot
+### WORKFORMS-002 - Work form completion and immutable snapshot
 
-- Status: NOT STARTED.
+- Status: COMPLETED.
+- Started: 2026-07-26T00:37:00+03:00.
+- Completed: 2026-07-26T01:01:00+03:00.
+- Commit message: `WORKFORMS-002: add work form submissions`.
 - Obiectiv: completarea formularelor dinamice pe lucrare si salvarea unui snapshot imutabil al template-ului folosit.
-- Scope: completare valori pentru WorkOrder pe baza template-ului activ, validare, snapshot versiune/campuri/raspunsuri si afisare read-only in detalii.
-- Non-goals: editare template, fisiere, workflow execution, conditional rules engine complex.
+- Scope: completare valori pentru WorkOrder pe baza template-ului activ, validare, snapshot versiune/campuri/raspunsuri, afisare read-only in detalii, demo seed cu submission-uri si login demo rapid.
+- Non-goals: editare template, fisiere, workflow execution, conditional rules engine complex, asignare tehnicieni, logistica, livrare, QC, notificari, portal extern medic, procesare plati.
 - Dependente: WORKFORMS-001, WORKS-001, RBAC-001.
-- Acceptance criteria: o lucrare noua poate salva raspunsurile cerute de template, iar lucrarile existente pastreaza snapshotul chiar daca template-ul se modifica ulterior.
-- Backend: modele/contract pentru raspunsuri si snapshot, validare server-side impotriva snapshotului, tranzactii unde este necesar.
-- Frontend: completare in create/edit Work, erori pe campuri dinamice, summary, read-only snapshot in detalii.
-- Securitate: RBAC pentru citire/modificare lucrari, fara expunere date peste permisiuni.
-- Audit: audit pentru create/update raspunsuri formular pe lucrare.
-- Testare: unit/integration pentru snapshot si validare, frontend pentru completare, erori si compatibilitate cu FORMS-001 patterns.
+- Summary:
+  - Added `WorkFormSubmission` as optional 1:1 relation from `WorkOrder`, with immutable `schemaSnapshot`, values JSON, template reference/name/version snapshots and actor timestamps.
+  - Added deterministic migration `20260726004000_work_form_submission_snapshot`.
+  - Added `WorkFormSubmissionValidationService` for active-template lookup, stale template 409, backend-owned snapshot construction, strict values validation, forbidden key/payload checks, FDI TOOTH allowlist and audit metadata without values.
+  - Extended `POST /works`, `PATCH /works/:id` and `GET /works/:id` for form submissions while keeping WorkOrder and submission changes transactional.
+  - Added shared contracts/helpers for snapshot fields, values, display formatting, FDI codes and changed key detection.
+  - Added dynamic work form UI in `/works`, field renderers, FDI tooth selector, multiselect, read-only snapshot display and template loading/error/empty states.
+  - Added demo templates and submissions for Coroană zirconiu, Proteză totală and Bont personalizat implant.
+  - Added `/auth/demo-login` guarded by `DEMO_MODE=true` and frontend quick-access demo buttons guarded by `VITE_DEMO_MODE=true`.
+- Main files modified:
+  - `apps/api/prisma/schema.prisma`
+  - `apps/api/prisma/migrations/20260726004000_work_form_submission_snapshot/migration.sql`
+  - `apps/api/src/modules/work-forms/work-form-submission-validation.service.ts`
+  - `apps/api/src/modules/works/*`
+  - `apps/api/src/modules/auth/*`
+  - `apps/api/prisma/demo/*`
+  - `apps/web/src/features/works/*`
+  - `apps/web/src/features/auth/*`
+  - `packages/shared/src/work-forms.ts`
+  - `packages/shared/src/works.ts`
+- Tests executed:
+  - `pnpm --filter @dental-lab/api prisma:validate` - passed.
+  - `pnpm --filter @dental-lab/api prisma:generate` - passed.
+  - `pnpm --filter @dental-lab/api prisma:migrate:dev --name work_form_submission_snapshot` - passed.
+  - `pnpm --filter @dental-lab/api prisma:db:seed:demo` - passed after reset was updated to remove all templates for demo work types.
+  - `pnpm typecheck` - passed.
+  - `pnpm test` - passed.
+  - `pnpm build` - passed.
+- Manual verification:
+  - API started on `http://127.0.0.1:3011` with `DEMO_MODE=true`.
+  - Frontend started on `http://127.0.0.1:5181` with `VITE_DEMO_MODE=true`.
+  - `GET /health` returned `200`.
+  - `POST /auth/demo-login` with role `MANAGER` returned `200` and created a normal session cookie.
+  - `GET /work-types/demo_wt_zirconiu/form-template` returned `Formular coroană zirconiu`.
+  - `POST /works` with zirconia work form values returned `201` and `workForm` snapshot with template name/version, fields and values.
+  - `/login` and `/works` frontend routes returned HTML from Vite.
+- Architecture decisions:
+  - API keeps local runtime validation types to preserve the existing API rootDir boundary; shared owns public/frontend contracts and pure helpers.
+  - Billing snapshots remain independent; work form changes do not alter issued financial documents.
+  - Demo quick login uses backend session creation and CSRF; no demo password is exposed to React.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Browser-level visual/manual testing of dynamic fields was limited to HTTP smoke and component tests in this terminal environment.
+  - Linting remains unconfigured.
 
 ### FILES-001 - Private file upload
 
@@ -1894,7 +1936,7 @@ None.
   - Reorganized the Work form into operational sections: clinic and doctor, patient, work, deadline and priority, and notes.
   - Standardized modal confirmation UX for archive/restore/disable flows through reusable UI instead of native confirms.
   - Disabled or hid false save actions where forms are read-only or unchanged, where appropriate.
-  - Updated plan/status documentation to track `WORKFORMS-001` separately before `FORMS-002`.
+  - Updated plan/status documentation to track `WORKFORMS-001` separately before `WORKFORMS-002`.
 - Non-goals:
   - No Prisma schema or migration changes.
   - No backend endpoints or permissions added.
@@ -1972,7 +2014,7 @@ None.
   - WorkOrder already had patient name, clinic, doctor, quantity, price snapshot, currency, createdAt, requested delivery date and work code; `invoicedDocumentId` was added for active invoice relation.
   - Linting remains unconfigured.
 - Reprioritization:
-  - `WORKFORMS-001` and `FORMS-002` remain NOT STARTED, but are no longer next.
+  - `WORKFORMS-001` and `WORKFORMS-002` remain NOT STARTED, but are no longer next.
   - Next recommended task is `BILLING-002 - Printable billing documents and clinic statements`.
 - Summary:
   - Added billing Prisma models for documents, lines, payments and numbering series.
