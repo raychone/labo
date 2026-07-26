@@ -15,6 +15,11 @@ function stage(overrides: Partial<WorkStageExecutionView>): WorkStageExecutionVi
   return {
     allowedRoleCodes: ["TEHNICIAN"],
     allowedRoleLabels: ["Tehnician"],
+    assignment: {
+      assignedAt: null,
+      assignedBy: null,
+      assignedUser: null,
+    },
     completedAt: null,
     completedBy: null,
     description: null,
@@ -53,6 +58,9 @@ describe("workflow execution helpers", () => {
     expect(getWorkflowExecutionStatusLabel("COMPLETED")).toBe("Flux finalizat");
     expect(getWorkStageExecutionStatusLabel("IN_PROGRESS")).toBe("În lucru");
     expect(getWorkStageEventLabel("STAGE_COMPLETED")).toBe("Etapă finalizată");
+    expect(getWorkStageEventLabel("STAGE_ASSIGNED")).toBe("Etapă asignată");
+    expect(getWorkStageEventLabel("STAGE_REASSIGNED")).toBe("Etapă reasignată");
+    expect(getWorkStageEventLabel("STAGE_UNASSIGNED")).toBe("Asignare eliminată");
   });
 
   it("exposes action availability for current stage state", () => {

@@ -113,10 +113,14 @@ Legend: A = implicit permis, O = posibil prin override explicit, - = interzis im
 | works.archive | A | - | - | - | - | - |
 | workflow.read | A | A | A | A | - | - |
 | workflow.configure | A | O | - | - | - | - |
+| workflow.assign_stage | A | O | - | - | - | - |
 | workflow.start_stage | A | O | - | A | - | - |
 | workflow.pause_stage | A | O | - | A | - | - |
 | workflow.complete_stage | A | O | - | A | - | - |
+| workflow.reassign_stage | A | O | - | - | - | - |
 | workflow.reopen_stage | A | O | - | - | - | - |
+| technician.workbench.read | A | O | - | A | - | - |
+| technician.workload.read | A | O | - | - | - | - |
 | logistics.read | A | A | A | - | - | - |
 | logistics.plan | A | A | - | - | - | - |
 | logistics.assign | A | A | - | - | - | - |
@@ -1365,19 +1369,19 @@ Decizie concreta SETTINGS-001:
 
 ### TECH-001 - Technician workbench
 
-- Scop: ecran lucrarile mele si executie etapa.
-- Motiv: productie reala.
-- Module: TechnicianModule.
-- Dependinte: LOGISTICS-001.
-- Pasi: list assigned, start/pause/complete, notes, files.
-- Acceptare: tehnician vede doar assigned.
-- Teste: API + E2E.
-- Manual: telefon/tableta.
-- Riscuri: conflicte concurenta.
-- Nu modifica: QC.
-- DoD: etapa executabila.
+- Scop: asignarea unui tehnician responsabil pe etapa curenta si ecran personal “Lucrările mele”.
+- Motiv: productie reala si coada clara pentru tehnicieni.
+- Module: TechnicianAssignmentsModule, Workbench UI.
+- Dependinte: WORKFLOW-002, USERS-001, RBAC-001.
+- Pasi: assign/reassign/unassign etapa curenta, coada personala, workload manager, start/complete din workbench.
+- Acceptare: tehnician vede doar etapa curenta asignata lui; manager vede etape curente asignate si neasignate; reasignarea unei etape in lucru cere confirmare si audit.
+- Teste: Prisma validate/generate/migrate, unit tests shared/API, typecheck, test, build, seed demo idempotent.
+- Manual: `/workbench` pe mobile/tablet/desktop, login manager si tehnician demo, endpointuri workbench/workload/options.
+- Riscuri: conflict concurenta tratat cu versiune optimista; warning `pg` la shutdown ramane observabil.
+- Nu modifica: SCAN-002, logistica, QC, fisiere, notificari, payroll.
+- DoD: etapa curenta este asignabila si executabila conform RBAC si ownership.
 - Estimare: L.
-- Status: NOT STARTED.
+- Status: COMPLETED.
 
 ### QC-001 - Quality control
 

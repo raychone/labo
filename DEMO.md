@@ -485,7 +485,36 @@ curier@demo.local
 
 Arata ca meniurile si accesul sunt diferite.
 
-## 15. Setari laborator
+## 15. Lucrarile mele pentru tehnicieni
+
+Din acces rapid demo, intra ca `tehnician1@demo.local` sau foloseste butonul “Intră ca tehnician”.
+
+Deschide `Lucrările mele`.
+
+Ce arati:
+
+- coada personala a tehnicianului;
+- filtrele rapide `Toate`, `De început`, `În lucru`, `Urgente`, `Astăzi`, `Întârziate`;
+- cardul de lucrare cu etapa curenta, termen, progres si responsabil;
+- actiunile `Începe etapa` si `Finalizează etapa`, disponibile doar cand statusul permite;
+- faptul ca tehnicianul vede numai lucrarea asignata lui.
+
+Revino ca manager si deschide `Lucrările mele`.
+
+Ce arati:
+
+- managerul vede atelierul complet, inclusiv etape neasignate;
+- sectiunea `Încărcare tehnicieni`;
+- in detaliul unei lucrari, sectiunea `Flux producție` are control `Responsabil` pentru asignare/reasignare/eliminare;
+- reasignarea unei etape deja pornite cere confirmare si ramane in istoric/audit.
+
+Ce explici:
+
+- asignarea este pe etapa curenta, nu pe toata lucrarea;
+- etapa urmatoare ramane neasignata cand fluxul avanseaza;
+- backend-ul verifica permisiunile si assignment-ul, UI-ul doar ghideaza utilizatorul.
+
+## 16. Setari laborator
 
 Deschide `Setari`.
 
@@ -507,7 +536,7 @@ Ce explici:
 - aceste date sunt folosite in documentele printabile;
 - datele demo sunt fictive si marcate ca demo.
 
-## 16. Ce este gata acum
+## 17. Ce este gata acum
 
 Gata in stadiul curent:
 
@@ -533,12 +562,13 @@ Gata in stadiul curent:
 - CSV;
 - dataset demo realist si resetabil.
 
-## 17. Ce nu este gata inca
+## 18. Ce nu este gata inca
 
 Nu prezenta ca finalizat:
 
 - workflow productie pe etape;
-- asignare tehnicieni pe lucrari;
+- asignare tehnicieni pe etapa curenta;
+- coada personala pentru tehnicieni;
 - fisiere/atasamente private;
 - logistica/livrari;
 - semnaturi;
@@ -551,7 +581,7 @@ Nu prezenta ca finalizat:
 - RO e-Factura/SPV;
 - procesare reala de plati.
 
-## 18. Flow recomandat de prezentare
+## 19. Flow recomandat de prezentare
 
 Ordine recomandata:
 
@@ -577,10 +607,12 @@ Ordine recomandata:
 20. Print/PDF si anexa.
 21. Inchidere luna si CSV.
 22. Utilizatori si roluri.
-23. Login cu receptie/tehnician/curier pentru meniuri diferite.
-24. Setari laborator.
-25. Recapitulare ce este gata si ce urmeaza.
+23. Login cu tehnician si arata `Lucrările mele`.
+24. Login manager si arata asignarea responsabilului in fluxul lucrarii.
+25. Login cu receptie/curier pentru meniuri diferite.
+26. Setari laborator.
+27. Recapitulare ce este gata si ce urmeaza.
 
-## 19. Fraza de inchidere
+## 20. Fraza de inchidere
 
-Aplicatia acopera deja baza operationala: utilizatori, roluri, clinici, medici, catalog de lucrari, receptie lucrari, QR, formulare dinamice, template-uri de workflow, facturare, incasari manuale si documente printabile. Urmatorul pas natural este executia workflow-ului pe lucrari, ca fiecare lucrare sa treaca prin etape, tehnicieni, fisiere, control calitate si livrare.
+Aplicatia acopera deja baza operationala: utilizatori, roluri, clinici, medici, catalog de lucrari, receptie lucrari, QR, formulare dinamice, template-uri de workflow, executia etapelor curente cu asignare pe tehnicieni, facturare, incasari manuale si documente printabile. Urmatorul pas natural este scanarea operationala pentru handoff-uri si actiuni rapide pe flux.

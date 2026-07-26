@@ -1,8 +1,17 @@
 import { formatWorkflowDuration, type WorkflowStageRoleCode } from "./workflow-templates.js";
+import type { TechnicianAssignmentView } from "./technician-assignments.js";
 
 export const WORKFLOW_EXECUTION_STATUSES = ["ACTIVE", "COMPLETED"] as const;
 export const WORK_STAGE_EXECUTION_STATUSES = ["PENDING", "IN_PROGRESS", "COMPLETED"] as const;
-export const WORK_STAGE_EVENT_TYPES = ["WORKFLOW_CREATED", "STAGE_STARTED", "STAGE_COMPLETED", "WORKFLOW_COMPLETED"] as const;
+export const WORK_STAGE_EVENT_TYPES = [
+  "WORKFLOW_CREATED",
+  "STAGE_STARTED",
+  "STAGE_COMPLETED",
+  "WORKFLOW_COMPLETED",
+  "STAGE_ASSIGNED",
+  "STAGE_REASSIGNED",
+  "STAGE_UNASSIGNED",
+] as const;
 
 export type WorkflowExecutionStatus = (typeof WORKFLOW_EXECUTION_STATUSES)[number];
 export type WorkStageExecutionStatus = (typeof WORK_STAGE_EXECUTION_STATUSES)[number];
@@ -16,6 +25,7 @@ export interface WorkflowUserSummary {
 export interface WorkStageExecutionView {
   readonly allowedRoleCodes: readonly WorkflowStageRoleCode[];
   readonly allowedRoleLabels: readonly string[];
+  readonly assignment: TechnicianAssignmentView;
   readonly completedAt: string | null;
   readonly completedBy: WorkflowUserSummary | null;
   readonly description: string | null;
@@ -108,6 +118,18 @@ export function getWorkStageExecutionStatusLabel(status: WorkStageExecutionStatu
 }
 
 export function getWorkStageEventLabel(type: WorkflowEventType): string {
+  if (type === "STAGE_ASSIGNED") {
+    return "Etapă asignată";
+  }
+
+  if (type === "STAGE_REASSIGNED") {
+    return "Etapă reasignată";
+  }
+
+  if (type === "STAGE_UNASSIGNED") {
+    return "Asignare eliminată";
+  }
+
   if (type === "STAGE_STARTED") {
     return "Etapă începută";
   }

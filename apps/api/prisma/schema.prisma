@@ -50,6 +50,8 @@ model User {
   archivedWorkflowTemplates WorkflowTemplate[] @relation("WorkflowTemplateArchivedBy")
   startedWorkStages WorkStageExecution[] @relation("WorkStageStartedBy")
   completedWorkStages WorkStageExecution[] @relation("WorkStageCompletedBy")
+  assignedWorkStages WorkStageExecution[] @relation("WorkStageAssignedTo")
+  assignedByWorkStages WorkStageExecution[] @relation("WorkStageAssignedBy")
   workflowStageEvents WorkStageEvent[] @relation("WorkStageEventActor")
 
   @@index([isActive])
@@ -626,6 +628,9 @@ model WorkStageExecution {
   startedByUserId String? @map("started_by_user_id")
   completedAt DateTime? @map("completed_at")
   completedByUserId String? @map("completed_by_user_id")
+  assignedUserId String? @map("assigned_user_id")
+  assignedAt DateTime? @map("assigned_at")
+  assignedByUserId String? @map("assigned_by_user_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   version Int @default(1)
@@ -633,6 +638,8 @@ model WorkStageExecution {
   stageDefinition WorkflowStageDefinition? @relation(fields: [stageDefinitionId], references: [id], onDelete: SetNull)
   startedBy User? @relation("WorkStageStartedBy", fields: [startedByUserId], references: [id], onDelete: SetNull)
   completedBy User? @relation("WorkStageCompletedBy", fields: [completedByUserId], references: [id], onDelete: SetNull)
+  assignedUser User? @relation("WorkStageAssignedTo", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  assignedBy User? @relation("WorkStageAssignedBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)
   currentForExecution WorkWorkflowExecution? @relation("CurrentWorkflowStage")
   events WorkStageEvent[]
 
@@ -642,6 +649,10 @@ model WorkStageExecution {
   @@index([status])
   @@index([startedByUserId])
   @@index([completedByUserId])
+  @@index([assignedUserId])
+  @@index([status, assignedUserId])
+  @@index([workflowExecutionId, assignedUserId])
+  @@index([assignedUserId, status])
   @@index([stageDefinitionId])
   @@map("work_stage_executions")
 }
@@ -679,6 +690,9 @@ enum WorkStageExecutionStatus {
 
 enum WorkStageEventType {
   WORKFLOW_CREATED
+  STAGE_ASSIGNED
+  STAGE_REASSIGNED
+  STAGE_UNASSIGNED
   STAGE_STARTED
   STAGE_COMPLETED
   WORKFLOW_COMPLETED

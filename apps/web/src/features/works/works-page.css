@@ -193,9 +193,16 @@
   padding: var(--dl-space-3);
 }
 
-.works-page__workflow-current > div {
+.works-page__workflow-current > div,
+.works-page__assignment {
   display: grid;
   gap: var(--dl-space-1);
+}
+
+.works-page__assignment {
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  padding: var(--dl-space-3);
 }
 
 .works-page__label {

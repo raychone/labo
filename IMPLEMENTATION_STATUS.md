@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-63%
+66%
 
 ## FOUNDATION
 
@@ -95,7 +95,7 @@
 
 ## TECHNICIAN
 
-- [ ] TECH-001 - Technician workbench
+- [x] TECH-001 - Technician assignments and personal workbench (COMPLETED)
 
 ## QUALITY
 
@@ -151,17 +151,69 @@ NONE / AWAITING APPROVAL
 
 Status: AWAITING APPROVAL
 
-Started: 2026-07-26T02:33:51+03:00
+Started: 2026-07-26T03:06:19+03:00
 
-Completed: 2026-07-26T02:59:06+03:00
+Completed: 2026-07-26T03:32:00+03:00
 
-Last completed task: WORKFLOW-002 - Workflow execution snapshot and stage transitions
+Last completed task: TECH-001 - Technician assignments and personal workbench
 
-Completed: 2026-07-26T02:59:06+03:00
+Completed: 2026-07-26T03:32:00+03:00
 
 ## Next Recommended Task
 
-TECH-001 - Technician workbench
+SCAN-002 - Operational QR scan actions
+
+## Latest Completion Summary
+
+### TECH-001 - Technician assignments and personal workbench
+
+- Implemented current-stage technician assignment with one primary assigned technician per current stage.
+- Added `assignedUserId`, `assignedAt`, `assignedByUserId`, assignment relations, indexes and assignment event types to workflow stage executions.
+- Added assignment endpoints for assign, reassign and unassign with optimistic locking, RBAC, CSRF and audit events.
+- Added `/technician/workbench`, `/technician/workload` and `/technicians/options`.
+- Added `/workbench` mobile-first UI for “Lucrările mele”, filters, queue categories, workload and stage start/complete actions.
+- Added current-stage assignment controls in the work detail workflow panel.
+- Updated workflow execution authorization so technicians can start/complete only their assigned current stage, while manager `ALL` scope can override.
+- Updated demo seed with assigned, unassigned, pending, in-progress, overdue and urgent current stages.
+
+Main files modified:
+
+- `apps/api/prisma/schema.prisma`
+- `apps/api/prisma/migrations/20260726031000_technician_stage_assignments/migration.sql`
+- `apps/api/src/modules/technician-assignments/*`
+- `apps/api/src/modules/workflow-execution/*`
+- `apps/web/src/features/technician-workbench/*`
+- `apps/web/src/features/works/work-workflow-section.tsx`
+- `packages/shared/src/technician-assignments.ts`
+
+Tests and verification:
+
+- `pnpm --filter @dental-lab/api prisma:validate` passed.
+- `pnpm --filter @dental-lab/api prisma:generate` passed.
+- `pnpm --filter @dental-lab/api prisma:migrate:dev --name technician_stage_assignments` passed, already in sync after cleanup.
+- `pnpm --filter @dental-lab/api prisma:db:seed` passed.
+- `pnpm --filter @dental-lab/api prisma:db:seed:demo` passed twice.
+- `pnpm typecheck` passed.
+- `pnpm test` passed.
+- `pnpm build` passed.
+- Manual API smoke: `/health`, `/technician/workbench`, `/technician/workload`, `/technicians/options` passed.
+- Manual frontend smoke: `/workbench` returned 200 from Vite on `http://localhost:3000`.
+- Manual role smoke: manager sees current-stage workshop queue and workload; technician demo sees only own assigned item.
+
+Architecture decisions:
+
+- Assignment belongs to the current workflow stage, not the whole work order.
+- Only one primary technician can be assigned to the current stage.
+- When workflow advances, the next stage remains unassigned.
+- Managers with `ALL` scope can execute or reassign current stages as an override; technicians require assignment.
+- Workbench and workload count only active current stages, not future pending stages.
+
+Technical debt introduced: None.
+
+Remaining risks:
+
+- Lint remains unconfigured.
+- A `pg` deprecation warning can appear when stopping the API, but requests and tests pass.
 
 ## Known Technical Debt
 
@@ -233,6 +285,8 @@ None.
 - Treat frontend route guards and permission-aware navigation as UX only; backend RBAC remains the enforcement source of truth.
 - Centralize frontend API calls through `apps/web/src/lib/api-client.ts` so cookie credentials, error parsing, and expired-session handling are consistent.
 - Reject external `returnTo` values on login and only redirect to safe relative app paths.
+- Store stage assignment on `WorkStageExecution`; assignment is current-stage scoped and is cleared by progression because the next stage starts unassigned.
+- Count technician workbench/workload from active workflow current stages only, never from future pending stages.
 
 ## Planned Task Definitions
 

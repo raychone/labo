@@ -64,6 +64,19 @@ export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
                 id: true;
               };
             };
+            assignedBy: {
+              select: {
+                displayName: true;
+                id: true;
+              };
+            };
+            assignedUser: {
+              select: {
+                displayName: true;
+                email: true;
+                id: true;
+              };
+            };
           };
           orderBy: {
             sortOrder: "asc";

@@ -14,9 +14,18 @@ export interface WorkflowUserView {
   readonly id: string;
 }
 
+export interface AssignedWorkflowUserView extends WorkflowUserView {
+  readonly email: string;
+}
+
 export interface WorkStageExecutionView {
   readonly allowedRoleCodes: readonly string[];
   readonly allowedRoleLabels: readonly string[];
+  readonly assignment: {
+    readonly assignedAt: string | null;
+    readonly assignedBy: WorkflowUserView | null;
+    readonly assignedUser: AssignedWorkflowUserView | null;
+  };
   readonly completedAt: string | null;
   readonly completedBy: WorkflowUserView | null;
   readonly description: string | null;
@@ -94,6 +103,19 @@ export type WorkflowExecutionRecord = Prisma.WorkWorkflowExecutionGetPayload<{
             id: true;
           };
         };
+        assignedBy: {
+          select: {
+            displayName: true;
+            id: true;
+          };
+        };
+        assignedUser: {
+          select: {
+            displayName: true;
+            email: true;
+            id: true;
+          };
+        };
       };
     };
   };
@@ -154,6 +176,13 @@ function toStageView(stage: WorkflowExecutionRecord["stages"][number], isCurrent
   return {
     allowedRoleCodes,
     allowedRoleLabels: allowedRoleCodes.map((roleCode) => roleLabels[roleCode] ?? roleCode),
+    assignment: {
+      assignedAt: stage.assignedAt?.toISOString() ?? null,
+      assignedBy: toUserView(stage.assignedBy),
+      assignedUser: stage.assignedUser
+        ? { displayName: stage.assignedUser.displayName, email: stage.assignedUser.email, id: stage.assignedUser.id }
+        : null,
+    },
     completedAt: stage.completedAt?.toISOString() ?? null,
     completedBy: toUserView(stage.completedBy),
     description: stage.stageDescriptionSnapshot,

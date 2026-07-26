@@ -60,6 +60,19 @@ const workflowExecutionInclude = {
           id: true,
         },
       },
+      assignedBy: {
+        select: {
+          displayName: true,
+          id: true,
+        },
+      },
+      assignedUser: {
+        select: {
+          displayName: true,
+          email: true,
+          id: true,
+        },
+      },
     },
     orderBy: {
       sortOrder: "asc",
@@ -466,8 +479,12 @@ export class WorkflowExecutionService {
       throw new ForbiddenException("Rolul curent nu poate executa etapa.");
     }
 
+    if (!hasAllScope && stage.assignedUserId !== actor.id) {
+      throw new ForbiddenException("Etapa trebuie să fie asignată utilizatorului curent.");
+    }
+
     return {
-      managerOverride: !hasAllowedRole && hasAllScope,
+      managerOverride: hasAllScope && (!hasAllowedRole || stage.assignedUserId !== actor.id),
     };
   }
 
@@ -506,13 +523,16 @@ export class WorkflowExecutionService {
     ]);
     const allowedRoleCodes = this.getAllowedRoleCodes(currentStage.allowedRoleCodesSnapshot);
     const hasAllowedRole = roleCodes.some((roleCode) => allowedRoleCodes.includes(roleCode));
-    const canUseStart = canStart.allowed && (hasAllowedRole || canStart.effectiveScopes.includes("ALL"));
-    const canUseComplete = canComplete.allowed && (hasAllowedRole || canComplete.effectiveScopes.includes("ALL"));
+    const canStartAll = canStart.effectiveScopes.includes("ALL");
+    const canCompleteAll = canComplete.effectiveScopes.includes("ALL");
+    const isAssigned = currentStage.assignedUserId === actor.id;
+    const canUseStart = canStart.allowed && (canStartAll || (hasAllowedRole && isAssigned));
+    const canUseComplete = canComplete.allowed && (canCompleteAll || (hasAllowedRole && isAssigned));
 
     return {
       canCompleteCurrentStage: canUseComplete && currentStage.status === WorkStageExecutionStatus.IN_PROGRESS,
       canStartCurrentStage: canUseStart && currentStage.status === WorkStageExecutionStatus.PENDING,
-      reason: canUseStart || canUseComplete ? null : "Rolul curent nu poate executa etapa.",
+      reason: canUseStart || canUseComplete ? null : "Etapa nu este asignată utilizatorului curent.",
     };
   }
 

@@ -224,4 +224,24 @@ export type {
   WorkStageExecutionView,
   WorkWorkflowExecutionView,
 } from "./workflow-execution.js";
+export {
+  TECHNICIAN_QUEUE_CATEGORIES,
+  deriveQueueCategories,
+  getAssignmentStatusLabel,
+  getTechnicianQueueCategoryLabel,
+  isDueToday,
+  isOverdue,
+} from "./technician-assignments.js";
+export type {
+  AssignStageInput,
+  TechnicianAssignmentView,
+  TechnicianOption,
+  TechnicianQueueCategory,
+  TechnicianWorkbenchFilter,
+  TechnicianWorkbenchItem,
+  TechnicianWorkbenchResponse,
+  TechnicianWorkbenchSummary,
+  TechnicianWorkloadItem,
+  UnassignStageInput,
+} from "./technician-assignments.js";
 export { formatApplicationTitle } from "./workspace-title.js";

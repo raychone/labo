@@ -524,7 +524,8 @@ async function seedDemoStageExecutions(
 
   for (const stage of stages) {
     const stageExecutionId = `demo_stage_execution_${work.id.replace("demo_work_", "")}_${String(stage.sortOrder).padStart(2, "0")}`;
-    const status = getDemoStageStatus(stage.sortOrder, currentOrder, getDemoWorkflowStatus(work));
+    const status = getDemoStageStatus(work, stage.sortOrder, currentOrder, getDemoWorkflowStatus(work));
+    const assignedUserId = getDemoAssignedTechnician(work, stage, currentOrder, status);
     if (stage.sortOrder === currentOrder && status !== "COMPLETED") {
       currentStageId = stageExecutionId;
     }
@@ -532,6 +533,9 @@ async function seedDemoStageExecutions(
     await prisma.workStageExecution.create({
       data: {
         allowedRoleCodesSnapshot: Array.isArray(stage.allowedRoleCodes) ? stage.allowedRoleCodes.filter((item): item is string => typeof item === "string") : [],
+        assignedAt: assignedUserId ? new Date(work.createdAt.getTime() + stage.sortOrder * 240_000) : null,
+        assignedByUserId: assignedUserId ? "demo_user_manager" : null,
+        assignedUserId,
         completedAt: status === "COMPLETED" ? new Date(work.createdAt.getTime() + stage.sortOrder * 600_000) : null,
         completedByUserId: status === "COMPLETED" ? "demo_user_tehnician_1" : null,
         createdAt: work.createdAt,
@@ -543,12 +547,34 @@ async function seedDemoStageExecutions(
         stageKeySnapshot: stage.key,
         stageNameSnapshot: stage.name,
         startedAt: status === "IN_PROGRESS" || status === "COMPLETED" ? new Date(work.createdAt.getTime() + stage.sortOrder * 300_000) : null,
-        startedByUserId: status === "IN_PROGRESS" || status === "COMPLETED" ? getDemoStageActor(stage.key) : null,
+        startedByUserId: status === "IN_PROGRESS" || status === "COMPLETED" ? (assignedUserId ?? getDemoStageActor(stage.key)) : null,
         status,
         updatedAt: work.createdAt,
         workflowExecutionId: executionId,
       },
     });
+
+    if (assignedUserId) {
+      await prisma.workStageEvent.create({
+        data: {
+          actorUserId: "demo_user_manager",
+          id: `demo_stage_event_${work.id.replace("demo_work_", "")}_${String(stage.sortOrder).padStart(2, "0")}_assigned`,
+          metadata: {
+            newAssignedUserId: assignedUserId,
+            oldAssignedUserId: null,
+            stageExecutionId,
+            stageKey: stage.key,
+            workCode: work.code,
+            workId: work.id,
+            workflowExecutionId: executionId,
+          },
+          occurredAt: new Date(work.createdAt.getTime() + stage.sortOrder * 240_000),
+          stageExecutionId,
+          type: "STAGE_ASSIGNED",
+          workflowExecutionId: executionId,
+        },
+      });
+    }
   }
 
   await prisma.workStageEvent.create({
@@ -583,7 +609,7 @@ function getDemoCurrentStageOrder(work: DemoWorkSeed, stageCount: number): numbe
   return 1;
 }
 
-function getDemoStageStatus(sortOrder: number, currentOrder: number | null, workflowStatus: "ACTIVE" | "COMPLETED"): "COMPLETED" | "IN_PROGRESS" | "PENDING" {
+function getDemoStageStatus(work: DemoWorkSeed, sortOrder: number, currentOrder: number | null, workflowStatus: "ACTIVE" | "COMPLETED"): "COMPLETED" | "IN_PROGRESS" | "PENDING" {
   if (workflowStatus === "COMPLETED") {
     return "COMPLETED";
   }
@@ -593,10 +619,34 @@ function getDemoStageStatus(sortOrder: number, currentOrder: number | null, work
   }
 
   if (sortOrder === currentOrder && currentOrder > 1) {
-    return "IN_PROGRESS";
+    return Number(work.id.slice(-3)) % 9 === 0 ? "PENDING" : "IN_PROGRESS";
   }
 
   return "PENDING";
+}
+
+function getDemoAssignedTechnician(
+  work: DemoWorkSeed,
+  stage: {
+    readonly allowedRoleCodes: Prisma.JsonValue;
+    readonly sortOrder: number;
+  },
+  currentOrder: number | null,
+  status: "COMPLETED" | "IN_PROGRESS" | "PENDING",
+): string | null {
+  const roleCodes = Array.isArray(stage.allowedRoleCodes)
+    ? stage.allowedRoleCodes.filter((item): item is string => typeof item === "string")
+    : [];
+  const suffix = Number(work.id.slice(-3));
+  if (stage.sortOrder !== currentOrder || status === "COMPLETED" || !roleCodes.includes("TEHNICIAN")) {
+    return null;
+  }
+
+  if (suffix % 15 === 0) {
+    return null;
+  }
+
+  return suffix % 4 === 1 ? "demo_user_tehnician_1" : "demo_user_tehnician_2";
 }
 
 function getDemoStageActor(stageKey: string): string {

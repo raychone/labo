@@ -42,10 +42,14 @@ export type PermissionKey =
   | "workflow.create"
   | "workflow.update"
   | "workflow.archive"
+  | "workflow.assign_stage"
   | "workflow.start_stage"
   | "workflow.pause_stage"
   | "workflow.complete_stage"
+  | "workflow.reassign_stage"
   | "workflow.reopen_stage"
+  | "technician.workbench.read"
+  | "technician.workload.read"
   | "logistics.read"
   | "logistics.plan"
   | "logistics.assign"
@@ -133,10 +137,14 @@ export const PERMISSION_REGISTRY = [
   definePermission("workflow.create", "Create workflow templates."),
   definePermission("workflow.update", "Update workflow templates."),
   definePermission("workflow.archive", "Archive workflow templates."),
+  definePermission("workflow.assign_stage", "Assign workflow stages."),
   definePermission("workflow.start_stage", "Start workflow stages."),
   definePermission("workflow.pause_stage", "Pause workflow stages."),
   definePermission("workflow.complete_stage", "Complete workflow stages."),
+  definePermission("workflow.reassign_stage", "Reassign workflow stages."),
   definePermission("workflow.reopen_stage", "Reopen workflow stages."),
+  definePermission("technician.workbench.read", "Read technician workbench."),
+  definePermission("technician.workload.read", "Read technician workload."),
   definePermission("logistics.read", "Read logistics."),
   definePermission("logistics.plan", "Plan logistics."),
   definePermission("logistics.assign", "Assign logistics work."),
@@ -305,6 +313,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "files.upload": "ASSIGNED",
     "forms.read": "ALL",
     "quality.read": "OWN_STAGE",
+    "technician.workbench.read": "ASSIGNED",
     "workflow.complete_stage": "OWN_STAGE",
     "workflow.pause_stage": "OWN_STAGE",
     "workflow.read": "ASSIGNED",
@@ -349,12 +358,16 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "reports.operational",
   "reports.productivity",
   "settings.read",
+  "technician.workbench.read",
+  "technician.workload.read",
   "workflow.archive",
+  "workflow.assign_stage",
   "workflow.complete_stage",
   "workflow.configure",
   "workflow.create",
   "workflow.pause_stage",
   "workflow.reopen_stage",
+  "workflow.reassign_stage",
   "workflow.start_stage",
   "workflow.update",
   "works.create",

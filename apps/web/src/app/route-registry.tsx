@@ -42,6 +42,15 @@ export const appRoutes = [
     showInNavigation: true,
   },
   {
+    icon: "AT",
+    label: "Lucrările mele",
+    navigationGroup: "Operare",
+    path: "/workbench",
+    permissionMode: "any",
+    requiredPermissions: ["technician.workbench.read"],
+    showInNavigation: true,
+  },
+  {
     icon: "BI",
     label: "Facturare",
     navigationGroup: "Financiar",

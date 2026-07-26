@@ -559,6 +559,26 @@ Transition endpoints require authentication, CSRF, `workflow.start_stage` or `wo
 
 The `/works` UI shows workflow progress in the register and a mobile-first workflow section in the work detail drawer with current stage, progress, stage list, timeline, and start/complete actions.
 
+## Technician Assignments And Workbench
+
+TECH-001 adds current-stage technician assignment and the personal work queue.
+
+Backend endpoints:
+
+- `GET /technicians/options`
+- `POST /works/:workId/workflow/stages/:stageExecutionId/assign`
+- `POST /works/:workId/workflow/stages/:stageExecutionId/unassign`
+- `GET /technician/workbench`
+- `GET /technician/workload`
+
+Assignment is stored on `WorkStageExecution`, not on the whole work order. Only the current workflow stage can have one primary assigned technician. When a workflow advances, the next stage starts unassigned.
+
+Technicians can start or complete only their assigned current stage. Managers with broad `ALL` scope can execute or reassign as an override. Reassigning or unassigning an `IN_PROGRESS` stage requires explicit confirmation and writes assignment timeline/audit events.
+
+The `/workbench` UI is mobile-first and shows “Lucrările mele”, queue categories, filters, workload counts for managers, and start/complete actions. The work detail workflow section also includes a “Responsabil” assignment control for users with assignment permissions.
+
+TECH-001 does not implement logistics handoffs, courier delivery, QC, files, notifications, time tracking, payroll, or SCAN-002 actions.
+
 ## Billing Workspace
 
 BILLING-001 adds the first financial workspace at `/billing`.

@@ -154,5 +154,5 @@ export async function resetUserPassword(userId: string, temporaryPassword: strin
 }
 
 export function hasPermission(snapshot: PermissionSnapshot | undefined, permissionKey: string): boolean {
-  return snapshot?.permissions.some((permission) => permission.key === permissionKey && permission.scopes.includes("ALL")) ?? false;
+  return snapshot?.permissions.some((permission) => permission.key === permissionKey && permission.scopes.length > 0) ?? false;
 }
