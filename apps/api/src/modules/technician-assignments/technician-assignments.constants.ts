@@ -7,3 +7,7 @@ export const TECHNICIAN_ASSIGNMENT_AUDIT_ACTIONS = {
 } as const;
 
 export const TECHNICIAN_ASSIGNMENT_CONFLICT_MESSAGE = "Asignarea sau starea etapei s-a modificat. Reîncarcă lucrarea și încearcă din nou.";
+
+export const TECHNICIAN_SCAN_AUDIT_ACTIONS = {
+  assigned: "scan.stage_assigned",
+} as const;

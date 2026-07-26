@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsInt, IsOptional, Min } from "class-validator";
+import { IsIn, IsInt, IsOptional, Min } from "class-validator";
 
 export class StageTransitionDto {
   @IsOptional()
@@ -13,4 +13,8 @@ export class StageTransitionDto {
   @IsInt()
   @Min(1)
   public readonly expectedStageVersion?: number;
+
+  @IsOptional()
+  @IsIn(["scan"])
+  public readonly source?: "scan";
 }

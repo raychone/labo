@@ -31,6 +31,8 @@ const expectedPermissionKeys = [
   "works.assign",
   "works.change_status",
   "works.archive",
+  "scan.use",
+  "scan.resolve",
   "workflow.read",
   "workflow.configure",
   "workflow.create",
@@ -148,6 +150,9 @@ describe("PERMISSION_REGISTRY", () => {
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["forms.read"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["forms.archive"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["technician.workbench.read"]).toBe("ASSIGNED");
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["scan.use"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["scan.resolve"]).toBe("ASSIGNED");
+    expect(ROLE_PERMISSION_MATRIX.MEDIC["scan.use"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.MANAGER["technician.workload.read"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.MANAGER["workflow.assign_stage"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.MEDIC["audit.read"]).toBeNull();

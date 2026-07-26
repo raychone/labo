@@ -24,7 +24,6 @@ const qrResponse = {
     quantity: 1,
     workTypeName: "Coroana zirconiu",
   },
-  payload: "dl-work:secure_token_12345678901234567890",
   workCode: "WO-2026-000001",
   workId: "work_order_1",
 };

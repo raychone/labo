@@ -24,13 +24,13 @@ export function ManualScanForm({
       <TextInput
         disabled={isLoading}
         id="qrPayload"
-        label="Cod lucrare sau payload QR"
+        label="Cod scanat sau cod lucrare"
         onChange={(event) => setPayload(event.target.value)}
         placeholder="WO-2026-000001 sau dl-work:..."
         required
         value={payload}
       />
-      <FormActions isSubmitting={isLoading} submitDisabled={payload.trim().length === 0} submitLabel="Caută" />
+      <FormActions isSubmitting={isLoading} submitDisabled={payload.trim().length === 0} submitLabel="Caută lucrarea" />
     </FormLayout>
   );
 }

@@ -9,3 +9,8 @@ export const WORKFLOW_EXECUTION_AUDIT_ACTIONS = {
 
 export const WORKFLOW_CONFLICT_MESSAGE = "Starea lucrării s-a modificat. Reîncarcă lucrarea și încearcă din nou.";
 export const WORKFLOW_STALE_TEMPLATE_MESSAGE = "Fluxul acestui tip de lucrare a fost actualizat. Reîncarcă datele înainte de salvare.";
+
+export const WORKFLOW_SCAN_AUDIT_ACTIONS = {
+  stageCompleted: "scan.stage_completed",
+  stageStarted: "scan.stage_started",
+} as const;

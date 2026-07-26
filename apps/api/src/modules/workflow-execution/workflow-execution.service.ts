@@ -9,6 +9,7 @@ import {
   WORKFLOW_CONFLICT_MESSAGE,
   WORKFLOW_EXECUTION_AUDIT_ACTIONS,
   WORKFLOW_EXECUTION_RESOURCE_TYPE,
+  WORKFLOW_SCAN_AUDIT_ACTIONS,
   WORKFLOW_STALE_TEMPLATE_MESSAGE,
 } from "./workflow-execution.constants.js";
 import { type WorkWorkflowExecutionView, type WorkflowExecutionRecord, toWorkflowExecutionView } from "./workflow-execution.view.js";
@@ -31,6 +32,7 @@ interface CreateSnapshotInput {
 interface TransitionInput {
   readonly expectedStageVersion?: number;
   readonly expectedWorkflowVersion?: number;
+  readonly source?: "scan";
 }
 
 type WorkflowTx = Prisma.TransactionClient;
@@ -252,6 +254,14 @@ export class WorkflowExecutionService {
         workCode: fresh.workOrder.code,
         workId: fresh.workOrderId,
       }));
+      if (input.source === "scan") {
+        await this.recordAudit(tx, context.actor.id, context.requestMetadata, WORKFLOW_SCAN_AUDIT_ACTIONS.stageStarted, workOrderId, this.createStageMetadata(fresh, stage, {
+          managerOverride: authorization.managerOverride,
+          source: "scan",
+          workCode: fresh.workOrder.code,
+          workId: fresh.workOrderId,
+        }));
+      }
 
       return this.findExecutionById(tx, fresh.id);
     });
@@ -324,6 +334,12 @@ export class WorkflowExecutionService {
       });
 
       await this.recordAudit(tx, context.actor.id, context.requestMetadata, WORKFLOW_EXECUTION_AUDIT_ACTIONS.stageCompleted, workOrderId, stageMetadata);
+      if (input.source === "scan") {
+        await this.recordAudit(tx, context.actor.id, context.requestMetadata, WORKFLOW_SCAN_AUDIT_ACTIONS.stageCompleted, workOrderId, {
+          ...stageMetadata,
+          source: "scan",
+        });
+      }
 
       if (!nextStage) {
         await this.createEvent(tx, {
@@ -546,6 +562,7 @@ export class WorkflowExecutionService {
     options: {
       readonly managerOverride: boolean;
       readonly nextStageKey?: string;
+      readonly source?: "scan";
       readonly workCode: string;
       readonly workId: string;
     },
@@ -553,6 +570,7 @@ export class WorkflowExecutionService {
     return {
       managerOverride: options.managerOverride,
       nextStageKey: options.nextStageKey ?? null,
+      ...(options.source ? { source: options.source } : {}),
       stageExecutionId: stage.id,
       stageKey: stage.stageKeySnapshot,
       stageOrder: stage.sortOrder,

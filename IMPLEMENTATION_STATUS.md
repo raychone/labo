@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-66%
+68%
 
 ## FOUNDATION
 
@@ -87,7 +87,7 @@
 
 ## SCAN
 
-- [ ] SCAN-002 - Scan actions and operational handoffs (NOT STARTED)
+- [x] SCAN-002 - Operational QR scan actions and physical work handoff (COMPLETED)
 
 ## LOGISTICS
 
@@ -151,19 +151,79 @@ NONE / AWAITING APPROVAL
 
 Status: AWAITING APPROVAL
 
-Started: 2026-07-26T03:06:19+03:00
+Started: 2026-07-26T03:39:38+03:00
 
-Completed: 2026-07-26T03:32:00+03:00
+Completed: 2026-07-26T03:58:00+03:00
 
-Last completed task: TECH-001 - Technician assignments and personal workbench
+Last completed task: SCAN-002 - Operational QR scan actions and physical work handoff
 
-Completed: 2026-07-26T03:32:00+03:00
+Completed: 2026-07-26T03:58:00+03:00
 
 ## Next Recommended Task
 
-SCAN-002 - Operational QR scan actions
+LOGISTICS-001 - Planning and assignment
 
 ## Latest Completion Summary
+
+### SCAN-002 - Operational QR scan actions and physical work handoff
+
+- Implemented authenticated operational scan context at `POST /scan/resolve`, read-only, CSRF-free, rate-limited, and protected by `scan.resolve`.
+- Added `scan.use` and `scan.resolve` permissions; `/scan` navigation and route access now use `scan.use`.
+- Added server-computed scan actions: `OPEN_WORK`, `START_STAGE`, `COMPLETE_STAGE`, `ASSIGN_STAGE`, `REASSIGN_STAGE`.
+- Kept mutations on existing workflow and assignment endpoints; scan actions add `source: "scan"` and require explicit UI confirmation plus CSRF.
+- Added scan audit actions for QR resolve, work open, stage start, stage complete and stage assignment with safe metadata only.
+- Hardened QR metadata so `GET /works/:id/qr` no longer exposes the raw `dl-work:<opaque-token>` payload; the token is only encoded server-side in the PNG image.
+- Updated QR image loading in the frontend to fetch authenticated PNG as a Blob object URL with cleanup, content-type validation and retry.
+- Reworked `/scan` into an operational workspace with camera/manual scan, duplicate suppression, result context, current stage/responsible/progress and action confirmation modal.
+- Added dashboard shortcut wording `Scanează lucrare`.
+
+Main files modified:
+
+- `apps/api/src/modules/scan/*`
+- `apps/api/src/modules/rbac/permission-registry.ts`
+- `apps/api/src/modules/qr/*`
+- `apps/api/src/modules/workflow-execution/*`
+- `apps/api/src/modules/technician-assignments/*`
+- `apps/web/src/features/works/work-scan-page.tsx`
+- `apps/web/src/features/works/scan-api.ts`
+- `apps/web/src/features/works/work-qr-modal.tsx`
+- `apps/web/src/app/route-registry.tsx`
+- `packages/shared/src/scan.ts`
+- `packages/shared/src/works.ts`
+- `packages/shared/src/workflow-execution.ts`
+- `packages/shared/src/technician-assignments.ts`
+
+Tests and verification:
+
+- Prisma migration: none.
+- `pnpm --filter @dental-lab/api prisma:validate` passed.
+- `pnpm --filter @dental-lab/api prisma:generate` passed.
+- `pnpm --filter @dental-lab/api prisma:db:seed` passed.
+- `ALLOW_DEMO_SEED=true pnpm --filter @dental-lab/api prisma:db:seed:demo` passed twice; idempotency confirmed with 48 demo works both times.
+- `pnpm typecheck` passed.
+- `pnpm test` passed.
+- `pnpm build` passed.
+- Manual API smoke on current code via `http://localhost:3011` passed: `/health`, demo login, `/scan/resolve`, `/works/:id/qr`, `/works/:id/qr-image`, workflow stage start, workflow stage complete, technician assignment.
+- Manual QR image verification passed: `GET /works/:id/qr-image` returned `200`, `image/png`, PNG magic bytes `137 80 78 71`.
+- Manual QR metadata verification passed: `GET /works/:id/qr` returned only `label`, `workCode`, `workId`, with no payload/token field.
+- Manual frontend route smoke on current code via `http://localhost:3001` passed for `/scan`, `/works`, `/workbench` with `200 text/html`.
+
+Architecture decisions:
+
+- Operational scan context is separate from legacy QR lookup: `/scan/resolve` returns only permitted operational context and server-computed actions.
+- QR metadata never exposes the opaque payload; PNG generation creates the payload inside the backend service only.
+- Stage transitions and assignments remain owned by existing workflow/assignment services; scan adds source-aware audit and UI confirmation.
+- `scan.use` controls route/navigation visibility, while `scan.resolve` controls backend scan context.
+
+Technical debt introduced: None.
+
+Remaining risks:
+
+- Physical phone scan remains pending.
+- Physical/real print verification remains pending.
+- Ports `3000` and `3010` were already occupied by older local processes during smoke checks; current-code runtime verification used isolated ports `3001` and `3011`.
+- Lint remains unconfigured.
+- The existing `pg` deprecation warning can appear when stopping the API, without request failures.
 
 ### TECH-001 - Technician assignments and personal workbench
 
@@ -278,9 +338,11 @@ None.
 - Treat `works.read_assigned` as deny-safe until an assignment relationship exists; WORKS-001 list/detail require `works.read_all`.
 - Store QR payloads as `dl-work:<opaque-token>` and keep work codes, patient data, pricing, clinic details, and internal database IDs out of QR content.
 - Generate QR tokens server-side with cryptographic randomness for new work orders inside the work-order create transaction.
-- Keep QR resolve behind cookie authentication, CSRF, `works.read_all`, and server-side rate limiting.
-- Implement browser camera scan in the works feature route `/scan` with native `BarcodeDetector` feature detection and manual fallback; do not add a frontend scanner dependency until browser support requires it.
-- Keep QR-001 limited to traceability lookup and label printing; workflow transitions, assignments, QC, delivery, files, notifications, and public/anonymous portals remain deferred.
+- Keep legacy QR resolve behind cookie authentication, CSRF, `works.read_all`, and server-side rate limiting.
+- Keep operational scan resolve behind cookie authentication, `scan.resolve`, no CSRF because it is read-only, and server-side rate limiting.
+- Implement browser camera scan in the works feature route `/scan` with native `BarcodeDetector` feature detection, duplicate suppression and manual fallback; do not add a frontend scanner dependency until browser support requires it.
+- Keep QR metadata responses free of raw QR payload/token fields; encode `dl-work:<opaque-token>` only inside backend PNG generation and scan input handling.
+- Keep QR-001 limited to traceability lookup and label printing; SCAN-002 adds workflow/assignment actions, while QC, delivery, files, notifications, logistics and public/anonymous portals remain deferred.
 - Keep authenticated frontend routes behind a shared app shell that reads `/auth/me` and `/auth/permissions` through TanStack Query.
 - Treat frontend route guards and permission-aware navigation as UX only; backend RBAC remains the enforcement source of truth.
 - Centralize frontend API calls through `apps/web/src/lib/api-client.ts` so cookie credentials, error parsing, and expired-session handling are consistent.
@@ -306,7 +368,7 @@ None.
 
 ### DASHBOARD-001 - Operational dashboard
 
-- Status: NOT STARTED.
+- Status: COMPLETED.
 - Obiectiv: ecran initial cu indicatori operationali pentru utilizatori autentificati.
 - Scope: sumar lucrari, urgente, termene apropiate, linkuri rapide si stari goale.
 - Non-goals: rapoarte financiare, grafice complexe, exporturi, notificari realtime.
@@ -682,11 +744,11 @@ None.
 - Status: NOT STARTED.
 - Obiectiv: folosirea scanarii QR pentru actiuni operationale controlate.
 - Scope: resolve scan plus actiuni permise contextual, precum handoff sau deschidere etapa, fara automatism periculos.
-- Non-goals: camera library noua daca `BarcodeDetector` este suficient, workflow complet daca nu exista dependentele.
-- Dependente: QR-001, WORKFLOW-002, LOGISTICS-001.
-- Acceptance criteria: scanarea nu schimba status fara confirmare si permisiune explicita.
-- Backend: endpointuri action-by-scan autorizate, DTO validate, tranzactii unde se schimba stare.
-- Frontend: UI scan action sheet, confirmari clare, fallback manual.
+- Non-goals: camera library noua daca `BarcodeDetector` este suficient, logistica, delivery, QC, fisiere, notificari, public/anonymous scan.
+- Dependente: QR-001, WORKFLOW-002, TECH-001.
+- Acceptance criteria: scanarea nu schimba status fara confirmare si permisiune explicita; contextul scanarii afiseaza actiunile permise de server.
+- Backend: `POST /scan/resolve`, audit scan, RBAC scan si reutilizare endpointuri workflow/asignare pentru mutatii.
+- Frontend: UI scan operational, confirmari clare, fallback manual, camera pornita explicit.
 - Securitate: RBAC server-side si token opac; fara acces anonim.
 - Audit: audit pentru fiecare actiune declansata din scan.
 - Testare: API permissions/state transitions, frontend camera/manual action states.

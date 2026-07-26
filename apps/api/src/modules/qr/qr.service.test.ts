@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { QR_RESOLVE_LIMIT } from "./qr.constants.js";
 import { QrRateLimitService } from "./qr-rate-limit.service.js";
 import { parseQrLookup, QrService } from "./qr.service.js";
-import { createPatientDisplay, createQrPayload, toWorkQrView } from "./qr.view.js";
+import { createPatientDisplay, toWorkQrView } from "./qr.view.js";
 
 function qrWork(overrides: Partial<Parameters<typeof toWorkQrView>[0]> = {}): Parameters<typeof toWorkQrView>[0] {
   return {
@@ -24,11 +24,10 @@ function qrWork(overrides: Partial<Parameters<typeof toWorkQrView>[0]> = {}): Pa
 }
 
 describe("QR view helpers", () => {
-  it("creates opaque QR payloads without patient or pricing data", () => {
+  it("creates QR metadata without exposing the opaque token", () => {
     const view = toWorkQrView(qrWork());
 
-    expect(view.payload).toBe(createQrPayload("secure_token_12345678901234567890"));
-    expect(view.payload).not.toContain("Ion");
+    expect(JSON.stringify(view)).not.toContain("secure_token_12345678901234567890");
     expect(view.label.patientDisplay).toBe("I. P.");
   });
 

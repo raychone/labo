@@ -20,6 +20,7 @@ export interface TechnicianAssignmentView {
 export interface AssignStageInput {
   readonly confirmInProgress?: boolean | undefined;
   readonly expectedVersion: number;
+  readonly source?: "scan";
   readonly userId: string;
 }
 

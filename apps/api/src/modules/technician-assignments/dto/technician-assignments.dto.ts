@@ -26,6 +26,10 @@ export class AssignStageDto {
   @Min(1)
   public readonly expectedVersion!: number;
 
+  @IsOptional()
+  @IsIn(["scan"])
+  public readonly source?: "scan";
+
   @Transform(({ value }) => trimOptionalString(value))
   @IsString()
   public readonly userId!: string;

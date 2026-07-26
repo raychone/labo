@@ -6,7 +6,8 @@
 .work-scan-page__layout,
 .work-scan-page__camera,
 .work-scan-page__manual,
-.work-scan-page__result {
+.work-scan-page__result,
+.work-scan-page__modal-body {
   display: grid;
   gap: var(--dl-space-4);
 }
@@ -80,9 +81,52 @@
   opacity: 1;
 }
 
+.work-scan-page__result-summary {
+  align-items: start;
+  display: grid;
+  gap: var(--dl-space-3);
+}
+
+.work-scan-page__workflow {
+  border-block: 1px solid var(--dl-color-border);
+  display: grid;
+  gap: var(--dl-space-3);
+  padding-block: var(--dl-space-4);
+}
+
+.work-scan-page__workflow > div {
+  display: grid;
+  gap: var(--dl-space-1);
+}
+
+.work-scan-page__workflow span {
+  color: var(--dl-color-text-muted);
+  font-size: var(--dl-font-size-sm);
+  font-weight: var(--dl-font-weight-semibold);
+}
+
+.work-scan-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-3);
+}
+
+.work-scan-page__reasons {
+  color: var(--dl-color-text-muted);
+  display: grid;
+  gap: var(--dl-space-2);
+  margin: 0;
+  padding-inline-start: var(--dl-space-5);
+}
+
 @media (min-width: 720px) {
   .work-scan-page__manual {
     align-items: end;
     grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .work-scan-page__result-summary,
+  .work-scan-page__workflow {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

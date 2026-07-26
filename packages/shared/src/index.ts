@@ -86,6 +86,25 @@ export type {
   WorksListParams,
 } from "./works.js";
 export {
+  SCAN_ACTION_TYPES,
+  SCAN_DUPLICATE_WINDOW_MS,
+  formatScanProgress,
+  isDuplicateScan,
+  localizeScanActionReason,
+  normalizeScanPayload,
+  sortScanActions,
+  validateScanPayloadPrefix,
+} from "./scan.js";
+export type {
+  ResolveScanInput,
+  ScanActionAvailability,
+  ScanActionType,
+  ScanContextView,
+  ScanStageSummary,
+  ScanWorkSummary,
+  ScanWorkflowSummary,
+} from "./scan.js";
+export {
   BILLING_DOCUMENT_SORT_FIELDS,
   BILLING_DOCUMENT_STATUSES,
   BILLING_DOCUMENT_TYPES,

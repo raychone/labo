@@ -8,6 +8,7 @@ import {
   TECHNICIAN_ASSIGNMENT_AUDIT_ACTIONS,
   TECHNICIAN_ASSIGNMENT_CONFLICT_MESSAGE,
   TECHNICIAN_ASSIGNMENT_RESOURCE_TYPE,
+  TECHNICIAN_SCAN_AUDIT_ACTIONS,
 } from "./technician-assignments.constants.js";
 import type { AssignStageDto, UnassignStageDto } from "./dto/technician-assignments.dto.js";
 import { toTechnicianOption } from "./technician-assignments.view.js";
@@ -116,6 +117,12 @@ export class TechnicianAssignmentsService {
       const metadata = this.createAssignmentMetadata(stage, context.actor.id, stage.assignedUserId, target.id, stage.status === WorkStageExecutionStatus.IN_PROGRESS);
       await this.recordEvent(tx, stage, context.actor.id, eventType, metadata);
       await this.recordAudit(tx, context, action, stage.id, metadata);
+      if (dto.source === "scan") {
+        await this.recordAudit(tx, context, TECHNICIAN_SCAN_AUDIT_ACTIONS.assigned, stage.id, {
+          ...metadata,
+          source: "scan",
+        });
+      }
 
       return updated;
     });

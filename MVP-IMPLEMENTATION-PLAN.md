@@ -1144,7 +1144,7 @@ Decizie concreta SETTINGS-001:
 
 ### DASHBOARD-001 - Operational dashboard
 
-- Status: NOT STARTED.
+- Status: COMPLETED.
 - Obiectiv: ecran initial cu indicatori operationali pentru utilizatori autentificati.
 - Scope: sumar lucrari, urgente, termene apropiate, linkuri rapide si stari goale.
 - Non-goals: rapoarte financiare, grafice complexe, exporturi, notificari realtime.
@@ -1342,11 +1342,11 @@ Decizie concreta SETTINGS-001:
 - Status: NOT STARTED.
 - Obiectiv: folosirea scanarii QR pentru actiuni operationale controlate.
 - Scope: resolve scan plus actiuni permise contextual, precum handoff sau deschidere etapa, fara automatism periculos.
-- Non-goals: camera library noua daca `BarcodeDetector` este suficient, workflow complet daca nu exista dependentele.
-- Dependente: QR-001, WORKFLOW-002, LOGISTICS-001.
-- Acceptance criteria: scanarea nu schimba status fara confirmare si permisiune explicita.
-- Backend: endpointuri action-by-scan autorizate, DTO validate, tranzactii unde se schimba stare.
-- Frontend: UI scan action sheet, confirmari clare, fallback manual.
+- Non-goals: camera library noua daca `BarcodeDetector` este suficient, logistica, delivery, QC, fisiere, notificari, public/anonymous scan.
+- Dependente: QR-001, WORKFLOW-002, TECH-001.
+- Acceptance criteria: scanarea nu schimba status fara confirmare si permisiune explicita; contextul scanarii afiseaza actiunile permise de server.
+- Backend: `POST /scan/resolve`, audit scan, RBAC scan si reutilizare endpointuri workflow/asignare pentru mutatii.
+- Frontend: UI scan operational, confirmari clare, fallback manual, camera pornita explicit.
 - Securitate: RBAC server-side si token opac; fara acces anonim.
 - Audit: audit pentru fiecare actiune declansata din scan.
 - Testare: API permissions/state transitions, frontend camera/manual action states.

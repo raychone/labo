@@ -349,23 +349,30 @@ Barcode, files, assignments, archive behavior, and a dedicated patient model are
 
 ## QR And Scan
 
-QR-001 adds authenticated QR traceability for work orders.
+QR-001 adds authenticated QR traceability for work orders. SCAN-002 turns `/scan` into an authenticated operational workspace for explicit workflow actions after a QR or work-code lookup.
 
 Backend endpoints:
 
-- `GET /works/:id/qr`: returns QR metadata and a minimal printable label view.
+- `GET /works/:id/qr`: returns QR metadata and a minimal printable label view without the raw QR payload/token.
 - `GET /works/:id/qr-image`: returns a private, non-cached PNG QR image.
 - `POST /works/resolve-qr`: resolves a QR payload or work code through authenticated, CSRF-protected backend lookup.
 - `POST /works/:id/qr/print`: records label print intent before browser print.
+- `POST /scan/resolve`: resolves a QR payload or work code into operational context, read-only, authenticated, rate-limited, and CSRF-free.
+- `POST /scan/work-opened`: records explicit work-open intent from the scanner.
 
 Permissions used:
 
-- `works.read_all` for QR view, image, resolve, and print audit.
+- `works.read_all` for QR view, image, legacy resolve, print audit, and opening full work details.
+- `scan.use` for `/scan` route/navigation visibility.
+- `scan.resolve` for operational scan context.
+- `workflow.start_stage`, `workflow.complete_stage`, `workflow.assign_stage`, and `workflow.reassign_stage` for explicit scan actions.
 - `pricing.read` only controls whether resolved work detail includes pricing fields.
 
-QR payloads use the `dl-work:<opaque-token>` format. They do not contain work codes, patient names, pricing, clinic details, or internal database IDs. Existing work orders are backfilled with QR tokens by the QR migration; newly created work orders receive a token in the create transaction.
+QR payloads use the `dl-work:<opaque-token>` format. They do not contain work codes, patient names, pricing, clinic details, or internal database IDs. Existing work orders are backfilled with QR tokens by the QR migration; newly created work orders receive a token in the create transaction. The raw payload is encoded only server-side in the PNG image and accepted as scan input; metadata responses do not expose it.
 
-The frontend shows QR actions inside the work detail drawer and opens a printable label modal. The `/scan` route is lazy-loaded and mobile-first. Camera scanning uses the native browser `BarcodeDetector` API only after the user presses the camera start button; manual work-code or QR-payload entry remains available for desktop, unsupported browsers, denied camera permission, and damaged labels.
+The frontend shows QR actions inside the work detail drawer and opens a printable label modal. The QR image is fetched as an authenticated PNG Blob and displayed through an object URL. The `/scan` route is lazy-loaded and mobile-first. Camera scanning uses the native browser `BarcodeDetector` API only after the user presses the camera start button; manual work-code or QR-payload entry remains available for desktop, unsupported browsers, denied camera permission, and damaged labels.
+
+Operational scan actions are computed server-side and require explicit user confirmation before any mutation. Start stage, complete stage and stage assignment reuse the existing workflow/assignment endpoints with CSRF and optimistic locking, while scan-specific audit records the source action without raw token, patient, pricing or form values.
 
 Browser access points:
 

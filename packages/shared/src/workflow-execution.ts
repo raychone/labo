@@ -80,11 +80,13 @@ export interface WorkWorkflowExecutionView {
 export interface StartStageInput {
   readonly expectedStageVersion?: number;
   readonly expectedWorkflowVersion?: number;
+  readonly source?: "scan";
 }
 
 export interface CompleteStageInput {
   readonly expectedStageVersion?: number;
   readonly expectedWorkflowVersion?: number;
+  readonly source?: "scan";
 }
 
 export function getWorkflowProgress(stages: readonly Pick<WorkStageExecutionView, "status">[]): { readonly completed: number; readonly total: number } {

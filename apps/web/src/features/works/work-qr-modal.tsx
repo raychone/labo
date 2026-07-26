@@ -1,6 +1,6 @@
 import { Button, ErrorState, LoadingState, Modal, PriorityBadge, StatusBadge } from "@dental-lab/ui";
 import type { WorkQrView } from "@dental-lab/shared";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Link } from "react-router";
 
 import { useRecordWorkQrPrint, useWorkQr, useWorkQrImage } from "./works-api.js";
@@ -27,6 +27,16 @@ export function WorkQrModal({
   const qrImageQuery = useWorkQrImage(workId, isOpen && qrQuery.data !== undefined);
   const printMutation = useRecordWorkQrPrint();
   const qr = qrQuery.data;
+
+  useEffect(() => {
+    const objectUrl = qrImageQuery.data;
+
+    return () => {
+      if (objectUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [qrImageQuery.data]);
 
   async function handlePrint(): Promise<void> {
     if (!workId) {

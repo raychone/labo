@@ -8,7 +8,7 @@ import { AuthorizationService } from "../rbac/authorization.service.js";
 import { toWorkDetailView, type WorkOrderRecord } from "../works/works.view.js";
 import { QR_AUDIT_ACTIONS, QR_PAYLOAD_PREFIX, QR_RESOURCE_TYPE, WORK_CODE_PATTERN, WORK_QR_TOKEN_PATTERN } from "./qr.constants.js";
 import { QrRateLimitService } from "./qr-rate-limit.service.js";
-import { toWorkQrView, type QrWorkRecord, type WorkQrView } from "./qr.view.js";
+import { createQrPayload, toWorkQrView, type QrWorkRecord, type WorkQrView } from "./qr.view.js";
 
 interface ActorContext {
   readonly actor: AuthenticatedUser;
@@ -114,9 +114,17 @@ export class QrService {
   }
 
   public async getWorkQrImage(context: ActorContext, workOrderId: string): Promise<Buffer> {
-    const qr = await this.getWorkQr(context, workOrderId);
+    const workOrder = await this.findQrWorkOrThrow({ id: workOrderId });
+    await this.recordQrAudit({
+      action: QR_AUDIT_ACTIONS.viewed,
+      context,
+      metadata: {
+        workCode: workOrder.code,
+      },
+      workOrderId: workOrder.id,
+    });
 
-    return QRCode.toBuffer(qr.payload, {
+    return QRCode.toBuffer(createQrPayload(workOrder.qrToken), {
       errorCorrectionLevel: "M",
       margin: 1,
       type: "png",

@@ -33,29 +33,41 @@ function createJsonResponse(body: unknown, status = 200): Response {
   } as Response;
 }
 
-const workDetail = {
-  baseUnitPriceMinor: null,
-  clinicalNotes: null,
-  clinic: { code: "CL-0001", id: "clinic_1", name: "Clinica Test" },
-  code: "WO-2026-000001",
-  createdAt: "2026-07-22T12:00:00.000Z",
-  createdByUserId: "user_1",
-  currency: null,
-  doctor: { displayName: "Dr. Ana Popescu", id: "doctor_1" },
-  externalReference: null,
-  id: "work_order_1",
-  internalNotes: null,
-  patientName: "Ion Pop",
-  patientReference: "P-100",
-  priority: "NORMAL",
-  quantity: 1,
-  requestedDeliveryDate: "2026-08-01T00:00:00.000Z",
-  status: "REGISTERED",
-  totalPriceMinor: null,
-  updatedAt: "2026-07-22T12:00:00.000Z",
-  updatedByUserId: "user_1",
-  version: 1,
-  workType: { code: "WT-0001", id: "work_type_1", name: "Coroana zirconiu" },
+const scanContext = {
+  actions: [
+    { enabled: true, reason: null, type: "OPEN_WORK" },
+    { enabled: true, reason: null, type: "START_STAGE" },
+    { enabled: false, reason: "Etapa trebuie să fie în lucru.", type: "COMPLETE_STAGE" },
+    { enabled: false, reason: "Etapa are deja responsabil.", type: "ASSIGN_STAGE" },
+    { enabled: false, reason: "Nu ai permisiunea necesară.", type: "REASSIGN_STAGE" },
+  ],
+  resolvedAt: "2026-07-22T12:00:00.000Z",
+  work: {
+    clinicName: "Clinica Test",
+    code: "WO-2026-000001",
+    doctorName: "Dr. Ana Popescu",
+    id: "work_order_1",
+    patientName: "Ion Pop",
+    priority: "NORMAL",
+    requestedDeliveryDate: "2026-08-01T00:00:00.000Z",
+    status: "REGISTERED",
+    workTypeName: "Coroana zirconiu",
+  },
+  workflow: {
+    currentStage: {
+      allowedRoleLabels: ["Tehnician"],
+      assignedUser: { displayName: "Tehnician Demo", id: "tech_1" },
+      id: "stage_1",
+      name: "Modelare",
+      status: "PENDING",
+      version: 1,
+    },
+    id: "workflow_1",
+    progress: { completed: 0, total: 3 },
+    status: "ACTIVE",
+    version: 1,
+    workflowName: "Flux standard",
+  },
 };
 
 describe("WorkScanPage", () => {
@@ -68,16 +80,17 @@ describe("WorkScanPage", () => {
       const url = String(input);
       if (url.endsWith("/auth/permissions")) {
         return Promise.resolve(createJsonResponse({
-          permissions: [{ key: "works.read_all", scopes: ["ALL"] }],
+          permissions: [
+            { key: "scan.use", scopes: ["ALL"] },
+            { key: "works.read_all", scopes: ["ALL"] },
+            { key: "workflow.start_stage", scopes: ["OWN_STAGE"] },
+          ],
         }));
       }
-      if (url.endsWith("/auth/csrf")) {
-        return Promise.resolve(createJsonResponse({ csrfToken: "csrf-token" }));
-      }
-      if (url.endsWith("/works/resolve-qr")) {
+      if (url.endsWith("/scan/resolve")) {
         expect(init?.method).toBe("POST");
         expect(init?.body).toBe(JSON.stringify({ payload: "WO-2026-000001", source: "manual" }));
-        return Promise.resolve(createJsonResponse({ work: workDetail }));
+        return Promise.resolve(createJsonResponse(scanContext));
       }
 
       return Promise.resolve(createJsonResponse({}, 404));
@@ -86,15 +99,17 @@ describe("WorkScanPage", () => {
 
     renderWithProviders(<WorkScanPage />);
 
-    fireEvent.change(await screen.findByLabelText("Cod lucrare sau payload QR"), { target: { value: "WO-2026-000001" } });
-    fireEvent.click(screen.getByRole("button", { name: "Caută" }));
+    fireEvent.change(await screen.findByLabelText("Cod scanat sau cod lucrare"), { target: { value: "WO-2026-000001" } });
+    fireEvent.click(screen.getByRole("button", { name: "Caută lucrarea" }));
 
     expect(await screen.findByText("Lucrare găsită")).toBeDefined();
     expect(await screen.findByText("WO-2026-000001")).toBeDefined();
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/works/resolve-qr"), expect.anything()));
+    expect(await screen.findByText("Flux standard")).toBeDefined();
+    expect(await screen.findByText("Tehnician Demo")).toBeDefined();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/scan/resolve"), expect.anything()));
   });
 
-  it("shows access denied without works.read_all", async () => {
+  it("shows access denied without scan.use", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(createJsonResponse({ permissions: [] })));
 
     renderWithProviders(<WorkScanPage />);

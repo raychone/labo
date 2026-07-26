@@ -37,6 +37,8 @@ export type PermissionKey =
   | "works.assign"
   | "works.change_status"
   | "works.archive"
+  | "scan.use"
+  | "scan.resolve"
   | "workflow.read"
   | "workflow.configure"
   | "workflow.create"
@@ -132,6 +134,8 @@ export const PERMISSION_REGISTRY = [
   definePermission("works.assign", "Assign work orders."),
   definePermission("works.change_status", "Change work order status."),
   definePermission("works.archive", "Archive work orders."),
+  definePermission("scan.use", "Use operational QR scanner."),
+  definePermission("scan.resolve", "Resolve operational QR scan context."),
   definePermission("workflow.read", "Read workflows."),
   definePermission("workflow.configure", "Configure workflows."),
   definePermission("workflow.create", "Create workflow templates."),
@@ -262,6 +266,8 @@ export const ROLE_PERMISSION_MATRIX = {
     "reception.handover_to_courier": "ALL",
     "reports.operational": "ALL",
     "reports.productivity": "ALL",
+    "scan.resolve": "ALL",
+    "scan.use": "ALL",
     "workflow.complete_stage": "OWN_STAGE",
     "workflow.read": "ALL",
     "workflow.start_stage": "OWN_STAGE",
@@ -296,6 +302,8 @@ export const ROLE_PERMISSION_MATRIX = {
     "reception.handover_to_courier": "ALL",
     "reception.handover_to_logistics": "ALL",
     "reception.receive": "ALL",
+    "scan.resolve": "ALL",
+    "scan.use": "ALL",
     "workflow.complete_stage": "OWN_STAGE",
     "workflow.read": "ALL",
     "workflow.start_stage": "OWN_STAGE",
@@ -313,6 +321,8 @@ export const ROLE_PERMISSION_MATRIX = {
     "files.upload": "ASSIGNED",
     "forms.read": "ALL",
     "quality.read": "OWN_STAGE",
+    "scan.resolve": "ASSIGNED",
+    "scan.use": "ASSIGNED",
     "technician.workbench.read": "ASSIGNED",
     "workflow.complete_stage": "OWN_STAGE",
     "workflow.pause_stage": "OWN_STAGE",
@@ -357,6 +367,8 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "reception.receive",
   "reports.operational",
   "reports.productivity",
+  "scan.resolve",
+  "scan.use",
   "settings.read",
   "technician.workbench.read",
   "technician.workload.read",

@@ -36,8 +36,11 @@ function createJsonResponse(body: unknown, status = 200): Response {
 }
 
 function createPngResponse(): Response {
+  const bytes = new Uint8Array([137, 80, 78, 71]);
+
   return {
-    arrayBuffer: async () => new Uint8Array([137, 80, 78, 71]).buffer,
+    arrayBuffer: async () => bytes.buffer,
+    blob: async () => new Blob([bytes], { type: "image/png" }),
     headers: new Headers({ "content-type": "image/png" }),
     json: async () => ({}),
     ok: true,
@@ -175,7 +178,6 @@ const qrResponse = {
     quantity: 1,
     workTypeName: "Coroana zirconiu",
   },
-  payload: "dl-work:secure_token_12345678901234567890",
   workCode: "WO-2026-000001",
   workId: "work_order_1",
 };
@@ -291,6 +293,10 @@ describe("WorksPage", () => {
   });
 
   it("opens QR details from the work drawer without exposing token text in the label", async () => {
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn() });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+    const createObjectUrl = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:http://localhost/qr-image");
+    const revokeObjectUrl = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith("/auth/permissions")) {
@@ -332,10 +338,13 @@ describe("WorksPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Vezi QR" }));
 
     const dialog = await screen.findByRole("dialog", { name: "QR lucrare" });
-    expect((await within(dialog).findByRole("img", { name: "QR WO-2026-000001" })).getAttribute("src")).toContain("data:image/png;base64,");
+    expect((await within(dialog).findByRole("img", { name: "QR WO-2026-000001" })).getAttribute("src")).toBe("blob:http://localhost/qr-image");
+    expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob));
     await waitFor(() => expect(within(dialog).getAllByText("WO-2026-000001")).toHaveLength(2));
     expect(await within(dialog).findByText("P-100")).toBeDefined();
     expect(screen.queryByText("dl-work:secure_token_12345678901234567890")).toBeNull();
+    revokeObjectUrl.mockRestore();
+    createObjectUrl.mockRestore();
   });
 
   it("shows workflow execution and starts the current stage", async () => {

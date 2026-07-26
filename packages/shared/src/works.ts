@@ -130,7 +130,6 @@ export interface WorkQrLabelView {
 
 export interface WorkQrView {
   readonly label: WorkQrLabelView;
-  readonly payload: string;
   readonly workCode: string;
   readonly workId: string;
 }

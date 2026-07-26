@@ -203,9 +203,11 @@ WO-2026-900001
 
 Ce explici:
 
-- scanarea reală cu camera este pregătită în UI;
+- scanarea reală cu camera este pregătită în UI și pornește doar la acțiunea utilizatorului;
 - QR-ul este rezolvat prin backend;
-- accesul rămâne autorizat.
+- accesul rămâne autorizat;
+- pagina afișează etapa curentă, responsabilul, progresul și acțiunile permise;
+- pornirea/finalizarea etapei sau asignarea responsabilului cer confirmare explicită.
 
 ## 8. Clinici și medici
 
@@ -615,4 +617,4 @@ Ordine recomandata:
 
 ## 20. Fraza de inchidere
 
-Aplicatia acopera deja baza operationala: utilizatori, roluri, clinici, medici, catalog de lucrari, receptie lucrari, QR, formulare dinamice, template-uri de workflow, executia etapelor curente cu asignare pe tehnicieni, facturare, incasari manuale si documente printabile. Urmatorul pas natural este scanarea operationala pentru handoff-uri si actiuni rapide pe flux.
+Aplicatia acopera deja baza operationala: utilizatori, roluri, clinici, medici, catalog de lucrari, receptie lucrari, QR, scanare operationala cu actiuni confirmate, formulare dinamice, template-uri de workflow, executia etapelor curente cu asignare pe tehnicieni, facturare, incasari manuale si documente printabile. Urmatorul pas natural este logistica: planificare, predari fizice si flux curier.

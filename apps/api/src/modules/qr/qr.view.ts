@@ -34,7 +34,6 @@ export interface WorkQrLabelView {
 
 export interface WorkQrView {
   readonly label: WorkQrLabelView;
-  readonly payload: string;
   readonly workCode: string;
   readonly workId: string;
 }
@@ -69,7 +68,6 @@ export function toWorkQrView(workOrder: QrWorkRecord): WorkQrView {
       quantity: workOrder.quantity,
       workTypeName: workOrder.workType.name,
     },
-    payload: createQrPayload(workOrder.qrToken),
     workCode: workOrder.code,
     workId: workOrder.id,
   };

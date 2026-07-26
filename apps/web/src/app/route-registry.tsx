@@ -13,6 +13,7 @@ export interface AppRouteConfig {
 }
 
 export const workReadPermissions = ["works.read_all", "works.read_assigned"] as const;
+export const scanPermissions = ["scan.use"] as const;
 
 export const appRoutes = [
   {
@@ -38,7 +39,7 @@ export const appRoutes = [
     navigationGroup: "Operare",
     path: "/scan",
     permissionMode: "any",
-    requiredPermissions: workReadPermissions,
+    requiredPermissions: scanPermissions,
     showInNavigation: true,
   },
   {

@@ -8,7 +8,7 @@ import { DashboardPage } from "./dashboard-page.js";
 import { ForbiddenPage, NotFoundPage } from "./error-pages.js";
 import { PublicOnlyRoute, AuthenticatedRoute, PermissionRoute } from "./route-guards.js";
 import { RouteLoading } from "./route-loading.js";
-import { workReadPermissions } from "./route-registry.js";
+import { scanPermissions, workReadPermissions } from "./route-registry.js";
 import { LoginPage } from "../features/auth/login-page.js";
 import { StylePreviewPage } from "../features/style-preview/style-preview-page.js";
 
@@ -80,7 +80,7 @@ const router = createBrowserRouter([
         path: "works",
       },
       {
-        element: <PermissionRoute requiredPermissions={workReadPermissions}><LazyRoute><WorkScanPage /></LazyRoute></PermissionRoute>,
+        element: <PermissionRoute requiredPermissions={scanPermissions}><LazyRoute><WorkScanPage /></LazyRoute></PermissionRoute>,
         path: "scan",
       },
       {

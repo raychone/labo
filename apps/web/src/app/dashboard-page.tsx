@@ -13,7 +13,7 @@ export function DashboardPage(): ReactNode {
   const laboratoryName = settingsQuery.data?.laboratoryName ?? "Dental Lab Management";
   const routes = getNavigationRoutes(auth.permissionKeys).filter((route) => route.path !== "/dashboard");
   const canCreateWork = auth.permissionKeys.includes("works.create");
-  const canReadWork = auth.permissionKeys.includes("works.read_all") || auth.permissionKeys.includes("works.read_assigned");
+  const canScanWork = auth.permissionKeys.includes("scan.use");
   usePageTitle("Panou principal", laboratoryName);
 
   return (
@@ -26,7 +26,7 @@ export function DashboardPage(): ReactNode {
         </div>
         <div className="dashboard-page__actions">
           {canCreateWork ? <Link className="dl-button dl-button--primary dl-button--medium" to="/works"><span className="dl-button__content"><span>Lucrare nouă</span></span></Link> : null}
-          {canReadWork ? <Link className="dl-button dl-button--outline dl-button--medium" to="/scan"><span className="dl-button__content"><span>Scanează QR</span></span></Link> : null}
+          {canScanWork ? <Link className="dl-button dl-button--outline dl-button--medium" to="/scan"><span className="dl-button__content"><span>Scanează lucrare</span></span></Link> : null}
         </div>
       </div>
 
