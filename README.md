@@ -345,7 +345,7 @@ The frontend route is:
 http://localhost:3000/works
 ```
 
-Workflow execution, barcode, files, assignments, archive behavior, and a dedicated patient model are intentionally deferred to later tasks.
+Barcode, files, assignments, archive behavior, and a dedicated patient model are intentionally deferred to later tasks. Workflow execution snapshots are implemented separately in WORKFLOW-002.
 
 ## QR And Scan
 
@@ -539,7 +539,25 @@ Read access uses `workflow.read`. State-changing endpoints require CSRF and use 
 
 The frontend builder route is `/work-types/:workTypeId/workflow`. The work type detail drawer links to it with “Configurează fluxul” when `workflow.read` is available. The builder shows version history, draft metadata editing, add/edit/remove stages, move up/down ordering, allowed role checkboxes, a linear preview, read-only mode and archived WorkType restrictions.
 
-`WORKFLOW-001` does not instantiate workflows on work orders and does not implement technician execution, assignments, transitions, drag-and-drop, branching, parallel stages, QC, logistics or delivery. Those remain in later workflow/operations tasks.
+`WORKFLOW-001` does not instantiate workflows on work orders. Runtime workflow snapshots and linear stage transitions are implemented in `WORKFLOW-002`; technician execution UI, assignments, drag-and-drop, branching, parallel stages, QC, logistics and delivery remain in later workflow/operations tasks.
+
+## Workflow Execution
+
+`WORKFLOW-002` adds immutable workflow execution snapshots for work orders.
+
+Backend endpoints:
+
+- `GET /works/:workId/workflow`: current workflow execution, stages, timeline and allowed actions.
+- `POST /works/:workId/workflow/stages/:stageExecutionId/start`: starts the current `PENDING` stage.
+- `POST /works/:workId/workflow/stages/:stageExecutionId/complete`: completes the current `IN_PROGRESS` stage and advances to the next stage.
+
+When a work order is created, the API copies the active workflow template for its work type into `WorkWorkflowExecution` and `WorkStageExecution`. If no active template exists, the work order is still created and the UI shows an empty workflow state. Later template edits do not rewrite existing work execution snapshots.
+
+Workflow execution state is separate from `WorkOrder.status`. WORKFLOW-002 keeps work orders in their general registered state and stores production progress on the workflow execution records.
+
+Transition endpoints require authentication, CSRF, `workflow.start_stage` or `workflow.complete_stage`, and a role allowed by the current stage snapshot. `ALL` scope acts as manager override and is stored in audit metadata. Optimistic version checks reject stale requests with a conflict message.
+
+The `/works` UI shows workflow progress in the register and a mobile-first workflow section in the work detail drawer with current stage, progress, stage list, timeline, and start/complete actions.
 
 ## Billing Workspace
 

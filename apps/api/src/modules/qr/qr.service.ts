@@ -43,6 +43,39 @@ const WORK_DETAIL_INCLUDE = {
   doctor: true,
   workFormSubmission: true,
   workType: true,
+  workflowExecution: {
+    include: {
+      events: {
+        include: {
+          actor: {
+            select: {
+              displayName: true,
+              id: true,
+            },
+          },
+        },
+      },
+      stages: {
+        include: {
+          completedBy: {
+            select: {
+              displayName: true,
+              id: true,
+            },
+          },
+          startedBy: {
+            select: {
+              displayName: true,
+              id: true,
+            },
+          },
+        },
+        orderBy: {
+          sortOrder: "asc",
+        },
+      },
+    },
+  },
 } as const satisfies Prisma.WorkOrderInclude;
 
 @Injectable()

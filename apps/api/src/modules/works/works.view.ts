@@ -1,5 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
+import { toWorkflowExecutionView, toWorkflowSummaryView } from "../workflow-execution/workflow-execution.view.js";
+
 type WorkFormValue = boolean | number | readonly string[] | string | null;
 type WorkFormValues = Readonly<Record<string, WorkFormValue>>;
 
@@ -36,6 +38,39 @@ export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
     doctor: true;
     workFormSubmission: true;
     workType: true;
+    workflowExecution: {
+      include: {
+        events: {
+          include: {
+            actor: {
+              select: {
+                displayName: true;
+                id: true;
+              };
+            };
+          };
+        };
+        stages: {
+          include: {
+            completedBy: {
+              select: {
+                displayName: true;
+                id: true;
+              };
+            };
+            startedBy: {
+              select: {
+                displayName: true;
+                id: true;
+              };
+            };
+          };
+          orderBy: {
+            sortOrder: "asc";
+          };
+        };
+      };
+    };
   };
 }>;
 
@@ -69,6 +104,7 @@ export interface WorkSummaryView {
   readonly status: string;
   readonly totalPriceMinor: number | null;
   readonly updatedAt: string;
+  readonly workflow: ReturnType<typeof toWorkflowSummaryView>;
   readonly workType: {
     readonly code: string;
     readonly id: string;
@@ -76,7 +112,7 @@ export interface WorkSummaryView {
   };
 }
 
-export interface WorkDetailView extends WorkSummaryView {
+export interface WorkDetailView extends Omit<WorkSummaryView, "workflow"> {
   readonly baseUnitPriceMinor: number | null;
   readonly clinicalNotes: string | null;
   readonly createdByUserId: string | null;
@@ -84,6 +120,7 @@ export interface WorkDetailView extends WorkSummaryView {
   readonly internalNotes: string | null;
   readonly updatedByUserId: string | null;
   readonly version: number;
+  readonly workflow: ReturnType<typeof toWorkflowExecutionView> | null;
   readonly workForm: WorkFormSubmissionView | null;
 }
 
@@ -128,6 +165,7 @@ export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: bo
     status: workOrder.status,
     totalPriceMinor: includePricing ? workOrder.totalPriceMinor : null,
     updatedAt: workOrder.updatedAt.toISOString(),
+    workflow: toWorkflowSummaryView(workOrder.workflowExecution),
     workType: {
       code: workOrder.workType.code,
       id: workOrder.workType.id,
@@ -146,6 +184,13 @@ export function toWorkDetailView(workOrder: WorkOrderRecord, includePricing: boo
     internalNotes: workOrder.internalNotes,
     updatedByUserId: workOrder.updatedByUserId,
     version: workOrder.version,
+    workflow: workOrder.workflowExecution
+      ? toWorkflowExecutionView(workOrder.workflowExecution, {
+          canCompleteCurrentStage: false,
+          canStartCurrentStage: false,
+          reason: "Acțiunile se verifică pe endpointul dedicat de workflow.",
+        })
+      : null,
     workForm: toWorkFormSubmissionView(workOrder.workFormSubmission),
   };
 }

@@ -49,6 +49,22 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
       },
     });
 
+    await tx.workStageEvent.deleteMany({
+      where: {
+        workflowExecution: demoWorkflowExecutionWhere(),
+      },
+    });
+
+    await tx.workStageExecution.deleteMany({
+      where: {
+        workflowExecution: demoWorkflowExecutionWhere(),
+      },
+    });
+
+    await tx.workWorkflowExecution.deleteMany({
+      where: demoWorkflowExecutionWhere(),
+    });
+
     await tx.workOrder.deleteMany({
       where: demoWorkOrderWhere(),
     });
@@ -163,6 +179,23 @@ function demoWorkOrderWhere(): Prisma.WorkOrderWhereInput {
       { clinicId: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
       { doctorId: { startsWith: `${DEMO_ID_PREFIX}doctor_` } },
       { workTypeId: { startsWith: `${DEMO_ID_PREFIX}wt_` } },
+    ],
+  };
+}
+
+function demoWorkflowExecutionWhere(): Prisma.WorkWorkflowExecutionWhereInput {
+  return {
+    OR: [
+      { id: { startsWith: `${DEMO_ID_PREFIX}workflow_execution_` } },
+      { workOrder: demoWorkOrderWhere() },
+      {
+        workflowTemplate: {
+          OR: [
+            { id: { startsWith: `${DEMO_ID_PREFIX}workflow_template_` } },
+            { workTypeId: { startsWith: `${DEMO_ID_PREFIX}wt_` } },
+          ],
+        },
+      },
     ],
   };
 }

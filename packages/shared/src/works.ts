@@ -1,3 +1,6 @@
+import type { CreateWorkFormSubmissionInput, WorkFormSubmissionView, WorkFormValues } from "./work-forms.js";
+import type { WorkWorkflowExecutionView, WorkflowExecutionStatus } from "./workflow-execution.js";
+
 export const WORK_STATUSES = ["REGISTERED"] as const;
 export const WORK_PRIORITIES = ["NORMAL", "URGENT"] as const;
 export const WORK_SORT_FIELDS = ["code", "createdAt", "priority", "requestedDeliveryDate", "status", "totalPriceMinor", "updatedAt"] as const;
@@ -30,6 +33,13 @@ export interface WorkTypeFormOption extends WorkTypeSnapshot {
   readonly unit: string;
 }
 
+export interface WorkWorkflowSummary {
+  readonly currentStageName: string | null;
+  readonly progressCompleted: number;
+  readonly progressTotal: number;
+  readonly status: WorkflowExecutionStatus | null;
+}
+
 export interface WorkSummary {
   readonly clinic: WorkClinicSummary;
   readonly code: string;
@@ -46,10 +56,11 @@ export interface WorkSummary {
   readonly status: WorkStatus;
   readonly totalPriceMinor: number | null;
   readonly updatedAt: string;
+  readonly workflow: WorkWorkflowSummary | null;
   readonly workType: WorkTypeSnapshot;
 }
 
-export interface WorkDetail extends WorkSummary {
+export interface WorkDetail extends Omit<WorkSummary, "workflow"> {
   readonly baseUnitPriceMinor: number | null;
   readonly clinicalNotes: string | null;
   readonly createdByUserId: string | null;
@@ -58,6 +69,7 @@ export interface WorkDetail extends WorkSummary {
   readonly updatedByUserId: string | null;
   readonly version: number;
   readonly workForm: WorkFormSubmissionView | null;
+  readonly workflow: WorkWorkflowExecutionView | null;
 }
 
 export interface CreateWorkInput {
@@ -65,6 +77,8 @@ export interface CreateWorkInput {
   readonly clinicalNotes?: string | null;
   readonly doctorId: string;
   readonly externalReference?: string | null;
+  readonly expectedWorkflowTemplateId?: string | null;
+  readonly expectedWorkflowTemplateVersion?: number;
   readonly internalNotes?: string | null;
   readonly patientName: string;
   readonly patientReference?: string | null;
@@ -135,4 +149,3 @@ export interface ResolveWorkQrResult {
 export function isWorkQrPayload(value: string): boolean {
   return value.startsWith(WORK_QR_PAYLOAD_PREFIX);
 }
-import type { CreateWorkFormSubmissionInput, WorkFormSubmissionView, WorkFormValues } from "./work-forms.js";

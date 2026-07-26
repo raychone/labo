@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { PrismaService } from "../database/prisma.service.js";
 import type { WorkQrTokenService } from "../qr/work-qr-token.service.js";
 import type { WorkFormSubmissionValidationService } from "../work-forms/work-form-submission-validation.service.js";
+import type { WorkflowExecutionService } from "../workflow-execution/workflow-execution.service.js";
 import { CreateWorkDto } from "./dto/works.dto.js";
 import type { WorkOrderCodeService } from "./work-order-code.service.js";
 import { calculateTotalPriceMinor, parseDateOnly, WorksService } from "./works.service.js";
@@ -138,12 +139,16 @@ function createService(
     prepareUpdateValues: vi.fn(),
     recordSubmissionAudit: vi.fn(),
   },
+  workflowExecutionService: unknown = {
+    createSnapshotForWork: vi.fn().mockResolvedValue(null),
+  },
 ): WorksService {
   return new WorksService(
     prisma as PrismaService,
     codeService as WorkOrderCodeService,
     qrTokenService as WorkQrTokenService,
     submissionValidationService as WorkFormSubmissionValidationService,
+    workflowExecutionService as WorkflowExecutionService,
   );
 }
 
@@ -174,7 +179,7 @@ describe("WorksService", () => {
           laboratorySettings: {
             upsert: vi.fn().mockResolvedValue({ currency: "RON" }),
           },
-          workOrder: { create },
+          workOrder: { create, findUniqueOrThrow: vi.fn().mockResolvedValue(createdWorkOrder) },
           workType: { findUnique: vi.fn().mockResolvedValue({ basePriceMinor: 35000, isActive: true }) },
         }),
       ),

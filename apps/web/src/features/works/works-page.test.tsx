@@ -61,6 +61,12 @@ const workSummary = {
   status: "REGISTERED",
   totalPriceMinor: null,
   updatedAt: "2026-07-22T12:00:00.000Z",
+  workflow: {
+    currentStageName: "Recepție",
+    progressCompleted: 0,
+    progressTotal: 2,
+    status: "ACTIVE",
+  },
   workType: { code: "WT-0001", id: "work_type_1", name: "Coroana zirconiu" },
 };
 
@@ -73,6 +79,90 @@ const workDetail = {
   internalNotes: null,
   updatedByUserId: "user_1",
   version: 1,
+  workForm: null,
+  workflow: null,
+};
+
+const workflowResponse = {
+  actions: {
+    canCompleteCurrentStage: false,
+    canStartCurrentStage: true,
+    reason: null,
+  },
+  completedAt: null,
+  createdAt: "2026-07-22T12:00:00.000Z",
+  currentStage: {
+    allowedRoleCodes: ["RECEPTIE"],
+    allowedRoleLabels: ["Recepție"],
+    completedAt: null,
+    completedBy: null,
+    description: null,
+    estimatedDurationMinutes: 10,
+    id: "stage_exec_1",
+    isCurrent: true,
+    key: "receptie",
+    name: "Recepție",
+    sortOrder: 1,
+    startedAt: null,
+    startedBy: null,
+    status: "PENDING",
+    version: 1,
+  },
+  events: [
+    {
+      actor: { displayName: "Receptie", id: "user_1" },
+      id: "event_1",
+      metadata: null,
+      occurredAt: "2026-07-22T12:01:00.000Z",
+      stageExecutionId: "stage_exec_1",
+      type: "WORKFLOW_CREATED",
+    },
+  ],
+  id: "workflow_exec_1",
+  progress: { completed: 0, total: 2 },
+  stages: [
+    {
+      allowedRoleCodes: ["RECEPTIE"],
+      allowedRoleLabels: ["Recepție"],
+      completedAt: null,
+      completedBy: null,
+      description: null,
+      estimatedDurationMinutes: 10,
+      id: "stage_exec_1",
+      isCurrent: true,
+      key: "receptie",
+      name: "Recepție",
+      sortOrder: 1,
+      startedAt: null,
+      startedBy: null,
+      status: "PENDING",
+      version: 1,
+    },
+    {
+      allowedRoleCodes: ["TEHNICIAN"],
+      allowedRoleLabels: ["Tehnician"],
+      completedAt: null,
+      completedBy: null,
+      description: null,
+      estimatedDurationMinutes: 120,
+      id: "stage_exec_2",
+      isCurrent: false,
+      key: "modelaj",
+      name: "Modelaj",
+      sortOrder: 2,
+      startedAt: null,
+      startedBy: null,
+      status: "PENDING",
+      version: 1,
+    },
+  ],
+  startedAt: "2026-07-22T12:00:00.000Z",
+  status: "ACTIVE",
+  updatedAt: "2026-07-22T12:00:00.000Z",
+  version: 1,
+  workflowName: "Flux zirconiu",
+  workflowTemplateId: "template_1",
+  workflowVersion: 3,
 };
 
 const qrResponse = {
@@ -217,6 +307,9 @@ describe("WorksPage", () => {
       if (url.includes("/works/work_order_1/qr")) {
         return Promise.resolve(createJsonResponse(qrResponse));
       }
+      if (url.includes("/works/work_order_1/workflow")) {
+        return Promise.resolve(createJsonResponse(workflowResponse));
+      }
       if (url.includes("/works/work_order_1")) {
         return Promise.resolve(createJsonResponse(workDetail));
       }
@@ -243,5 +336,62 @@ describe("WorksPage", () => {
     await waitFor(() => expect(within(dialog).getAllByText("WO-2026-000001")).toHaveLength(2));
     expect(await within(dialog).findByText("P-100")).toBeDefined();
     expect(screen.queryByText("dl-work:secure_token_12345678901234567890")).toBeNull();
+  });
+
+  it("shows workflow execution and starts the current stage", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/auth/permissions")) {
+        return Promise.resolve(createJsonResponse({
+          permissions: [
+            { key: "workflow.start_stage", scopes: ["OWN_STAGE"] },
+            { key: "works.read_all", scopes: ["ALL"] },
+            { key: "works.update", scopes: ["ALL"] },
+          ],
+        }));
+      }
+      if (url.endsWith("/auth/csrf")) {
+        return Promise.resolve(createJsonResponse({ csrfToken: "csrf-token" }));
+      }
+      if (url.includes("/works/work_order_1/workflow/stages/stage_exec_1/start")) {
+        expect(init?.method).toBe("POST");
+        expect(init?.body).toBe(JSON.stringify({ expectedStageVersion: 1, expectedWorkflowVersion: 1 }));
+        return Promise.resolve(createJsonResponse({
+          ...workflowResponse,
+          actions: { canCompleteCurrentStage: true, canStartCurrentStage: false, reason: null },
+          currentStage: { ...workflowResponse.currentStage, status: "IN_PROGRESS", version: 2 },
+          stages: workflowResponse.stages.map((stage) => stage.id === "stage_exec_1" ? { ...stage, status: "IN_PROGRESS", version: 2 } : stage),
+          version: 2,
+        }));
+      }
+      if (url.includes("/works/work_order_1/workflow")) {
+        return Promise.resolve(createJsonResponse(workflowResponse));
+      }
+      if (url.includes("/works/work_order_1")) {
+        return Promise.resolve(createJsonResponse(workDetail));
+      }
+      if (url.includes("/works/work-type-options")) {
+        return Promise.resolve(createJsonResponse(workTypeOptionsResponse));
+      }
+      if (url.includes("/clinics/options")) {
+        return Promise.resolve(createJsonResponse(clinicOptionsResponse));
+      }
+      if (url.includes("/works?")) {
+        return Promise.resolve(createJsonResponse({ items: [workSummary], page: 1, pageCount: 1, pageSize: 20, total: 1 }));
+      }
+
+      return Promise.resolve(createJsonResponse({}, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(<WorksPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
+    expect(await screen.findByRole("heading", { name: "Flux producție" })).toBeDefined();
+    expect(await screen.findByText("Flux zirconiu · versiunea 3")).toBeDefined();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Pornește etapa" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/workflow/stages/stage_exec_1/start"), expect.objectContaining({ method: "POST" })));
   });
 });

@@ -5,13 +5,14 @@ import { DatabaseModule } from "../database/database.module.js";
 import { QrModule } from "../qr/qr.module.js";
 import { RbacModule } from "../rbac/rbac.module.js";
 import { WorkFormsModule } from "../work-forms/work-forms.module.js";
+import { WorkflowExecutionModule } from "../workflow-execution/workflow-execution.module.js";
 import { WorkOrderCodeService } from "./work-order-code.service.js";
 import { WorksController } from "./works.controller.js";
 import { WorksService } from "./works.service.js";
 
 @Module({
   controllers: [WorksController],
-  imports: [AuthModule, DatabaseModule, QrModule, RbacModule, WorkFormsModule],
+  imports: [AuthModule, DatabaseModule, QrModule, RbacModule, WorkFormsModule, WorkflowExecutionModule],
   providers: [WorkOrderCodeService, WorksService],
 })
 export class WorksModule {}

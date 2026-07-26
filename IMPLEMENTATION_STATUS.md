@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-61%
+63%
 
 ## FOUNDATION
 
@@ -83,7 +83,7 @@
 ## WORKFLOW
 
 - [x] WORKFLOW-001 - Workflow templates (COMPLETED)
-- [ ] WORKFLOW-002 - Workflow execution snapshot (NOT STARTED)
+- [x] WORKFLOW-002 - Workflow execution snapshot (COMPLETED)
 
 ## SCAN
 
@@ -149,19 +149,19 @@
 
 NONE / AWAITING APPROVAL
 
-Status: COMPLETED
+Status: AWAITING APPROVAL
 
-Started: 2026-07-26T02:10:00+03:00
+Started: 2026-07-26T02:33:51+03:00
 
-Completed: 2026-07-26T02:23:34+03:00
+Completed: 2026-07-26T02:59:06+03:00
 
-Last completed task: WORKFLOW-001 - Workflow templates
+Last completed task: WORKFLOW-002 - Workflow execution snapshot and stage transitions
 
-Completed: 2026-07-26T02:23:34+03:00
+Completed: 2026-07-26T02:59:06+03:00
 
 ## Next Recommended Task
 
-WORKFLOW-002 - Workflow execution snapshot
+TECH-001 - Technician workbench
 
 ## Known Technical Debt
 
@@ -548,17 +548,80 @@ None.
 
 ### WORKFLOW-002 - Workflow execution snapshot
 
-- Status: NOT STARTED.
+- Status: COMPLETED.
+- Started: 2026-07-26T02:33:51+03:00.
+- Completed: 2026-07-26T02:59:06+03:00.
 - Obiectiv: instantiere flux pe lucrare fara dependenta de editari ulterioare ale templateului.
-- Scope: assign template, create stage snapshots, status operational initial.
-- Non-goals: technician UI, QC, delivery.
+- Scope implemented:
+  - `WorkWorkflowExecution`, `WorkStageExecution` and `WorkStageEvent` Prisma models with deterministic migration.
+  - Snapshot immutable from the active workflow template when a work order is created.
+  - Linear current-stage execution with PENDING -> IN_PROGRESS -> COMPLETED transitions.
+  - Dedicated workflow endpoint on work detail, plus start/complete endpoints with optimistic version checks.
+  - Workflow indicators and timeline/actions in the `/works` drawer.
+  - Demo seed workflow executions for realistic demo works.
+- Non-goals kept out: technician workbench, assignments, pause/resume, skip/back/reopen, QC, delivery, logistics, notifications, files, dashboard and QR repair.
 - Dependente: WORKFLOW-001, WORKS-001.
-- Acceptance criteria: modificarea templateului nu schimba lucrarile deja instantiate.
-- Backend: WorkflowExecutionModule cu tranzactii pentru snapshot.
-- Frontend: actiune clara de alocare template pe lucrare.
-- Securitate: RBAC server-side si validare stare.
-- Audit: audit assign/snapshot.
-- Testare: integration pentru snapshot si regresii template.
+- Acceptance criteria:
+  - Active workflow template is copied as snapshot at work creation.
+  - Works without active template remain creatable and show an empty workflow state.
+  - Work order status remains general; production state is stored separately in workflow execution.
+  - Start is allowed only for current PENDING stage.
+  - Complete is allowed only for current IN_PROGRESS stage.
+  - Completing a non-final stage advances the current stage.
+  - Completing the final stage marks workflow COMPLETED.
+  - Stale expected workflow/stage versions return conflict.
+  - `workflow.start_stage` and `workflow.complete_stage` are enforced server-side.
+- Backend files:
+  - `apps/api/prisma/schema.prisma`
+  - `apps/api/prisma/migrations/20260726023500_workflow_execution_snapshot/migration.sql`
+  - `apps/api/src/modules/workflow-execution/*`
+  - `apps/api/src/modules/works/*`
+  - `apps/api/prisma/demo/demo-seed.ts`
+  - `apps/api/prisma/demo/demo-reset.ts`
+- Frontend/shared files:
+  - `packages/shared/src/workflow-execution.ts`
+  - `packages/shared/src/works.ts`
+  - `apps/web/src/features/works/work-workflow-section.tsx`
+  - `apps/web/src/features/works/works-api.ts`
+  - `apps/web/src/features/works/works-page.tsx`
+  - `apps/web/src/features/works/works-page.css`
+- Security:
+  - Transition endpoints require authentication, CSRF and RBAC permissions.
+  - Allowed stage roles are evaluated against immutable stage snapshots.
+  - Manager override is represented by `ALL` scope and audit metadata.
+- Audit:
+  - `workflow.execution_created`, `workflow.stage_started`, `workflow.stage_completed`, and `workflow.execution_completed` audit entries.
+  - Append-only `WorkStageEvent` timeline entries.
+- Tests executed:
+  - `pnpm --filter @dental-lab/api prisma:validate` passed.
+  - `pnpm --filter @dental-lab/api prisma:generate` passed.
+  - `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION="Confirm resetarea bazei locale de dezvoltare pentru verificările WORKFLOW-002." pnpm --filter @dental-lab/api exec dotenv -e ../../.env -- prisma migrate reset --force` passed against local `localhost:55439/dental_lab_dev`.
+  - `pnpm --filter @dental-lab/api prisma:migrate:dev --name workflow_execution_snapshot` passed with schema already in sync.
+  - `pnpm --filter @dental-lab/api seed:demo` passed twice sequentially for demo idempotency.
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed.
+- Manual verification:
+  - Existing API on `http://localhost:3010` returned `/health` 200 with database ok.
+  - API dev server could not bind because `3010` was already in use; existing local API instance was used.
+  - Frontend dev server started on `http://localhost:3002` because 3000 and 3001 were already in use.
+  - Demo manager login through CSRF and `/auth/demo-login` succeeded.
+  - `GET /works` returned 48 demo works with workflow summaries.
+  - `GET /works/demo_work_034/workflow` returned ACTIVE workflow.
+  - `POST /works/demo_work_034/workflow/stages/:stageId/start` changed current stage to IN_PROGRESS.
+  - `POST /works/demo_work_034/workflow/stages/:stageId/complete` completed Recepție and advanced current stage to Model.
+  - `GET http://localhost:3002/works` returned 200 HTML.
+- Architecture decisions:
+  - Use separate relational execution/event models, not opaque JSON, for workflow runtime.
+  - Snapshot template name, version, stage names, descriptions, order, duration and allowed role codes.
+  - Keep work order status unchanged in WORKFLOW-002; workflow status is independent.
+  - Keep runtime workflow linear until later approved tasks.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Browser visual verification was limited to component tests and HTTP smoke in this terminal environment.
+  - Real multi-user concurrency was covered by version/row-locking implementation, but not by a parallel live smoke scenario.
+  - Linting remains unconfigured.
 
 ### SCAN-002 - Scan actions and operational handoffs
 

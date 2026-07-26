@@ -21,6 +21,7 @@ export async function seedDemoData(prisma: PrismaClient, now = new Date()): Prom
   await seedDemoWorkFormTemplates(prisma);
   await seedDemoWorkflowTemplates(prisma);
   await seedDemoWorks(prisma, dataset);
+  await seedDemoWorkflowExecutions(prisma, dataset);
   await seedDemoBilling(prisma, dataset);
 
   return dataset;
@@ -460,6 +461,154 @@ async function seedDemoWorks(prisma: PrismaClient, dataset: DemoDataset): Promis
       },
     });
   }
+}
+
+async function seedDemoWorkflowExecutions(prisma: PrismaClient, dataset: DemoDataset): Promise<void> {
+  for (const work of dataset.works) {
+    const templateSeed = demoWorkflowTemplates.find((item) => item.workTypeId === work.workTypeId);
+    if (!templateSeed) {
+      continue;
+    }
+
+    const template = await prisma.workflowTemplate.findUniqueOrThrow({
+      include: {
+        stages: {
+          orderBy: { sortOrder: "asc" },
+        },
+      },
+      where: { id: templateSeed.id },
+    });
+    const executionId = `demo_workflow_execution_${work.id.replace("demo_work_", "")}`;
+    await prisma.workWorkflowExecution.create({
+      data: {
+        createdAt: work.createdAt,
+        id: executionId,
+        startedAt: work.createdAt,
+        status: getDemoWorkflowStatus(work),
+        updatedAt: work.createdAt,
+        version: 1,
+        workflowNameSnapshot: template.name,
+        workflowTemplateId: template.id,
+        workflowTemplateVersion: template.version,
+        workOrderId: work.id,
+      },
+    });
+
+    const currentStageId = await seedDemoStageExecutions(prisma, executionId, work, template.stages);
+    await prisma.workWorkflowExecution.update({
+      data: {
+        completedAt: getDemoWorkflowStatus(work) === "COMPLETED" ? new Date(work.createdAt.getTime() + 3_600_000) : null,
+        currentStageExecutionId: currentStageId,
+      },
+      where: { id: executionId },
+    });
+  }
+}
+
+async function seedDemoStageExecutions(
+  prisma: PrismaClient,
+  executionId: string,
+  work: DemoWorkSeed,
+  stages: readonly {
+    readonly allowedRoleCodes: Prisma.JsonValue;
+    readonly description: string | null;
+    readonly estimatedDurationMinutes: number | null;
+    readonly id: string;
+    readonly key: string;
+    readonly name: string;
+    readonly sortOrder: number;
+  }[],
+): Promise<string | null> {
+  const currentOrder = getDemoCurrentStageOrder(work, stages.length);
+  let currentStageId: string | null = null;
+
+  for (const stage of stages) {
+    const stageExecutionId = `demo_stage_execution_${work.id.replace("demo_work_", "")}_${String(stage.sortOrder).padStart(2, "0")}`;
+    const status = getDemoStageStatus(stage.sortOrder, currentOrder, getDemoWorkflowStatus(work));
+    if (stage.sortOrder === currentOrder && status !== "COMPLETED") {
+      currentStageId = stageExecutionId;
+    }
+
+    await prisma.workStageExecution.create({
+      data: {
+        allowedRoleCodesSnapshot: Array.isArray(stage.allowedRoleCodes) ? stage.allowedRoleCodes.filter((item): item is string => typeof item === "string") : [],
+        completedAt: status === "COMPLETED" ? new Date(work.createdAt.getTime() + stage.sortOrder * 600_000) : null,
+        completedByUserId: status === "COMPLETED" ? "demo_user_tehnician_1" : null,
+        createdAt: work.createdAt,
+        estimatedDurationMinutesSnapshot: stage.estimatedDurationMinutes,
+        id: stageExecutionId,
+        sortOrder: stage.sortOrder,
+        stageDefinitionId: stage.id,
+        stageDescriptionSnapshot: stage.description,
+        stageKeySnapshot: stage.key,
+        stageNameSnapshot: stage.name,
+        startedAt: status === "IN_PROGRESS" || status === "COMPLETED" ? new Date(work.createdAt.getTime() + stage.sortOrder * 300_000) : null,
+        startedByUserId: status === "IN_PROGRESS" || status === "COMPLETED" ? getDemoStageActor(stage.key) : null,
+        status,
+        updatedAt: work.createdAt,
+        workflowExecutionId: executionId,
+      },
+    });
+  }
+
+  await prisma.workStageEvent.create({
+    data: {
+      actorUserId: "demo_user_receptie",
+      id: `demo_stage_event_${work.id.replace("demo_work_", "")}_created`,
+      metadata: { workCode: work.code, workId: work.id, workflowExecutionId: executionId },
+      occurredAt: work.createdAt,
+      stageExecutionId: currentStageId,
+      type: "WORKFLOW_CREATED",
+      workflowExecutionId: executionId,
+    },
+  });
+
+  return currentStageId;
+}
+
+function getDemoWorkflowStatus(work: DemoWorkSeed): "ACTIVE" | "COMPLETED" {
+  return Number(work.id.slice(-3)) % 6 === 0 ? "COMPLETED" : "ACTIVE";
+}
+
+function getDemoCurrentStageOrder(work: DemoWorkSeed, stageCount: number): number | null {
+  const suffix = Number(work.id.slice(-3));
+  if (suffix % 6 === 0) {
+    return null;
+  }
+
+  if (suffix % 3 === 0) {
+    return Math.min(2, stageCount);
+  }
+
+  return 1;
+}
+
+function getDemoStageStatus(sortOrder: number, currentOrder: number | null, workflowStatus: "ACTIVE" | "COMPLETED"): "COMPLETED" | "IN_PROGRESS" | "PENDING" {
+  if (workflowStatus === "COMPLETED") {
+    return "COMPLETED";
+  }
+
+  if (currentOrder === null || sortOrder < currentOrder) {
+    return "COMPLETED";
+  }
+
+  if (sortOrder === currentOrder && currentOrder > 1) {
+    return "IN_PROGRESS";
+  }
+
+  return "PENDING";
+}
+
+function getDemoStageActor(stageKey: string): string {
+  if (stageKey === "receptie") {
+    return "demo_user_receptie";
+  }
+
+  if (stageKey === "pregatire_livrare") {
+    return "demo_user_logistica";
+  }
+
+  return "demo_user_tehnician_1";
 }
 
 function toDemoWorkFormSubmission(work: DemoWorkSeed): Prisma.WorkFormSubmissionUncheckedCreateWithoutWorkOrderInput | null {

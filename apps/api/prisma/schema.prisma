@@ -48,6 +48,9 @@ model User {
   updatedWorkflowTemplates WorkflowTemplate[] @relation("WorkflowTemplateUpdatedBy")
   activatedWorkflowTemplates WorkflowTemplate[] @relation("WorkflowTemplateActivatedBy")
   archivedWorkflowTemplates WorkflowTemplate[] @relation("WorkflowTemplateArchivedBy")
+  startedWorkStages WorkStageExecution[] @relation("WorkStageStartedBy")
+  completedWorkStages WorkStageExecution[] @relation("WorkStageCompletedBy")
+  workflowStageEvents WorkStageEvent[] @relation("WorkStageEventActor")
 
   @@index([isActive])
   @@index([createdAt])
@@ -302,6 +305,7 @@ model WorkflowTemplate {
   activatedBy User? @relation("WorkflowTemplateActivatedBy", fields: [activatedByUserId], references: [id], onDelete: SetNull)
   archivedBy User? @relation("WorkflowTemplateArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
   stages WorkflowStageDefinition[]
+  executions WorkWorkflowExecution[]
 
   @@unique([workTypeId, version])
   @@index([workTypeId])
@@ -328,6 +332,7 @@ model WorkflowStageDefinition {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   workflowTemplate WorkflowTemplate @relation(fields: [workflowTemplateId], references: [id], onDelete: Cascade)
+  executions WorkStageExecution[]
 
   @@unique([workflowTemplateId, key])
   @@index([workflowTemplateId, sortOrder])
@@ -374,6 +379,7 @@ model WorkOrder {
   billingLines BillingDocumentLine[]
   invoicedDocument BillingDocument? @relation("WorkOrderInvoicedDocument", fields: [invoicedDocumentId], references: [id], onDelete: SetNull)
   workFormSubmission WorkFormSubmission?
+  workflowExecution WorkWorkflowExecution?
 
   @@index([clinicId])
   @@index([doctorId])
@@ -577,6 +583,105 @@ enum WorkStatus {
 enum WorkPriority {
   NORMAL
   URGENT
+}
+
+model WorkWorkflowExecution {
+  id String @id @default(cuid())
+  workOrderId String @unique @map("work_order_id")
+  workflowTemplateId String? @map("workflow_template_id")
+  workflowTemplateVersion Int @map("workflow_template_version")
+  workflowNameSnapshot String @map("workflow_name_snapshot") @db.VarChar(160)
+  status WorkWorkflowExecutionStatus @default(ACTIVE)
+  currentStageExecutionId String? @unique @map("current_stage_execution_id")
+  startedAt DateTime @default(now()) @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  version Int @default(1)
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  workflowTemplate WorkflowTemplate? @relation(fields: [workflowTemplateId], references: [id], onDelete: SetNull)
+  currentStage WorkStageExecution? @relation("CurrentWorkflowStage", fields: [currentStageExecutionId], references: [id], onDelete: SetNull)
+  stages WorkStageExecution[] @relation("WorkflowExecutionStages")
+  events WorkStageEvent[]
+
+  @@index([workflowTemplateId])
+  @@index([status])
+  @@index([startedAt])
+  @@index([completedAt])
+  @@map("work_workflow_executions")
+}
+
+model WorkStageExecution {
+  id String @id @default(cuid())
+  workflowExecutionId String @map("workflow_execution_id")
+  stageDefinitionId String? @map("stage_definition_id")
+  stageKeySnapshot String @map("stage_key_snapshot") @db.VarChar(64)
+  stageNameSnapshot String @map("stage_name_snapshot") @db.VarChar(160)
+  stageDescriptionSnapshot String? @map("stage_description_snapshot") @db.VarChar(1000)
+  sortOrder Int @map("sort_order")
+  estimatedDurationMinutesSnapshot Int? @map("estimated_duration_minutes_snapshot")
+  allowedRoleCodesSnapshot Json @map("allowed_role_codes_snapshot")
+  status WorkStageExecutionStatus @default(PENDING)
+  startedAt DateTime? @map("started_at")
+  startedByUserId String? @map("started_by_user_id")
+  completedAt DateTime? @map("completed_at")
+  completedByUserId String? @map("completed_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  version Int @default(1)
+  workflowExecution WorkWorkflowExecution @relation("WorkflowExecutionStages", fields: [workflowExecutionId], references: [id], onDelete: Cascade)
+  stageDefinition WorkflowStageDefinition? @relation(fields: [stageDefinitionId], references: [id], onDelete: SetNull)
+  startedBy User? @relation("WorkStageStartedBy", fields: [startedByUserId], references: [id], onDelete: SetNull)
+  completedBy User? @relation("WorkStageCompletedBy", fields: [completedByUserId], references: [id], onDelete: SetNull)
+  currentForExecution WorkWorkflowExecution? @relation("CurrentWorkflowStage")
+  events WorkStageEvent[]
+
+  @@unique([workflowExecutionId, sortOrder])
+  @@unique([workflowExecutionId, stageKeySnapshot])
+  @@index([workflowExecutionId, status])
+  @@index([status])
+  @@index([startedByUserId])
+  @@index([completedByUserId])
+  @@index([stageDefinitionId])
+  @@map("work_stage_executions")
+}
+
+model WorkStageEvent {
+  id String @id @default(cuid())
+  workflowExecutionId String @map("workflow_execution_id")
+  stageExecutionId String? @map("stage_execution_id")
+  type WorkStageEventType
+  actorUserId String? @map("actor_user_id")
+  occurredAt DateTime @default(now()) @map("occurred_at")
+  metadata Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  workflowExecution WorkWorkflowExecution @relation(fields: [workflowExecutionId], references: [id], onDelete: Cascade)
+  stageExecution WorkStageExecution? @relation(fields: [stageExecutionId], references: [id], onDelete: SetNull)
+  actor User? @relation("WorkStageEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([workflowExecutionId, occurredAt])
+  @@index([stageExecutionId])
+  @@index([type])
+  @@index([actorUserId])
+  @@map("work_stage_events")
+}
+
+enum WorkWorkflowExecutionStatus {
+  ACTIVE
+  COMPLETED
+}
+
+enum WorkStageExecutionStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum WorkStageEventType {
+  WORKFLOW_CREATED
+  STAGE_STARTED
+  STAGE_COMPLETED
+  WORKFLOW_COMPLETED
 }
 
 model Role {

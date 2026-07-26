@@ -196,6 +196,17 @@ export class CreateWorkDto extends WorkMutationDto {
   @ValidateNested()
   @Type(() => WorkFormSubmissionDto)
   public readonly workFormSubmission?: WorkFormSubmissionDto;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  public readonly expectedWorkflowTemplateId?: string | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  public readonly expectedWorkflowTemplateVersion?: number;
 }
 
 export class UpdateWorkDto extends WorkMutationDto {

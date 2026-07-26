@@ -6,6 +6,7 @@ import { PrismaService } from "../database/prisma.service.js";
 import { DEFAULT_LABORATORY_SETTINGS, SETTINGS_SINGLETON_KEY } from "../settings/settings.constants.js";
 import { WorkQrTokenService } from "../qr/work-qr-token.service.js";
 import { WorkFormSubmissionValidationService } from "../work-forms/work-form-submission-validation.service.js";
+import { WorkflowExecutionService } from "../workflow-execution/workflow-execution.service.js";
 import { WORK_ORDER_AUDIT_ACTIONS, WORK_ORDER_RESOURCE_TYPE } from "./works.constants.js";
 import type { CreateWorkDto, ListWorksQueryDto, UpdateWorkDto } from "./dto/works.dto.js";
 import { WorkOrderCodeService } from "./work-order-code.service.js";
@@ -37,6 +38,39 @@ const WORK_ORDER_INCLUDE = {
   doctor: true,
   workFormSubmission: true,
   workType: true,
+  workflowExecution: {
+    include: {
+      events: {
+        include: {
+          actor: {
+            select: {
+              displayName: true,
+              id: true,
+            },
+          },
+        },
+      },
+      stages: {
+        include: {
+          completedBy: {
+            select: {
+              displayName: true,
+              id: true,
+            },
+          },
+          startedBy: {
+            select: {
+              displayName: true,
+              id: true,
+            },
+          },
+        },
+        orderBy: {
+          sortOrder: "asc",
+        },
+      },
+    },
+  },
 } as const satisfies Prisma.WorkOrderInclude;
 
 const WORK_ORDER_MUTATION_FIELDS = [
@@ -60,6 +94,7 @@ export class WorksService {
     @Inject(WorkOrderCodeService) private readonly workOrderCodeService: WorkOrderCodeService,
     @Inject(WorkQrTokenService) private readonly workQrTokenService: WorkQrTokenService,
     @Inject(WorkFormSubmissionValidationService) private readonly workFormSubmissionValidationService: WorkFormSubmissionValidationService,
+    @Inject(WorkflowExecutionService) private readonly workflowExecutionService: WorkflowExecutionService,
   ) {}
 
   public async listWorks(query: ListWorksQueryDto, includePricing: boolean): Promise<PaginatedWorksView> {
@@ -188,6 +223,16 @@ export class WorksService {
         include: WORK_ORDER_INCLUDE,
       });
 
+      await this.workflowExecutionService.createSnapshotForWork(tx, {
+        actorUserId: context.actorUserId,
+        ...(dto.expectedWorkflowTemplateId ? { expectedWorkflowTemplateId: dto.expectedWorkflowTemplateId } : {}),
+        ...(dto.expectedWorkflowTemplateVersion ? { expectedWorkflowTemplateVersion: dto.expectedWorkflowTemplateVersion } : {}),
+        requestMetadata: context.requestMetadata,
+        workCode: createdWorkOrder.code,
+        workOrderId: createdWorkOrder.id,
+        workTypeId: createdWorkOrder.workTypeId,
+      });
+
       await this.recordAudit(tx, {
         action: WORK_ORDER_AUDIT_ACTIONS.created,
         actorUserId: context.actorUserId,
@@ -208,7 +253,12 @@ export class WorksService {
         });
       }
 
-      return createdWorkOrder;
+      return tx.workOrder.findUniqueOrThrow({
+        include: WORK_ORDER_INCLUDE,
+        where: {
+          id: createdWorkOrder.id,
+        },
+      });
     });
 
     return toWorkDetailView(workOrder, true);

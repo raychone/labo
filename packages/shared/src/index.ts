@@ -80,6 +80,7 @@ export type {
   WorkSortField,
   WorkStatus,
   WorkSummary,
+  WorkWorkflowSummary,
   WorkTypeFormOption,
   WorkTypeSnapshot,
   WorksListParams,
@@ -199,4 +200,28 @@ export type {
   WorkflowValidationResult,
   WorkflowWorkTypeSummary,
 } from "./workflow-templates.js";
+export {
+  WORKFLOW_EXECUTION_STATUSES,
+  WORK_STAGE_EVENT_TYPES,
+  WORK_STAGE_EXECUTION_STATUSES,
+  formatTimelineDate,
+  getNextStage,
+  getStageActionAvailability,
+  getWorkflowExecutionStatusLabel,
+  getWorkflowProgress,
+  getWorkStageEventLabel,
+  getWorkStageExecutionStatusLabel,
+} from "./workflow-execution.js";
+export type {
+  CompleteStageInput,
+  StartStageInput,
+  WorkflowActionAvailability,
+  WorkflowEventType,
+  WorkflowExecutionStatus,
+  WorkflowUserSummary,
+  WorkStageEventView,
+  WorkStageExecutionStatus,
+  WorkStageExecutionView,
+  WorkWorkflowExecutionView,
+} from "./workflow-execution.js";
 export { formatApplicationTitle } from "./workspace-title.js";

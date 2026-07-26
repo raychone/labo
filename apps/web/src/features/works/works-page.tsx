@@ -20,7 +20,7 @@ import {
   type DataTableColumn,
   type DataTableSort,
 } from "@dental-lab/ui";
-import { formatMoneyMinor, type CreateWorkInput, type UpdateWorkInput, type WorkFormTemplateDetail, type WorkSortField, type WorkSummary, type WorksListParams } from "@dental-lab/shared";
+import { formatMoneyMinor, getWorkflowExecutionStatusLabel, type CreateWorkInput, type UpdateWorkInput, type WorkFormTemplateDetail, type WorkSortField, type WorkSummary, type WorksListParams } from "@dental-lab/shared";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
@@ -34,6 +34,7 @@ import { useWorkTypeOptions } from "../work-types/work-types-api.js";
 import { useActiveWorkFormTemplate } from "../work-forms/work-form-templates-api.js";
 import { WorkForm, WorkFormActions, defaultWorkFormValues, toWorkFormValues } from "./work-form.js";
 import { WorkFormReadOnlyView } from "./work-dynamic-form.js";
+import { WorkWorkflowSection } from "./work-workflow-section.js";
 import { useCreateWork, useUpdateWork, useWork, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
 import { workFormSchema, type WorkFormValues } from "./works-page.schema.js";
 import { WorkQrModal } from "./work-qr-modal.js";
@@ -193,6 +194,18 @@ export function WorksPage(): ReactNode {
     { header: "Cabinet", id: "clinic", renderCell: (work) => work.clinic.name },
     { header: "Medic", id: "doctor", renderCell: (work) => work.doctor.displayName },
     { header: "Tip", id: "workType", renderCell: (work) => work.workType.name },
+    {
+      header: "Flux",
+      id: "workflow",
+      renderCell: (work) => work.workflow
+        ? (
+            <div>
+              <strong>{work.workflow.currentStageName ?? getWorkflowExecutionStatusLabel(work.workflow.status ?? "COMPLETED")}</strong>
+              <div className="works-page__muted">{work.workflow.progressCompleted}/{work.workflow.progressTotal} etape</div>
+            </div>
+          )
+        : "Fără flux",
+    },
     {
       header: "Prioritate",
       id: "priority",
@@ -584,6 +597,7 @@ function WorkDetailsDrawer({
             <div className="works-page__actions">
               <Button onClick={() => onShowQr(work.id)} variant="outline">Vezi QR</Button>
             </div>
+            <WorkWorkflowSection isOpen={isOpen} workId={work.id} />
             {workTypeOptionsError ? <ErrorState title="Opțiunile nu au fost încărcate" description={getErrorMessage(workTypeOptionsError)} /> : null}
             <WorkForm
               clinicOptions={clinicOptions}

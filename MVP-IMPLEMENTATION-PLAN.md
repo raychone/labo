@@ -1300,19 +1300,38 @@ Decizie concreta SETTINGS-001:
 
 ### WORKFLOW-002 - Workflow execution snapshot
 
-- Scop: instantiere flux pe lucrare.
-- Motiv: istoric neschimbat la editarea template-ului.
-- Module: WorkflowExecutionModule.
+- Scop: instantiere flux operational pe lucrare fara dependenta de editari ulterioare ale template-ului.
+- Motiv: istoricul si traseul lucrarii trebuie sa ramana neschimbate dupa modificarea template-ului activ.
+- Module: WorkflowExecutionModule, WorksModule.
 - Dependinte: WORKFLOW-001, WORKS-001.
-- Pasi: assign template, create stages, status PLANNED.
-- Acceptare: snapshot creat.
-- Teste: integration.
-- Manual: modificare template nu schimba lucrare.
-- Riscuri: duplicare date.
-- Nu modifica: technician UI.
+- Pasi:
+  - la creare lucrare, gaseste template-ul ACTIVE pentru WorkType;
+  - copiaza template/stage data in `WorkWorkflowExecution` si `WorkStageExecution`;
+  - seteaza prima etapa ca etapa curenta;
+  - expune `GET /works/:workId/workflow`;
+  - expune start/complete pentru etapa curenta cu versiuni asteptate;
+  - inregistreaza evenimente si audit.
+- Acceptare:
+  - snapshot creat pentru lucrari cu template activ;
+  - lucrarile fara template activ raman permise si afiseaza empty state;
+  - statusul lucrarii ramane general, iar starea de productie ramane in workflow execution;
+  - start este permis doar pentru etapa curenta PENDING;
+  - complete este permis doar pentru etapa curenta IN_PROGRESS;
+  - finalizarea unei etape non-finale avanseaza etapa curenta;
+  - finalizarea ultimei etape marcheaza workflow-ul COMPLETED;
+  - versiuni stale returneaza conflict;
+  - RBAC server-side foloseste `workflow.start_stage` si `workflow.complete_stage`.
+- Backend: modele relationale separate pentru execution, stages si events; tranzactii, row lock si optimistic versioning.
+- Frontend: sectiune workflow in drawer-ul lucrarii, indicator in registru, timeline si butoane de start/finalizare.
+- Securitate: autentificare cookie, CSRF pentru mutatii, RBAC server-side, stage role snapshot si manager override prin scope ALL.
+- Audit: `workflow.execution_created`, `workflow.stage_started`, `workflow.stage_completed`, `workflow.execution_completed`.
+- Teste: unit, service, component si smoke manual cu API/web.
+- Manual: creare/seed demo cu snapshot, start etapa, complete etapa si avansare etapa curenta.
+- Riscuri: datele snapshot dubleaza template-ul intentionat; editarea template-ului nu trebuie sa rescrie executiile existente.
+- Nu modifica: technician UI, assignments, pause/resume, skip/back/reopen, QC, delivery, logistics, files, notifications, QR repair.
 - DoD: execution model stabil.
 - Estimare: L.
-- Status: NOT STARTED.
+- Status: COMPLETED.
 
 ### SCAN-002 - Scan actions and operational handoffs
 

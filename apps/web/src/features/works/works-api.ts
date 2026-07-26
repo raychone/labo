@@ -1,12 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateWorkInput,
+  CompleteStageInput,
   PaginatedWorksResponse,
   ResolveWorkQrInput,
   ResolveWorkQrResult,
+  StartStageInput,
   UpdateWorkInput,
   WorkDetail,
   WorkQrView,
+  WorkWorkflowExecutionView,
   WorksListParams,
   WorkTypeFormOption,
 } from "@dental-lab/shared";
@@ -20,6 +23,7 @@ export const worksQueryKeys = {
   list: (params: WorksListParams) => ["works", "list", params] as const,
   qr: (workOrderId: string | null) => ["works", "qr", workOrderId] as const,
   qrImage: (workOrderId: string | null) => ["works", "qr-image", workOrderId] as const,
+  workflow: (workOrderId: string | null) => ["works", "workflow", workOrderId] as const,
   workTypeOptions: ["works", "work-type-options"] as const,
 };
 
@@ -119,6 +123,20 @@ export async function updateWork(workOrderId: string, input: UpdateWorkInput): P
   return sendJson<WorkDetail>(`/works/${workOrderId}`, "PATCH", input);
 }
 
+export async function fetchWorkWorkflow(workOrderId: string): Promise<WorkWorkflowExecutionView | null> {
+  const response = await apiFetch(`/works/${workOrderId}/workflow`);
+
+  return parseApiResponse<WorkWorkflowExecutionView | null>(response);
+}
+
+export async function startWorkflowStage(workOrderId: string, stageExecutionId: string, input: StartStageInput): Promise<WorkWorkflowExecutionView> {
+  return sendJson<WorkWorkflowExecutionView>(`/works/${workOrderId}/workflow/stages/${stageExecutionId}/start`, "POST", input);
+}
+
+export async function completeWorkflowStage(workOrderId: string, stageExecutionId: string, input: CompleteStageInput): Promise<WorkWorkflowExecutionView> {
+  return sendJson<WorkWorkflowExecutionView>(`/works/${workOrderId}/workflow/stages/${stageExecutionId}/complete`, "POST", input);
+}
+
 export async function resolveWorkQr(input: ResolveWorkQrInput): Promise<ResolveWorkQrResult> {
   return sendJson<ResolveWorkQrResult>("/works/resolve-qr", "POST", input);
 }
@@ -163,6 +181,15 @@ export function useWorkQrImage(workOrderId: string | null, enabled: boolean) {
   });
 }
 
+export function useWorkWorkflow(workOrderId: string | null, enabled: boolean) {
+  return useQuery({
+    enabled: enabled && workOrderId !== null,
+    queryFn: () => fetchWorkWorkflow(workOrderId ?? ""),
+    queryKey: worksQueryKeys.workflow(workOrderId),
+    retry: false,
+  });
+}
+
 export function useWorkFormWorkTypeOptions(enabled: boolean) {
   return useQuery({
     enabled,
@@ -188,6 +215,36 @@ export function useUpdateWork() {
     mutationFn: ({ input, workOrderId }: { readonly input: UpdateWorkInput; readonly workOrderId: string }) => updateWork(workOrderId, input),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: worksQueryKeys.all });
+    },
+  });
+}
+
+export function useStartWorkflowStage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ input, stageExecutionId, workOrderId }: { readonly input: StartStageInput; readonly stageExecutionId: string; readonly workOrderId: string }) =>
+      startWorkflowStage(workOrderId, stageExecutionId, input),
+    onSuccess: async (_workflow, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.detail(variables.workOrderId) }),
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.workflow(variables.workOrderId) }),
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.all }),
+      ]);
+    },
+  });
+}
+
+export function useCompleteWorkflowStage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ input, stageExecutionId, workOrderId }: { readonly input: CompleteStageInput; readonly stageExecutionId: string; readonly workOrderId: string }) =>
+      completeWorkflowStage(workOrderId, stageExecutionId, input),
+    onSuccess: async (_workflow, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.detail(variables.workOrderId) }),
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.workflow(variables.workOrderId) }),
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.all }),
+      ]);
     },
   });
 }
