@@ -1,4 +1,4 @@
-import { DeliveryPreparationGroupStatus, LogisticsBlockReasonCode, LogisticsLocationCode, WorkLogisticsStatus } from "@prisma/client";
+import { DeliveryEventType, DeliveryFailureReasonCode, DeliveryPreparationGroupStatus, DeliveryStatus, LogisticsBlockReasonCode, LogisticsLocationCode, WorkLogisticsStatus } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
 import type { Prisma, WorkFormFieldType } from "@prisma/client";
 
@@ -790,10 +790,16 @@ async function seedDemoLogistics(prisma: PrismaClient): Promise<void> {
     logisticsState("004", WorkLogisticsStatus.BLOCKED, LogisticsLocationCode.PRODUCTIE, LogisticsBlockReasonCode.MISSING_INFO, "Lipsește confirmarea medicului pentru nuanță."),
     logisticsState("006", WorkLogisticsStatus.READY_FOR_PACKING, LogisticsLocationCode.RAFT_FINISARE),
     logisticsState("012", WorkLogisticsStatus.PACKING, LogisticsLocationCode.ZONA_AMBALARE),
+    logisticsState("010", WorkLogisticsStatus.READY_FOR_DELIVERY, LogisticsLocationCode.GATA_LIVRARE),
+    logisticsState("014", WorkLogisticsStatus.READY_FOR_DELIVERY, LogisticsLocationCode.GATA_LIVRARE),
     logisticsState("018", WorkLogisticsStatus.READY_FOR_DELIVERY, LogisticsLocationCode.GATA_LIVRARE),
-    logisticsState("024", WorkLogisticsStatus.READY_FOR_DELIVERY, LogisticsLocationCode.GATA_LIVRARE),
-    logisticsState("030", WorkLogisticsStatus.READY_FOR_DELIVERY, LogisticsLocationCode.GATA_LIVRARE),
-    logisticsState("036", WorkLogisticsStatus.READY_FOR_DELIVERY, LogisticsLocationCode.GATA_LIVRARE),
+    logisticsState("022", WorkLogisticsStatus.READY_FOR_DELIVERY, LogisticsLocationCode.GATA_LIVRARE),
+    logisticsState("026", WorkLogisticsStatus.HANDED_TO_DELIVERY, LogisticsLocationCode.GATA_LIVRARE),
+    logisticsState("030", WorkLogisticsStatus.HANDED_TO_DELIVERY, LogisticsLocationCode.GATA_LIVRARE),
+    logisticsState("034", WorkLogisticsStatus.DELIVERED, LogisticsLocationCode.GATA_LIVRARE),
+    logisticsState("038", WorkLogisticsStatus.DELIVERED, LogisticsLocationCode.GATA_LIVRARE),
+    logisticsState("042", WorkLogisticsStatus.HANDED_TO_DELIVERY, LogisticsLocationCode.GATA_LIVRARE),
+    logisticsState("046", WorkLogisticsStatus.READY_FOR_DELIVERY, LogisticsLocationCode.GATA_LIVRARE),
   ] as const;
 
   for (const seed of logisticsSeeds) {
@@ -829,9 +835,18 @@ async function seedDemoLogistics(prisma: PrismaClient): Promise<void> {
     });
   }
 
-  await createDemoDeliveryPreparationGroup(prisma, "draft_1", "demo_clinic_smile", ["demo_work_018", "demo_work_030"], DeliveryPreparationGroupStatus.DRAFT);
+  await createDemoDeliveryPreparationGroup(prisma, "draft_1", "demo_clinic_smile", ["demo_work_006"], DeliveryPreparationGroupStatus.DRAFT);
   await createDemoDeliveryPreparationGroup(prisma, "draft_2", "demo_clinic_point", ["demo_work_024"], DeliveryPreparationGroupStatus.DRAFT);
-  await createDemoDeliveryPreparationGroup(prisma, "ready_1", "demo_clinic_point", ["demo_work_036"], DeliveryPreparationGroupStatus.READY);
+  await createDemoDeliveryWithGroup(prisma, { courierUserId: null, sequence: 1, status: DeliveryStatus.PLANNED, suffix: "planned_1", workSuffix: "010" });
+  await createDemoDeliveryWithGroup(prisma, { courierUserId: null, sequence: 2, status: DeliveryStatus.PLANNED, suffix: "planned_2", workSuffix: "014" });
+  await createDemoDeliveryWithGroup(prisma, { courierUserId: "demo_user_curier", sequence: 3, status: DeliveryStatus.ASSIGNED, suffix: "assigned_1", workSuffix: "018" });
+  await createDemoDeliveryWithGroup(prisma, { courierUserId: "demo_user_curier", sequence: 4, status: DeliveryStatus.ASSIGNED, suffix: "assigned_2", workSuffix: "022" });
+  await createDemoDeliveryWithGroup(prisma, { courierUserId: "demo_user_curier", sequence: 5, status: DeliveryStatus.PICKED_UP, suffix: "picked_up_1", workSuffix: "026" });
+  await createDemoDeliveryWithGroup(prisma, { courierUserId: "demo_user_curier", sequence: 6, status: DeliveryStatus.IN_TRANSIT, suffix: "in_transit_1", workSuffix: "030" });
+  await createDemoDeliveryWithGroup(prisma, { courierUserId: "demo_user_curier", sequence: 7, status: DeliveryStatus.DELIVERED, suffix: "delivered_1", workSuffix: "034" });
+  await createDemoDeliveryWithGroup(prisma, { courierUserId: "demo_user_curier", sequence: 8, status: DeliveryStatus.DELIVERED, suffix: "delivered_2", workSuffix: "038" });
+  await createDemoDeliveryWithGroup(prisma, { courierUserId: "demo_user_curier", sequence: 9, status: DeliveryStatus.FAILED, suffix: "failed_1", workSuffix: "042" });
+  await createDemoDeliveryWithGroup(prisma, { courierUserId: null, sequence: 10, status: DeliveryStatus.PLANNED, suffix: "unassigned_1", workSuffix: "046" });
 }
 
 function logisticsState(
@@ -855,7 +870,7 @@ async function createDemoDeliveryPreparationGroup(
   await prisma.deliveryPreparationGroup.create({
     data: {
       clinicId,
-      code: `PG-2026-DEMO-${suffix.toUpperCase()}`,
+      code: `PG-DEMO-${suffix.toUpperCase().replaceAll("_", "-").slice(0, 16)}`,
       createdByUserId: "demo_user_logistica",
       id: groupId,
       plannedDate: new Date("2026-07-27T08:00:00.000Z"),
@@ -868,6 +883,55 @@ async function createDemoDeliveryPreparationGroup(
           isActive: true,
           workOrderId,
         })),
+      },
+    },
+  });
+}
+
+interface DemoDeliverySeed {
+  readonly courierUserId: string | null;
+  readonly sequence: number;
+  readonly status: DeliveryStatus;
+  readonly suffix: string;
+  readonly workSuffix: string;
+}
+
+async function createDemoDeliveryWithGroup(prisma: PrismaClient, seed: DemoDeliverySeed): Promise<void> {
+  const groupId = `demo_delivery_group_${seed.suffix}`;
+  const deliveryId = `demo_delivery_${seed.suffix}`;
+  const plannedDate = new Date("2026-07-27T08:00:00.000Z");
+  await createDemoDeliveryPreparationGroup(prisma, seed.suffix, "demo_clinic_smile", [`demo_work_${seed.workSuffix}`], DeliveryPreparationGroupStatus.READY);
+  await prisma.delivery.create({
+    data: {
+      assignedAt: seed.courierUserId ? new Date("2026-07-26T10:00:00.000Z") : null,
+      assignedByUserId: seed.courierUserId ? "demo_user_logistica" : null,
+      clinicId: "demo_clinic_smile",
+      code: `DLV-2026-DEMO-${seed.sequence.toString().padStart(2, "0")}`,
+      courierUserId: seed.courierUserId,
+      deliveredAt: seed.status === DeliveryStatus.DELIVERED ? new Date("2026-07-26T14:00:00.000Z") : null,
+      deliveredByUserId: seed.status === DeliveryStatus.DELIVERED ? seed.courierUserId : null,
+      failedAt: seed.status === DeliveryStatus.FAILED ? new Date("2026-07-26T13:00:00.000Z") : null,
+      failureDetails: seed.status === DeliveryStatus.FAILED ? "Destinatarul nu era disponibil la clinică." : null,
+      failureReasonCode: seed.status === DeliveryStatus.FAILED ? DeliveryFailureReasonCode.RECIPIENT_UNAVAILABLE : null,
+      id: deliveryId,
+      inTransitAt: seed.status === DeliveryStatus.IN_TRANSIT || seed.status === DeliveryStatus.DELIVERED || seed.status === DeliveryStatus.FAILED ? new Date("2026-07-26T12:00:00.000Z") : null,
+      pickedUpAt: seed.status === DeliveryStatus.PICKED_UP || seed.status === DeliveryStatus.IN_TRANSIT || seed.status === DeliveryStatus.DELIVERED || seed.status === DeliveryStatus.FAILED ? new Date("2026-07-26T11:00:00.000Z") : null,
+      pickedUpByUserId: seed.status === DeliveryStatus.PICKED_UP || seed.status === DeliveryStatus.IN_TRANSIT || seed.status === DeliveryStatus.DELIVERED || seed.status === DeliveryStatus.FAILED ? seed.courierUserId : null,
+      plannedDate,
+      preparationGroupId: groupId,
+      recipientName: seed.status === DeliveryStatus.DELIVERED ? "Recepție clinică" : null,
+      recipientRole: seed.status === DeliveryStatus.DELIVERED ? "Recepție" : null,
+      sequenceOrder: seed.sequence,
+      status: seed.status,
+      createdByUserId: "demo_user_logistica",
+      updatedByUserId: "demo_user_logistica",
+      events: {
+        create: {
+          actorUserId: "demo_user_logistica",
+          id: `demo_delivery_event_${seed.suffix}_created`,
+          metadata: { deliveryId, deliveryCode: `DLV-2026-DEMO-${seed.sequence.toString().padStart(2, "0")}`, newStatus: seed.status },
+          type: DeliveryEventType.DELIVERY_CREATED,
+        },
       },
     },
   });

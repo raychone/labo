@@ -251,6 +251,13 @@ function ScanResult({
           <p>Lucrarea nu are flux operațional activ.</p>
         )}
         <div className="work-scan-page__workflow">
+          {context.delivery ? (
+            <div>
+              <span>Livrare</span>
+              <strong>{context.delivery.code}</strong>
+              <p>{context.delivery.statusLabel}</p>
+            </div>
+          ) : null}
           <div>
             <span>Logistică</span>
             <strong>{LOGISTICS_STATUS_LABELS[context.logistics.status]}</strong>
@@ -271,6 +278,11 @@ function ScanResult({
           <Button disabled={!openAction?.enabled} isLoading={isOpening} onClick={onOpenWork} variant="outline">
             Deschide lucrarea
           </Button>
+          {context.delivery ? (
+            <Button onClick={() => window.location.assign(`/deliveries?deliveryId=${encodeURIComponent(context.delivery?.id ?? "")}`)} variant="outline">
+              Deschide livrarea
+            </Button>
+          ) : null}
           {workflowActions.map((action) => (
             <Button disabled={!action.enabled} key={action.type} onClick={() => onAction(action.type)} variant={action.enabled ? "primary" : "secondary"}>
               {getActionLabel(action.type)}

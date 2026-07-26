@@ -64,6 +64,13 @@ export interface ScanActionAvailability {
 
 export interface ScanContextView {
   readonly actions: readonly ScanActionAvailability[];
+  readonly delivery: {
+    readonly code: string;
+    readonly id: string;
+    readonly plannedDate: string;
+    readonly status: string;
+    readonly statusLabel: string;
+  } | null;
   readonly logistics: ScanLogisticsSummary;
   readonly resolvedAt: string;
   readonly work: ScanWorkSummary;

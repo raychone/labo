@@ -618,6 +618,34 @@ Billing is visible in logistics only as a document/payment status label. It does
 
 The demo seed includes representative logistics states and three internal preparation groups. Running the demo seed repeatedly resets and recreates those records deterministically.
 
+## Delivery Planning And Courier Execution
+
+DELIVERY-001 adds the authenticated delivery workspace at `/deliveries`.
+
+The backend module exposes:
+
+- `GET /deliveries`
+- `GET /deliveries/:id`
+- `GET /couriers/options`
+- `POST /delivery-preparation-groups/:groupId/delivery`
+- `PATCH /deliveries/:id`
+- `POST /deliveries/:id/assign`
+- `POST /deliveries/:id/unassign`
+- `POST /deliveries/:id/cancel`
+- `POST /deliveries/:id/pickup`
+- `POST /deliveries/:id/start-transit`
+- `POST /deliveries/:id/complete`
+- `POST /deliveries/:id/fail`
+- `POST /deliveries/:id/reschedule`
+
+Deliveries are created only from READY preparation groups. One active delivery is allowed per preparation group. Pickup changes included works to `HANDED_TO_DELIVERY`; completion changes them to `DELIVERED`. Failed deliveries can be replanned; cancelled pre-pickup deliveries release the preparation group.
+
+Courier access is enforced server-side through `OWN_DELIVERY`. The courier UI and API responses do not expose pricing, payments or invoice totals. Completion records recipient name/role/notes only as manual evidence; signature capture is intentionally deferred to `SIGNATURES-001`.
+
+`/scan` includes delivery context when a scanned work belongs to the authenticated courier's active delivery and shows a “Deschide livrarea” action in the UI.
+
+The demo seed now includes 10 deterministic deliveries: planned, assigned, picked up, in transit, delivered, failed and unassigned.
+
 ## Billing Workspace
 
 BILLING-001 adds the first financial workspace at `/billing`.

@@ -102,6 +102,13 @@ export interface DeliveryPreparationGroupSummary {
   readonly plannedDate: string | null;
   readonly status: DeliveryPreparationGroupStatus;
   readonly version: number;
+  readonly delivery: {
+    readonly code: string;
+    readonly courierName: string | null;
+    readonly id: string;
+    readonly status: string;
+    readonly statusLabel: string;
+  } | null;
 }
 
 export interface DeliveryPreparationItem {

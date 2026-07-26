@@ -29,7 +29,13 @@
 27. Use browser print preview.
 28. Show the month registry and CSV export.
 29. Use demo quick access to enter as Recepție and show permission-filtered navigation.
-30. Use demo quick access to enter as Curier and show courier navigation.
-31. Verify `/health`.
+30. Open Centru operațional and show READY preparation groups with active delivery context.
+31. Open Livrările mele as Manager/Logistică and show 10 demo deliveries, including planned, assigned, in transit, delivered, failed and unassigned.
+32. Filter Nereușite and show the failed delivery.
+33. Use demo quick access to enter as Curier and open Livrările mele.
+34. Show that the courier sees only own deliveries and no pricing/payment totals.
+35. Open Scanare as Curier and resolve `WO-2026-900018`; show the delivery card and “Deschide livrarea”.
+36. Explain that confirmation without signature records recipient details only; signature capture is planned in `SIGNATURES-001`.
+37. Verify `/health`.
 
-All people, clinics, fiscal identifiers and payments in the demo are fictive. Payment rows are manual evidence only; the application does not process money. Technician assignments are demo operational data on current workflow stages only.
+All people, clinics, fiscal identifiers, payments and deliveries in the demo are fictive. Payment rows are manual evidence only; the application does not process money. Technician assignments are demo operational data on current workflow stages only. Delivery signatures and proof photos are not implemented yet.

@@ -14,6 +14,24 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
       },
     });
 
+    await tx.deliveryEvent.deleteMany({
+      where: {
+        OR: [
+          { id: { startsWith: `${DEMO_ID_PREFIX}delivery_event_` } },
+          { delivery: { id: { startsWith: `${DEMO_ID_PREFIX}delivery_` } } },
+        ],
+      },
+    });
+
+    await tx.delivery.deleteMany({
+      where: {
+        OR: [
+          { id: { startsWith: `${DEMO_ID_PREFIX}delivery_` } },
+          { clinicId: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
+        ],
+      },
+    });
+
     await tx.deliveryPreparationItem.deleteMany({
       where: {
         OR: [

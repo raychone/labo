@@ -14,6 +14,19 @@ interface ActorContext {
   readonly requestMetadata: RequestMetadata;
 }
 
+function deliveryStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    ASSIGNED: "Atribuită",
+    CANCELLED: "Anulată",
+    DELIVERED: "Finalizată",
+    FAILED: "Nereușită",
+    IN_TRANSIT: "În tranzit",
+    PICKED_UP: "Preluată",
+    PLANNED: "Planificată",
+  };
+  return labels[status] ?? status;
+}
+
 type ScanActionType = "OPEN_WORK" | "START_STAGE" | "COMPLETE_STAGE" | "ASSIGN_STAGE" | "REASSIGN_STAGE";
 type ScanSource = "camera" | "manual";
 
@@ -30,6 +43,13 @@ interface ScanActionAvailability {
 
 export interface ScanContextView {
   readonly actions: readonly ScanActionAvailability[];
+  readonly delivery: {
+    readonly code: string;
+    readonly id: string;
+    readonly plannedDate: string;
+    readonly status: string;
+    readonly statusLabel: string;
+  } | null;
   readonly logistics: {
     readonly activeGroup: { readonly code: string; readonly id: string; readonly status: "DRAFT" | "READY" | "CANCELLED" } | null;
     readonly blockedReason: string | null;
@@ -96,10 +116,12 @@ const scanWorkInclude = {
   deliveryPreparationItems: {
     include: {
       group: {
-        select: {
-          code: true,
-          id: true,
-          status: true,
+        include: {
+          deliveries: {
+            where: {
+              isActive: true,
+            },
+          },
         },
       },
     },
@@ -214,6 +236,14 @@ export class ScanService {
       throw new ForbiddenException("Nu ai permisiune pentru scanare.");
     }
     if (permission.effectiveScopes.includes("ALL")) {
+      return;
+    }
+    const deliveryRead = await this.authorizationService.hasPermission({
+      permission: "delivery.read",
+      requiredScope: "OWN_DELIVERY",
+      userId: actor.id,
+    });
+    if (deliveryRead.allowed && this.getActiveDelivery(work)?.courierUserId === actor.id) {
       return;
     }
 
@@ -335,6 +365,7 @@ export class ScanService {
 
     return {
       actions,
+      delivery: this.toDeliverySummary(work),
       logistics: {
         activeGroup: work.deliveryPreparationItems[0]?.group ?? null,
         blockedReason: work.logisticsState?.blockedReasonNotes ?? work.logisticsState?.blockedReasonCode ?? null,
@@ -375,6 +406,24 @@ export class ScanService {
             workflowName: execution.workflowNameSnapshot,
           }
         : null,
+    };
+  }
+
+  private getActiveDelivery(work: ScanWorkRecord): ScanWorkRecord["deliveryPreparationItems"][number]["group"]["deliveries"][number] | null {
+    return work.deliveryPreparationItems[0]?.group.deliveries[0] ?? null;
+  }
+
+  private toDeliverySummary(work: ScanWorkRecord): ScanContextView["delivery"] {
+    const delivery = this.getActiveDelivery(work);
+    if (!delivery) {
+      return null;
+    }
+    return {
+      code: delivery.code,
+      id: delivery.id,
+      plannedDate: delivery.plannedDate.toISOString(),
+      status: delivery.status,
+      statusLabel: deliveryStatusLabel(delivery.status),
     };
   }
 

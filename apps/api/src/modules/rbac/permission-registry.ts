@@ -67,10 +67,17 @@ export type PermissionKey =
   | "reception.handover_to_logistics"
   | "reception.handover_to_courier"
   | "delivery.read_own"
+  | "delivery.read"
+  | "delivery.create"
+  | "delivery.assign"
   | "delivery.create_route"
   | "delivery.pickup"
+  | "delivery.start_transit"
+  | "delivery.complete"
   | "delivery.deliver"
   | "delivery.fail"
+  | "delivery.reschedule"
+  | "delivery.cancel"
   | "delivery.capture_signature"
   | "quality.read"
   | "quality.approve"
@@ -170,10 +177,17 @@ export const PERMISSION_REGISTRY = [
   definePermission("reception.handover_to_logistics", "Hand over to logistics."),
   definePermission("reception.handover_to_courier", "Hand over to courier."),
   definePermission("delivery.read_own", "Read own deliveries."),
+  definePermission("delivery.read", "Read deliveries."),
+  definePermission("delivery.create", "Create deliveries from ready preparation groups."),
+  definePermission("delivery.assign", "Assign couriers to deliveries."),
   definePermission("delivery.create_route", "Create delivery routes."),
   definePermission("delivery.pickup", "Confirm pickup."),
+  definePermission("delivery.start_transit", "Start delivery transit."),
+  definePermission("delivery.complete", "Complete delivery."),
   definePermission("delivery.deliver", "Confirm delivery."),
   definePermission("delivery.fail", "Mark delivery failed."),
+  definePermission("delivery.reschedule", "Reschedule failed deliveries."),
+  definePermission("delivery.cancel", "Cancel deliveries before execution."),
   definePermission("delivery.capture_signature", "Capture delivery signatures."),
   definePermission("quality.read", "Read quality control."),
   definePermission("quality.approve", "Approve quality checks."),
@@ -254,11 +268,16 @@ export const ROLE_PERMISSION_MATRIX = {
     "comments.create": "ALL",
     "comments.read_external": "ALL",
     "delivery.capture_signature": "OWN_DELIVERY",
+    "delivery.complete": "OWN_DELIVERY",
     "delivery.deliver": "OWN_DELIVERY",
     "delivery.fail": "OWN_DELIVERY",
     "delivery.pickup": "OWN_DELIVERY",
+    "delivery.read": "OWN_DELIVERY",
     "delivery.read_own": "OWN_DELIVERY",
+    "delivery.start_transit": "OWN_DELIVERY",
     "files.upload": "ALL",
+    "scan.resolve": "ASSIGNED",
+    "scan.use": "ASSIGNED",
     "works.change_status": "OWN_DELIVERY",
     "works.read_assigned": "OWN_DELIVERY",
   }),
@@ -266,7 +285,12 @@ export const ROLE_PERMISSION_MATRIX = {
     "comments.create": "ALL",
     "comments.read_external": "ALL",
     "comments.read_internal": "ALL",
+    "delivery.assign": "ALL",
+    "delivery.cancel": "ALL",
+    "delivery.create": "ALL",
     "delivery.create_route": "ALL",
+    "delivery.read": "ALL",
+    "delivery.reschedule": "ALL",
     "files.read": "ALL",
     "files.upload": "ALL",
     "logistics.assign": "ALL",
@@ -310,6 +334,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "comments.create": "ALL",
     "comments.read_external": "ALL",
     "comments.read_internal": "ALL",
+    "delivery.read": "ALL",
     "doctors.read": "ALL",
     "forms.read": "ALL",
     "files.read": "ALL",
@@ -362,11 +387,18 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "clinics.read",
   "clinics.update",
   "delivery.capture_signature",
+  "delivery.assign",
+  "delivery.cancel",
+  "delivery.complete",
+  "delivery.create",
   "delivery.create_route",
   "delivery.deliver",
   "delivery.fail",
   "delivery.pickup",
+  "delivery.read",
   "delivery.read_own",
+  "delivery.reschedule",
+  "delivery.start_transit",
   "doctors.archive",
   "doctors.create",
   "doctors.read",

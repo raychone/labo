@@ -61,10 +61,17 @@ const expectedPermissionKeys = [
   "reception.handover_to_logistics",
   "reception.handover_to_courier",
   "delivery.read_own",
+  "delivery.read",
+  "delivery.create",
+  "delivery.assign",
   "delivery.create_route",
   "delivery.pickup",
+  "delivery.start_transit",
+  "delivery.complete",
   "delivery.deliver",
   "delivery.fail",
+  "delivery.reschedule",
+  "delivery.cancel",
   "delivery.capture_signature",
   "quality.read",
   "quality.approve",
@@ -142,7 +149,8 @@ describe("PERMISSION_REGISTRY", () => {
     expect(ROLE_PERMISSION_MATRIX.MANAGER["users.create"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["works.read_all"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["workflow.complete_stage"]).toBe("OWN_STAGE");
-    expect(ROLE_PERMISSION_MATRIX.CURIER["delivery.deliver"]).toBe("OWN_DELIVERY");
+    expect(ROLE_PERMISSION_MATRIX.CURIER["delivery.complete"]).toBe("OWN_DELIVERY");
+    expect(ROLE_PERMISSION_MATRIX.CURIER["delivery.start_transit"]).toBe("OWN_DELIVERY");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["clinics.read"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["doctors.read"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["clinics.create"]).toBeNull();

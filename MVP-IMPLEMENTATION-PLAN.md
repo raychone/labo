@@ -1399,21 +1399,21 @@ Decizie concreta SETTINGS-001:
 - Estimare: M.
 - Status: NOT STARTED.
 
-### DELIVERY-001 - Delivery routes and courier mobile UI
+### DELIVERY-001 - Courier planning and delivery execution
 
-- Scop: ridicari/livrari mobile-first.
-- Motiv: livrare controlata.
-- Module: DeliveriesModule, Courier UI.
-- Dependinte: QC-001, QR-001.
-- Pasi: route, stops, scan, confirm, fail, signature/photo.
-- Acceptare: curier nu vede financiar.
-- Teste: API + Playwright mobile.
-- Manual: scan si confirmare pe telefon.
-- Riscuri: semnatura/camera.
-- Nu modifica: GPS.
-- DoD: livrare end-to-end.
+- Scop: livrari operationale pornite din grupuri READY, planificate si executate de curier.
+- Motiv: predare controlata fara expunere financiara catre curier.
+- Module: DeliveryModule, Courier UI, Scan integration.
+- Dependinte: LOGISTICS-001, SCAN-002, RBAC-001.
+- Pasi: create delivery from READY group, assign courier, pickup, start transit, complete, fail, reschedule, cancel.
+- Acceptare: curierul vede doar livrarile proprii, fara pricing; pickup muta lucrarile in `HANDED_TO_DELIVERY`; complete muta lucrarile in `DELIVERED`.
+- Teste: typecheck, unit tests, suite completa, migration/seed checks si smoke API/UI.
+- Manual: login curier demo, `/deliveries`, scan lucrare in livrare proprie, filtre manager/logistica.
+- Riscuri: validare fizica pe telefon si dovada semnatura raman pentru taskurile urmatoare.
+- Nu modifica: GPS, harti, optimizare rute, plati, semnaturi, poze dovada.
+- DoD: livrare operationala end-to-end fara semnatura.
 - Estimare: XL.
-- Status: NOT STARTED.
+- Status: COMPLETED.
 
 ### SIGNATURES-001 - Delivery signatures and proof capture
 

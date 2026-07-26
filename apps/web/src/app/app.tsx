@@ -8,7 +8,7 @@ import { DashboardPage } from "./dashboard-page.js";
 import { ForbiddenPage, NotFoundPage } from "./error-pages.js";
 import { PublicOnlyRoute, AuthenticatedRoute, PermissionRoute } from "./route-guards.js";
 import { RouteLoading } from "./route-loading.js";
-import { scanPermissions, workReadPermissions } from "./route-registry.js";
+import { deliveryReadPermissions, scanPermissions, workReadPermissions } from "./route-registry.js";
 import { LoginPage } from "../features/auth/login-page.js";
 import { StylePreviewPage } from "../features/style-preview/style-preview-page.js";
 
@@ -53,6 +53,10 @@ const LogisticsPage = lazy(async () => {
   const module = await import("../features/logistics/logistics-page.js");
   return { default: module.LogisticsPage };
 });
+const DeliveriesPage = lazy(async () => {
+  const module = await import("../features/deliveries/deliveries-page.js");
+  return { default: module.DeliveriesPage };
+});
 const BillingPage = lazy(async () => {
   const module = await import("../features/billing/billing-page.js");
   return { default: module.BillingPage };
@@ -79,6 +83,10 @@ const router = createBrowserRouter([
     children: [
       { element: <Navigate replace to="/dashboard" />, index: true },
       { element: <DashboardPage />, path: "dashboard" },
+      {
+        element: <PermissionRoute requiredPermissions={deliveryReadPermissions}><LazyRoute><DeliveriesPage /></LazyRoute></PermissionRoute>,
+        path: "deliveries",
+      },
       {
         element: <PermissionRoute requiredPermissions={workReadPermissions}><LazyRoute><WorksPage /></LazyRoute></PermissionRoute>,
         path: "works",

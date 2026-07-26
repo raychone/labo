@@ -14,8 +14,18 @@ export interface AppRouteConfig {
 
 export const workReadPermissions = ["works.read_all", "works.read_assigned"] as const;
 export const scanPermissions = ["scan.use"] as const;
+export const deliveryReadPermissions = ["delivery.read", "delivery.read_own"] as const;
 
 export const appRoutes = [
+  {
+    icon: "LV",
+    label: "Livrările mele",
+    navigationGroup: "Operare",
+    path: "/deliveries",
+    permissionMode: "any",
+    requiredPermissions: deliveryReadPermissions,
+    showInNavigation: true,
+  },
   {
     icon: "DB",
     label: "Panou principal",

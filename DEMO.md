@@ -80,7 +80,8 @@ Spune clar:
 - aplicația nu procesează bani;
 - încasările sunt înregistrări manuale ale unor plăți făcute în afara aplicației;
 - factura printabila este interna/demo, nu integrare RO e-Factura;
-- configurarea template-urilor de workflow este gata, dar execuția etapelor pe lucrări, fișierele și livrările sunt taskuri următoare.
+- configurarea si execuția workflow-ului, scanarea operațională, logistica internă și livrările curierului sunt disponibile în demo;
+- semnătura de primire, fișierele și dovada foto sunt taskuri următoare.
 
 ## 4. Login și shell aplicație
 
@@ -91,6 +92,7 @@ Spune clar:
    - Panou principal;
    - Lucrări;
    - Scanare;
+   - Livrările mele;
    - Facturare;
    - Clinici și medici;
    - Tipuri de lucrări;

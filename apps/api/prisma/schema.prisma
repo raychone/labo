@@ -63,6 +63,14 @@ model User {
   updatedDeliveryPreparationGroups DeliveryPreparationGroup[] @relation("DeliveryPreparationGroupUpdatedBy")
   addedDeliveryPreparationItems DeliveryPreparationItem[] @relation("DeliveryPreparationItemAddedBy")
   removedDeliveryPreparationItems DeliveryPreparationItem[] @relation("DeliveryPreparationItemRemovedBy")
+  courierDeliveries Delivery[] @relation("DeliveryCourier")
+  assignedDeliveries Delivery[] @relation("DeliveryAssignedBy")
+  pickedUpDeliveries Delivery[] @relation("DeliveryPickedUpBy")
+  deliveredDeliveries Delivery[] @relation("DeliveryDeliveredBy")
+  cancelledDeliveries Delivery[] @relation("DeliveryCancelledBy")
+  createdDeliveries Delivery[] @relation("DeliveryCreatedBy")
+  updatedDeliveries Delivery[] @relation("DeliveryUpdatedBy")
+  deliveryEvents DeliveryEvent[] @relation("DeliveryEventActor")
 
   @@index([isActive])
   @@index([createdAt])
@@ -146,6 +154,7 @@ model Clinic {
   updatedBy User? @relation("ClinicUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   archivedBy User? @relation("ClinicArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
   deliveryPreparationGroups DeliveryPreparationGroup[]
+  deliveries Delivery[]
 
   @@index([name])
   @@index([city])
@@ -675,6 +684,7 @@ model DeliveryPreparationGroup {
   createdBy User? @relation("DeliveryPreparationGroupCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   updatedBy User? @relation("DeliveryPreparationGroupUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   items DeliveryPreparationItem[]
+  deliveries Delivery[]
 
   @@index([clinicId])
   @@index([status])
@@ -755,6 +765,110 @@ enum DeliveryPreparationGroupStatus {
   DRAFT
   READY
   CANCELLED
+}
+
+model Delivery {
+  id String @id @default(cuid())
+  code String @unique @db.VarChar(24)
+  preparationGroupId String @map("preparation_group_id")
+  clinicId String @map("clinic_id")
+  courierUserId String? @map("courier_user_id")
+  status DeliveryStatus @default(PLANNED)
+  plannedDate DateTime @map("planned_date")
+  sequenceOrder Int? @map("sequence_order")
+  assignedAt DateTime? @map("assigned_at")
+  assignedByUserId String? @map("assigned_by_user_id")
+  pickedUpAt DateTime? @map("picked_up_at")
+  pickedUpByUserId String? @map("picked_up_by_user_id")
+  inTransitAt DateTime? @map("in_transit_at")
+  deliveredAt DateTime? @map("delivered_at")
+  deliveredByUserId String? @map("delivered_by_user_id")
+  failedAt DateTime? @map("failed_at")
+  cancelledAt DateTime? @map("cancelled_at")
+  cancelledByUserId String? @map("cancelled_by_user_id")
+  recipientName String? @map("recipient_name") @db.VarChar(160)
+  recipientRole String? @map("recipient_role") @db.VarChar(120)
+  deliveryNotes String? @map("delivery_notes") @db.VarChar(1000)
+  failureReasonCode DeliveryFailureReasonCode? @map("failure_reason_code")
+  failureDetails String? @map("failure_details") @db.VarChar(1000)
+  rescheduledFor DateTime? @map("rescheduled_for")
+  isActive Boolean @default(true) @map("is_active")
+  version Int @default(1)
+  createdByUserId String? @map("created_by_user_id")
+  updatedByUserId String? @map("updated_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  preparationGroup DeliveryPreparationGroup @relation(fields: [preparationGroupId], references: [id], onDelete: Restrict)
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  courier User? @relation("DeliveryCourier", fields: [courierUserId], references: [id], onDelete: SetNull)
+  assignedBy User? @relation("DeliveryAssignedBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+  pickedUpBy User? @relation("DeliveryPickedUpBy", fields: [pickedUpByUserId], references: [id], onDelete: SetNull)
+  deliveredBy User? @relation("DeliveryDeliveredBy", fields: [deliveredByUserId], references: [id], onDelete: SetNull)
+  cancelledBy User? @relation("DeliveryCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
+  createdBy User? @relation("DeliveryCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("DeliveryUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  events DeliveryEvent[]
+
+  @@index([preparationGroupId])
+  @@index([clinicId])
+  @@index([courierUserId])
+  @@index([status])
+  @@index([plannedDate])
+  @@index([courierUserId, plannedDate])
+  @@index([status, plannedDate])
+  @@index([isActive])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@map("deliveries")
+}
+
+model DeliveryEvent {
+  id String @id @default(cuid())
+  deliveryId String @map("delivery_id")
+  type DeliveryEventType
+  actorUserId String? @map("actor_user_id")
+  occurredAt DateTime @default(now()) @map("occurred_at")
+  metadata Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  delivery Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  actor User? @relation("DeliveryEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([deliveryId, occurredAt])
+  @@index([type])
+  @@index([actorUserId])
+  @@map("delivery_events")
+}
+
+enum DeliveryStatus {
+  PLANNED
+  ASSIGNED
+  PICKED_UP
+  IN_TRANSIT
+  DELIVERED
+  FAILED
+  CANCELLED
+}
+
+enum DeliveryFailureReasonCode {
+  CLINIC_CLOSED
+  RECIPIENT_UNAVAILABLE
+  ADDRESS_PROBLEM
+  DELIVERY_REFUSED
+  COURIER_PROBLEM
+  OTHER
+}
+
+enum DeliveryEventType {
+  DELIVERY_CREATED
+  COURIER_ASSIGNED
+  COURIER_REASSIGNED
+  COURIER_UNASSIGNED
+  DELIVERY_PICKED_UP
+  DELIVERY_IN_TRANSIT
+  DELIVERY_COMPLETED
+  DELIVERY_FAILED
+  DELIVERY_RESCHEDULED
+  DELIVERY_CANCELLED
 }
 
 model WorkWorkflowExecution {

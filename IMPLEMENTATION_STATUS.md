@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-68%
+70%
 
 ## FOUNDATION
 
@@ -103,7 +103,7 @@
 
 ## DELIVERY
 
-- [ ] DELIVERY-001 - Delivery routes and courier mobile UI (NOT STARTED)
+- [x] DELIVERY-001 - Courier planning and delivery execution (COMPLETED)
 
 ## SIGNATURES
 
@@ -151,19 +151,87 @@ NONE / AWAITING APPROVAL
 
 Status: AWAITING APPROVAL
 
-Started: 2026-07-26T09:18:38Z
+Started: 2026-07-26T10:08:29Z
 
-Completed: 2026-07-26T09:45:40Z
+Completed: 2026-07-26T10:31:00Z
 
-Last completed task: LOGISTICS-001 - Laboratory operational center, intake and internal logistics
+Last completed task: DELIVERY-001 - Courier planning and delivery execution
 
-Completed: 2026-07-26T09:45:40Z
+Completed: 2026-07-26T10:31:00Z
 
 ## Next Recommended Task
 
-DELIVERY-001 - Courier planning and delivery execution
+SIGNATURES-001 - Delivery signature capture and proof of handover
 
 ## Latest Completion Summary
+
+### DELIVERY-001 - Courier planning and delivery execution
+
+- Implemented `Delivery` and `DeliveryEvent` with deterministic migration `20260726101000_delivery_planning_execution`.
+- Added `DeliveryModule` with delivery list/detail, create from READY group, update plan, assign/unassign, cancel, pickup, start transit, complete, fail, reschedule and courier options endpoints.
+- Added RBAC permissions for delivery planning and execution, with courier `OWN_DELIVERY` enforcement and server-side ownership checks.
+- Added `/deliveries` mobile-first UI with filters, cards, detail drawer, action controls and READY group conversion.
+- Integrated logistics group summaries with active delivery context and scan results with “Deschide livrarea” for courier-owned active deliveries.
+- Extended demo seed/reset with 10 deterministic deliveries across planned, assigned, picked up, in transit, delivered, failed and unassigned states.
+
+Main files modified:
+
+- `apps/api/prisma/schema.prisma`
+- `apps/api/prisma/migrations/20260726101000_delivery_planning_execution/migration.sql`
+- `apps/api/src/modules/delivery/*`
+- `apps/api/src/modules/rbac/permission-registry.ts`
+- `apps/api/src/modules/logistics/logistics.view.ts`
+- `apps/api/src/modules/scan/scan.service.ts`
+- `apps/api/prisma/demo/*`
+- `apps/web/src/features/deliveries/*`
+- `apps/web/src/features/works/work-scan-page.tsx`
+- `apps/web/src/app/app.tsx`
+- `apps/web/src/app/route-registry.tsx`
+- `packages/shared/src/delivery.ts`
+- `README.md`
+- `MVP-IMPLEMENTATION-PLAN.md`
+
+Verification:
+
+- `pnpm --filter @dental-lab/api prisma:validate` passed.
+- `pnpm --filter @dental-lab/api prisma:generate` passed.
+- `pnpm --filter @dental-lab/api prisma:migrate:dev --name delivery_planning_execution` passed against `localhost:55439/dental_lab_dev`.
+- `pnpm --filter @dental-lab/api prisma:db:seed` passed.
+- `pnpm --filter @dental-lab/api prisma:db:reset-demo` passed.
+- `pnpm --filter @dental-lab/api prisma:db:seed:demo` passed twice.
+- `pnpm typecheck` passed.
+- `pnpm test` passed.
+- `pnpm build` passed.
+
+Manual verification:
+
+- API code compiled in watch mode with 0 errors.
+- `/health` returned 200.
+- `/deliveries` HTML returned 200 from Vite.
+- Demo courier login succeeded.
+- Courier `GET /deliveries?page=1&pageSize=5` returned 7 own deliveries.
+- Demo manager `GET /deliveries?page=1&pageSize=20` returned 10 deliveries.
+- Demo manager `GET /deliveries?filter=FAILED` returned 1 failed delivery.
+- READY preparation groups include active delivery summaries and are hidden from create list in `/deliveries`.
+- Courier `POST /scan/resolve` for `WO-2026-900018` returned delivery `DLV-2026-DEMO-03`.
+
+Architecture decisions:
+
+- A delivery belongs to exactly one READY preparation group and one clinic.
+- `DeliveryEvent` is append-only and stores safe metadata only.
+- `Delivery.isActive` protects preparation-group reuse while allowing cancelled pre-pickup deliveries to release the group.
+- Delivery execution changes `WorkLogisticsState`; signature proof remains deferred to `SIGNATURES-001`.
+
+Known technical debt:
+
+- No Playwright/mobile browser automation yet; verification was API/UI smoke.
+- Local port 3000/3010 were already occupied during smoke, so Vite used 3001 and a separate API smoke instance used 3011.
+- `pg` emitted an existing shutdown deprecation warning when stopping the temporary API process.
+
+Remaining risks:
+
+- Physical courier phone scan and real-world delivery handoff still need device validation.
+- `SIGNATURES-001` is still required for signed proof of delivery.
 
 ### LOGISTICS-001 - Laboratory operational center, intake and internal logistics
 
@@ -845,19 +913,19 @@ None.
 - Audit: audit approve/reject/rework.
 - Testare: state transitions, API permissions si UI approve/reject.
 
-### DELIVERY-001 - Delivery routes and courier mobile UI
+### DELIVERY-001 - Courier planning and delivery execution
 
-- Status: NOT STARTED.
-- Obiectiv: ridicari/livrari mobile-first.
-- Scope: route, stops, scan, confirm, fail, courier UI.
-- Non-goals: GPS obligatoriu, semnatura avansata, facturare.
-- Dependente: QC-001, QR-001.
-- Acceptance criteria: curierul confirma livrari fara acces financiar.
-- Backend: DeliveriesModule cu validari si RBAC.
-- Frontend: courier mobile UI.
-- Securitate: `OWN_DELIVERY` server-side, fara pricing.
-- Audit: audit confirm/fail/handoff.
-- Testare: API + mobile UI tests.
+- Status: COMPLETED.
+- Obiectiv: livrari operationale pornite din grupuri READY, planificate si executate de curier.
+- Scope: Delivery/DeliveryEvent, atribuire curier, pickup, tranzit, finalizare, nereusita, replanificare, anulare, UI `/deliveries`, integrare scan si seed demo.
+- Non-goals: semnatura, dovada foto, GPS, harti, optimizare ruta, tracking public, plata la livrare.
+- Dependente: LOGISTICS-001, SCAN-002, RBAC-001.
+- Acceptance criteria: curierul vede doar livrari proprii si nu vede financiar; logistica/managerul planifica; statusurile lucrarilor se sincronizeaza la pickup/delivered.
+- Backend: DeliveryModule cu DTO validation, RBAC, tranzactii si audit.
+- Frontend: courier/mobile-first UI cu filtre si actiuni.
+- Securitate: `OWN_DELIVERY` server-side, CSRF pe mutatii, fara pricing in raspunsuri courier.
+- Audit: DeliveryEvent append-only plus AuditLog.
+- Testare: suite automata completa si smoke manual API/UI.
 
 ### SIGNATURES-001 - Delivery signatures and proof capture
 

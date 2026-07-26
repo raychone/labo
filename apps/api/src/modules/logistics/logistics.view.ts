@@ -64,6 +64,7 @@ export interface DeliveryPreparationGroupSummary {
   readonly plannedDate: string | null;
   readonly status: "DRAFT" | "READY" | "CANCELLED";
   readonly version: number;
+  readonly delivery: { readonly code: string; readonly courierName: string | null; readonly id: string; readonly status: string; readonly statusLabel: string } | null;
 }
 
 export interface DeliveryPreparationGroupDetail extends DeliveryPreparationGroupSummary {
@@ -156,6 +157,18 @@ export const logisticsWorkInclude = {
               isActive: true,
             },
           },
+          deliveries: {
+            include: {
+              courier: {
+                select: {
+                  displayName: true,
+                },
+              },
+            },
+            where: {
+              isActive: true,
+            },
+          },
         },
       },
     },
@@ -223,6 +236,18 @@ export const deliveryPreparationGroupInclude = {
     select: {
       id: true,
       name: true,
+    },
+  },
+  deliveries: {
+    include: {
+      courier: {
+        select: {
+          displayName: true,
+        },
+      },
+    },
+    where: {
+      isActive: true,
     },
   },
   items: {
@@ -295,11 +320,20 @@ export function toDeliveryPreparationGroupSummary(group: {
   readonly plannedDate: Date | null;
   readonly status: string;
   readonly version: number;
+  readonly deliveries?: readonly { readonly code: string; readonly courier?: { readonly displayName: string } | null; readonly id: string; readonly status: string }[];
 }): DeliveryPreparationGroupSummary {
+  const delivery = group.deliveries?.[0] ?? null;
   return {
     clinicId: group.clinic.id,
     clinicName: group.clinic.name,
     code: group.code,
+    delivery: delivery ? {
+      code: delivery.code,
+      courierName: delivery.courier?.displayName ?? null,
+      id: delivery.id,
+      status: delivery.status,
+      statusLabel: deliveryStatusLabel(delivery.status),
+    } : null,
     id: group.id,
     itemCount: group.items.length,
     notes: group.notes,
@@ -307,6 +341,19 @@ export function toDeliveryPreparationGroupSummary(group: {
     status: group.status as DeliveryPreparationGroupSummary["status"],
     version: group.version,
   };
+}
+
+function deliveryStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    ASSIGNED: "Atribuită",
+    CANCELLED: "Anulată",
+    DELIVERED: "Finalizată",
+    FAILED: "Nereușită",
+    IN_TRANSIT: "În tranzit",
+    PICKED_UP: "Preluată",
+    PLANNED: "Planificată",
+  };
+  return labels[status] ?? status;
 }
 
 export function toDeliveryPreparationGroupDetail(
