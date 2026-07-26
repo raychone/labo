@@ -586,6 +586,38 @@ The `/workbench` UI is mobile-first and shows “Lucrările mele”, queue categ
 
 TECH-001 does not implement logistics handoffs, courier delivery, QC, files, notifications, time tracking, payroll, or SCAN-002 actions.
 
+## Laboratory Operations
+
+LOGISTICS-001 adds the authenticated operational center at `/logistics`.
+
+The backend module exposes:
+
+- `GET /logistics/center`
+- `GET /logistics/center/summary`
+- `GET /works/:workId/logistics`
+- `POST /works/:workId/logistics/location`
+- `POST /works/:workId/logistics/block`
+- `POST /works/:workId/logistics/unblock`
+- `POST /works/:workId/logistics/ready-for-packing`
+- `POST /works/:workId/logistics/start-packing`
+- `POST /works/:workId/logistics/complete-packing`
+- `GET /delivery-preparation-groups`
+- `GET /delivery-preparation-groups/:id`
+- `POST /delivery-preparation-groups`
+- `PATCH /delivery-preparation-groups/:id`
+- `POST /delivery-preparation-groups/:id/works`
+- `POST /delivery-preparation-groups/:id/works/remove`
+- `POST /delivery-preparation-groups/:id/mark-ready`
+- `POST /delivery-preparation-groups/:id/cancel`
+
+Logistics state is stored separately from `WorkOrder.status` and workflow execution. `WorkLogisticsState` tracks the physical location, operational blocking, packing readiness and ready-for-delivery state. `LogisticsEvent` is append-only and stores safe operational metadata only. `DeliveryPreparationGroup` and `DeliveryPreparationItem` represent internal preparation groups by clinic; they are not courier routes and do not confirm delivery.
+
+Billing is visible in logistics only as a document/payment status label. It does not block packing or internal preparation. Prices and financial totals are not exposed in the logistics center response.
+
+`/scan` now includes logistics context after resolving a QR or work code: logistics status, physical location, block reason and active preparation group. Scan still does not mutate logistics automatically.
+
+The demo seed includes representative logistics states and three internal preparation groups. Running the demo seed repeatedly resets and recreates those records deterministically.
+
 ## Billing Workspace
 
 BILLING-001 adds the first financial workspace at `/billing`.

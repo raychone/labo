@@ -1,3 +1,4 @@
+import { DeliveryPreparationGroupStatus, LogisticsBlockReasonCode, LogisticsLocationCode, WorkLogisticsStatus } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
 import type { Prisma, WorkFormFieldType } from "@prisma/client";
 
@@ -23,6 +24,7 @@ export async function seedDemoData(prisma: PrismaClient, now = new Date()): Prom
   await seedDemoWorks(prisma, dataset);
   await seedDemoWorkflowExecutions(prisma, dataset);
   await seedDemoBilling(prisma, dataset);
+  await seedDemoLogistics(prisma);
 
   return dataset;
 }
@@ -778,6 +780,97 @@ async function seedDemoBilling(prisma: PrismaClient, dataset: DemoDataset): Prom
       where: { id: { in: [...document.workIds] } },
     });
   }
+}
+
+async function seedDemoLogistics(prisma: PrismaClient): Promise<void> {
+  const logisticsSeeds = [
+    logisticsState("001", WorkLogisticsStatus.RECEIVED, LogisticsLocationCode.RECEPTIE),
+    logisticsState("002", WorkLogisticsStatus.IN_PRODUCTION, LogisticsLocationCode.PRODUCTIE),
+    logisticsState("003", WorkLogisticsStatus.IN_PRODUCTION, LogisticsLocationCode.PRODUCTIE),
+    logisticsState("004", WorkLogisticsStatus.BLOCKED, LogisticsLocationCode.PRODUCTIE, LogisticsBlockReasonCode.MISSING_INFO, "Lipsește confirmarea medicului pentru nuanță."),
+    logisticsState("006", WorkLogisticsStatus.READY_FOR_PACKING, LogisticsLocationCode.RAFT_FINISARE),
+    logisticsState("012", WorkLogisticsStatus.PACKING, LogisticsLocationCode.ZONA_AMBALARE),
+    logisticsState("018", WorkLogisticsStatus.READY_FOR_DELIVERY, LogisticsLocationCode.GATA_LIVRARE),
+    logisticsState("024", WorkLogisticsStatus.READY_FOR_DELIVERY, LogisticsLocationCode.GATA_LIVRARE),
+    logisticsState("030", WorkLogisticsStatus.READY_FOR_DELIVERY, LogisticsLocationCode.GATA_LIVRARE),
+    logisticsState("036", WorkLogisticsStatus.READY_FOR_DELIVERY, LogisticsLocationCode.GATA_LIVRARE),
+  ] as const;
+
+  for (const seed of logisticsSeeds) {
+    const now = new Date("2026-07-26T09:00:00.000Z");
+    await prisma.workLogisticsState.create({
+      data: {
+        blockedAt: seed.status === "BLOCKED" ? now : null,
+        blockedByUserId: seed.status === "BLOCKED" ? "demo_user_logistica" : null,
+        blockedReasonCode: seed.blockedReasonCode,
+        blockedReasonNotes: seed.blockedReasonNotes,
+        id: `demo_logistics_state_${seed.suffix}`,
+        packingStartedAt: seed.status === "PACKING" ? now : null,
+        packingStartedByUserId: seed.status === "PACKING" ? "demo_user_logistica" : null,
+        physicalLocationCode: seed.locationCode,
+        readyForDeliveryAt: seed.status === "READY_FOR_DELIVERY" ? now : null,
+        readyForDeliveryByUserId: seed.status === "READY_FOR_DELIVERY" ? "demo_user_logistica" : null,
+        readyForPackingAt: seed.status === "READY_FOR_PACKING" || seed.status === "PACKING" || seed.status === "READY_FOR_DELIVERY" ? now : null,
+        readyForPackingByUserId: seed.status === "READY_FOR_PACKING" || seed.status === "PACKING" || seed.status === "READY_FOR_DELIVERY" ? "demo_user_logistica" : null,
+        status: seed.status,
+        updatedByUserId: "demo_user_logistica",
+        workOrderId: `demo_work_${seed.suffix}`,
+      },
+    });
+    await prisma.logisticsEvent.create({
+      data: {
+        actorUserId: "demo_user_logistica",
+        id: `demo_logistics_event_${seed.suffix}_state`,
+        logisticsStateId: `demo_logistics_state_${seed.suffix}`,
+        metadata: { newStatus: seed.status, workId: `demo_work_${seed.suffix}` },
+        type: seed.status === "BLOCKED" ? "WORK_BLOCKED" : "WORK_RECEIVED",
+        workOrderId: `demo_work_${seed.suffix}`,
+      },
+    });
+  }
+
+  await createDemoDeliveryPreparationGroup(prisma, "draft_1", "demo_clinic_smile", ["demo_work_018", "demo_work_030"], DeliveryPreparationGroupStatus.DRAFT);
+  await createDemoDeliveryPreparationGroup(prisma, "draft_2", "demo_clinic_point", ["demo_work_024"], DeliveryPreparationGroupStatus.DRAFT);
+  await createDemoDeliveryPreparationGroup(prisma, "ready_1", "demo_clinic_point", ["demo_work_036"], DeliveryPreparationGroupStatus.READY);
+}
+
+function logisticsState(
+  suffix: string,
+  status: WorkLogisticsStatus,
+  locationCode: LogisticsLocationCode,
+  blockedReasonCode: LogisticsBlockReasonCode | null = null,
+  blockedReasonNotes: string | null = null,
+) {
+  return { blockedReasonCode, blockedReasonNotes, locationCode, status, suffix };
+}
+
+async function createDemoDeliveryPreparationGroup(
+  prisma: PrismaClient,
+  suffix: string,
+  clinicId: string,
+  workOrderIds: readonly string[],
+  status: DeliveryPreparationGroupStatus,
+): Promise<void> {
+  const groupId = `demo_delivery_group_${suffix}`;
+  await prisma.deliveryPreparationGroup.create({
+    data: {
+      clinicId,
+      code: `PG-2026-DEMO-${suffix.toUpperCase()}`,
+      createdByUserId: "demo_user_logistica",
+      id: groupId,
+      plannedDate: new Date("2026-07-27T08:00:00.000Z"),
+      status,
+      updatedByUserId: "demo_user_logistica",
+      items: {
+        create: workOrderIds.map((workOrderId) => ({
+          addedByUserId: "demo_user_logistica",
+          id: `demo_delivery_item_${suffix}_${workOrderId.replace("demo_work_", "")}`,
+          isActive: true,
+          workOrderId,
+        })),
+      },
+    },
+  });
 }
 
 async function seedDemoSeries(prisma: PrismaClient, year: number): Promise<void> {

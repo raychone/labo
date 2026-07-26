@@ -1,5 +1,6 @@
 import type { ScanSource, WorkPriority, WorkStatus } from "./works.js";
 import type { WorkStageExecutionStatus, WorkflowExecutionStatus, WorkflowUserSummary } from "./workflow-execution.js";
+import type { DeliveryPreparationGroupStatus, LogisticsLocationCode, LogisticsStatus } from "./logistics.js";
 
 export const SCAN_ACTION_TYPES = ["OPEN_WORK", "START_STAGE", "COMPLETE_STAGE", "ASSIGN_STAGE", "REASSIGN_STAGE"] as const;
 export const SCAN_DUPLICATE_WINDOW_MS = 2_000;
@@ -44,6 +45,17 @@ export interface ScanWorkflowSummary {
   readonly workflowName: string;
 }
 
+export interface ScanLogisticsSummary {
+  readonly activeGroup: {
+    readonly code: string;
+    readonly id: string;
+    readonly status: DeliveryPreparationGroupStatus;
+  } | null;
+  readonly blockedReason: string | null;
+  readonly locationCode: LogisticsLocationCode | null;
+  readonly status: LogisticsStatus;
+}
+
 export interface ScanActionAvailability {
   readonly enabled: boolean;
   readonly reason: string | null;
@@ -52,6 +64,7 @@ export interface ScanActionAvailability {
 
 export interface ScanContextView {
   readonly actions: readonly ScanActionAvailability[];
+  readonly logistics: ScanLogisticsSummary;
   readonly resolvedAt: string;
   readonly work: ScanWorkSummary;
   readonly workflow: ScanWorkflowSummary | null;

@@ -1351,21 +1351,21 @@ Decizie concreta SETTINGS-001:
 - Audit: audit pentru fiecare actiune declansata din scan.
 - Testare: API permissions/state transitions, frontend camera/manual action states.
 
-### LOGISTICS-001 - Planning and assignment
+### LOGISTICS-001 - Laboratory operational center, intake and internal logistics
 
-- Scop: planificare si alocare tehnicieni.
-- Motiv: control operational.
-- Module: LogisticsModule.
-- Dependinte: WORKFLOW-002, USERS-001.
-- Pasi: board, filters, assign stage/user, priority.
-- Acceptare: logistica aloca fara date financiare.
-- Teste: API permissions.
-- Manual: board responsive.
-- Riscuri: aglomerare UI.
-- Nu modifica: invoices.
-- DoD: lucrari intra in productie.
+- Scop: centru operational pentru receptie/logistica, locatie fizica, blocari, ambalare si pregatiri interne pentru livrare.
+- Motiv: vizibilitate operationala cap-coada dupa workflow, fara a porni livrarea efectiva.
+- Module: LogisticsModule, `/logistics`, scan context, demo seed.
+- Dependinte: WORKFLOW-002, TECH-001, SCAN-002, USERS-001, RBAC-001.
+- Pasi: stare logistica separata, evenimente append-only, filtre operationale, actiuni explicite, grupuri interne pe clinica.
+- Acceptare: logistica afiseaza si modifica stari operationale fara pricing; billing nu blocheaza operational; grupurile nu reprezinta rute/livrari.
+- Teste: Prisma validate/generate/migrate, seed demo idempotent, shared/API/web unit tests, typecheck, build, smoke API/UI.
+- Manual: `/logistics`, `/scan`, endpointuri center/summary/work/groups.
+- Riscuri: delivery real, semnaturi, QC formal, fisiere, notificari si rute curier raman pentru taskuri ulterioare.
+- Nu modifica: facturare fiscala, payment processing, courier delivery.
+- DoD: lucrarile pot fi urmarite si pregatite intern pana la `READY_FOR_DELIVERY`.
 - Estimare: L.
-- Status: NOT STARTED.
+- Status: COMPLETED.
 
 ### TECH-001 - Technician workbench
 

@@ -41,6 +41,12 @@ const scanContext = {
     { enabled: false, reason: "Etapa are deja responsabil.", type: "ASSIGN_STAGE" },
     { enabled: false, reason: "Nu ai permisiunea necesară.", type: "REASSIGN_STAGE" },
   ],
+  logistics: {
+    activeGroup: null,
+    blockedReason: null,
+    locationCode: "PRODUCTIE",
+    status: "IN_PRODUCTION",
+  },
   resolvedAt: "2026-07-22T12:00:00.000Z",
   work: {
     clinicName: "Clinica Test",

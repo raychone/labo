@@ -56,6 +56,12 @@ export type PermissionKey =
   | "logistics.plan"
   | "logistics.assign"
   | "logistics.prepare_delivery"
+  | "logistics.center.read"
+  | "logistics.update_location"
+  | "logistics.block_work"
+  | "logistics.unblock_work"
+  | "logistics.prepare_work"
+  | "logistics.manage_groups"
   | "reception.receive"
   | "reception.edit_intake"
   | "reception.handover_to_logistics"
@@ -153,6 +159,12 @@ export const PERMISSION_REGISTRY = [
   definePermission("logistics.plan", "Plan logistics."),
   definePermission("logistics.assign", "Assign logistics work."),
   definePermission("logistics.prepare_delivery", "Prepare deliveries."),
+  definePermission("logistics.center.read", "Read the operational logistics center."),
+  definePermission("logistics.update_location", "Update work physical location."),
+  definePermission("logistics.block_work", "Block work for operational reasons."),
+  definePermission("logistics.unblock_work", "Unblock work after issue resolution."),
+  definePermission("logistics.prepare_work", "Confirm packing readiness and packing transitions."),
+  definePermission("logistics.manage_groups", "Manage internal delivery preparation groups."),
   definePermission("reception.receive", "Receive work orders."),
   definePermission("reception.edit_intake", "Edit intake."),
   definePermission("reception.handover_to_logistics", "Hand over to logistics."),
@@ -258,9 +270,15 @@ export const ROLE_PERMISSION_MATRIX = {
     "files.read": "ALL",
     "files.upload": "ALL",
     "logistics.assign": "ALL",
+    "logistics.block_work": "ALL",
+    "logistics.center.read": "ALL",
+    "logistics.manage_groups": "ALL",
     "logistics.plan": "ALL",
+    "logistics.prepare_work": "ALL",
     "logistics.prepare_delivery": "ALL",
     "logistics.read": "ALL",
+    "logistics.unblock_work": "ALL",
+    "logistics.update_location": "ALL",
     "quality.read": "ALL",
     "quality.rework": "ALL",
     "reception.handover_to_courier": "ALL",
@@ -296,8 +314,11 @@ export const ROLE_PERMISSION_MATRIX = {
     "forms.read": "ALL",
     "files.read": "ALL",
     "files.upload": "ALL",
+    "logistics.block_work": "ALL",
+    "logistics.center.read": "ALL",
     "logistics.prepare_delivery": "ALL",
     "logistics.read": "ALL",
+    "logistics.update_location": "ALL",
     "reception.edit_intake": "ALL",
     "reception.handover_to_courier": "ALL",
     "reception.handover_to_logistics": "ALL",
@@ -320,6 +341,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "files.read": "ASSIGNED",
     "files.upload": "ASSIGNED",
     "forms.read": "ALL",
+    "logistics.center.read": "ASSIGNED",
     "quality.read": "OWN_STAGE",
     "scan.resolve": "ASSIGNED",
     "scan.use": "ASSIGNED",
@@ -356,6 +378,12 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "forms.read",
   "forms.update",
   "finance.read",
+  "logistics.block_work",
+  "logistics.center.read",
+  "logistics.manage_groups",
+  "logistics.prepare_work",
+  "logistics.unblock_work",
+  "logistics.update_location",
   "invoice.download",
   "invoice.read",
   "quality.approve",

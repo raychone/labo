@@ -14,6 +14,43 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
       },
     });
 
+    await tx.deliveryPreparationItem.deleteMany({
+      where: {
+        OR: [
+          { id: { startsWith: `${DEMO_ID_PREFIX}delivery_item_` } },
+          { groupId: { startsWith: `${DEMO_ID_PREFIX}delivery_group_` } },
+          { workOrder: demoWorkOrderWhere() },
+        ],
+      },
+    });
+
+    await tx.deliveryPreparationGroup.deleteMany({
+      where: {
+        OR: [
+          { id: { startsWith: `${DEMO_ID_PREFIX}delivery_group_` } },
+          { clinicId: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
+        ],
+      },
+    });
+
+    await tx.logisticsEvent.deleteMany({
+      where: {
+        OR: [
+          { id: { startsWith: `${DEMO_ID_PREFIX}logistics_event_` } },
+          { workOrder: demoWorkOrderWhere() },
+        ],
+      },
+    });
+
+    await tx.workLogisticsState.deleteMany({
+      where: {
+        OR: [
+          { id: { startsWith: `${DEMO_ID_PREFIX}logistics_state_` } },
+          { workOrder: demoWorkOrderWhere() },
+        ],
+      },
+    });
+
     await tx.payment.deleteMany({
       where: {
         OR: [

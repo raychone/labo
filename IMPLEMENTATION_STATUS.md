@@ -91,7 +91,7 @@
 
 ## LOGISTICS
 
-- [ ] LOGISTICS-001 - Planning and assignment (NOT STARTED)
+- [x] LOGISTICS-001 - Laboratory operational center, intake and internal logistics (COMPLETED)
 
 ## TECHNICIAN
 
@@ -151,19 +151,83 @@ NONE / AWAITING APPROVAL
 
 Status: AWAITING APPROVAL
 
-Started: 2026-07-26T03:39:38+03:00
+Started: 2026-07-26T09:18:38Z
 
-Completed: 2026-07-26T03:58:00+03:00
+Completed: 2026-07-26T09:45:40Z
 
-Last completed task: SCAN-002 - Operational QR scan actions and physical work handoff
+Last completed task: LOGISTICS-001 - Laboratory operational center, intake and internal logistics
 
-Completed: 2026-07-26T03:58:00+03:00
+Completed: 2026-07-26T09:45:40Z
 
 ## Next Recommended Task
 
-LOGISTICS-001 - Planning and assignment
+DELIVERY-001 - Courier planning and delivery execution
 
 ## Latest Completion Summary
+
+### LOGISTICS-001 - Laboratory operational center, intake and internal logistics
+
+- Implemented `WorkLogisticsState`, `LogisticsEvent`, `DeliveryPreparationGroup` and `DeliveryPreparationItem` with deterministic migration `20260726092000_logistics_operational_center`.
+- Added `LogisticsModule` with center, summary, work detail, location, block/unblock, ready-for-packing, packing, and internal preparation group endpoints.
+- Added RBAC permissions: `logistics.center.read`, `logistics.update_location`, `logistics.block_work`, `logistics.unblock_work`, `logistics.prepare_work`, `logistics.manage_groups`.
+- Added `/logistics` mobile-first UI with summary cards, quick filters, status/location drawer, packing actions, and preparation groups.
+- Extended scan context with logistics status, physical location, block reason and active preparation group.
+- Extended demo seed/reset with logistics states and three deterministic delivery preparation groups.
+
+Main files modified:
+
+- `apps/api/prisma/schema.prisma`
+- `apps/api/prisma/migrations/20260726092000_logistics_operational_center/migration.sql`
+- `apps/api/src/modules/logistics/*`
+- `apps/api/src/modules/rbac/permission-registry.ts`
+- `apps/api/src/modules/scan/scan.service.ts`
+- `apps/api/prisma/demo/*`
+- `apps/web/src/features/logistics/*`
+- `apps/web/src/features/works/work-scan-page.tsx`
+- `apps/web/src/app/app.tsx`
+- `apps/web/src/app/route-registry.tsx`
+- `packages/shared/src/logistics.ts`
+
+Verification:
+
+- `pnpm --filter @dental-lab/api prisma:validate` passed.
+- `pnpm --filter @dental-lab/api prisma:generate` passed.
+- `pnpm --filter @dental-lab/api prisma:migrate:dev` passed against `localhost:55439/dental_lab_dev`.
+- `pnpm --filter @dental-lab/api prisma:db:seed` passed.
+- `pnpm --filter @dental-lab/api prisma:db:seed:demo` passed twice.
+- `pnpm typecheck` passed.
+- `pnpm test` passed.
+- `pnpm build` passed.
+
+Manual verification:
+
+- API build started on `http://127.0.0.1:3012`.
+- Demo manager login succeeded.
+- `/health` returned `ok`.
+- `/logistics/center` returned 48 demo works.
+- `/logistics/center/summary` returned blocked/ready counts.
+- `/works/demo_work_018/logistics` returned `READY_FOR_DELIVERY` and active group `PG-2026-DEMO-DRAFT_1`.
+- `/delivery-preparation-groups` returned 3 demo groups.
+- `/scan/resolve` for `WO-2026-900018` returned logistics status and group context.
+- Frontend dev served `/logistics` with 200 HTML on `http://localhost:3001` because local port 3000 was already in use.
+
+Architecture decisions:
+
+- Logistics state is independent from `WorkOrder.status` and workflow execution.
+- `RECEIVED`/`IN_PRODUCTION` can be derived for legacy rows, while block/packing/ready-for-delivery states are persisted.
+- Billing is visible as a non-blocking label only; logistics responses do not expose prices or totals.
+- Delivery preparation groups are internal clinic-based preparation groups, not routes, handoffs, courier delivery or signatures.
+- A work can be in one active preparation group through a partial unique index on active delivery preparation items.
+
+Technical debt introduced:
+
+- None.
+
+Remaining risks:
+
+- Browser visual verification was limited to HTTP smoke and component tests in this terminal environment.
+- Frontend smoke used port 3001 because port 3000 was occupied.
+- Linting remains unconfigured.
 
 ### SCAN-002 - Operational QR scan actions and physical work handoff
 
@@ -753,19 +817,19 @@ None.
 - Audit: audit pentru fiecare actiune declansata din scan.
 - Testare: API permissions/state transitions, frontend camera/manual action states.
 
-### LOGISTICS-001 - Planning and assignment
+### LOGISTICS-001 - Laboratory operational center, intake and internal logistics
 
-- Status: NOT STARTED.
-- Obiectiv: planificare si alocare tehnicieni.
-- Scope: board, filters, assign stage/user, priority.
-- Non-goals: invoices, QC, delivery.
-- Dependente: WORKFLOW-002, USERS-001.
-- Acceptance criteria: logistica aloca lucrari fara date financiare.
-- Backend: LogisticsModule cu RBAC si validari de stare.
-- Frontend: board responsive si filtre operationale.
-- Securitate: acces fara pricing pentru roluri non-financiare.
-- Audit: audit assignment/reassignment.
-- Testare: API permissions si UI board states.
+- Status: COMPLETED.
+- Obiectiv: centru operational pentru receptie/logistica, locatie fizica, blocari, ambalare si pregatiri interne pentru livrare.
+- Scope: `/logistics`, stari logistice, evenimente, filtre operationale, scan context logistic, pregatiri interne pe clinica.
+- Non-goals: delivery efectiv, rute curier, GPS, semnaturi, QC formal, fisiere/upload, notificari, portal medic, procesare plati.
+- Dependente: WORKFLOW-002, TECH-001, SCAN-002, USERS-001, RBAC-001.
+- Acceptance criteria: lucrarile pot fi urmarite pana la `READY_FOR_DELIVERY`; billing nu blocheaza operational; pricing nu este expus in logistica.
+- Backend: `LogisticsModule` cu endpointuri REST, RBAC, validari de stare, optimistic locking si audit.
+- Frontend: centru operational responsive, summary cards, quick filters, drawer de lucrare, pregatiri pentru livrare.
+- Securitate: RBAC server-side, CSRF pentru mutatii, token QR opac, fara date financiare detaliate.
+- Audit: audit pentru location/block/unblock/packing/group actions si `LogisticsEvent` append-only.
+- Testare: Prisma validate/generate/migrate, seed base/demo idempotent, typecheck, test, build si smoke manual API/UI.
 
 ### QC-001 - Quality control
 

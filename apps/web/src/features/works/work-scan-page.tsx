@@ -3,6 +3,8 @@ import {
   formatScanProgress,
   getWorkStageExecutionStatusLabel,
   isDuplicateScan,
+  LOGISTICS_LOCATION_LABELS,
+  LOGISTICS_STATUS_LABELS,
   type ScanActionAvailability,
   type ScanActionType,
   type ScanContextView,
@@ -248,6 +250,23 @@ function ScanResult({
         ) : (
           <p>Lucrarea nu are flux operațional activ.</p>
         )}
+        <div className="work-scan-page__workflow">
+          <div>
+            <span>Logistică</span>
+            <strong>{LOGISTICS_STATUS_LABELS[context.logistics.status]}</strong>
+            <p>{context.logistics.locationCode ? LOGISTICS_LOCATION_LABELS[context.logistics.locationCode] : "Locație necompletată"}</p>
+          </div>
+          <div>
+            <span>Grup pregătire</span>
+            <strong>{context.logistics.activeGroup?.code ?? "Fără grup"}</strong>
+            <p>{context.logistics.activeGroup?.status ?? "Pregătirea internă nu este începută"}</p>
+          </div>
+          <div>
+            <span>Blocare</span>
+            <strong>{context.logistics.blockedReason ?? "Fără blocare"}</strong>
+            <p>Acțiunile logistice se confirmă separat.</p>
+          </div>
+        </div>
         <div className="work-scan-page__actions">
           <Button disabled={!openAction?.enabled} isLoading={isOpening} onClick={onOpenWork} variant="outline">
             Deschide lucrarea

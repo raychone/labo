@@ -30,6 +30,12 @@ interface ScanActionAvailability {
 
 export interface ScanContextView {
   readonly actions: readonly ScanActionAvailability[];
+  readonly logistics: {
+    readonly activeGroup: { readonly code: string; readonly id: string; readonly status: "DRAFT" | "READY" | "CANCELLED" } | null;
+    readonly blockedReason: string | null;
+    readonly locationCode: "RECEPTIE" | "PRODUCTIE" | "RAFT_FINISARE" | "ZONA_AMBALARE" | "GATA_LIVRARE" | null;
+    readonly status: "RECEIVED" | "IN_PRODUCTION" | "BLOCKED" | "READY_FOR_PACKING" | "PACKING" | "READY_FOR_DELIVERY" | "HANDED_TO_DELIVERY" | "DELIVERED";
+  };
   readonly resolvedAt: string;
   readonly work: {
     readonly clinicName: string;
@@ -87,6 +93,21 @@ const scanWorkInclude = {
       displayName: true,
     },
   },
+  deliveryPreparationItems: {
+    include: {
+      group: {
+        select: {
+          code: true,
+          id: true,
+          status: true,
+        },
+      },
+    },
+    where: {
+      isActive: true,
+    },
+  },
+  logisticsState: true,
   workType: {
     select: {
       name: true,
@@ -314,6 +335,12 @@ export class ScanService {
 
     return {
       actions,
+      logistics: {
+        activeGroup: work.deliveryPreparationItems[0]?.group ?? null,
+        blockedReason: work.logisticsState?.blockedReasonNotes ?? work.logisticsState?.blockedReasonCode ?? null,
+        locationCode: work.logisticsState?.physicalLocationCode ?? null,
+        status: work.logisticsState?.status ?? (execution?.status === WorkWorkflowExecutionStatus.ACTIVE ? "IN_PRODUCTION" : "RECEIVED"),
+      },
       resolvedAt: new Date().toISOString(),
       work: {
         clinicName: work.clinic.name,

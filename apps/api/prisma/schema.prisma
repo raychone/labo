@@ -53,6 +53,16 @@ model User {
   assignedWorkStages WorkStageExecution[] @relation("WorkStageAssignedTo")
   assignedByWorkStages WorkStageExecution[] @relation("WorkStageAssignedBy")
   workflowStageEvents WorkStageEvent[] @relation("WorkStageEventActor")
+  blockedWorkLogisticsStates WorkLogisticsState[] @relation("WorkLogisticsBlockedBy")
+  readyForPackingWorkLogisticsStates WorkLogisticsState[] @relation("WorkLogisticsReadyForPackingBy")
+  packingStartedWorkLogisticsStates WorkLogisticsState[] @relation("WorkLogisticsPackingStartedBy")
+  readyForDeliveryWorkLogisticsStates WorkLogisticsState[] @relation("WorkLogisticsReadyForDeliveryBy")
+  updatedWorkLogisticsStates WorkLogisticsState[] @relation("WorkLogisticsUpdatedBy")
+  logisticsEvents LogisticsEvent[] @relation("LogisticsEventActor")
+  createdDeliveryPreparationGroups DeliveryPreparationGroup[] @relation("DeliveryPreparationGroupCreatedBy")
+  updatedDeliveryPreparationGroups DeliveryPreparationGroup[] @relation("DeliveryPreparationGroupUpdatedBy")
+  addedDeliveryPreparationItems DeliveryPreparationItem[] @relation("DeliveryPreparationItemAddedBy")
+  removedDeliveryPreparationItems DeliveryPreparationItem[] @relation("DeliveryPreparationItemRemovedBy")
 
   @@index([isActive])
   @@index([createdAt])
@@ -135,6 +145,7 @@ model Clinic {
   createdBy User? @relation("ClinicCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   updatedBy User? @relation("ClinicUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   archivedBy User? @relation("ClinicArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
+  deliveryPreparationGroups DeliveryPreparationGroup[]
 
   @@index([name])
   @@index([city])
@@ -382,6 +393,9 @@ model WorkOrder {
   invoicedDocument BillingDocument? @relation("WorkOrderInvoicedDocument", fields: [invoicedDocumentId], references: [id], onDelete: SetNull)
   workFormSubmission WorkFormSubmission?
   workflowExecution WorkWorkflowExecution?
+  logisticsState WorkLogisticsState?
+  logisticsEvents LogisticsEvent[]
+  deliveryPreparationItems DeliveryPreparationItem[]
 
   @@index([clinicId])
   @@index([doctorId])
@@ -585,6 +599,162 @@ enum WorkStatus {
 enum WorkPriority {
   NORMAL
   URGENT
+}
+
+model WorkLogisticsState {
+  id String @id @default(cuid())
+  workOrderId String @unique @map("work_order_id")
+  status WorkLogisticsStatus @default(RECEIVED)
+  physicalLocationCode LogisticsLocationCode? @map("physical_location_code")
+  blockedReasonCode LogisticsBlockReasonCode? @map("blocked_reason_code")
+  blockedReasonNotes String? @map("blocked_reason_notes") @db.VarChar(1000)
+  blockedAt DateTime? @map("blocked_at")
+  blockedByUserId String? @map("blocked_by_user_id")
+  readyForPackingAt DateTime? @map("ready_for_packing_at")
+  readyForPackingByUserId String? @map("ready_for_packing_by_user_id")
+  packingStartedAt DateTime? @map("packing_started_at")
+  packingStartedByUserId String? @map("packing_started_by_user_id")
+  readyForDeliveryAt DateTime? @map("ready_for_delivery_at")
+  readyForDeliveryByUserId String? @map("ready_for_delivery_by_user_id")
+  updatedByUserId String? @map("updated_by_user_id")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  blockedBy User? @relation("WorkLogisticsBlockedBy", fields: [blockedByUserId], references: [id], onDelete: SetNull)
+  readyForPackingBy User? @relation("WorkLogisticsReadyForPackingBy", fields: [readyForPackingByUserId], references: [id], onDelete: SetNull)
+  packingStartedBy User? @relation("WorkLogisticsPackingStartedBy", fields: [packingStartedByUserId], references: [id], onDelete: SetNull)
+  readyForDeliveryBy User? @relation("WorkLogisticsReadyForDeliveryBy", fields: [readyForDeliveryByUserId], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("WorkLogisticsUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  events LogisticsEvent[]
+
+  @@index([status])
+  @@index([physicalLocationCode])
+  @@index([blockedByUserId])
+  @@index([readyForPackingByUserId])
+  @@index([packingStartedByUserId])
+  @@index([readyForDeliveryByUserId])
+  @@index([updatedByUserId])
+  @@index([updatedAt])
+  @@map("work_logistics_states")
+}
+
+model LogisticsEvent {
+  id String @id @default(cuid())
+  workOrderId String @map("work_order_id")
+  logisticsStateId String? @map("logistics_state_id")
+  type LogisticsEventType
+  actorUserId String? @map("actor_user_id")
+  occurredAt DateTime @default(now()) @map("occurred_at")
+  metadata Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  logisticsState WorkLogisticsState? @relation(fields: [logisticsStateId], references: [id], onDelete: SetNull)
+  actor User? @relation("LogisticsEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([workOrderId, occurredAt])
+  @@index([logisticsStateId])
+  @@index([type])
+  @@index([actorUserId])
+  @@map("logistics_events")
+}
+
+model DeliveryPreparationGroup {
+  id String @id @default(cuid())
+  code String @unique @db.VarChar(24)
+  clinicId String @map("clinic_id")
+  status DeliveryPreparationGroupStatus @default(DRAFT)
+  plannedDate DateTime? @map("planned_date")
+  notes String? @db.VarChar(1000)
+  createdByUserId String? @map("created_by_user_id")
+  updatedByUserId String? @map("updated_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  version Int @default(1)
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  createdBy User? @relation("DeliveryPreparationGroupCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("DeliveryPreparationGroupUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  items DeliveryPreparationItem[]
+
+  @@index([clinicId])
+  @@index([status])
+  @@index([plannedDate])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@map("delivery_preparation_groups")
+}
+
+model DeliveryPreparationItem {
+  id String @id @default(cuid())
+  groupId String @map("group_id")
+  workOrderId String @map("work_order_id")
+  addedByUserId String? @map("added_by_user_id")
+  addedAt DateTime @default(now()) @map("added_at")
+  removedByUserId String? @map("removed_by_user_id")
+  removedAt DateTime? @map("removed_at")
+  isActive Boolean @default(true) @map("is_active")
+  group DeliveryPreparationGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  addedBy User? @relation("DeliveryPreparationItemAddedBy", fields: [addedByUserId], references: [id], onDelete: SetNull)
+  removedBy User? @relation("DeliveryPreparationItemRemovedBy", fields: [removedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([groupId, workOrderId])
+  @@index([groupId])
+  @@index([workOrderId])
+  @@index([isActive])
+  @@index([addedByUserId])
+  @@index([removedByUserId])
+  @@map("delivery_preparation_items")
+}
+
+enum WorkLogisticsStatus {
+  RECEIVED
+  IN_PRODUCTION
+  BLOCKED
+  READY_FOR_PACKING
+  PACKING
+  READY_FOR_DELIVERY
+  HANDED_TO_DELIVERY
+  DELIVERED
+}
+
+enum LogisticsLocationCode {
+  RECEPTIE
+  PRODUCTIE
+  RAFT_FINISARE
+  ZONA_AMBALARE
+  GATA_LIVRARE
+}
+
+enum LogisticsBlockReasonCode {
+  MISSING_INFO
+  DOCTOR_CONFIRMATION
+  MISSING_COMPONENTS
+  TECHNICAL_ISSUE
+  DEADLINE_CLARIFICATION
+  OTHER
+}
+
+enum LogisticsEventType {
+  WORK_RECEIVED
+  LOCATION_UPDATED
+  WORK_BLOCKED
+  WORK_UNBLOCKED
+  READY_FOR_PACKING_CONFIRMED
+  PACKING_STARTED
+  PACKING_COMPLETED
+  DELIVERY_GROUP_CREATED
+  DELIVERY_GROUP_UPDATED
+  WORK_ADDED_TO_DELIVERY_GROUP
+  WORK_REMOVED_FROM_DELIVERY_GROUP
+  DELIVERY_GROUP_MARKED_READY
+  DELIVERY_GROUP_CANCELLED
+}
+
+enum DeliveryPreparationGroupStatus {
+  DRAFT
+  READY
+  CANCELLED
 }
 
 model WorkWorkflowExecution {

@@ -52,6 +52,15 @@ export const appRoutes = [
     showInNavigation: true,
   },
   {
+    icon: "LO",
+    label: "Centru operațional",
+    navigationGroup: "Operare",
+    path: "/logistics",
+    permissionMode: "any",
+    requiredPermissions: ["logistics.center.read"],
+    showInNavigation: true,
+  },
+  {
     icon: "BI",
     label: "Facturare",
     navigationGroup: "Financiar",

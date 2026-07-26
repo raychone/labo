@@ -49,6 +49,10 @@ const TechnicianWorkbenchPage = lazy(async () => {
   const module = await import("../features/technician-workbench/technician-workbench-page.js");
   return { default: module.TechnicianWorkbenchPage };
 });
+const LogisticsPage = lazy(async () => {
+  const module = await import("../features/logistics/logistics-page.js");
+  return { default: module.LogisticsPage };
+});
 const BillingPage = lazy(async () => {
   const module = await import("../features/billing/billing-page.js");
   return { default: module.BillingPage };
@@ -86,6 +90,10 @@ const router = createBrowserRouter([
       {
         element: <PermissionRoute requiredPermissions={["technician.workbench.read"]}><LazyRoute><TechnicianWorkbenchPage /></LazyRoute></PermissionRoute>,
         path: "workbench",
+      },
+      {
+        element: <PermissionRoute requiredPermissions={["logistics.center.read"]}><LazyRoute><LogisticsPage /></LazyRoute></PermissionRoute>,
+        path: "logistics",
       },
       {
         element: <PermissionRoute requiredPermissions={["finance.read", "invoice.read", "invoice.create"]}><LazyRoute><BillingPage /></LazyRoute></PermissionRoute>,
