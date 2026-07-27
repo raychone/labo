@@ -57,6 +57,10 @@ const DeliveriesPage = lazy(async () => {
   const module = await import("../features/deliveries/deliveries-page.js");
   return { default: module.DeliveriesPage };
 });
+const DeliveryProofPrintPage = lazy(async () => {
+  const module = await import("../features/deliveries/delivery-proof-print-page.js");
+  return { default: module.DeliveryProofPrintPage };
+});
 const BillingPage = lazy(async () => {
   const module = await import("../features/billing/billing-page.js");
   return { default: module.BillingPage };
@@ -86,6 +90,10 @@ const router = createBrowserRouter([
       {
         element: <PermissionRoute requiredPermissions={deliveryReadPermissions}><LazyRoute><DeliveriesPage /></LazyRoute></PermissionRoute>,
         path: "deliveries",
+      },
+      {
+        element: <PermissionRoute requiredPermissions={["delivery.proof.print"]}><LazyRoute><DeliveryProofPrintPage /></LazyRoute></PermissionRoute>,
+        path: "deliveries/:id/proof/print",
       },
       {
         element: <PermissionRoute requiredPermissions={workReadPermissions}><LazyRoute><WorksPage /></LazyRoute></PermissionRoute>,

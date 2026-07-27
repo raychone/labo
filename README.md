@@ -640,11 +640,20 @@ The backend module exposes:
 
 Deliveries are created only from READY preparation groups. One active delivery is allowed per preparation group. Pickup changes included works to `HANDED_TO_DELIVERY`; completion changes them to `DELIVERED`. Failed deliveries can be replanned; cancelled pre-pickup deliveries release the preparation group.
 
-Courier access is enforced server-side through `OWN_DELIVERY`. The courier UI and API responses do not expose pricing, payments or invoice totals. Completion records recipient name/role/notes only as manual evidence; signature capture is intentionally deferred to `SIGNATURES-001`.
+Courier access is enforced server-side through `OWN_DELIVERY`. The courier UI and API responses do not expose pricing, payments or invoice totals. Completion now requires a strict internal handover proof: either normalized browser-drawn signature strokes from the recipient or an explicit manager override.
+
+`SIGNATURES-001` adds a dedicated `DeliveryProof` model and private proof endpoints:
+
+- `GET /deliveries/:id/proof`
+- `GET /deliveries/:id/proof/print-view`
+
+The proof stores normalized stroke JSON and a SHA-256 hash of the canonical representation. It does not store PNG/base64, photos, GPS, biometric pressure data, raw SVG/HTML, or generic file uploads. The wording is intentionally operational: “Confirmare internă de primire”. It is not a qualified or advanced electronic signature and does not claim legal/fiscal receipt behavior.
+
+The frontend adds a mobile-first signature modal in `/deliveries`, read-only proof display, manager-only “Finalizează fără semnătură” override flow, and `/deliveries/:id/proof/print` with A4 print CSS and the required disclaimer.
 
 `/scan` includes delivery context when a scanned work belongs to the authenticated courier's active delivery and shows a “Deschide livrarea” action in the UI.
 
-The demo seed now includes 10 deterministic deliveries: planned, assigned, picked up, in transit, delivered, failed and unassigned.
+The demo seed now includes deterministic deliveries across planned, assigned, picked up, in transit, delivered, failed and unassigned states, including signed proof examples, an override example, and one in-transit delivery ready for live signing.
 
 ## Billing Workspace
 

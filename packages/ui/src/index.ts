@@ -79,6 +79,8 @@ export type {
 } from "./components/form-patterns.js";
 export { FileUpload } from "./components/file-upload.js";
 export type { FileUploadProps } from "./components/file-upload.js";
+export { SignatureDisplay, SignaturePad } from "./components/signature-pad.js";
+export type { SignatureDisplayProps, SignaturePadProps } from "./components/signature-pad.js";
 export { Field, FieldDescription, FieldError, FieldLabel } from "./components/field.js";
 export type {
   FieldDescriptionProps,

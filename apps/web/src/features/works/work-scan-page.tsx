@@ -280,7 +280,7 @@ function ScanResult({
           </Button>
           {context.delivery ? (
             <Button onClick={() => window.location.assign(`/deliveries?deliveryId=${encodeURIComponent(context.delivery?.id ?? "")}`)} variant="outline">
-              Deschide livrarea
+              {context.delivery.status === "IN_TRANSIT" ? "Confirmă predarea" : "Deschide livrarea"}
             </Button>
           ) : null}
           {workflowActions.map((action) => (

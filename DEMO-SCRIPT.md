@@ -30,12 +30,15 @@
 28. Show the month registry and CSV export.
 29. Use demo quick access to enter as Recepție and show permission-filtered navigation.
 30. Open Centru operațional and show READY preparation groups with active delivery context.
-31. Open Livrările mele as Manager/Logistică and show 10 demo deliveries, including planned, assigned, in transit, delivered, failed and unassigned.
+31. Open Livrările mele as Manager/Logistică and show demo deliveries, including planned, assigned, in transit, delivered, failed and unassigned.
 32. Filter Nereușite and show the failed delivery.
-33. Use demo quick access to enter as Curier and open Livrările mele.
-34. Show that the courier sees only own deliveries and no pricing/payment totals.
-35. Open Scanare as Curier and resolve `WO-2026-900018`; show the delivery card and “Deschide livrarea”.
-36. Explain that confirmation without signature records recipient details only; signature capture is planned in `SIGNATURES-001`.
-37. Verify `/health`.
+33. Open delivered delivery `DLV-2026-DEMO-07` or `DLV-2026-DEMO-08`, show “Confirmare internă de primire”, “Deschide dovada”, signature display and proof print route.
+34. Open `DLV-2026-DEMO-11` and show the manager override proof without signature.
+35. Use demo quick access to enter as Curier and open Livrările mele.
+36. Show that the courier sees only own deliveries and no pricing/payment totals.
+37. Open Scanare as Curier and resolve `WO-2026-900030`; show the delivery card and “Confirmă predarea”.
+38. Open the in-transit delivery and demonstrate the signature modal: recipient, works, signature canvas, confirmation checkbox and “Confirmă predarea”.
+39. Explain that the proof is internal operational evidence, not a qualified electronic signature, and that no money, POS, GPS, photos or file upload is involved.
+40. Verify `/health`.
 
-All people, clinics, fiscal identifiers, payments and deliveries in the demo are fictive. Payment rows are manual evidence only; the application does not process money. Technician assignments are demo operational data on current workflow stages only. Delivery signatures and proof photos are not implemented yet.
+All people, clinics, fiscal identifiers, payments and deliveries in the demo are fictive. Payment rows are manual evidence only; the application does not process money. Technician assignments are demo operational data on current workflow stages only. Delivery signatures are internal proof of handover only; proof photos and generic files are not implemented yet.

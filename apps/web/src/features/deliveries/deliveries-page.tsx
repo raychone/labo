@@ -1,23 +1,27 @@
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Drawer, ErrorState, LoadingState, Select, StatusBadge, TextInput, Textarea, useToast } from "@dental-lab/ui";
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Checkbox, Drawer, ErrorState, LoadingState, Modal, Select, SignatureDisplay, SignaturePad, StatusBadge, TextInput, Textarea, useToast } from "@dental-lab/ui";
 import {
   DELIVERY_FAILURE_REASON_LABELS,
   DELIVERY_FILTERS,
   DELIVERY_STATUS_LABELS,
+  SIGNATURE_LIMITS,
+  SIGNATURE_OVERRIDE_REASON_LABELS,
   type DeliveryDetail,
   type DeliveryFailureReasonCode,
   type DeliveryFilter,
   type DeliveryFilters,
   type DeliverySummary,
+  type SignatureOverrideReasonCode,
+  type SignatureValue,
 } from "@dental-lab/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
 import { useDeliveryPreparationGroups } from "../logistics/logistics-api.js";
 import { hasPermission } from "../users/users-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
-import { useCourierOptions, useCreateDeliveryFromGroup, useDeliveries, useDelivery, useDeliveryMutation } from "./deliveries-api.js";
+import { deliveryQueryKeys, fetchDeliveryProof, useCourierOptions, useCreateDeliveryFromGroup, useDeliveries, useDelivery, useDeliveryMutation } from "./deliveries-api.js";
 import "./deliveries-page.css";
 
 const defaultQuery: DeliveryFilters = {
@@ -89,7 +93,7 @@ export function DeliveriesPage(): ReactNode {
         <header className="deliveries-page__header">
           <div>
             <h1 id="deliveries-title">Livrările mele</h1>
-            <p>Planificare curier, preluare, tranzit și confirmare manuală. Semnătura de primire va fi disponibilă într-o etapă separată.</p>
+            <p>Planificare curier, preluare, tranzit și confirmare internă de primire cu semnătură.</p>
           </div>
           <Button onClick={() => navigate("/scan")} variant="outline">Scanează lucrare</Button>
         </header>
@@ -228,13 +232,22 @@ function DeliveryDrawer({ delivery, onAction }: { readonly delivery: DeliveryDet
   const [notes, setNotes] = useState(delivery.deliveryNotes ?? "");
   const [failureReason, setFailureReason] = useState<DeliveryFailureReasonCode>("CLINIC_CLOSED");
   const [failureDetails, setFailureDetails] = useState("");
+  const [isSignatureModalOpen, setSignatureModalOpen] = useState(false);
+  const [isOverrideModalOpen, setOverrideModalOpen] = useState(false);
+  const [isProofModalOpen, setProofModalOpen] = useState(false);
+  const proofQuery = useQuery({
+    enabled: isProofModalOpen && delivery.proof !== null,
+    queryFn: () => fetchDeliveryProof(delivery.id),
+    queryKey: deliveryQueryKeys.proof(delivery.id),
+    retry: false,
+  });
 
   return (
     <div className="deliveries-page__drawer">
       <section>
         <h3>{delivery.code}</h3>
         <p>{delivery.clinic.name} · {delivery.clinic.address ?? "Adresă necompletată"} · {delivery.workCount} lucrări</p>
-        <p>Semnătura de primire va fi disponibilă într-o etapă separată.</p>
+        <p>Confirmare internă de primire pentru predarea fizică a lucrărilor.</p>
       </section>
       <section className="deliveries-page__drawer-grid">
         <Info label="Status" value={delivery.statusLabel} />
@@ -249,7 +262,22 @@ function DeliveryDrawer({ delivery, onAction }: { readonly delivery: DeliveryDet
           <TextInput label="Nume primitor" onChange={(event) => setRecipientName(event.target.value)} value={recipientName} />
           <TextInput label="Rol primitor" onChange={(event) => setRecipientRole(event.target.value)} value={recipientRole} />
           <Textarea label="Observații predare" onChange={(event) => setNotes(event.target.value)} value={notes} />
-          <Button onClick={() => onAction(delivery, "complete", { deliveryNotes: notes, recipientName, recipientRole }, "Livrarea a fost finalizată.")}>Confirmă livrarea</Button>
+          <Button onClick={() => setSignatureModalOpen(true)}>Confirmă livrarea</Button>
+          {delivery.actions.signatureOverride ? (
+            <Button onClick={() => setOverrideModalOpen(true)} type="button" variant="ghost">Finalizează fără semnătură</Button>
+          ) : null}
+        </section>
+      ) : null}
+      {delivery.proof ? (
+        <section className="deliveries-page__proof-summary">
+          <h3>Confirmare internă de primire</h3>
+          <Info label="Destinatar" value={delivery.proof.recipientName} />
+          <Info label="Confirmat la" value={formatDateTime(delivery.proof.confirmedAt)} />
+          <Info label="Semnătură" value={delivery.proof.hasSignature ? "Capturată" : `Finalizată fără semnătură · ${delivery.proof.overrideReasonLabel ?? "-"}`} />
+          <div className="deliveries-page__actions">
+            {delivery.actions.readProof ? <Button onClick={() => setProofModalOpen(true)} size="small" variant="outline">Deschide dovada</Button> : null}
+            {delivery.actions.printProof ? <Link className="deliveries-page__link-button" to={`/deliveries/${delivery.id}/proof/print`}>Printează dovada</Link> : null}
+          </div>
         </section>
       ) : null}
       {delivery.actions.fail ? (
@@ -273,7 +301,161 @@ function DeliveryDrawer({ delivery, onAction }: { readonly delivery: DeliveryDet
           </div>
         ))}
       </section>
+      <CompleteDeliveryModal
+        delivery={delivery}
+        isOpen={isSignatureModalOpen}
+        notes={notes}
+        onAction={onAction}
+        onOpenChange={setSignatureModalOpen}
+        recipientName={recipientName}
+        recipientRole={recipientRole}
+      />
+      <OverrideDeliveryModal
+        delivery={delivery}
+        isOpen={isOverrideModalOpen}
+        notes={notes}
+        onAction={onAction}
+        onOpenChange={setOverrideModalOpen}
+        recipientName={recipientName}
+        recipientRole={recipientRole}
+      />
+      <Modal isOpen={isProofModalOpen} onOpenChange={setProofModalOpen} size="lg" title="Confirmare internă de primire">
+        {proofQuery.isLoading ? <LoadingState text="Se încarcă dovada" /> : null}
+        {proofQuery.isError ? <ErrorState title="Dovada nu poate fi încărcată" description={getErrorMessage(proofQuery.error)} /> : null}
+        {proofQuery.data ? (
+          <div className="deliveries-page__proof-modal">
+            <Info label="Destinatar" value={proofQuery.data.recipientName} />
+            <Info label="Funcție" value={proofQuery.data.recipientRole ?? "-"} />
+            <Info label="Confirmat la" value={formatDateTime(proofQuery.data.confirmedAt)} />
+            <Info label="Confirmat de" value={proofQuery.data.confirmedByUserName ?? "-"} />
+            <SignatureDisplay value={proofQuery.data.signature} />
+            <p>Semnătura este utilizată ca dovadă operațională internă de predare.</p>
+          </div>
+        ) : null}
+      </Modal>
     </div>
+  );
+}
+
+function CompleteDeliveryModal({
+  delivery,
+  isOpen,
+  notes,
+  onAction,
+  onOpenChange,
+  recipientName,
+  recipientRole,
+}: {
+  readonly delivery: DeliveryDetail;
+  readonly isOpen: boolean;
+  readonly notes: string;
+  readonly onAction: (delivery: DeliveryDetail, path: string, body: Record<string, unknown>, title: string) => void;
+  readonly onOpenChange: (isOpen: boolean) => void;
+  readonly recipientName: string;
+  readonly recipientRole: string;
+}): ReactNode {
+  const [confirmed, setConfirmed] = useState(false);
+  const [signature, setSignature] = useState<SignatureValue>({ strokes: [] });
+  const signaturePoints = signature.strokes.reduce((total, stroke) => total + stroke.points.length, 0);
+  const canSubmit = recipientName.trim().length > 0 && confirmed && signaturePoints >= SIGNATURE_LIMITS.minPoints;
+  const signatureError = signaturePoints > 0 && signaturePoints < SIGNATURE_LIMITS.minPoints ? "Semnătura este prea scurtă." : undefined;
+
+  return (
+    <Modal
+      footer={(
+        <>
+          <Button onClick={() => onOpenChange(false)} type="button" variant="outline">Anulează</Button>
+          <Button
+            disabled={!canSubmit}
+            onClick={() => {
+              onAction(delivery, "complete", { confirmedHandover: true, deliveryNotes: notes, recipientName, recipientRole, signature }, "Predarea a fost confirmată.");
+              onOpenChange(false);
+            }}
+            type="button"
+          >
+            Confirmă predarea
+          </Button>
+        </>
+      )}
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      size="xl"
+      title="Confirmare internă de primire"
+    >
+      <div className="deliveries-page__handover-modal">
+        <section>
+          <h3>Destinatar</h3>
+          <Info label="Nume" value={recipientName.trim() || "-"} />
+          <Info label="Funcție" value={recipientRole.trim() || "-"} />
+          <Info label="Observații" value={notes.trim() || "-"} />
+        </section>
+        <section>
+          <h3>Lucrări predate</h3>
+          {delivery.works.map((work) => <div className="deliveries-page__work" key={work.id}><strong>{work.workCode}</strong><span>{work.patientName} · {work.doctorName} · {work.workTypeName}</span></div>)}
+        </section>
+        <section>
+          <h3>Semnătură</h3>
+          <p>Persoana care primește semnează în zona de mai jos.</p>
+          <SignaturePad {...(signatureError ? { error: signatureError } : {})} label="Semnătura destinatarului" minPoints={SIGNATURE_LIMITS.minPoints} onChange={setSignature} value={signature} />
+        </section>
+        <Checkbox checked={confirmed} label="Confirm că lucrările afișate au fost predate persoanei menționate." onChange={(event) => setConfirmed(event.target.checked)} />
+      </div>
+    </Modal>
+  );
+}
+
+function OverrideDeliveryModal({
+  delivery,
+  isOpen,
+  notes,
+  onAction,
+  onOpenChange,
+  recipientName,
+  recipientRole,
+}: {
+  readonly delivery: DeliveryDetail;
+  readonly isOpen: boolean;
+  readonly notes: string;
+  readonly onAction: (delivery: DeliveryDetail, path: string, body: Record<string, unknown>, title: string) => void;
+  readonly onOpenChange: (isOpen: boolean) => void;
+  readonly recipientName: string;
+  readonly recipientRole: string;
+}): ReactNode {
+  const [reason, setReason] = useState<SignatureOverrideReasonCode>("RECIPIENT_REFUSED_SIGNATURE");
+  const [details, setDetails] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+  const canSubmit = recipientName.trim().length > 0 && confirmed && (reason !== "OTHER" || details.trim().length > 0);
+
+  return (
+    <Modal
+      footer={(
+        <>
+          <Button onClick={() => onOpenChange(false)} type="button" variant="outline">Anulează</Button>
+          <Button
+            disabled={!canSubmit}
+            onClick={() => {
+              onAction(delivery, "complete", { confirmedWithoutSignature: true, deliveryNotes: notes, overrideDetails: details, overrideReasonCode: reason, recipientName, recipientRole }, "Livrarea a fost finalizată fără semnătură.");
+              onOpenChange(false);
+            }}
+            type="button"
+            variant="secondary"
+          >
+            Finalizează fără semnătură
+          </Button>
+        </>
+      )}
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      size="lg"
+      title="Finalizează fără semnătură"
+    >
+      <div className="deliveries-page__handover-modal">
+        <p className="deliveries-page__warning">Această acțiune va finaliza livrarea fără semnătura destinatarului și va fi înregistrată în audit.</p>
+        <Select label="Motiv" onChange={(event) => setReason(event.target.value as SignatureOverrideReasonCode)} options={Object.entries(SIGNATURE_OVERRIDE_REASON_LABELS).map(([value, label]) => ({ label, value }))} value={reason} />
+        <Textarea label="Detalii override" onChange={(event) => setDetails(event.target.value)} value={details} />
+        <Checkbox checked={confirmed} label="Confirm finalizarea fără semnătura destinatarului." onChange={(event) => setConfirmed(event.target.checked)} />
+      </div>
+    </Modal>
   );
 }
 

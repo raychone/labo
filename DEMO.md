@@ -80,8 +80,9 @@ Spune clar:
 - aplicația nu procesează bani;
 - încasările sunt înregistrări manuale ale unor plăți făcute în afara aplicației;
 - factura printabila este interna/demo, nu integrare RO e-Factura;
-- configurarea si execuția workflow-ului, scanarea operațională, logistica internă și livrările curierului sunt disponibile în demo;
-- semnătura de primire, fișierele și dovada foto sunt taskuri următoare.
+- configurarea si execuția workflow-ului, scanarea operațională, logistica internă, livrările curierului și semnătura internă de primire sunt disponibile în demo;
+- semnătura este doar “Confirmare internă de primire”, nu semnătură electronică calificată;
+- fișierele și dovada foto sunt taskuri următoare.
 
 ## 4. Login și shell aplicație
 
@@ -211,7 +212,47 @@ Ce explici:
 - pagina afișează etapa curentă, responsabilul, progresul și acțiunile permise;
 - pornirea/finalizarea etapei sau asignarea responsabilului cer confirmare explicită.
 
-## 8. Clinici și medici
+Pentru curier, scanează:
+
+```text
+WO-2026-900030
+```
+
+Arată că livrarea este `În tranzit` și butonul duce către confirmarea predării.
+
+## 8. Livrări și semnătură internă
+
+Intră ca Manager și deschide `Livrările mele`.
+
+Ce arăți:
+
+1. Lista de livrări cu statusuri planificate, atribuite, în tranzit, finalizate, nereușite și neatribuite.
+2. Deschide `DLV-2026-DEMO-07` sau `DLV-2026-DEMO-08`.
+3. Arată secțiunea “Confirmare internă de primire”.
+4. Apasă “Deschide dovada”.
+5. Arată semnătura redată read-only, destinatarul, confirmatorul și hash-ul parțial.
+6. Apasă “Printează dovada” și arată pagina `/deliveries/:id/proof/print`.
+7. Explică disclaimer-ul: document intern operațional, nu semnătură electronică calificată.
+8. Deschide livrarea `DLV-2026-DEMO-11` și arată badge-ul de finalizare fără semnătură prin override.
+
+Pentru semnare live:
+
+1. Intră ca `curier@demo.local` sau folosește butonul “Intră ca curier”.
+2. Deschide `Livrările mele`.
+3. Deschide livrarea `DLV-2026-DEMO-06`, aflată `În tranzit`.
+4. Completează destinatarul dacă este necesar.
+5. Apasă “Confirmă livrarea”.
+6. În modal, semnează în canvas, bifează confirmarea și apasă “Confirmă predarea”.
+7. Arată că livrarea devine finalizată și proof-ul devine disponibil.
+
+Ce explici:
+
+- curierul nu poate finaliza fără semnătură;
+- managerul poate finaliza fără semnătură doar cu motiv explicit și audit;
+- aplicația nu stochează PNG/base64, ci coordonate normalizate și hash SHA-256;
+- dovada nu este expusă în liste, exporturi sau audit raw.
+
+## 9. Clinici și medici
 
 Deschide `Clinici și medici`.
 
@@ -556,6 +597,15 @@ Gata in stadiul curent:
 - tipuri de lucrari si preturi;
 - lucrari cu QR;
 - scanare/rezolvare QR;
+- template-uri de workflow;
+- executie workflow pe etape;
+- asignare tehnicieni pe etapa curenta;
+- coada personala pentru tehnicieni;
+- logistica interna;
+- pregatire livrare;
+- livrari curier;
+- confirmare interna de primire cu semnatura;
+- dovada printabila de predare;
 - facturare operationala;
 - proforme;
 - facturi;
@@ -570,12 +620,8 @@ Gata in stadiul curent:
 
 Nu prezenta ca finalizat:
 
-- workflow productie pe etape;
-- asignare tehnicieni pe etapa curenta;
-- coada personala pentru tehnicieni;
 - fisiere/atasamente private;
-- logistica/livrari;
-- semnaturi;
+- dovada foto;
 - QC;
 - notificari;
 - dashboard operational complet;

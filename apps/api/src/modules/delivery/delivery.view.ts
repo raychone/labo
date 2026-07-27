@@ -1,4 +1,5 @@
 import type { DeliveryEventType, DeliveryFailureReasonCode, DeliveryStatus, Prisma } from "@prisma/client";
+import { toDeliveryProofSummary } from "../delivery-proof/delivery-proof.view.js";
 
 type WorkPriority = "NORMAL" | "URGENT";
 
@@ -7,8 +8,11 @@ export interface DeliveryActionAvailability {
   readonly cancel: boolean;
   readonly complete: boolean;
   readonly fail: boolean;
+  readonly printProof: boolean;
   readonly pickup: boolean;
+  readonly readProof: boolean;
   readonly reschedule: boolean;
+  readonly signatureOverride: boolean;
   readonly startTransit: boolean;
   readonly unassign: boolean;
   readonly updatePlan: boolean;
@@ -31,6 +35,7 @@ export interface DeliverySummary {
   readonly plannedDate: string;
   readonly preparationGroupCode: string;
   readonly preparationGroupId: string;
+  readonly proof: ReturnType<typeof toDeliveryProofSummary> | null;
   readonly recipientName: string | null;
   readonly sequenceOrder: number | null;
   readonly status: DeliveryStatus;
@@ -65,8 +70,11 @@ export interface DeliveryAccessContext {
   readonly canComplete: boolean;
   readonly canFail: boolean;
   readonly canPickup: boolean;
+  readonly canPrintProof: boolean;
   readonly canReadBilling: boolean;
+  readonly canReadProof: boolean;
   readonly canReschedule: boolean;
+  readonly canSignatureOverride: boolean;
   readonly canStartTransit: boolean;
   readonly canUpdatePlan: boolean;
   readonly canUnassign: boolean;
@@ -120,6 +128,15 @@ export const deliveryInclude = {
       },
     },
   },
+  proof: {
+    include: {
+      confirmedBy: {
+        select: {
+          displayName: true,
+        },
+      },
+    },
+  },
 } as const satisfies Prisma.DeliveryInclude;
 
 export type DeliveryRecord = Prisma.DeliveryGetPayload<{ include: typeof deliveryInclude }>;
@@ -168,6 +185,7 @@ export function toDeliverySummary(delivery: DeliveryRecord, context: DeliveryAcc
     plannedDate: delivery.plannedDate.toISOString(),
     preparationGroupCode: delivery.preparationGroup.code,
     preparationGroupId: delivery.preparationGroupId,
+    proof: delivery.proof ? toDeliveryProofSummary(delivery.proof) : null,
     recipientName: delivery.recipientName,
     sequenceOrder: delivery.sequenceOrder,
     status: delivery.status,
@@ -214,8 +232,11 @@ function toActions(delivery: DeliveryRecord, context: DeliveryAccessContext): De
     cancel: context.canCancel && (delivery.status === "PLANNED" || delivery.status === "ASSIGNED" || delivery.status === "FAILED"),
     complete: context.canComplete && courierAllowed && delivery.status === "IN_TRANSIT",
     fail: context.canFail && courierAllowed && (delivery.status === "PICKED_UP" || delivery.status === "IN_TRANSIT"),
+    printProof: context.canPrintProof && delivery.proof !== null,
     pickup: context.canPickup && courierAllowed && delivery.status === "ASSIGNED",
+    readProof: context.canReadProof && (courierAllowed || context.canAssign) && delivery.proof !== null,
     reschedule: context.canReschedule && delivery.status === "FAILED",
+    signatureOverride: context.canSignatureOverride && delivery.status === "IN_TRANSIT",
     startTransit: context.canStartTransit && courierAllowed && delivery.status === "PICKED_UP",
     unassign: context.canUnassign && delivery.courierUserId !== null && (delivery.status === "PLANNED" || delivery.status === "ASSIGNED"),
     updatePlan: context.canUpdatePlan && (delivery.status === "PLANNED" || delivery.status === "ASSIGNED"),

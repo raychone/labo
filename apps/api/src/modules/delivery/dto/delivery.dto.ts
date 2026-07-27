@@ -1,11 +1,12 @@
 import { Transform, Type } from "class-transformer";
-import { IsIn, IsInt, IsISO8601, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
+import { IsBoolean, IsIn, IsInt, IsISO8601, IsObject, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
 
 const DELIVERY_STATUSES = ["PLANNED", "ASSIGNED", "PICKED_UP", "IN_TRANSIT", "DELIVERED", "FAILED", "CANCELLED"] as const;
 const DELIVERY_FAILURE_REASON_CODES = ["CLINIC_CLOSED", "RECIPIENT_UNAVAILABLE", "ADDRESS_PROBLEM", "DELIVERY_REFUSED", "COURIER_PROBLEM", "OTHER"] as const;
 const DELIVERY_FILTERS = ["ALL", "UNASSIGNED", "TODAY", "BY_COURIER", "PICKED_UP", "IN_TRANSIT", "FAILED", "DELIVERED", "CANCELLED"] as const;
 const DELIVERY_SORT_FIELDS = ["plannedDate", "sequenceOrder", "createdAt", "updatedAt", "code"] as const;
 const SORT_DIRECTIONS = ["asc", "desc"] as const;
+const SIGNATURE_OVERRIDE_REASON_CODES = ["RECIPIENT_REFUSED_SIGNATURE", "DEVICE_UNAVAILABLE", "TECHNICAL_FAILURE", "OTHER"] as const;
 
 function trimOptionalString(value: unknown): string | null | undefined {
   if (value === undefined) {
@@ -132,6 +133,14 @@ export class DeliveryVersionDto {
 }
 
 export class CompleteDeliveryDto {
+  @IsOptional()
+  @IsBoolean()
+  public readonly confirmedHandover?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  public readonly confirmedWithoutSignature?: boolean;
+
   @Transform(({ value }) => trimRequiredString(value))
   @IsString()
   @MaxLength(160)
@@ -148,6 +157,20 @@ export class CompleteDeliveryDto {
   @IsString()
   @MaxLength(1000)
   public readonly deliveryNotes?: string | null;
+
+  @IsOptional()
+  @IsObject()
+  public readonly signature?: unknown;
+
+  @IsOptional()
+  @IsIn(SIGNATURE_OVERRIDE_REASON_CODES)
+  public readonly overrideReasonCode?: (typeof SIGNATURE_OVERRIDE_REASON_CODES)[number];
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(1000)
+  public readonly overrideDetails?: string | null;
 
   @Type(() => Number)
   @IsInt()
@@ -186,4 +209,3 @@ export class RescheduleDeliveryDto {
   @Min(1)
   public readonly version!: number;
 }
-

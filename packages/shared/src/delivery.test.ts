@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DELIVERY_FAILURE_REASON_LABELS, DELIVERY_STATUS_LABELS, canTransitionDelivery, createDefaultDeliveryActions, isDeliveryToday } from "./delivery.js";
+import { DELIVERY_FAILURE_REASON_LABELS, DELIVERY_STATUS_LABELS, canTransitionDelivery, createDefaultDeliveryActions, isDeliveryToday, validateAndNormalizeSignature } from "./delivery.js";
 
 describe("delivery shared rules", () => {
   it("keeps Romanian labels for statuses and failure reasons", () => {
@@ -15,8 +15,11 @@ describe("delivery shared rules", () => {
       cancel: false,
       complete: false,
       fail: false,
+      printProof: false,
       pickup: false,
+      readProof: false,
       reschedule: false,
+      signatureOverride: false,
       startTransit: false,
       unassign: false,
       updatePlan: false,
@@ -35,5 +38,24 @@ describe("delivery shared rules", () => {
   it("detects today's planned deliveries in UTC", () => {
     expect(isDeliveryToday(new Date("2026-07-26T22:30:00.000Z"), new Date("2026-07-26T01:00:00.000Z"))).toBe(true);
     expect(isDeliveryToday(new Date("2026-07-27T00:00:00.000Z"), new Date("2026-07-26T23:59:00.000Z"))).toBe(false);
+  });
+
+  it("normalizes valid signature strokes into canonical JSON", () => {
+    const result = validateAndNormalizeSignature({
+      strokes: [
+        {
+          points: Array.from({ length: 8 }, (_, index) => ({ t: index, x: index / 10, y: 0.25 })),
+        },
+      ],
+    });
+
+    expect(result.pointCount).toBe(8);
+    expect(result.canonical).toContain("\"strokes\"");
+  });
+
+  it("rejects unsafe or incomplete signature payloads", () => {
+    expect(() => validateAndNormalizeSignature({ strokes: [{ points: [{ t: 1, x: 1.2, y: 0.5 }] }] })).toThrow("coordonate");
+    expect(() => validateAndNormalizeSignature({ strokes: [{ points: [{ t: 1, x: 0.2, y: 0.5, pressure: 0.4 }] }] })).toThrow("puncte");
+    expect(() => validateAndNormalizeSignature({ strokes: [{ points: [{ t: 1, x: 0.2, y: 0.5 }] }] })).toThrow("prea scurtă");
   });
 });

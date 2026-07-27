@@ -1,6 +1,7 @@
 import { DeliveryEventType, DeliveryFailureReasonCode, DeliveryPreparationGroupStatus, DeliveryStatus, LogisticsBlockReasonCode, LogisticsLocationCode, WorkLogisticsStatus } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
-import type { Prisma, WorkFormFieldType } from "@prisma/client";
+import { Prisma, type WorkFormFieldType } from "@prisma/client";
+import { createHash } from "node:crypto";
 
 import { hashPassword } from "../../src/modules/auth/password.hashing.js";
 import { DEMO_INVOICE_SERIES, DEMO_PASSWORD, DEMO_PROFORMA_SERIES } from "./demo.constants.js";
@@ -785,7 +786,7 @@ async function seedDemoBilling(prisma: PrismaClient, dataset: DemoDataset): Prom
 async function seedDemoLogistics(prisma: PrismaClient): Promise<void> {
   const logisticsSeeds = [
     logisticsState("001", WorkLogisticsStatus.RECEIVED, LogisticsLocationCode.RECEPTIE),
-    logisticsState("002", WorkLogisticsStatus.IN_PRODUCTION, LogisticsLocationCode.PRODUCTIE),
+    logisticsState("002", WorkLogisticsStatus.DELIVERED, LogisticsLocationCode.GATA_LIVRARE),
     logisticsState("003", WorkLogisticsStatus.IN_PRODUCTION, LogisticsLocationCode.PRODUCTIE),
     logisticsState("004", WorkLogisticsStatus.BLOCKED, LogisticsLocationCode.PRODUCTIE, LogisticsBlockReasonCode.MISSING_INFO, "Lipsește confirmarea medicului pentru nuanță."),
     logisticsState("006", WorkLogisticsStatus.READY_FOR_PACKING, LogisticsLocationCode.RAFT_FINISARE),
@@ -847,6 +848,7 @@ async function seedDemoLogistics(prisma: PrismaClient): Promise<void> {
   await createDemoDeliveryWithGroup(prisma, { courierUserId: "demo_user_curier", sequence: 8, status: DeliveryStatus.DELIVERED, suffix: "delivered_2", workSuffix: "038" });
   await createDemoDeliveryWithGroup(prisma, { courierUserId: "demo_user_curier", sequence: 9, status: DeliveryStatus.FAILED, suffix: "failed_1", workSuffix: "042" });
   await createDemoDeliveryWithGroup(prisma, { courierUserId: null, sequence: 10, status: DeliveryStatus.PLANNED, suffix: "unassigned_1", workSuffix: "046" });
+  await createDemoDeliveryWithGroup(prisma, { courierUserId: "demo_user_curier", sequence: 11, status: DeliveryStatus.DELIVERED, suffix: "delivered_override", workSuffix: "002" });
 }
 
 function logisticsState(
@@ -935,6 +937,74 @@ async function createDemoDeliveryWithGroup(prisma: PrismaClient, seed: DemoDeliv
       },
     },
   });
+  if (seed.status === DeliveryStatus.DELIVERED) {
+    await createDemoDeliveryProof(prisma, deliveryId, seed.suffix);
+  }
+}
+
+async function createDemoDeliveryProof(prisma: PrismaClient, deliveryId: string, suffix: string): Promise<void> {
+  const signed = suffix !== "delivered_override";
+  const signature = createDemoSignature(suffix);
+  const canonical = JSON.stringify(signature);
+  const signatureHash = createHash("sha256").update(canonical).digest("hex");
+  const confirmedAt = suffix === "delivered_override" ? new Date("2026-07-26T14:20:00.000Z") : new Date("2026-07-26T14:05:00.000Z");
+  await prisma.deliveryProof.create({
+    data: {
+      confirmedAt,
+      confirmedByUserId: signed ? "demo_user_curier" : "demo_user_manager",
+      deliveryId,
+      id: `demo_delivery_proof_${suffix}`,
+      recipientName: signed ? "Recepție clinică" : "Dr. Radu Stan",
+      recipientNotes: signed ? "Predare demo confirmată cu semnătură fictivă." : "Predare demo finalizată prin override manager.",
+      recipientRole: signed ? "Recepție" : "Medic",
+      signatureCapturedAt: signed ? confirmedAt : null,
+      signatureHash: signed ? signatureHash : null,
+      signatureOverrideDetails: signed ? null : "Telefonul curierului nu a putut captura semnătura în scenariul demo.",
+      signatureOverrideReasonCode: signed ? null : "DEVICE_UNAVAILABLE",
+      signatureStrokes: signed ? signature : Prisma.DbNull,
+      signed,
+    },
+  });
+  await prisma.deliveryEvent.create({
+    data: {
+      actorUserId: signed ? "demo_user_curier" : "demo_user_manager",
+      deliveryId,
+      id: `demo_delivery_event_${suffix}_${signed ? "signature" : "override"}`,
+      metadata: {
+        actorUserId: signed ? "demo_user_curier" : "demo_user_manager",
+        overrideReasonCode: signed ? null : "DEVICE_UNAVAILABLE",
+        proofId: `demo_delivery_proof_${suffix}`,
+        signed,
+        signatureHashPrefix: signed ? signatureHash.slice(0, 12) : null,
+      },
+      type: signed ? DeliveryEventType.DELIVERY_SIGNATURE_CAPTURED : DeliveryEventType.DELIVERY_COMPLETED_WITHOUT_SIGNATURE,
+    },
+  });
+}
+
+function createDemoSignature(seed: string): Prisma.InputJsonObject {
+  const offset = seed.endsWith("2") ? 0.08 : 0;
+  return {
+    strokes: [
+      {
+        points: [
+          { t: 0, x: 0.12 + offset, y: 0.62 },
+          { t: 20, x: 0.2 + offset, y: 0.42 },
+          { t: 40, x: 0.3 + offset, y: 0.56 },
+          { t: 60, x: 0.4 + offset, y: 0.38 },
+          { t: 80, x: 0.52 + offset, y: 0.58 },
+        ],
+      },
+      {
+        points: [
+          { t: 100, x: 0.18 + offset, y: 0.72 },
+          { t: 120, x: 0.34 + offset, y: 0.68 },
+          { t: 140, x: 0.52 + offset, y: 0.7 },
+          { t: 160, x: 0.7 + offset, y: 0.66 },
+        ],
+      },
+    ],
+  };
 }
 
 async function seedDemoSeries(prisma: PrismaClient, year: number): Promise<void> {

@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-70%
+73%
 
 ## FOUNDATION
 
@@ -107,7 +107,7 @@
 
 ## SIGNATURES
 
-- [ ] SIGNATURES-001 - Delivery signatures and proof capture (NOT STARTED)
+- [x] SIGNATURES-001 - Delivery signatures and proof capture (COMPLETED)
 
 ## NOTIFICATIONS
 
@@ -151,19 +151,106 @@ NONE / AWAITING APPROVAL
 
 Status: AWAITING APPROVAL
 
-Started: 2026-07-26T10:08:29Z
+Started: 2026-07-27T01:30:42Z
 
-Completed: 2026-07-26T10:31:00Z
+Completed: 2026-07-27T03:24:00Z
 
-Last completed task: DELIVERY-001 - Courier planning and delivery execution
+Last completed task: SIGNATURES-001 - Delivery signature capture and proof of handover
 
-Completed: 2026-07-26T10:31:00Z
+Completed: 2026-07-27T03:24:00Z
 
 ## Next Recommended Task
 
-SIGNATURES-001 - Delivery signature capture and proof of handover
+DASHBOARD-001 - Operational and financial dashboards
 
 ## Latest Completion Summary
+
+### SIGNATURES-001 - Delivery signature capture and proof of handover
+
+- Implemented dedicated `DeliveryProof` persistence with deterministic migration `20260727013000_delivery_signature_proof`.
+- Added `DeliveryProofModule` with strict signature validation, SHA-256 canonical hash, proof read endpoint and proof print-view endpoint.
+- Updated `POST /deliveries/:id/complete` so deliveries in transit require a valid recipient signature or manager override with explicit reason and confirmation.
+- Added proof-related delivery events and audit actions without storing raw strokes, recipient notes or sensitive payloads in audit metadata.
+- Added RBAC permissions `delivery.signature.capture`, `delivery.signature.read`, `delivery.signature.override` and `delivery.proof.print`.
+- Added `SignaturePad` and `SignatureDisplay` UI components with normalized coordinate capture and no PNG/base64 export.
+- Updated `/deliveries` with handover modal, works summary, signature canvas, confirmation checkbox, manager override modal, proof summary and proof print link.
+- Added `/deliveries/:id/proof/print` with A4 print CSS and the disclaimer that the document is internal operational evidence, not a qualified electronic signature.
+- Updated scan wording so in-transit courier delivery scans lead users to “Confirmă predarea”.
+- Extended demo seed with two signed delivered proofs, one manager override proof and one in-transit delivery ready for live signing.
+
+Main files modified:
+
+- `apps/api/prisma/schema.prisma`
+- `apps/api/prisma/migrations/20260727013000_delivery_signature_proof/migration.sql`
+- `apps/api/src/modules/delivery-proof/*`
+- `apps/api/src/modules/delivery/*`
+- `apps/api/src/modules/rbac/permission-registry.ts`
+- `apps/api/prisma/demo/demo-seed.ts`
+- `apps/web/src/features/deliveries/*`
+- `apps/web/src/features/works/work-scan-page.tsx`
+- `apps/web/src/app/app.tsx`
+- `packages/shared/src/delivery.ts`
+- `packages/ui/src/components/signature-pad.tsx`
+- `packages/ui/src/styles.css`
+- `README.md`
+- `MVP-IMPLEMENTATION-PLAN.md`
+- `DEMO.md`
+- `DEMO-SCRIPT.md`
+- `IMPLEMENTATION_STATUS.md`
+
+Verification:
+
+- `pnpm --filter @dental-lab/api prisma:validate` passed.
+- `pnpm --filter @dental-lab/api prisma:generate` passed.
+- `pnpm --filter @dental-lab/api prisma:migrate:dev` passed and applied `20260727013000_delivery_signature_proof` on `localhost:55439/dental_lab_dev`.
+- `pnpm --filter @dental-lab/api prisma:db:seed` passed.
+- `ALLOW_DEMO_SEED=true pnpm --filter @dental-lab/api prisma:db:seed:demo` passed twice for idempotency and once more after smoke reset.
+- `pnpm typecheck` passed.
+- `pnpm test` passed after updating RBAC expected permission keys.
+- `pnpm build` passed.
+
+Manual verification:
+
+- Temporary API started on `http://localhost:3011` because `3010` was already occupied.
+- Temporary frontend started on `http://localhost:3002`; Vite reported `3000` occupied during the first start attempt.
+- API compiled in watch mode with 0 errors.
+- `GET /health` returned `200`.
+- Demo manager login with CSRF returned `200`.
+- `GET /deliveries?filter=DELIVERED` returned delivered proof summaries.
+- `GET /deliveries/demo_delivery_delivered_1/proof` returned `200`.
+- `GET /deliveries/demo_delivery_delivered_1/proof/print-view` returned `200`.
+- `GET http://localhost:3002/deliveries` returned `200`.
+- Demo courier login returned `200`.
+- Completing `demo_delivery_in_transit_1` without signature returned `400`.
+- Completing `demo_delivery_in_transit_1` with valid signature returned `201`.
+- Reading the newly created proof returned `200`.
+- Demo seed was rerun after smoke to restore the deterministic in-transit signing scenario.
+
+Architecture decisions:
+
+- `DeliveryProof` is the canonical proof source for deliveries completed after SIGNATURES-001; existing delivery recipient fields remain compatibility snapshots.
+- Proof storage is dedicated to delivery handover and does not use FILES-001 or generic file upload.
+- Stroke payloads are normalized numeric JSON with max 50 strokes, max 5000 points, max 200 KB payload and min 8 points.
+- Signature hash is SHA-256 over canonical normalized JSON.
+- Override is manager-only through `delivery.signature.override` and requires allowlisted reason plus explicit confirmation.
+- Proof read/print access is permissioned server-side; lists and audit metadata avoid raw proof payloads.
+
+Legal/security positioning:
+
+- UI wording uses “Confirmare internă de primire”.
+- Print disclaimer: “Document de confirmare operațională internă a predării. Nu reprezintă o semnătură electronică calificată.”
+- No eIDAS, qualified/advanced electronic signature, biometrics, GPS, photos, POS, money processing or fiscal receipt claims.
+
+Technical debt introduced:
+
+- No Playwright browser automation for drawing on the canvas yet.
+- Existing local dev port conflicts remain possible when another API/Vite process already runs on `3010`/`3000`.
+- Linting remains unconfigured.
+
+Remaining risks:
+
+- Physical phone signature capture and physical print output still need real-device validation.
+- Backend shutdown still shows the existing `pg` deprecation warning, without request failures.
 
 ### DELIVERY-001 - Courier planning and delivery execution
 
@@ -220,7 +307,7 @@ Architecture decisions:
 - A delivery belongs to exactly one READY preparation group and one clinic.
 - `DeliveryEvent` is append-only and stores safe metadata only.
 - `Delivery.isActive` protects preparation-group reuse while allowing cancelled pre-pickup deliveries to release the group.
-- Delivery execution changes `WorkLogisticsState`; signature proof remains deferred to `SIGNATURES-001`.
+- Delivery execution changes `WorkLogisticsState`; signed proof is now covered by completed `SIGNATURES-001`.
 
 Known technical debt:
 
@@ -231,7 +318,7 @@ Known technical debt:
 Remaining risks:
 
 - Physical courier phone scan and real-world delivery handoff still need device validation.
-- `SIGNATURES-001` is still required for signed proof of delivery.
+- Signed proof of delivery is covered by completed `SIGNATURES-001`.
 
 ### LOGISTICS-001 - Laboratory operational center, intake and internal logistics
 
@@ -929,17 +1016,17 @@ None.
 
 ### SIGNATURES-001 - Delivery signatures and proof capture
 
-- Status: NOT STARTED.
-- Obiectiv: dovada livrarii prin semnatura si/sau fotografie.
-- Scope: capturare semnatura, dovada foto optionala, atasare la livrare, audit.
-- Non-goals: verificare identitate avansata, GPS obligatoriu, semnatura calificata.
-- Dependente: DELIVERY-001, FILES-001.
-- Acceptance criteria: dovada este privata, legata de livrare si vizibila doar autorizat.
-- Backend: endpointuri private pentru proof metadata si upload/legare fisiere.
-- Frontend: canvas/signature pad sau input compatibil mobil, confirmare explicita.
-- Securitate: storage privat, RBAC, validare server-side.
-- Audit: audit capture/update/delete proof.
-- Testare: component tests pentru semnatura, API permissions si manual mobile.
+- Status: COMPLETED.
+- Obiectiv: dovada interna de predare prin semnatura capturata in browser sau manager override explicit.
+- Scope: `DeliveryProof` dedicat, stroke JSON normalizat, hash SHA-256, finalizare livrare cu semnatura obligatorie, override manager auditat, proof read/print si seed demo.
+- Non-goals: fotografie, FILES-001, upload generic, verificare identitate avansata, GPS, biometrie/pressure, semnatura electronica avansata/calificata, eIDAS, fiscalizare.
+- Dependente: DELIVERY-001.
+- Acceptance criteria: dovada este privata, unica per livrare, legata de livrare, imuabila dupa finalizare si vizibila doar autorizat.
+- Backend: `DeliveryProofModule`, `GET /deliveries/:id/proof`, `GET /deliveries/:id/proof/print-view`, `POST /deliveries/:id/complete` cu semnatura sau override.
+- Frontend: `SignaturePad`, `SignatureDisplay`, modal confirmare predare, modal override manager, pagina `/deliveries/:id/proof/print`.
+- Securitate: RBAC server-side, `OWN_DELIVERY`, payload strict, fara base64 PNG/raw SVG/HTML/date biometrice/date financiare in proof.
+- Audit: `delivery.signature_captured`, `delivery.completed_without_signature`, `delivery.proof_viewed`, `delivery.proof_printed`.
+- Testare: validator semnatura, component tests, permission registry, typecheck, test, build si smoke API/UI.
 
 ### NOTIFICATIONS-001 - Operational notifications
 

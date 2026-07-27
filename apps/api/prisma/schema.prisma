@@ -71,6 +71,7 @@ model User {
   createdDeliveries Delivery[] @relation("DeliveryCreatedBy")
   updatedDeliveries Delivery[] @relation("DeliveryUpdatedBy")
   deliveryEvents DeliveryEvent[] @relation("DeliveryEventActor")
+  confirmedDeliveryProofs DeliveryProof[] @relation("DeliveryProofConfirmedBy")
 
   @@index([isActive])
   @@index([createdAt])
@@ -808,6 +809,7 @@ model Delivery {
   createdBy User? @relation("DeliveryCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   updatedBy User? @relation("DeliveryUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   events DeliveryEvent[]
+  proof DeliveryProof?
 
   @@index([preparationGroupId])
   @@index([clinicId])
@@ -839,6 +841,31 @@ model DeliveryEvent {
   @@map("delivery_events")
 }
 
+model DeliveryProof {
+  id String @id @default(cuid())
+  deliveryId String @unique @map("delivery_id")
+  recipientName String @map("recipient_name") @db.VarChar(160)
+  recipientRole String? @map("recipient_role") @db.VarChar(120)
+  recipientNotes String? @map("recipient_notes") @db.VarChar(1000)
+  signatureStrokes Json? @map("signature_strokes")
+  signatureHash String? @map("signature_hash") @db.Char(64)
+  signatureCapturedAt DateTime? @map("signature_captured_at")
+  signed Boolean @default(false)
+  signatureOverrideReasonCode SignatureOverrideReasonCode? @map("signature_override_reason_code")
+  signatureOverrideDetails String? @map("signature_override_details") @db.VarChar(1000)
+  confirmedByUserId String? @map("confirmed_by_user_id")
+  confirmedAt DateTime @map("confirmed_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  delivery Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  confirmedBy User? @relation("DeliveryProofConfirmedBy", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([confirmedByUserId])
+  @@index([confirmedAt])
+  @@index([signed])
+  @@map("delivery_proofs")
+}
+
 enum DeliveryStatus {
   PLANNED
   ASSIGNED
@@ -865,10 +892,19 @@ enum DeliveryEventType {
   COURIER_UNASSIGNED
   DELIVERY_PICKED_UP
   DELIVERY_IN_TRANSIT
+  DELIVERY_SIGNATURE_CAPTURED
   DELIVERY_COMPLETED
+  DELIVERY_COMPLETED_WITHOUT_SIGNATURE
   DELIVERY_FAILED
   DELIVERY_RESCHEDULED
   DELIVERY_CANCELLED
+}
+
+enum SignatureOverrideReasonCode {
+  RECIPIENT_REFUSED_SIGNATURE
+  DEVICE_UNAVAILABLE
+  TECHNICAL_FAILURE
+  OTHER
 }
 
 model WorkWorkflowExecution {

@@ -327,6 +327,9 @@ export class DeliveryService {
       this.authorizationService.hasPermission({ permission: "pricing.read", requiredScope: "ALL", userId }),
       this.authorizationService.hasPermission({ permission: "delivery.reschedule", requiredScope: "ALL", userId }),
       this.authorizationService.hasPermission({ permission: "delivery.start_transit", requiredScope: "OWN_DELIVERY", userId }),
+      this.authorizationService.hasPermission({ permission: "delivery.signature.read", requiredScope: "OWN_DELIVERY", userId }),
+      this.authorizationService.hasPermission({ permission: "delivery.signature.override", requiredScope: "ALL", userId }),
+      this.authorizationService.hasPermission({ permission: "delivery.proof.print", requiredScope: "ALL", userId }),
     ]);
     return {
       canAssign: checks[0].allowed,
@@ -334,8 +337,11 @@ export class DeliveryService {
       canComplete: checks[2].allowed || await this.hasAll(userId, "delivery.complete"),
       canFail: checks[3].allowed || await this.hasAll(userId, "delivery.fail"),
       canPickup: checks[4].allowed || await this.hasAll(userId, "delivery.pickup"),
+      canPrintProof: checks[10].allowed,
       canReadBilling: checks[5].allowed,
+      canReadProof: checks[8].allowed || await this.hasAll(userId, "delivery.signature.read"),
       canReschedule: checks[6].allowed,
+      canSignatureOverride: checks[9].allowed,
       canStartTransit: checks[7].allowed || await this.hasAll(userId, "delivery.start_transit"),
       canUnassign: checks[0].allowed,
       canUpdatePlan: checks[0].allowed,

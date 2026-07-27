@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable } from "@nestjs/common";
 import { DeliveryEventType, DeliveryFailureReasonCode, DeliveryStatus, Prisma, WorkLogisticsStatus } from "@prisma/client";
 
 import type { ActorContext } from "./delivery.service.js";
@@ -6,6 +6,8 @@ import { DeliveryService } from "./delivery.service.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { AuthorizationService } from "../rbac/authorization.service.js";
 import { DELIVERY_AUDIT_ACTIONS, DELIVERY_RESOURCE_TYPE } from "./delivery.constants.js";
+import { STALE_DELIVERY_MESSAGE } from "../delivery-proof/delivery-proof.constants.js";
+import { DeliveryProofService } from "../delivery-proof/delivery-proof.service.js";
 import type { CompleteDeliveryDto, FailDeliveryDto, RescheduleDeliveryDto } from "./dto/delivery.dto.js";
 import { deliveryInclude, type DeliveryDetail, toDeliveryDetail } from "./delivery.view.js";
 
@@ -16,6 +18,7 @@ export class DeliveryTransitionService {
   public constructor(
     @Inject(AuthorizationService) private readonly authorizationService: AuthorizationService,
     @Inject(DeliveryService) private readonly deliveryService: DeliveryService,
+    @Inject(DeliveryProofService) private readonly deliveryProofService: DeliveryProofService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
   ) {}
 
@@ -75,13 +78,15 @@ export class DeliveryTransitionService {
       if (current.status !== DeliveryStatus.IN_TRANSIT) {
         throw new BadRequestException("Doar livrările aflate în tranzit pot fi finalizate.");
       }
+      const now = new Date();
+      const proofResult = await this.deliveryProofService.createForCompletedDelivery(tx, context, current, dto, now);
       await tx.workLogisticsState.updateMany({
         data: { status: WorkLogisticsStatus.DELIVERED, updatedByUserId: context.actor.id, version: { increment: 1 } },
         where: { workOrderId: { in: current.preparationGroup.items.map((item) => item.workOrderId) } },
       });
       const updated = await tx.delivery.update({
         data: {
-          deliveredAt: new Date(),
+          deliveredAt: now,
           deliveredByUserId: context.actor.id,
           deliveryNotes: dto.deliveryNotes ?? null,
           recipientName: dto.recipientName,
@@ -92,6 +97,11 @@ export class DeliveryTransitionService {
         },
         include: deliveryInclude,
         where: { id: deliveryId },
+      });
+      await this.recordProof(tx, context, updated.id, proofResult.eventType, proofResult.auditAction, {
+        ...proofResult.metadata,
+        deliveryCode: updated.code,
+        deliveryId: updated.id,
       });
       await this.record(tx, context, updated.id, DeliveryEventType.DELIVERY_COMPLETED, DELIVERY_AUDIT_ACTIONS.completed, current.status, updated.status);
       return updated;
@@ -211,10 +221,28 @@ export class DeliveryTransitionService {
       data: auditData,
     });
   }
+
+  private async recordProof(tx: DeliveryTx, context: ActorContext, deliveryId: string, type: DeliveryEventType, action: string, metadata: Prisma.InputJsonValue): Promise<void> {
+    const auditData: Prisma.AuditLogUncheckedCreateInput = {
+      action,
+      actorUserId: context.actor.id,
+      metadata,
+      resourceId: deliveryId,
+      resourceType: DELIVERY_RESOURCE_TYPE,
+    };
+    if (context.requestMetadata.ipAddress) {
+      auditData.ipAddress = context.requestMetadata.ipAddress;
+    }
+    if (context.requestMetadata.userAgent) {
+      auditData.userAgent = context.requestMetadata.userAgent;
+    }
+    await tx.deliveryEvent.create({ data: { actorUserId: context.actor.id, deliveryId, metadata, type } });
+    await tx.auditLog.create({ data: auditData });
+  }
 }
 
 function assertVersion(currentVersion: number, expectedVersion: number): void {
   if (currentVersion !== expectedVersion) {
-    throw new BadRequestException("Livrarea a fost modificată între timp. Reîncarcă datele.");
+    throw new ConflictException(STALE_DELIVERY_MESSAGE);
   }
 }

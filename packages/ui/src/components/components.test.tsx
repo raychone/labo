@@ -27,6 +27,8 @@ import {
   RadioGroup,
   SearchInput,
   Select,
+  SignatureDisplay,
+  SignaturePad,
   StatusBadge,
   Switch,
   Tabs,
@@ -38,6 +40,8 @@ import {
 } from "../index.js";
 
 afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
@@ -129,6 +133,35 @@ describe("form controls", () => {
     expect((screen.getByRole("switch", { name: "Enabled" }) as HTMLInputElement).checked).toBe(
       true,
     );
+  });
+});
+
+describe("signature components", () => {
+  it("renders signature controls and read-only fallback", () => {
+    class ResizeObserverMock {
+      public observe(): void {}
+      public disconnect(): void {}
+    }
+    vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      beginPath: vi.fn(),
+      clearRect: vi.fn(),
+      lineTo: vi.fn(),
+      moveTo: vi.fn(),
+      setTransform: vi.fn(),
+      stroke: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+
+    render(
+      <>
+        <SignaturePad label="Semnătură" onChange={vi.fn()} value={{ strokes: [] }} />
+        <SignatureDisplay value={null} />
+      </>,
+    );
+
+    expect(screen.getByText("Șterge")).toBeDefined();
+    expect(screen.getByText("Anulează ultima linie")).toBeDefined();
+    expect(screen.getByText("Finalizată fără semnătură")).toBeDefined();
   });
 });
 

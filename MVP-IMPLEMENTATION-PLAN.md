@@ -1417,17 +1417,17 @@ Decizie concreta SETTINGS-001:
 
 ### SIGNATURES-001 - Delivery signatures and proof capture
 
-- Status: NOT STARTED.
-- Obiectiv: dovada livrarii prin semnatura si/sau fotografie.
-- Scope: capturare semnatura, dovada foto optionala, atasare la livrare, audit.
-- Non-goals: verificare identitate avansata, GPS obligatoriu, semnatura calificata.
-- Dependente: DELIVERY-001, FILES-001.
-- Acceptance criteria: dovada este privata, legata de livrare si vizibila doar autorizat.
-- Backend: endpointuri private pentru proof metadata si upload/legare fisiere.
-- Frontend: canvas/signature pad sau input compatibil mobil, confirmare explicita.
-- Securitate: storage privat, RBAC, validare server-side.
-- Audit: audit capture/update/delete proof.
-- Testare: component tests pentru semnatura, API permissions si manual mobile.
+- Status: COMPLETED.
+- Obiectiv: dovada interna de predare prin semnatura capturata in browser sau manager override explicit.
+- Scope: `DeliveryProof` dedicat, stroke JSON normalizat, hash SHA-256, finalizare livrare cu semnatura obligatorie, override manager auditat, proof read/print si seed demo.
+- Non-goals: fotografie, FILES-001, upload generic, verificare identitate avansata, GPS, biometrie/pressure, semnatura electronica avansata/calificata, eIDAS, fiscalizare.
+- Dependente: DELIVERY-001.
+- Acceptance criteria: dovada este privata, unica per livrare, legata de livrare, imuabila dupa finalizare si vizibila doar autorizat.
+- Backend: `DeliveryProofModule`, `GET /deliveries/:id/proof`, `GET /deliveries/:id/proof/print-view`, `POST /deliveries/:id/complete` cu semnatura sau override.
+- Frontend: `SignaturePad`, `SignatureDisplay`, modal confirmare predare, modal override manager, pagina `/deliveries/:id/proof/print`.
+- Securitate: RBAC server-side, `OWN_DELIVERY`, payload strict, fara base64 PNG/raw SVG/HTML/date biometrice/date financiare in proof.
+- Audit: `delivery.signature_captured`, `delivery.completed_without_signature`, `delivery.proof_viewed`, `delivery.proof_printed`.
+- Testare: validator semnatura, component tests UI, permission registry, typecheck, test, build si smoke API/UI.
 
 ### NOTIFICATIONS-001 - Operational notifications
 

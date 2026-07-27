@@ -2,10 +2,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   AssignCourierInput,
   CompleteDeliveryInput,
+  CompleteDeliveryWithoutSignatureInput,
   CourierOption,
   CreateDeliveryInput,
   DeliveryDetail,
   DeliveryFilters,
+  DeliveryProofPrintView,
+  DeliveryProofView,
   FailDeliveryInput,
   PaginatedDeliveriesResponse,
   RescheduleDeliveryInput,
@@ -20,6 +23,8 @@ export const deliveryQueryKeys = {
   couriers: ["deliveries", "couriers"] as const,
   detail: (id: string | null) => ["deliveries", "detail", id] as const,
   list: (params: DeliveryFilters) => ["deliveries", "list", params] as const,
+  proof: (id: string | null) => ["deliveries", "proof", id] as const,
+  proofPrint: (id: string | null) => ["deliveries", "proof-print", id] as const,
 };
 
 function appendParam(searchParams: URLSearchParams, key: string, value: string | number | undefined): void {
@@ -67,6 +72,16 @@ export async function fetchDelivery(deliveryId: string): Promise<DeliveryDetail>
   return parseApiResponse<DeliveryDetail>(response);
 }
 
+export async function fetchDeliveryProof(deliveryId: string): Promise<DeliveryProofView> {
+  const response = await apiFetch(`/deliveries/${deliveryId}/proof`);
+  return parseApiResponse<DeliveryProofView>(response);
+}
+
+export async function fetchDeliveryProofPrint(deliveryId: string): Promise<DeliveryProofPrintView> {
+  const response = await apiFetch(`/deliveries/${deliveryId}/proof/print-view`);
+  return parseApiResponse<DeliveryProofPrintView>(response);
+}
+
 export async function fetchCourierOptions(): Promise<readonly CourierOption[]> {
   const response = await apiFetch("/couriers/options");
   return parseApiResponse<readonly CourierOption[]>(response);
@@ -87,7 +102,7 @@ export function useCourierOptions(enabled: boolean) {
 export function useDeliveryMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ body, id, path }: { readonly body: AssignCourierInput | CompleteDeliveryInput | CreateDeliveryInput | FailDeliveryInput | RescheduleDeliveryInput | UpdateDeliveryInput | VersionedDeliveryActionInput; readonly id?: string; readonly path: string }) =>
+    mutationFn: ({ body, id, path }: { readonly body: AssignCourierInput | CompleteDeliveryInput | CompleteDeliveryWithoutSignatureInput | CreateDeliveryInput | FailDeliveryInput | RescheduleDeliveryInput | UpdateDeliveryInput | VersionedDeliveryActionInput; readonly id?: string; readonly path: string }) =>
       sendJson<DeliveryDetail>(id ? `/deliveries/${id}/${path}` : path, path === "" ? "PATCH" : "POST", body),
     onSuccess: async (delivery) => {
       await queryClient.invalidateQueries({ queryKey: ["deliveries"] });

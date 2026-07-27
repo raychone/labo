@@ -79,6 +79,10 @@ export type PermissionKey =
   | "delivery.reschedule"
   | "delivery.cancel"
   | "delivery.capture_signature"
+  | "delivery.signature.capture"
+  | "delivery.signature.read"
+  | "delivery.signature.override"
+  | "delivery.proof.print"
   | "quality.read"
   | "quality.approve"
   | "quality.reject"
@@ -189,6 +193,10 @@ export const PERMISSION_REGISTRY = [
   definePermission("delivery.reschedule", "Reschedule failed deliveries."),
   definePermission("delivery.cancel", "Cancel deliveries before execution."),
   definePermission("delivery.capture_signature", "Capture delivery signatures."),
+  definePermission("delivery.signature.capture", "Capture internal delivery handover signatures."),
+  definePermission("delivery.signature.read", "Read internal delivery handover proof."),
+  definePermission("delivery.signature.override", "Complete delivery without recipient signature through explicit override."),
+  definePermission("delivery.proof.print", "Print internal delivery handover proof."),
   definePermission("quality.read", "Read quality control."),
   definePermission("quality.approve", "Approve quality checks."),
   definePermission("quality.reject", "Reject quality checks."),
@@ -274,6 +282,8 @@ export const ROLE_PERMISSION_MATRIX = {
     "delivery.pickup": "OWN_DELIVERY",
     "delivery.read": "OWN_DELIVERY",
     "delivery.read_own": "OWN_DELIVERY",
+    "delivery.signature.capture": "OWN_DELIVERY",
+    "delivery.signature.read": "OWN_DELIVERY",
     "delivery.start_transit": "OWN_DELIVERY",
     "files.upload": "ALL",
     "scan.resolve": "ASSIGNED",
@@ -290,7 +300,9 @@ export const ROLE_PERMISSION_MATRIX = {
     "delivery.create": "ALL",
     "delivery.create_route": "ALL",
     "delivery.read": "ALL",
+    "delivery.proof.print": "ALL",
     "delivery.reschedule": "ALL",
+    "delivery.signature.read": "ALL",
     "files.read": "ALL",
     "files.upload": "ALL",
     "logistics.assign": "ALL",
@@ -323,8 +335,6 @@ export const ROLE_PERMISSION_MATRIX = {
   MEDIC: grants({
     "comments.create": "ALL",
     "comments.read_external": "ALL",
-    "delivery.capture_signature": "OWN_CLINIC",
-    "delivery.deliver": "OWN_CLINIC",
     "files.read": "OWN_CLINIC",
     "files.upload": "OWN_CLINIC",
     "works.read_assigned": "OWN_CLINIC",
@@ -335,6 +345,8 @@ export const ROLE_PERMISSION_MATRIX = {
     "comments.read_external": "ALL",
     "comments.read_internal": "ALL",
     "delivery.read": "ALL",
+    "delivery.proof.print": "ALL",
+    "delivery.signature.read": "ALL",
     "doctors.read": "ALL",
     "forms.read": "ALL",
     "files.read": "ALL",
@@ -387,6 +399,7 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "clinics.read",
   "clinics.update",
   "delivery.capture_signature",
+  "delivery.proof.print",
   "delivery.assign",
   "delivery.cancel",
   "delivery.complete",
@@ -398,6 +411,9 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "delivery.read",
   "delivery.read_own",
   "delivery.reschedule",
+  "delivery.signature.capture",
+  "delivery.signature.override",
+  "delivery.signature.read",
   "delivery.start_transit",
   "doctors.archive",
   "doctors.create",

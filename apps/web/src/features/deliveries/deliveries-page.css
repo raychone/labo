@@ -120,9 +120,152 @@
   gap: var(--space-3);
 }
 
+.deliveries-page__proof-summary,
+.deliveries-page__proof-modal,
+.deliveries-page__handover-modal {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.deliveries-page__proof-summary,
+.deliveries-page__warning {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.deliveries-page__proof-summary {
+  background: var(--color-surface);
+}
+
+.deliveries-page__warning {
+  background: var(--dl-color-warning-background);
+  color: var(--dl-color-warning-strong);
+  font-weight: 700;
+  margin: 0;
+}
+
+.deliveries-page__link-button,
+.delivery-proof-print-page__back-link {
+  align-items: center;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  color: var(--color-primary-strong);
+  display: inline-flex;
+  font-weight: 700;
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  text-decoration: none;
+}
+
+.delivery-proof-print-page {
+  background: #eef4f1;
+  min-height: 100vh;
+  padding: var(--space-5);
+}
+
+.delivery-proof-print-page__actions {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+  margin-bottom: var(--space-4);
+}
+
+.delivery-proof-print {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  display: grid;
+  gap: var(--space-5);
+  margin: 0 auto;
+  max-width: 210mm;
+  min-height: 297mm;
+  padding: 18mm;
+}
+
+.delivery-proof-print__header,
+.delivery-proof-print__signature {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.delivery-proof-print__header h1 {
+  margin: 0;
+}
+
+.delivery-proof-print__notice {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  margin: 0;
+  padding: var(--space-3);
+}
+
+.delivery-proof-print__meta {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  margin: 0;
+}
+
+.delivery-proof-print__meta div,
+.deliveries-page__proof-summary div,
+.deliveries-page__proof-modal div {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.delivery-proof-print__meta dt,
+.deliveries-page__proof-summary span,
+.deliveries-page__proof-modal span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.delivery-proof-print__meta dd {
+  font-weight: 700;
+  margin: 0;
+}
+
+.delivery-proof-print__table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.delivery-proof-print__table th,
+.delivery-proof-print__table td {
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-2);
+  text-align: left;
+}
+
 @media (min-width: 760px) {
   .deliveries-page__card,
   .deliveries-page__group {
     grid-template-columns: minmax(0, 1.5fr) auto auto auto auto;
+  }
+
+  .delivery-proof-print__header,
+  .delivery-proof-print__signature {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+@media print {
+  .delivery-proof-print-page {
+    background: #ffffff;
+    padding: 0;
+  }
+
+  .delivery-proof-print-page__actions {
+    display: none;
+  }
+
+  .delivery-proof-print {
+    border: 0;
+    margin: 0;
+    max-width: none;
+    min-height: auto;
+    padding: 0;
   }
 }
