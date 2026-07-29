@@ -13,7 +13,7 @@ import {
   TextInput,
   Textarea,
 } from "@dental-lab/ui";
-import type { ClinicOption, DoctorOption, WorkDetail, WorkFormTemplateDetail, WorkPriority, WorkTypeFormOption } from "@dental-lab/shared";
+import type { ClinicOption, DoctorOption, PatientOption, WorkDetail, WorkFormTemplateDetail, WorkPriority, WorkTypeFormOption } from "@dental-lab/shared";
 import type { ReactNode } from "react";
 import type { UseFormReturn } from "react-hook-form";
 
@@ -27,7 +27,7 @@ export const defaultWorkFormValues: WorkFormValues = {
   doctorId: "",
   externalReference: null,
   internalNotes: null,
-  patientName: "",
+  patientId: "",
   patientReference: null,
   priority: "NORMAL",
   quantity: 1,
@@ -47,7 +47,7 @@ const workFieldLabels: Record<keyof WorkFormValues, string> = {
   doctorId: "Medic",
   externalReference: "Referință externă",
   internalNotes: "Note interne",
-  patientName: "Pacient",
+  patientId: "Pacient",
   patientReference: "Identificator pacient",
   priority: "Prioritate",
   quantity: "Cantitate",
@@ -76,7 +76,7 @@ export function toWorkFormValues(work: WorkDetail | undefined): WorkFormValues {
     doctorId: work.doctor.id,
     externalReference: work.externalReference,
     internalNotes: work.internalNotes,
-    patientName: work.patientName,
+    patientId: work.patient?.id ?? "",
     patientReference: work.patientReference,
     priority: work.priority,
     quantity: work.quantity,
@@ -95,11 +95,13 @@ export function WorkForm({
   isTemplateError,
   isTemplateLoading,
   onClinicChange,
+  onCreatePatient,
   onRetryTemplate,
   onSubmit,
   template,
   totalPreview,
   workTypeOptions,
+  patientOptions,
 }: {
   readonly clinicOptions: readonly ClinicOption[];
   readonly doctorOptions: readonly DoctorOption[];
@@ -109,11 +111,13 @@ export function WorkForm({
   readonly isTemplateError: boolean;
   readonly isTemplateLoading: boolean;
   readonly onClinicChange: (clinicId: string) => void;
+  readonly onCreatePatient: () => void;
   readonly onRetryTemplate: () => void;
   readonly onSubmit: (values: WorkFormValues) => void;
   readonly template: WorkFormTemplateDetail | null | undefined;
   readonly totalPreview?: string | null;
   readonly workTypeOptions: readonly WorkTypeFormOption[];
+  readonly patientOptions: readonly PatientOption[];
 }): ReactNode {
   const summaryRef = useErrorSummaryFocus(form.formState.errors, form.formState.submitCount);
   const summaryItems = form.formState.submitCount > 0
@@ -153,16 +157,22 @@ export function WorkForm({
         </FormGrid>
       </FormSection>
 
-      <FormSection title="Pacient" description="Folosește identificatorul minim necesar pentru recepție.">
+      <FormSection title="Pacient" description="Alege pacientul din registru sau creează rapid un pacient nou.">
         <FormGrid>
-          <TextInput disabled={isDisabled} error={form.formState.errors.patientName?.message} id="patientName" label="Pacient" required {...form.register("patientName")} />
-          <TextInput
+          <Select
             disabled={isDisabled}
-            error={form.formState.errors.patientReference?.message}
-            id="patientReference"
-            label="Identificator pacient"
-            {...form.register("patientReference")}
+            error={form.formState.errors.patientId?.message}
+            id="patientId"
+            label="Pacient"
+            options={patientOptions.map((patient) => ({ label: `${patient.fullName}${patient.birthDate ? ` · ${patient.birthDate}` : ""}`, value: patient.id }))}
+            placeholder="Alege pacientul"
+            required
+            {...form.register("patientId")}
           />
+          <div>
+            <Button disabled={isDisabled} onClick={onCreatePatient} type="button" variant="secondary">Pacient nou</Button>
+            <p className="works-page__muted">Fără cod pacient afișat.</p>
+          </div>
         </FormGrid>
       </FormSection>
 

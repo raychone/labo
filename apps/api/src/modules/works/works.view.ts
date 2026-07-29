@@ -36,6 +36,7 @@ export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
   include: {
     clinic: true;
     doctor: true;
+    patient: true;
     workFormSubmission: true;
     workType: true;
     workflowExecution: {
@@ -111,6 +112,12 @@ export interface WorkSummaryView {
   readonly invoicedDocumentId: string | null;
   readonly patientName: string;
   readonly patientReference: string | null;
+  readonly patient: {
+    readonly firstName: string;
+    readonly fullName: string;
+    readonly id: string;
+    readonly lastName: string;
+  } | null;
   readonly priority: string;
   readonly quantity: number;
   readonly requestedDeliveryDate: string;
@@ -172,6 +179,14 @@ export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: bo
     invoicedDocumentId: workOrder.invoicedDocumentId,
     patientName: workOrder.patientName,
     patientReference: workOrder.patientReference,
+    patient: workOrder.patient
+      ? {
+          firstName: workOrder.patient.firstName,
+          fullName: `${workOrder.patient.firstName} ${workOrder.patient.lastName}`.trim(),
+          id: workOrder.patient.id,
+          lastName: workOrder.patient.lastName,
+        }
+      : null,
     priority: workOrder.priority,
     quantity: workOrder.quantity,
     requestedDeliveryDate: workOrder.requestedDeliveryDate.toISOString(),

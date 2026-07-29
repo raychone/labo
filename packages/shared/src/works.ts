@@ -50,6 +50,12 @@ export interface WorkSummary {
   readonly invoicedDocumentId: string | null;
   readonly patientName: string;
   readonly patientReference: string | null;
+  readonly patient: {
+    readonly firstName: string;
+    readonly fullName: string;
+    readonly id: string;
+    readonly lastName: string;
+  } | null;
   readonly priority: WorkPriority;
   readonly quantity: number;
   readonly requestedDeliveryDate: string;
@@ -80,7 +86,7 @@ export interface CreateWorkInput {
   readonly expectedWorkflowTemplateId?: string | null;
   readonly expectedWorkflowTemplateVersion?: number;
   readonly internalNotes?: string | null;
-  readonly patientName: string;
+  readonly patientId: string;
   readonly patientReference?: string | null;
   readonly priority: WorkPriority;
   readonly quantity: number;

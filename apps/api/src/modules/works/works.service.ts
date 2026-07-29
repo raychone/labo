@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
+import { PatientsService } from "../patients/patients.service.js";
 import { DEFAULT_LABORATORY_SETTINGS, SETTINGS_SINGLETON_KEY } from "../settings/settings.constants.js";
 import { WorkQrTokenService } from "../qr/work-qr-token.service.js";
 import { WorkFormSubmissionValidationService } from "../work-forms/work-form-submission-validation.service.js";
@@ -36,6 +37,7 @@ type AuditClient = Pick<Prisma.TransactionClient, "auditLog"> | Pick<PrismaServi
 const WORK_ORDER_INCLUDE = {
   clinic: true,
   doctor: true,
+  patient: true,
   workFormSubmission: true,
   workType: true,
   workflowExecution: {
@@ -90,6 +92,7 @@ const WORK_ORDER_MUTATION_FIELDS = [
   "clinicId",
   "doctorId",
   "workTypeId",
+  "patientId",
   "patientName",
   "patientReference",
   "quantity",
@@ -104,6 +107,7 @@ const WORK_ORDER_MUTATION_FIELDS = [
 export class WorksService {
   public constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(PatientsService) private readonly patientsService: PatientsService,
     @Inject(WorkOrderCodeService) private readonly workOrderCodeService: WorkOrderCodeService,
     @Inject(WorkQrTokenService) private readonly workQrTokenService: WorkQrTokenService,
     @Inject(WorkFormSubmissionValidationService) private readonly workFormSubmissionValidationService: WorkFormSubmissionValidationService,
@@ -192,6 +196,8 @@ export class WorksService {
     const workOrder = await this.prisma.$transaction(async (tx) => {
       await this.validateClinic(tx, dto.clinicId, true);
       await this.validateDoctor(tx, dto.doctorId, dto.clinicId, true);
+      this.rejectConflictingPatientPayload(dto.patientId, dto.patientName);
+      const patient = await this.patientsService.findActivePatientOrThrow(tx, dto.patientId);
       const workType = await this.validateWorkType(tx, dto.workTypeId, true);
       const pricing = await this.createPricingSnapshot(tx, workType.basePriceMinor, dto.quantity);
       const code = await this.workOrderCodeService.generate(tx);
@@ -210,7 +216,8 @@ export class WorksService {
         createdByUserId: context.actorUserId,
         currency: pricing.currency,
         doctorId: dto.doctorId,
-        patientName: dto.patientName,
+        patientId: patient.id,
+        patientName: toPatientSnapshotName(patient),
         priority: dto.priority,
         qrToken,
         quantity: dto.quantity,
@@ -279,6 +286,7 @@ export class WorksService {
 
   public async updateWork(context: ActorContext, workOrderId: string, dto: UpdateWorkDto): Promise<WorkDetailView> {
     const before = await this.findWorkOrderOrThrow(workOrderId);
+    this.rejectConflictingPatientPayload(dto.patientId, dto.patientName);
     const data = await this.toUpdateData(before, dto, context.actorUserId);
     const isWorkTypeChanging = dto.workTypeId !== undefined && dto.workTypeId !== before.workTypeId;
 
@@ -433,6 +441,12 @@ export class WorksService {
       data.totalPriceMinor = calculateTotalPriceMinor(before.baseUnitPriceMinor, dto.quantity);
     }
 
+    if (dto.patientId !== undefined) {
+      const patient = await this.patientsService.findActivePatientOrThrow(this.prisma, dto.patientId);
+      data.patientId = patient.id;
+      data.patientName = toPatientSnapshotName(patient);
+    }
+
     for (const field of WORK_ORDER_MUTATION_FIELDS) {
       if (!Object.prototype.hasOwnProperty.call(dto, field)) {
         continue;
@@ -458,6 +472,7 @@ export class WorksService {
       case "clinicId":
       case "doctorId":
       case "workTypeId":
+      case "patientId":
         return;
       case "clinicalNotes":
       case "externalReference":
@@ -601,9 +616,16 @@ export class WorksService {
       priority: workOrder.priority,
       quantity: workOrder.quantity,
       status: workOrder.status,
+      patientId: workOrder.patientId,
       totalPriceMinor: workOrder.totalPriceMinor,
       workTypeId: workOrder.workTypeId,
     };
+  }
+
+  private rejectConflictingPatientPayload(patientId: string | undefined, patientName: string | undefined): void {
+    if (patientId !== undefined && patientName !== undefined) {
+      throw new BadRequestException("Trimite fie pacient existent, fie nume legacy, nu ambele.");
+    }
   }
 
   private async recordAudit(
@@ -656,6 +678,10 @@ export function assignNullableCreateValue(
   if (value !== undefined) {
     data[field] = value;
   }
+}
+
+export function toPatientSnapshotName(patient: { readonly firstName: string; readonly lastName: string }): string {
+  return `${patient.firstName} ${patient.lastName}`.trim();
 }
 
 export function parseDateOnly(value: string, rejectPast: boolean): Date {

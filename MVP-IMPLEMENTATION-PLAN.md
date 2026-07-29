@@ -48,7 +48,7 @@ MVP Extended include portalul medicului, rapoarte suplimentare, export contabil 
 
 - Aplicatia deserveste un singur laborator operational comun, cu doua contexte juridice/financiare: `NC` - Nicolaie Cristina si `NG` - Nicolaie Gabriel.
 - Utilizatorii sunt creati doar de manager.
-- Datele pacientului trebuie modelate explicit in etapa viitoare `PATIENTS-001`; codul operational ramane codul lucrarii.
+- Datele pacientului sunt modelate explicit prin `PATIENTS-001`; codul operational ramane codul lucrarii.
 - Fisierele private sunt accesibile doar prin backend autorizat.
 - Facturarea MVP genereaza PDF si numerotare controlata, dar elementele fiscale finale se valideaza cu contabilul clientului.
 - Interfata trebuie sa fie mobile-first si full responsive, inclusiv pentru tablet si desktop.
@@ -1689,17 +1689,17 @@ Aceste taskuri inlocuiesc ordinea veche dupa `SIGNATURES-001`. Detaliile complet
 
 ### PATIENTS-001 - Patient records and history
 
-- Status: NOT STARTED.
+- Status: COMPLETED.
 - Obiectiv: pacienti reutilizabili cu istoric de lucrari.
-- Scope: model pacient, CRUD, istoric lucrari, medici/clinici, documente, cautare.
-- Non-goals: portal pacient, dosar medical complet, medic permanent obligatoriu.
+- Scope: model pacient, CRUD, istoric lucrari, medici/clinici, documente existente, cautare si integrare la creare lucrare.
+- Non-goals: portal pacient, dosar medical complet, medic permanent obligatoriu, cod intern pacient, CNP, CI, adresa, telefon, email, import din `assets/`.
 - Dependente: ORG-CONTEXT-001, WORKS-001, CLINICS-001.
-- Acceptance criteria: pacientul are nume/prenume, campuri optionale limitate, multe lucrari, fara cod intern.
-- Backend: model, DTO validation, relatii WorkOrder si permisiuni.
-- Frontend: pagina pacient cu taburi Prezentare, Lucrari, Medici si clinici, Documente, Istoric.
-- Securitate: citire/scriere filtrata server-side.
-- Audit: create/update/corectii sensibile.
-- Testare: unit, integration, frontend, migration checks.
+- Acceptance criteria: pacientul are nume/prenume, campuri optionale limitate, multe lucrari, fara cod intern; lucrarile noi folosesc `patientId`, iar `patientName` ramane snapshot.
+- Backend: model `Patient`, DTO validation, relatie nullable `WorkOrder.patientId`, backfill determinist din `patientName`, PatientsModule si permisiuni `patients.*`.
+- Frontend: pagina `/patients` cu taburi Prezentare, Lucrari, Medici si clinici, Documente, Istoric; selector pacient si quick create in `/works`.
+- Securitate: RBAC server-side, optiunile de pacient nu expun note/documente, pacientii arhivati nu pot fi folositi la lucrari noi.
+- Audit: create/update/archive/restore fara payload complet, nume sau note in metadata.
+- Testare: Prisma validate/generate/migrate, seed, demo seed idempotency, unit tests, typecheck, test, build, smoke API/web.
 
 ### PRICING-002 - Company-specific pricing and agreements
 

@@ -1,0 +1,66 @@
+.patients-page__layout {
+  display: grid;
+  gap: var(--dl-space-5);
+  padding-block: var(--dl-space-5);
+}
+
+.patients-page__header,
+.patients-page__drawer-header,
+.patients-page__actions,
+.patients-page__tabs {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-3);
+  justify-content: space-between;
+}
+
+.patients-page__filters,
+.patients-page__form-grid {
+  display: grid;
+  gap: var(--dl-space-3);
+  grid-template-columns: 1fr;
+}
+
+.patients-page__muted {
+  color: var(--dl-color-text-muted);
+  font-size: var(--dl-font-size-sm);
+}
+
+.patients-page__stats,
+.patients-page__tab-panel,
+.patients-page__timeline {
+  display: grid;
+  gap: var(--dl-space-3);
+}
+
+.patients-page__stats {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.patients-page__stat {
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  padding: var(--dl-space-3);
+}
+
+.patients-page__stat strong {
+  display: block;
+  font-size: var(--dl-font-size-xl);
+}
+
+.patients-page__tabs {
+  justify-content: flex-start;
+}
+
+.patients-page__tabs button[aria-selected="true"] {
+  background: var(--dl-color-primary);
+  color: var(--dl-color-primary-contrast);
+}
+
+@media (min-width: 760px) {
+  .patients-page__filters,
+  .patients-page__form-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

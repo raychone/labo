@@ -22,6 +22,7 @@ export async function seedDemoData(prisma: PrismaClient, now = new Date()): Prom
   await seedDemoWorkTypes(prisma, dataset);
   await seedDemoWorkFormTemplates(prisma);
   await seedDemoWorkflowTemplates(prisma);
+  await seedDemoPatients(prisma, dataset);
   await seedDemoWorks(prisma, dataset);
   await seedDemoWorkflowExecutions(prisma, dataset);
   await seedDemoBilling(prisma, dataset);
@@ -505,6 +506,23 @@ async function seedDemoWorkTypes(prisma: PrismaClient, dataset: DemoDataset): Pr
   }
 }
 
+async function seedDemoPatients(prisma: PrismaClient, dataset: DemoDataset): Promise<void> {
+  for (const patientName of [...new Set(dataset.works.map((work) => work.patientName))].sort()) {
+    const parsed = parseDemoPatientName(patientName);
+    await prisma.patient.create({
+      data: {
+        firstName: parsed.firstName,
+        id: toDemoPatientId(patientName),
+        lastName: parsed.lastName,
+        normalizedFirstName: normalizeDemoPatientName(parsed.firstName),
+        normalizedLastName: normalizeDemoPatientName(parsed.lastName),
+        notes: "Pacient fictiv pentru demonstrație.",
+        sex: "UNSPECIFIED",
+      },
+    });
+  }
+}
+
 async function seedDemoWorks(prisma: PrismaClient, dataset: DemoDataset): Promise<void> {
   for (const work of dataset.works) {
     const submission = toDemoWorkFormSubmission(work);
@@ -519,6 +537,7 @@ async function seedDemoWorks(prisma: PrismaClient, dataset: DemoDataset): Promis
         doctorId: work.doctorId,
         externalReference: work.externalReference,
         id: work.id,
+        patientId: toDemoPatientId(work.patientName),
         internalNotes: "Lucrare fictiva pentru dataset demo.",
         patientName: work.patientName,
         patientReference: work.patientReference,
@@ -1170,6 +1189,30 @@ function toLineCreateInput(dataset: DemoDataset, work: DemoWorkSeed, index: numb
     workOrderId: work.id,
     workTypeNameSnapshot: workType.name,
   };
+}
+
+function parseDemoPatientName(patientName: string): { readonly firstName: string; readonly lastName: string } {
+  const parts = patientName.trim().replace(/\s+/g, " ").split(" ");
+  const lastName = parts.pop() ?? "Nespecificat";
+
+  return {
+    firstName: parts.join(" ") || patientName.trim(),
+    lastName,
+  };
+}
+
+function normalizeDemoPatientName(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .slice(0, 80);
+}
+
+function toDemoPatientId(patientName: string): string {
+  return `demo_patient_${createHash("sha1").update(normalizeDemoPatientName(patientName)).digest("hex").slice(0, 16)}`;
 }
 
 function findWork(dataset: DemoDataset, workId: string): DemoWorkSeed {

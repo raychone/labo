@@ -24,6 +24,11 @@ export type PermissionKey =
   | "permissions.read"
   | "organization_context.read"
   | "organization_context.switch"
+  | "patients.read"
+  | "patients.create"
+  | "patients.update"
+  | "patients.archive"
+  | "patients.documents.read"
   | "clinics.create"
   | "clinics.read"
   | "clinics.update"
@@ -140,6 +145,11 @@ export const PERMISSION_REGISTRY = [
   definePermission("permissions.read", "Read permissions."),
   definePermission("organization_context.read", "Read active organization context."),
   definePermission("organization_context.switch", "Switch active organization context."),
+  definePermission("patients.read", "Read patient registry and patient work records."),
+  definePermission("patients.create", "Create patient records."),
+  definePermission("patients.update", "Update current patient identity fields."),
+  definePermission("patients.archive", "Archive and restore patient records."),
+  definePermission("patients.documents.read", "Read patient document references."),
   definePermission("clinics.create", "Create dental clinics."),
   definePermission("clinics.read", "Read dental clinics."),
   definePermission("clinics.update", "Update dental clinics."),
@@ -319,6 +329,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "logistics.read": "ALL",
     "logistics.unblock_work": "ALL",
     "logistics.update_location": "ALL",
+    "patients.read": "ASSIGNED",
     "quality.read": "ALL",
     "quality.rework": "ALL",
     "reception.handover_to_courier": "ALL",
@@ -360,6 +371,10 @@ export const ROLE_PERMISSION_MATRIX = {
     "logistics.prepare_delivery": "ALL",
     "logistics.read": "ALL",
     "logistics.update_location": "ALL",
+    "patients.create": "ALL",
+    "patients.read": "ALL",
+    "patients.update": "ALL",
+    "patients.documents.read": "ALL",
     "reception.edit_intake": "ALL",
     "reception.handover_to_courier": "ALL",
     "reception.handover_to_logistics": "ALL",
@@ -383,6 +398,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "files.upload": "ASSIGNED",
     "forms.read": "ALL",
     "logistics.center.read": "ASSIGNED",
+    "patients.read": "ASSIGNED",
     "quality.read": "OWN_STAGE",
     "scan.resolve": "ASSIGNED",
     "scan.use": "ASSIGNED",
@@ -436,6 +452,11 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "logistics.prepare_work",
   "logistics.unblock_work",
   "logistics.update_location",
+  "patients.archive",
+  "patients.create",
+  "patients.documents.read",
+  "patients.read",
+  "patients.update",
   "invoice.download",
   "invoice.read",
   "quality.approve",

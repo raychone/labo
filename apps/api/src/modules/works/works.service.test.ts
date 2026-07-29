@@ -1,10 +1,11 @@
 import { BadRequestException } from "@nestjs/common";
-import type { Clinic, Doctor, WorkOrder, WorkType } from "@prisma/client";
+import type { Clinic, Doctor, Patient, WorkOrder, WorkType } from "@prisma/client";
 import { plainToInstance } from "class-transformer";
 import { validate } from "class-validator";
 import { describe, expect, it, vi } from "vitest";
 
 import type { PrismaService } from "../database/prisma.service.js";
+import type { PatientsService } from "../patients/patients.service.js";
 import type { WorkQrTokenService } from "../qr/work-qr-token.service.js";
 import type { WorkFormSubmissionValidationService } from "../work-forms/work-form-submission-validation.service.js";
 import type { WorkflowExecutionService } from "../workflow-execution/workflow-execution.service.js";
@@ -95,6 +96,28 @@ function workType(overrides: Partial<WorkType> = {}): WorkType {
   };
 }
 
+function patient(overrides: Partial<Patient> = {}): Patient {
+  return {
+    archivedAt: null,
+    archivedByUserId: null,
+    birthDate: null,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    createdByUserId: "actor_1",
+    firstName: "Ion",
+    id: "patient_1",
+    isArchived: false,
+    lastName: "Pop",
+    normalizedFirstName: "ion",
+    normalizedLastName: "pop",
+    notes: null,
+    sex: "UNSPECIFIED",
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedByUserId: "actor_1",
+    version: 1,
+    ...overrides,
+  };
+}
+
 function workOrder(overrides: Partial<WorkOrder> = {}) {
   return {
     baseUnitPriceMinor: 35000,
@@ -110,6 +133,8 @@ function workOrder(overrides: Partial<WorkOrder> = {}) {
     externalReference: null,
     id: "work_order_1",
     internalNotes: null,
+    patient: patient(),
+    patientId: "patient_1",
     patientName: "Ion Pop",
     patientReference: "P-100",
     priority: "NORMAL",
@@ -131,6 +156,7 @@ function workOrder(overrides: Partial<WorkOrder> = {}) {
 
 function createService(
   prisma: unknown,
+  patientsService: unknown = { findActivePatientOrThrow: vi.fn().mockResolvedValue(patient()) },
   codeService: unknown = { generate: vi.fn().mockResolvedValue("WO-2026-000001") },
   qrTokenService: unknown = { generate: vi.fn().mockResolvedValue("qr_token_1") },
   submissionValidationService: unknown = {
@@ -145,6 +171,7 @@ function createService(
 ): WorksService {
   return new WorksService(
     prisma as PrismaService,
+    patientsService as PatientsService,
     codeService as WorkOrderCodeService,
     qrTokenService as WorkQrTokenService,
     submissionValidationService as WorkFormSubmissionValidationService,
@@ -155,7 +182,7 @@ function createService(
 const createDto = {
   clinicId: "clinic_1",
   doctorId: "doctor_1",
-  patientName: "Ion Pop",
+  patientId: "patient_1",
   patientReference: "P-100",
   priority: "NORMAL",
   quantity: 2,
@@ -183,7 +210,7 @@ describe("WorksService", () => {
           workType: { findUnique: vi.fn().mockResolvedValue({ basePriceMinor: 35000, isActive: true }) },
         }),
       ),
-    }, codeService, qrTokenService);
+    }, undefined, codeService, qrTokenService);
 
     const result = await service.createWork(
       { actorUserId: "actor_1", requestMetadata: { ipAddress: "127.0.0.1" } },
@@ -197,6 +224,8 @@ describe("WorksService", () => {
         baseUnitPriceMinor: 35000,
         code: "WO-2026-000001",
         currency: "RON",
+        patientId: "patient_1",
+        patientName: "Ion Pop",
         qrToken: "qr_token_1",
         quantity: 2,
         status: "REGISTERED",

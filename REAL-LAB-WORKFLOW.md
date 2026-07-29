@@ -175,7 +175,7 @@ All internal users may see operational status. Only managers may see financial d
 
 ## Patient Model
 
-Future task `PATIENTS-001` introduces a real patient model.
+`PATIENTS-001` introduces a real patient model.
 
 The patient has no internal patient code. The operational identifier remains the work code.
 
@@ -615,17 +615,17 @@ Architecture direction:
 
 ### PATIENTS-001 - Patient records and history
 
-- Status: NOT STARTED.
+- Status: COMPLETED.
 - Objective: replace patient text-only workflow with reusable patient records and history.
-- Scope: patient CRUD, work history, doctor/clinic history, documents tab and search integration.
-- Non-goals: public patient portal, medical record system, permanent doctor requirement.
+- Scope: patient CRUD, work history, doctor/clinic history, existing document references and work creation integration.
+- Non-goals: public patient portal, medical record system, permanent doctor requirement, patient code/number, CNP, CI, address, phone, email, import from `assets/`.
 - Dependencies: ORG-CONTEXT-001, WORKS-001, CLINICS-001.
-- Acceptance criteria: patient has first/last name, optional demographic fields, many works, no internal code, and work code remains operational identifier.
-- Backend: Patient model, DTO validation, server-side permission checks.
-- Frontend: patient pages/tabs, selectors in work forms, documents filters.
-- Security: restrict patient reads/writes by role and never expose more than needed.
-- Audit: audit create/update/merge-sensitive changes.
-- Testing: unit, integration, frontend tests, migration checks.
+- Acceptance criteria: patient has first/last name, optional demographic fields, many works, no internal code, and work code remains operational identifier; work creation uses `patientId` while preserving `patientName` snapshots.
+- Backend: Patient model, DTO validation, deterministic `patientName` backfill, server-side permission checks and work integration through PatientsService.
+- Frontend: `/patients` registry/detail tabs, application-styled selector in work forms and quick patient creation.
+- Security: restrict patient reads/writes by role, never expose patient notes in selector responses and reject archived patients for new works.
+- Audit: audit create/update/archive/restore without logging names, notes or full payloads.
+- Testing: Prisma validate/generate/migrate, seed, demo seed idempotency, unit tests, full test suite, build and smoke checks.
 
 ### PRICING-002 - Company-specific pricing and agreements
 

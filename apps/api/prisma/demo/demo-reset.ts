@@ -124,6 +124,18 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
       where: demoWorkOrderWhere(),
     });
 
+    await tx.patient.deleteMany({
+      where: {
+        OR: [
+          { id: { startsWith: `${DEMO_ID_PREFIX}patient_` } },
+          {
+            id: { startsWith: "pat_backfill_" },
+            workOrders: { none: {} },
+          },
+        ],
+      },
+    });
+
     await tx.workFormTemplate.deleteMany({
       where: {
         OR: [

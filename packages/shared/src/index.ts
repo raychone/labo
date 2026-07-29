@@ -60,6 +60,25 @@ export type {
   UpdateClinicInput,
   UpdateDoctorInput,
 } from "./clinics.js";
+export { PATIENT_SEX_VALUES, PATIENT_SORT_FIELDS, formatPatientName, formatPatientSex } from "./patients.js";
+export type {
+  CreatePatientInput,
+  PaginatedPatientWorksResponse,
+  PaginatedPatientsResponse,
+  PatientDetail,
+  PatientDocumentRecord,
+  PatientOption,
+  PatientOverview,
+  PatientRelationship,
+  PatientSex,
+  PatientSortField,
+  PatientSummary,
+  PatientTimelineEvent,
+  PatientWorkRecord,
+  PatientWorksListParams,
+  PatientsListParams,
+  UpdatePatientInput,
+} from "./patients.js";
 export {
   WORK_TYPE_SORT_FIELDS,
   WORK_TYPE_UNITS,

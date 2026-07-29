@@ -41,6 +41,7 @@ const QR_WORK_INCLUDE = {
 const WORK_DETAIL_INCLUDE = {
   clinic: true,
   doctor: true,
+  patient: true,
   workFormSubmission: true,
   workType: true,
   workflowExecution: {

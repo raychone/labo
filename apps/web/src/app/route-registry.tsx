@@ -80,6 +80,15 @@ export const appRoutes = [
     showInNavigation: true,
   },
   {
+    icon: "PA",
+    label: "Pacienți",
+    navigationGroup: "Administrare",
+    path: "/patients",
+    permissionMode: "any",
+    requiredPermissions: ["patients.read"],
+    showInNavigation: true,
+  },
+  {
     icon: "CL",
     label: "Clinici și medici",
     navigationGroup: "Administrare",

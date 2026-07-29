@@ -602,6 +602,27 @@ Transition endpoints require authentication, CSRF, `workflow.start_stage` or `wo
 
 The `/works` UI shows workflow progress in the register and a mobile-first workflow section in the work detail drawer with current stage, progress, stage list, timeline, and start/complete actions.
 
+## Patient Registry
+
+PATIENTS-001 adds reusable patient records without introducing internal patient codes. A patient stores first name, last name, optional birth date, sex and limited notes only. The system intentionally does not store CNP, CI, address, phone, email, permanent clinic or permanent doctor on the patient record.
+
+Backend endpoints:
+
+- `GET /patients`
+- `GET /patients/options`
+- `GET /patients/:id`
+- `GET /patients/:id/works`
+- `POST /patients`
+- `PATCH /patients/:id`
+- `POST /patients/:id/archive`
+- `POST /patients/:id/restore`
+
+Work orders now have nullable `patientId` plus the existing `patientName` snapshot. Existing data is backfilled deterministically from `patientName`, and `WorkOrder.code` remains the operational identifier. New work creation validates an active `patientId` server-side and snapshots the current patient display name onto the work order.
+
+RBAC adds `patients.read`, `patients.create`, `patients.update`, `patients.archive` and `patients.documents.read`. Patient selector responses are intentionally minimal and do not include notes or document information. Archive/restore and mutations require CSRF where applicable.
+
+The frontend adds `/patients` with registry filters, detail drawer and tabs for Prezentare, Lucrari, Medici si clinici, Documente and Istoric. The `/works` create/edit flow now uses the application-styled patient selector and quick patient creation instead of free-text patient entry.
+
 ## Technician Assignments And Workbench
 
 TECH-001 adds current-stage technician assignment and the personal work queue.

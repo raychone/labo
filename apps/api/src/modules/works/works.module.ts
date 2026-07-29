@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 
 import { AuthModule } from "../auth/auth.module.js";
 import { DatabaseModule } from "../database/database.module.js";
+import { PatientsModule } from "../patients/patients.module.js";
 import { QrModule } from "../qr/qr.module.js";
 import { RbacModule } from "../rbac/rbac.module.js";
 import { WorkFormsModule } from "../work-forms/work-forms.module.js";
@@ -12,7 +13,7 @@ import { WorksService } from "./works.service.js";
 
 @Module({
   controllers: [WorksController],
-  imports: [AuthModule, DatabaseModule, QrModule, RbacModule, WorkFormsModule, WorkflowExecutionModule],
+  imports: [AuthModule, DatabaseModule, PatientsModule, QrModule, RbacModule, WorkFormsModule, WorkflowExecutionModule],
   providers: [WorkOrderCodeService, WorksService],
 })
 export class WorksModule {}

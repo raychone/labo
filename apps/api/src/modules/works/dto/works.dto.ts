@@ -103,6 +103,11 @@ export class WorkMutationDto {
   @IsOptional()
   @Transform(({ value }) => trimRequiredString(value))
   @IsString()
+  public readonly patientId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
   @MinLength(2)
   @MaxLength(120)
   public readonly patientName?: string;
@@ -176,9 +181,7 @@ export class CreateWorkDto extends WorkMutationDto {
 
   @Transform(({ value }) => trimRequiredString(value))
   @IsString()
-  @MinLength(2)
-  @MaxLength(120)
-  public declare readonly patientName: string;
+  public declare readonly patientId: string;
 
   @Type(() => Number)
   @IsInt()

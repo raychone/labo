@@ -25,6 +25,9 @@ model User {
   assignedPermissionOverrides UserPermissionOverride[] @relation("AssignedPermissionOverrides")
   updatedLaboratorySettings LaboratorySettings[] @relation("LaboratorySettingsUpdatedBy")
   updatedLegalEntitySettings LegalEntitySettings[] @relation("LegalEntitySettingsUpdatedBy")
+  createdPatients Patient[] @relation("PatientCreatedBy")
+  updatedPatients Patient[] @relation("PatientUpdatedBy")
+  archivedPatients Patient[] @relation("PatientArchivedBy")
   createdClinics Clinic[] @relation("ClinicCreatedBy")
   updatedClinics Clinic[] @relation("ClinicUpdatedBy")
   archivedClinics Clinic[] @relation("ClinicArchivedBy")
@@ -156,6 +159,43 @@ model LegalEntitySettings {
 
   @@index([updatedByUserId])
   @@map("legal_entity_settings")
+}
+
+model Patient {
+  id                  String      @id @default(cuid())
+  firstName           String      @map("first_name") @db.VarChar(80)
+  lastName            String      @map("last_name") @db.VarChar(80)
+  normalizedFirstName String      @map("normalized_first_name") @db.VarChar(80)
+  normalizedLastName  String      @map("normalized_last_name") @db.VarChar(80)
+  birthDate           DateTime?   @map("birth_date") @db.Date
+  sex                 PatientSex  @default(UNSPECIFIED)
+  notes               String?     @db.VarChar(1000)
+  isArchived          Boolean     @default(false) @map("is_archived")
+  archivedAt          DateTime?   @map("archived_at")
+  archivedByUserId    String?     @map("archived_by_user_id")
+  createdByUserId     String?     @map("created_by_user_id")
+  updatedByUserId     String?     @map("updated_by_user_id")
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @default(now()) @updatedAt @map("updated_at")
+  version             Int         @default(1)
+  archivedBy          User?       @relation("PatientArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
+  createdBy           User?       @relation("PatientCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy           User?       @relation("PatientUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  workOrders          WorkOrder[]
+
+  @@index([normalizedLastName, normalizedFirstName])
+  @@index([isArchived])
+  @@index([createdAt])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@index([archivedByUserId])
+  @@map("patients")
+}
+
+enum PatientSex {
+  FEMALE
+  MALE
+  UNSPECIFIED
 }
 
 model Clinic {
@@ -423,6 +463,7 @@ model WorkOrder {
   clinicId String @map("clinic_id")
   doctorId String @map("doctor_id")
   workTypeId String @map("work_type_id")
+  patientId String? @map("patient_id")
   patientName String @map("patient_name") @db.VarChar(120)
   patientReference String? @map("patient_reference") @db.VarChar(80)
   qrToken String @unique @map("qr_token") @db.VarChar(64)
@@ -445,6 +486,7 @@ model WorkOrder {
   invoicedDocumentId String? @map("invoiced_document_id")
   clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
   doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  patient Patient? @relation(fields: [patientId], references: [id], onDelete: Restrict)
   workType WorkType @relation(fields: [workTypeId], references: [id], onDelete: Restrict)
   createdBy User? @relation("WorkOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   updatedBy User? @relation("WorkOrderUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
@@ -459,6 +501,7 @@ model WorkOrder {
   @@index([clinicId])
   @@index([doctorId])
   @@index([workTypeId])
+  @@index([patientId])
   @@index([qrCreatedAt])
   @@index([status])
   @@index([priority])

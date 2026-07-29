@@ -65,6 +65,10 @@ const BillingPage = lazy(async () => {
   const module = await import("../features/billing/billing-page.js");
   return { default: module.BillingPage };
 });
+const PatientsPage = lazy(async () => {
+  const module = await import("../features/patients/patients-page.js");
+  return { default: module.PatientsPage };
+});
 const BillingPrintPage = lazy(async () => {
   const module = await import("../features/billing/billing-print-page.js");
   return { default: module.BillingPrintPage };
@@ -122,6 +126,10 @@ const router = createBrowserRouter([
       {
         element: <PermissionRoute requiredPermissions={["clinics.read"]}><LazyRoute><ClinicsPage /></LazyRoute></PermissionRoute>,
         path: "clinics",
+      },
+      {
+        element: <PermissionRoute requiredPermissions={["patients.read"]}><LazyRoute><PatientsPage /></LazyRoute></PermissionRoute>,
+        path: "patients",
       },
       {
         element: <PermissionRoute requiredPermissions={["pricing.read"]}><LazyRoute><WorkTypesPage /></LazyRoute></PermissionRoute>,

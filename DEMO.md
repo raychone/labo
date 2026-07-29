@@ -109,6 +109,7 @@ Spune clar:
 3. Arată că după login utilizatorul intră în aplicație, nu într-o pagină publică.
 4. Arată navigația principală:
    - Panou principal;
+   - Pacienți;
    - Lucrări;
    - Scanare;
    - Livrările mele;
@@ -164,7 +165,36 @@ Ce spui:
 
 Dashboard-ul este momentan punctul de intrare. Datele operationale detaliate se vad acum in Lucrari si Facturare.
 
-## 7. Lucrări
+## 7. Pacienți
+
+Deschide `Pacienți`.
+
+Ce arăți:
+
+1. Registrul de pacienți.
+2. Search după:
+
+```text
+Maria Dumitrescu
+```
+
+3. Deschide dosarul pacientei.
+4. Arată taburile:
+   - Prezentare;
+   - Lucrări;
+   - Medici și clinici;
+   - Documente;
+   - Istoric.
+5. Arată că pacienta are mai multe lucrări și istoric pe medici/clinici, fără cod intern de pacient.
+
+Ce explici:
+
+- pacientul are doar date operaționale minime: nume, prenume și câmpuri opționale limitate;
+- nu există CNP, CI, adresă, telefon sau email în dosarul pacientului;
+- codul de urmărit în laborator rămâne codul lucrării `WO-...`;
+- documentele afișate sunt referințe existente din facturare/livrare, nu un modul complet de fișiere.
+
+## 8. Lucrări
 
 Deschide `Lucrări`.
 
@@ -205,7 +235,8 @@ Dr. Ana Popescu
 Ce explici:
 
 - lucrarea primește cod unic `WO-<an>-<număr>`;
-- statusul actual este `REGISTERED`, pentru ca workflow-ul de productie vine intr-un task ulterior;
+- pacientul se alege din selectorul aplicației sau se creează rapid din modal, nu se introduce ca text liber;
+- statusul actual este `REGISTERED` la creare, iar execuția workflow-ului se urmărește separat în secțiunea de flux producție;
 - prețul este snapshot pe lucrare;
 - formularul specific este snapshot imutabil; dacă template-ul se schimbă ulterior, lucrarea veche păstrează câmpurile și valorile salvate;
 - datele sunt filtrabile pentru receptie/manager.
@@ -218,7 +249,7 @@ WO-2026-900001
 
 Dacă demo-ul este rulat într-un alt an, codurile devin `WO-<an>-900001`.
 
-Pentru creare lucrare nouă, alege `Coroană zirconiu`. Arată secțiunea “Detalii specifice lucrării”:
+Pentru creare lucrare nouă, alege pacienta din selector, apoi alege `Coroană zirconiu`. Arată secțiunea “Detalii specifice lucrării”:
 
 - Dinți;
 - Nuanță;
@@ -226,7 +257,7 @@ Pentru creare lucrare nouă, alege `Coroană zirconiu`. Arată secțiunea “Det
 - Probă solicitată;
 - Observații specifice.
 
-## 8. QR și scanare
+## 9. QR și scanare
 
 Din detaliul unei lucrări, arată QR-ul.
 
@@ -264,7 +295,7 @@ WO-2026-900030
 
 Arată că livrarea este `În tranzit` și butonul duce către confirmarea predării.
 
-## 9. Livrări și semnătură internă
+## 10. Livrări și semnătură internă
 
 Intră ca Manager și deschide `Livrările mele`.
 
@@ -296,7 +327,7 @@ Ce explici:
 - aplicația nu stochează PNG/base64, ci coordonate normalizate și hash SHA-256;
 - dovada nu este expusă în liste, exporturi sau audit raw.
 
-## 10. Clinici și medici
+## 11. Clinici și medici
 
 Deschide `Clinici și medici`.
 
@@ -322,7 +353,7 @@ Ce explici:
 - fiecare medic apartine unei clinici;
 - datele de facturare ale clinicii sunt folosite în documentele printabile.
 
-## 11. Tipuri de lucrări și prețuri
+## 12. Tipuri de lucrări și prețuri
 
 Deschide `Tipuri de lucrări`.
 
@@ -368,7 +399,7 @@ Ce explici:
 - template-urile active/arhivate sunt read-only;
 - acest ecran configureaza fluxul standard, dar nu porneste inca executia etapelor pe o lucrare existenta.
 
-## 12. Facturare
+## 13. Facturare
 
 Deschide `Facturare`.
 
@@ -420,7 +451,7 @@ Ce explici:
 - statusurile `UNPAID`, `PARTIALLY_PAID`, `PAID` sunt derivate din incasari active;
 - overpayment este refuzat de backend.
 
-## 13. Scenarii financiare de aratat
+## 14. Scenarii financiare de aratat
 
 ### Factura neachitata/restanta
 
@@ -508,7 +539,7 @@ Arata:
 - nu accepta incasari noi;
 - ramane in istoric.
 
-## 14. Print preview si anexa
+## 15. Print preview si anexa
 
 Dintr-o factura, apasa `Print / PDF`.
 
@@ -535,7 +566,7 @@ Ce explici:
 - documentul este intern/demo;
 - RO e-Factura/SPV nu este implementat in acest stadiu.
 
-## 15. Export CSV
+## 16. Export CSV
 
 In `Facturare`, mergi la `Inchidere luna` si apasa export registru lunar CSV.
 
@@ -545,7 +576,7 @@ Ce explici:
 - valorile sunt protejate impotriva formula injection;
 - exportul este auditat pe backend.
 
-## 16. Utilizatori si RBAC
+## 17. Utilizatori si RBAC
 
 Deschide `Utilizatori`.
 
@@ -574,7 +605,7 @@ curier@demo.local
 
 Arata ca meniurile si accesul sunt diferite.
 
-## 17. Lucrarile mele pentru tehnicieni
+## 18. Lucrarile mele pentru tehnicieni
 
 Din acces rapid demo, intra ca `tehnician1@demo.local` sau foloseste butonul “Intră ca tehnician”.
 
@@ -603,7 +634,7 @@ Ce explici:
 - etapa urmatoare ramane neasignata cand fluxul avanseaza;
 - backend-ul verifica permisiunile si assignment-ul, UI-ul doar ghideaza utilizatorul.
 
-## 18. Ce este gata acum
+## 19. Ce este gata acum
 
 Gata in stadiul curent:
 
@@ -616,6 +647,7 @@ Gata in stadiul curent:
 - management utilizatori;
 - setari laborator;
 - clinici si medici;
+- registru pacienti si dosar pacient;
 - tipuri de lucrari si preturi;
 - lucrari cu QR;
 - scanare/rezolvare QR;
@@ -638,7 +670,7 @@ Gata in stadiul curent:
 - CSV;
 - dataset demo realist si resetabil.
 
-## 19. Ce nu este gata inca
+## 20. Ce nu este gata inca
 
 Nu prezenta ca finalizat:
 
@@ -653,38 +685,40 @@ Nu prezenta ca finalizat:
 - RO e-Factura/SPV;
 - procesare reala de plati.
 
-## 20. Flow recomandat de prezentare
+## 21. Flow recomandat de prezentare
 
 Ordine recomandata:
 
 1. Login manager.
 2. Navigatie/shell.
-3. Lucrari.
-4. Search `Maria Dumitrescu`.
-5. Filtru `Clinica Dentară Aurora`.
-6. Deschide lucrare.
-7. Arata QR.
-8. Scanare cu fallback manual.
-9. Clinici si medici.
-10. Tipuri de lucrari.
-11. Facturare overview.
-12. Lucrari nefacturate.
-13. Proforme.
-14. Factura neachitata.
-15. Factura partial incasata.
-16. Cautare `CH-2026-001`.
-17. Cautare `OP-DEMO-001`.
-18. Factura achitata.
-19. Factura anulata.
-20. Print/PDF si anexa.
-21. Inchidere luna si CSV.
-22. Utilizatori si roluri.
-23. Login cu tehnician si arata `Lucrările mele`.
-24. Login manager si arata asignarea responsabilului in fluxul lucrarii.
-25. Login cu receptie/curier pentru meniuri diferite.
-26. Setari laborator.
-27. Recapitulare ce este gata si ce urmeaza.
+3. Pacienti.
+4. Search `Maria Dumitrescu` si dosar pacient.
+5. Lucrari.
+6. Search `Maria Dumitrescu`.
+7. Filtru `Clinica Dentară Aurora`.
+8. Deschide lucrare.
+9. Arata QR.
+10. Scanare cu fallback manual.
+11. Clinici si medici.
+12. Tipuri de lucrari.
+13. Facturare overview.
+14. Lucrari nefacturate.
+15. Proforme.
+16. Factura neachitata.
+17. Factura partial incasata.
+18. Cautare `CH-2026-001`.
+19. Cautare `OP-DEMO-001`.
+20. Factura achitata.
+21. Factura anulata.
+22. Print/PDF si anexa.
+23. Inchidere luna si CSV.
+24. Utilizatori si roluri.
+25. Login cu tehnician si arata `Lucrările mele`.
+26. Login manager si arata asignarea responsabilului in fluxul lucrarii.
+27. Login cu receptie/curier pentru meniuri diferite.
+28. Setari laborator.
+29. Recapitulare ce este gata si ce urmeaza.
 
-## 21. Fraza de inchidere
+## 22. Fraza de inchidere
 
-Aplicatia acopera deja baza operationala: utilizatori, roluri, clinici, medici, catalog de lucrari, receptie lucrari, QR, scanare operationala cu actiuni confirmate, formulare dinamice, template-uri de workflow, executia etapelor curente cu asignare pe tehnicieni, facturare, incasari manuale si documente printabile. Urmatorul pas natural este logistica: planificare, predari fizice si flux curier.
+Aplicatia acopera deja baza operationala: utilizatori, roluri, clinici, medici, pacienti, catalog de lucrari, receptie lucrari, QR, scanare operationala cu actiuni confirmate, formulare dinamice, template-uri de workflow, executia etapelor curente cu asignare pe tehnicieni, logistica, livrari, confirmare interna de predare, facturare, incasari manuale si documente printabile. Urmatorul pas natural este realinierea preturilor pe firme, clinici si medici.

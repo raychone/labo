@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-78%
+79%
 
 ## ROADMAP
 
@@ -101,7 +101,7 @@
 
 ## PATIENTS
 
-- [ ] PATIENTS-001 - Patient records and patient work history (NOT STARTED)
+- [x] PATIENTS-001 - Patient records and patient work history (COMPLETED)
 
 ## SCAN
 
@@ -187,19 +187,79 @@ NONE / AWAITING APPROVAL
 
 Status: COMPLETED
 
-Started: 2026-07-29T03:31:35Z
+Started: 2026-07-29T05:32:59Z
 
-Completed: 2026-07-29T03:58:33Z
+Completed: 2026-07-29T06:11:51Z
 
-Last completed task: ORG-DATA-MIGRATION-001 - Company-aware local data migration
+Last completed task: PATIENTS-001 - Patient records and patient work history
 
-Completed: 2026-07-29T03:58:33Z
+Completed: 2026-07-29T06:11:51Z
 
 ## Next Recommended Task
 
-PATIENTS-001 - APPROVED
+PRICING-002 - Company-specific pricing and agreements
 
 ## Latest Completion Summary
+
+### PATIENTS-001 - Patient records and patient work history
+
+- Added a dedicated Patient model with first name, last name, optional birth date, sex and limited notes only; no patient code, CNP, contact or address fields were introduced.
+- Added deterministic migration `20260729053300_patient_registry` with nullable `work_orders.patient_id`, foreign key, indexes and non-destructive backfill from existing `patient_name` snapshots.
+- Preserved `work_orders.patient_name` as immutable snapshot/legacy display data and kept `WorkOrder.code` as the only operational identifier.
+- Added `PatientsModule` with `GET /patients`, `GET /patients/options`, patient detail, patient works, create, update, archive and restore endpoints.
+- Added server-side RBAC permissions `patients.read`, `patients.create`, `patients.update`, `patients.archive` and `patients.documents.read`.
+- Added patient audit entries for create/update/archive/restore without logging names, notes or full payloads.
+- Integrated works creation/update with `patientId` validation through `PatientsService`; archived or missing patients are rejected server-side.
+- Updated `/works` UI to use the application-styled patient selector and quick patient creation modal, without free-text patient entry.
+- Added `/patients` UI with registry filters, detail drawer and tabs for overview, works, doctor/clinic history, documents and timeline.
+- Updated demo reset/seed so demo patients are deterministic and linked to demo works; idempotency was verified twice.
+- Preserved `assets/` as untracked local client material for future tasks; no asset file was processed, committed or used as source data.
+- Updated `README.md`, `REAL-LAB-WORKFLOW.md`, `MVP-IMPLEMENTATION-PLAN.md`, `DEMO.md` and `DEMO-SCRIPT.md`.
+
+Main files modified:
+
+- `apps/api/prisma/schema.prisma`
+- `apps/api/prisma/migrations/20260729053300_patient_registry/migration.sql`
+- `apps/api/prisma/demo/demo-seed.ts`
+- `apps/api/prisma/demo/demo-reset.ts`
+- `apps/api/src/modules/patients/*`
+- `apps/api/src/modules/works/*`
+- `apps/api/src/modules/rbac/permission-registry.ts`
+- `apps/web/src/features/patients/*`
+- `apps/web/src/features/works/*`
+- `packages/shared/src/patients.ts`
+- `packages/shared/src/works.ts`
+- `README.md`
+- `REAL-LAB-WORKFLOW.md`
+- `MVP-IMPLEMENTATION-PLAN.md`
+- `DEMO.md`
+- `DEMO-SCRIPT.md`
+
+Verification:
+
+- `pnpm --filter @dental-lab/api prisma:validate` passed.
+- `pnpm --filter @dental-lab/api prisma:generate` passed.
+- `pnpm --filter @dental-lab/api prisma:migrate:dev` passed.
+- `pnpm --filter @dental-lab/api prisma:db:seed` passed.
+- `ALLOW_DEMO_SEED=true pnpm --filter @dental-lab/api prisma:db:seed:demo` passed twice for idempotency.
+- `pnpm typecheck` passed.
+- `pnpm test` passed: API 40 files / 151 tests, web 15 files / 39 tests, shared 11 files / 37 tests, UI 3 files / 27 tests.
+- `pnpm build` passed.
+- Manual API smoke passed for manager demo login, patient registry/search, patient options without notes, patient detail and creating a work linked by `patientId` with `patientName` snapshot.
+- Manual DB checks confirmed 10 demo patients, zero work orders without patient and zero forbidden patient columns.
+- Manual web smoke returned `200` for `/patients` and `/works`.
+
+Technical debt introduced:
+
+- None.
+
+Remaining risks:
+
+- Patient document rows currently expose existing generated document/proof references only; dedicated file/document ingestion remains in `DOCUMENTS-001` and related future tasks.
+- Patient matching is intentionally explicit by selected `patientId`; no merge/deduplication workflow was introduced.
+- Client files in `assets/` remain local-only and must not be committed until a dedicated document/template ingestion task defines exactly how to use them.
+- Linting remains unconfigured.
+- Backend shutdown can still show the existing `pg` deprecation warning, without request failures.
 
 ### ORG-DATA-MIGRATION-001 - Company-aware local data migration
 
@@ -712,7 +772,7 @@ None.
 - Reception registers work operationally without selecting a company.
 - Technician self-claim becomes the target production model; the technician selects `NC`/`NG` at first technical claim and the company is attached to the work.
 - Existing assignment-driven technician screens are prior-flow implementation until `TECH-CLAIM-001`.
-- Patient data will move from work-order text fields to a real patient model in `PATIENTS-001`; the work code remains the operational identifier.
+- Patient data is modeled through PATIENTS-001; work orders use `patientId` plus `patientName` snapshot, and the work code remains the operational identifier.
 - Current demo remains prior-flow/single-company until `DEMO-REAL-DATA-001`.
 - Use a pnpm workspace monorepo with `apps/web`, `apps/api`, `packages/shared`, `packages/ui`, and `packages/config`.
 - Use TypeScript strict mode everywhere.
