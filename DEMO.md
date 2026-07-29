@@ -4,9 +4,9 @@ Acest document este ghidul de prezentare cap-coadă pentru stadiul curent al apl
 
 ## Notă ROADMAP-REALIGN-002
 
-Demo-ul curent prezintă funcționalitățile deja implementate în fluxul anterior: setări single-company și lucru tehnician bazat pe asignare. Fluxul real validat pentru laborator va avea două contexte juridice/financiare `NC` și `NG`, doi manageri cu acces la ambele contexte, self-claim pentru tehnicieni și selecția firmei la primul claim tehnic.
+Demo-ul curent prezintă funcționalitățile deja implementate, inclusiv contextul `NC`/`NG`, pacienți, prețuri pe companie, termene calculate, workflow operațional, logistică, livrări și facturare. Fluxul tehnicianului este încă bazat pe asignare; self-claim-ul și selecția firmei la primul claim tehnic vin într-un task următor.
 
-Nu prezenta demo-ul curent ca implementare finală a fluxului `NC`/`NG`. Pentru întâlniri comerciale, formulează-l ca demonstrație a modulelor existente până la realinierea completă prin `ORG-CONTEXT-001`, `TECH-CLAIM-001`, `STATUS-001`, `BILLING-REALIGN-001` și `DEMO-REAL-DATA-001`.
+Nu prezenta demo-ul curent ca implementare finală a fluxului de atelier real. Pentru întâlniri comerciale, formulează-l ca demonstrație a modulelor existente până la realinierea completă prin `TECH-CLAIM-001`, `STATUS-001`, `BILLING-REALIGN-001` și `DEMO-REAL-DATA-001`.
 
 `ORG-CONTEXT-001` adaugă selectorul global „Firmă activă”, iar `ORG-DATA-MIGRATION-001` mută pagina Setări pe date juridice distincte pentru `NC` și `NG`. Pentru demo:
 
@@ -17,7 +17,7 @@ Nu prezenta demo-ul curent ca implementare finală a fluxului `NC`/`NG`. Pentru 
 5. Arată că fluxurile operaționale, precum `/works`, rămân accesibile.
 6. Deschide Setări și arată datele NC.
 7. Schimbă în NG și arată că Setări afișează date juridice diferite.
-8. Spune explicit că separarea facturilor, seriilor, prețurilor și documentelor emise vine în taskurile următoare.
+8. Spune explicit că prețurile sunt deja dependente de contextul activ, iar separarea finală a documentelor emise și seriilor reale vine în taskurile financiare următoare.
 
 ## 1. Pregătire înainte de prezentare
 
@@ -228,6 +228,8 @@ Dr. Ana Popescu
    - cantitate;
    - prioritate;
    - termen promis;
+   - termen efectiv calculat;
+   - mod deadline: calculat, manual sau nerezolvat;
    - status;
    - valoare, dacă utilizatorul are drept de pricing;
    - “Detalii specifice lucrării”, cu formularul salvat ca snapshot.
@@ -238,6 +240,9 @@ Ce explici:
 - pacientul se alege din selectorul aplicației sau se creează rapid din modal, nu se introduce ca text liber;
 - statusul actual este `REGISTERED` la creare, iar execuția workflow-ului se urmărește separat în secțiunea de flux producție;
 - prețul este snapshot pe lucrare;
+- termenul efectiv este snapshot pe lucrare și nu expune prețuri pentru rolurile fără acces financiar;
+- dacă se schimbă cabinetul, medicul, tipul de lucrare sau cantitatea, aplicația cere versiunea deadline-ului și recalculează controlat;
+- un termen manual setat de manager rămâne blocat până la o corecție explicită;
 - formularul specific este snapshot imutabil; dacă template-ul se schimbă ulterior, lucrarea veche păstrează câmpurile și valorile salvate;
 - datele sunt filtrabile pentru receptie/manager.
 
@@ -256,6 +261,13 @@ Pentru creare lucrare nouă, alege pacienta din selector, apoi alege `Coroană z
 - Tip zirconiu;
 - Probă solicitată;
 - Observații specifice.
+
+În aceeași creare, arată cardul de preview pentru termen:
+
+- `Termen efectiv` calculat din regulile de execuție;
+- explicația cu zile lucrătoare și calendar;
+- lipsa totalurilor financiare pentru rolurile fără `pricing.read`;
+- dacă regula este manuală, aplicația afișează că termenul trebuie decis explicit.
 
 ## 9. QR și scanare
 

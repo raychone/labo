@@ -6,6 +6,8 @@ import type {
   ResolveWorkQrInput,
   ResolveWorkQrResult,
   StartStageInput,
+  WorkDeadlinePreview,
+  WorkDeadlinePreviewInput,
   UpdateWorkInput,
   WorkDetail,
   WorkQrView,
@@ -25,6 +27,7 @@ export const worksQueryKeys = {
   qrImage: (workOrderId: string | null) => ["works", "qr-image", workOrderId] as const,
   workflow: (workOrderId: string | null) => ["works", "workflow", workOrderId] as const,
   workTypeOptions: ["works", "work-type-options"] as const,
+  deadlinePreview: (input: WorkDeadlinePreviewInput | null) => ["works", "deadline-preview", input] as const,
 };
 
 function appendOptional(query: URLSearchParams, key: string, value: boolean | number | string | undefined): void {
@@ -117,6 +120,10 @@ export async function createWork(input: CreateWorkInput): Promise<WorkDetail> {
   return sendJson<WorkDetail>("/works", "POST", input);
 }
 
+export async function previewWorkDeadline(input: WorkDeadlinePreviewInput): Promise<WorkDeadlinePreview> {
+  return sendJson<WorkDeadlinePreview>("/works/deadline-preview", "POST", input);
+}
+
 export async function updateWork(workOrderId: string, input: UpdateWorkInput): Promise<WorkDetail> {
   return sendJson<WorkDetail>(`/works/${workOrderId}`, "PATCH", input);
 }
@@ -193,6 +200,15 @@ export function useWorkFormWorkTypeOptions(enabled: boolean) {
     enabled,
     queryFn: fetchWorkFormWorkTypeOptions,
     queryKey: worksQueryKeys.workTypeOptions,
+    retry: false,
+  });
+}
+
+export function useWorkDeadlinePreview(input: WorkDeadlinePreviewInput | null, enabled: boolean) {
+  return useQuery({
+    enabled: enabled && input !== null,
+    queryFn: () => previewWorkDeadline(input as WorkDeadlinePreviewInput),
+    queryKey: worksQueryKeys.deadlinePreview(input),
     retry: false,
   });
 }

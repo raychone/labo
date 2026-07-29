@@ -13,7 +13,7 @@ import {
   TextInput,
   Textarea,
 } from "@dental-lab/ui";
-import type { ClinicOption, DoctorOption, PatientOption, WorkDetail, WorkFormTemplateDetail, WorkPriority, WorkTypeFormOption } from "@dental-lab/shared";
+import type { ClinicOption, DoctorOption, PatientOption, WorkDeadlinePreview, WorkDetail, WorkFormTemplateDetail, WorkPriority, WorkTypeFormOption } from "@dental-lab/shared";
 import type { ReactNode } from "react";
 import type { UseFormReturn } from "react-hook-form";
 
@@ -100,6 +100,8 @@ export function WorkForm({
   onSubmit,
   template,
   totalPreview,
+  deadlinePreview,
+  isDeadlinePreviewLoading,
   workTypeOptions,
   patientOptions,
 }: {
@@ -116,6 +118,8 @@ export function WorkForm({
   readonly onSubmit: (values: WorkFormValues) => void;
   readonly template: WorkFormTemplateDetail | null | undefined;
   readonly totalPreview?: string | null;
+  readonly deadlinePreview?: WorkDeadlinePreview | null;
+  readonly isDeadlinePreviewLoading?: boolean;
   readonly workTypeOptions: readonly WorkTypeFormOption[];
   readonly patientOptions: readonly PatientOption[];
 }): ReactNode {
@@ -233,6 +237,7 @@ export function WorkForm({
           />
           <Select disabled={isDisabled} error={form.formState.errors.priority?.message} id="priority" label="Prioritate" options={priorityOptions} required {...form.register("priority")} />
         </FormGrid>
+        <DeadlinePreviewPanel isLoading={isDeadlinePreviewLoading === true} preview={deadlinePreview ?? null} />
       </FormSection>
 
       <FormSection title="Observații" description="Notele interne rămân vizibile doar personalului autorizat.">
@@ -247,6 +252,33 @@ export function WorkForm({
         </FormGrid>
       </FormSection>
     </FormLayout>
+  );
+}
+
+function DeadlinePreviewPanel({ isLoading, preview }: { readonly isLoading: boolean; readonly preview: WorkDeadlinePreview | null }): ReactNode {
+  if (isLoading) {
+    return <p className="works-page__muted">Se calculează termenul estimat...</p>;
+  }
+
+  if (!preview) {
+    return <p className="works-page__muted">Alege cabinetul, medicul, tipul lucrării și cantitatea pentru termen estimat.</p>;
+  }
+
+  if (preview.mode === "UNRESOLVED") {
+    return (
+      <div className="works-page__deadline-preview">
+        <strong>Termen estimat nerezolvat</strong>
+        <span>{preview.explanation}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="works-page__deadline-preview">
+      <strong>{preview.mode === "MANUAL" ? "Termen manual" : "Termen estimat"}</strong>
+      <span>{preview.effectiveDueAt ? new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(preview.effectiveDueAt)) : "Fără termen efectiv"}</span>
+      <span>{preview.executionDays === null ? preview.explanation : `${preview.executionDays} zile lucrătoare. ${preview.explanation}`}</span>
+    </div>
   );
 }
 

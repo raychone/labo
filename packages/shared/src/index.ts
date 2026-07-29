@@ -157,15 +157,23 @@ export type {
   PricingRuleScope,
   PricingSortField,
 } from "./pricing.js";
-export { SCAN_SOURCES, WORK_PRIORITIES, WORK_QR_PAYLOAD_PREFIX, WORK_SORT_FIELDS, WORK_STATUSES, isWorkQrPayload } from "./works.js";
+export { SCAN_SOURCES, WORK_DEADLINE_MODES, WORK_DEADLINE_SOURCES, WORK_PRIORITIES, WORK_QR_PAYLOAD_PREFIX, WORK_SORT_FIELDS, WORK_STATUSES, isWorkQrPayload } from "./works.js";
 export type {
   CreateWorkInput,
   PaginatedWorksResponse,
+  RecalculateWorkDeadlineInput,
   ResolveWorkQrInput,
   ResolveWorkQrResult,
   ScanSource,
+  SetManualWorkDeadlineInput,
   UpdateWorkInput,
   WorkClinicSummary,
+  WorkDeadlineMode,
+  WorkDeadlinePreview,
+  WorkDeadlinePreviewInput,
+  WorkDeadlineSource,
+  WorkDeadlineSourceSummary,
+  WorkDeadlineSummary,
   WorkDetail,
   WorkDoctorSummary,
   WorkPriority,

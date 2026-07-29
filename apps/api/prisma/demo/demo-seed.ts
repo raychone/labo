@@ -849,8 +849,9 @@ async function seedDemoPatients(prisma: PrismaClient, dataset: DemoDataset): Pro
 }
 
 async function seedDemoWorks(prisma: PrismaClient, dataset: DemoDataset): Promise<void> {
-  for (const work of dataset.works) {
+  for (const [index, work] of dataset.works.entries()) {
     const submission = toDemoWorkFormSubmission(work);
+    const deadline = toDemoDeadlineSnapshot(work, index);
     await prisma.workOrder.create({
       data: {
         baseUnitPriceMinor: work.baseUnitPriceMinor,
@@ -858,6 +859,7 @@ async function seedDemoWorks(prisma: PrismaClient, dataset: DemoDataset): Promis
         clinicId: work.clinicId,
         code: work.code,
         createdAt: work.createdAt,
+        ...deadline,
         currency: "RON",
         doctorId: work.doctorId,
         externalReference: work.externalReference,
@@ -884,6 +886,115 @@ async function seedDemoWorks(prisma: PrismaClient, dataset: DemoDataset): Promis
       },
     });
   }
+}
+
+interface DemoDeadlineSnapshot {
+  readonly calculatedDueAt?: Date | null;
+  readonly deadlineCalculatedAt: Date;
+  readonly deadlineDueHour: number;
+  readonly deadlineDueMinute: number;
+  readonly deadlineExecutionDays: number | null;
+  readonly deadlineExplanation: string;
+  readonly deadlineIncludeStartDay: boolean;
+  readonly deadlineLockedAt: Date | null;
+  readonly deadlineLockedReason: string | null;
+  readonly deadlineMode: "CALCULATED" | "MANUAL" | "UNRESOLVED";
+  readonly deadlineReasonCode: string | null;
+  readonly deadlineRevision: number;
+  readonly deadlineRuleSnapshot: Prisma.InputJsonObject;
+  readonly deadlineSource: "CREATION" | "MANUAL_OVERRIDE";
+  readonly deadlineStartAt: Date;
+  readonly deadlineTimezone: string;
+  readonly effectiveDueAt: Date | null;
+  readonly manualDueAt: Date | null;
+}
+
+function toDemoDeadlineSnapshot(work: DemoWorkSeed, index: number): DemoDeadlineSnapshot {
+  const calculatedDueAt = addDemoDays(work.createdAt, index % 5 === 0 ? 6 : 4);
+  const baseSnapshot = {
+    calendarCoverage: { fromYear: 2026, toYear: 2030 },
+    dueHour: 17,
+    dueMinute: 0,
+    executionTimeRuleCode: null,
+    includeStartDay: false,
+    maxQuantity: index % 6 === 0 ? null : 7,
+    minQuantity: 1,
+    pricingSourceType: index % 2 === 0 ? "STANDARD" : "CLINIC",
+    sourceType: index % 2 === 0 ? "STANDARD" : "CLINIC",
+    timezone: "Europe/Bucharest",
+    version: 1,
+    workingWeekdays: [1, 2, 3, 4, 5],
+  };
+
+  if (index === 1 || index === 7) {
+    return {
+      deadlineCalculatedAt: work.createdAt,
+      deadlineDueHour: 17,
+      deadlineDueMinute: 0,
+      deadlineExecutionDays: null,
+      deadlineExplanation: "Termen demo setat manual pentru prezentare.",
+      deadlineIncludeStartDay: false,
+      deadlineLockedAt: work.createdAt,
+      deadlineLockedReason: "Termen manual demo.",
+      deadlineMode: "MANUAL",
+      deadlineReasonCode: null,
+      deadlineRevision: 1,
+      deadlineRuleSnapshot: { ...baseSnapshot, executionDays: null, requiresManualDueDate: false },
+      deadlineSource: "MANUAL_OVERRIDE",
+      deadlineStartAt: work.createdAt,
+      deadlineTimezone: "Europe/Bucharest",
+      effectiveDueAt: work.requestedDeliveryDate,
+      manualDueAt: work.requestedDeliveryDate,
+    };
+  }
+
+  if (index === 2 || index === 8) {
+    return {
+      calculatedDueAt: null,
+      deadlineCalculatedAt: work.createdAt,
+      deadlineDueHour: 17,
+      deadlineDueMinute: 0,
+      deadlineExecutionDays: null,
+      deadlineExplanation: "Demo: nu există regulă activă de termen pentru această combinație.",
+      deadlineIncludeStartDay: false,
+      deadlineLockedAt: null,
+      deadlineLockedReason: null,
+      deadlineMode: "UNRESOLVED",
+      deadlineReasonCode: "NO_EXECUTION_RULE",
+      deadlineRevision: 1,
+      deadlineRuleSnapshot: { ...baseSnapshot, executionDays: null, requiresManualDueDate: false, sourceType: "NONE" },
+      deadlineSource: "CREATION",
+      deadlineStartAt: work.createdAt,
+      deadlineTimezone: "Europe/Bucharest",
+      effectiveDueAt: null,
+      manualDueAt: null,
+    };
+  }
+
+  return {
+    calculatedDueAt,
+    deadlineCalculatedAt: work.createdAt,
+    deadlineDueHour: 17,
+    deadlineDueMinute: 0,
+    deadlineExecutionDays: index % 5 === 0 ? 6 : 4,
+    deadlineExplanation: "Termen demo calculat determinist din regulile de execuție.",
+    deadlineIncludeStartDay: false,
+    deadlineLockedAt: null,
+    deadlineLockedReason: null,
+    deadlineMode: "CALCULATED",
+    deadlineReasonCode: null,
+    deadlineRevision: 1,
+    deadlineRuleSnapshot: { ...baseSnapshot, executionDays: index % 5 === 0 ? 6 : 4, requiresManualDueDate: false },
+    deadlineSource: "CREATION",
+    deadlineStartAt: work.createdAt,
+    deadlineTimezone: "Europe/Bucharest",
+    effectiveDueAt: calculatedDueAt,
+    manualDueAt: null,
+  };
+}
+
+function addDemoDays(date: Date, days: number): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days, date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds(), date.getUTCMilliseconds()));
 }
 
 async function seedDemoWorkflowExecutions(prisma: PrismaClient, dataset: DemoDataset): Promise<void> {

@@ -253,7 +253,7 @@ Each work must keep a financial snapshot:
 
 ## Deadlines
 
-`WORK-DEADLINES-001A` adds the reusable calculation layer for execution deadlines. It does not persist a work deadline and does not change the operational claim flow.
+`WORK-DEADLINES-001A` adds the reusable calculation layer for execution deadlines. `WORK-DEADLINES-001B` persists a controlled deadline snapshot on each work order without changing the operational claim flow.
 
 Managers configure execution time in the pricing page.
 
@@ -265,15 +265,15 @@ Example rules:
 - more than 12 elements: manual;
 - special rules per service.
 
-At first technical claim:
+Current persisted flow:
 
-1. technician selects `NC` or `NG`;
-2. the application resolves the price;
-3. the application resolves the deadline rule;
-4. the application saves the snapshot;
-5. the application sets `executionStartedAt`;
-6. the application sets `calculatedDueAt`;
-7. the UI displays the deadline alert.
+1. reception/manager creates the work order;
+2. the application uses the active legal entity context to resolve the execution rule;
+3. the application saves a sanitized deadline snapshot on the work order;
+4. `effectiveDueAt` becomes the canonical operational deadline;
+5. manual rules without an explicit manual due date become `UNRESOLVED`;
+6. updates to cabinet, doctor, work type or quantity require `expectedDeadlineRevision` and recalculate only when the deadline is not manually locked;
+7. managers can set manual deadlines or force recalculation with audit.
 
 Implemented in `WORK-DEADLINES-001A`:
 
@@ -285,12 +285,20 @@ Implemented in `WORK-DEADLINES-001A`:
 - Controlled unresolved reason `AMBIGUOUS_EXECUTION_RULES` when active matching rules are not uniquely resolved by priority.
 - Optional manager-only deadline preview through `POST /pricing/resolve-preview` when `startAt` is provided.
 
-Deferred to `WORK-DEADLINES-001B`:
+Implemented in `WORK-DEADLINES-001B`:
 
 - WorkOrder deadline persistence.
-- First-claim deadline snapshot.
-- Deadline alerts and work registry filters.
+- Deterministic backfill from legacy `requestedDeliveryDate`.
+- Side-effect-free operational preview through `POST /works/deadline-preview`, without prices or internal rule IDs.
+- Manual and unresolved deadline modes.
+- Optimistic locking with `deadlineRevision`.
 - Deadline correction audit.
+
+Deferred to `WORK-DEADLINES-001C` and later tasks:
+
+- First technical claim integration and `executionStartedAt`.
+- Deadline alerts and work registry filters.
+- Notifications, dashboard and overdue reporting.
 
 Required deadline colors:
 

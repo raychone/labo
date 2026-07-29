@@ -3,13 +3,15 @@ import type { Prisma } from "@prisma/client";
 
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
+import type { LegalEntityContext } from "../organization-context/organization-context.view.js";
 import { PatientsService } from "../patients/patients.service.js";
 import { DEFAULT_LABORATORY_SETTINGS, SETTINGS_SINGLETON_KEY } from "../settings/settings.constants.js";
 import { WorkQrTokenService } from "../qr/work-qr-token.service.js";
 import { WorkFormSubmissionValidationService } from "../work-forms/work-form-submission-validation.service.js";
 import { WorkflowExecutionService } from "../workflow-execution/workflow-execution.service.js";
 import { WORK_ORDER_AUDIT_ACTIONS, WORK_ORDER_RESOURCE_TYPE } from "./works.constants.js";
-import type { CreateWorkDto, ListWorksQueryDto, UpdateWorkDto } from "./dto/works.dto.js";
+import type { CreateWorkDto, ListWorksQueryDto, RecalculateWorkDeadlineDto, SetManualWorkDeadlineDto, UpdateWorkDto, WorkDeadlinePreviewDto } from "./dto/works.dto.js";
+import { deadlineDataToPrisma, WorkDeadlineService } from "./work-deadline.service.js";
 import { WorkOrderCodeService } from "./work-order-code.service.js";
 import {
   type PaginatedWorksView,
@@ -112,6 +114,7 @@ export class WorksService {
     @Inject(WorkQrTokenService) private readonly workQrTokenService: WorkQrTokenService,
     @Inject(WorkFormSubmissionValidationService) private readonly workFormSubmissionValidationService: WorkFormSubmissionValidationService,
     @Inject(WorkflowExecutionService) private readonly workflowExecutionService: WorkflowExecutionService,
+    @Inject(WorkDeadlineService) private readonly workDeadlineService: WorkDeadlineService,
   ) {}
 
   public async listWorks(query: ListWorksQueryDto, includePricing: boolean): Promise<PaginatedWorksView> {
@@ -190,8 +193,33 @@ export class WorksService {
     return toWorkDetailView(workOrder, includePricing);
   }
 
-  public async createWork(context: ActorContext, dto: CreateWorkDto): Promise<WorkDetailView> {
+  public async previewDeadline(legalEntity: LegalEntityContext, dto: WorkDeadlinePreviewDto, canSetManualDeadline: boolean) {
+    await this.validateClinic(this.prisma, dto.clinicId, true);
+    await this.validateDoctor(this.prisma, dto.doctorId, dto.clinicId, true);
+    await this.validateWorkType(this.prisma, dto.workTypeId, true);
+    if (dto.manualDueAt && !canSetManualDeadline) {
+      throw new BadRequestException("Nu ai permisiunea necesară pentru termen manual.");
+    }
+
+    return this.workDeadlineService.preview({
+      clinicId: dto.clinicId,
+      doctorId: dto.doctorId,
+      legalEntity,
+      ...(dto.manualDueAt !== undefined ? { manualDueAt: dto.manualDueAt } : {}),
+      now: new Date(),
+      quantity: dto.quantity,
+      ...(dto.startAt !== undefined ? { startAt: dto.startAt } : {}),
+      workTypeId: dto.workTypeId,
+    });
+  }
+
+  public async createWork(context: ActorContext, legalEntity: LegalEntityContext, dto: CreateWorkDto, canSetManualDeadline: boolean): Promise<WorkDetailView> {
     const requestedDeliveryDate = parseDateOnly(dto.requestedDeliveryDate, true);
+    const operationNow = new Date();
+    const manualDueAt = dto.manualDueAt ? new Date(dto.manualDueAt) : null;
+    if (manualDueAt && !canSetManualDeadline) {
+      throw new BadRequestException("Nu ai permisiunea necesară pentru termen manual.");
+    }
 
     const workOrder = await this.prisma.$transaction(async (tx) => {
       await this.validateClinic(tx, dto.clinicId, true);
@@ -200,6 +228,17 @@ export class WorksService {
       const patient = await this.patientsService.findActivePatientOrThrow(tx, dto.patientId);
       const workType = await this.validateWorkType(tx, dto.workTypeId, true);
       const pricing = await this.createPricingSnapshot(tx, workType.basePriceMinor, dto.quantity);
+      const deadline = await this.workDeadlineService.resolveForWork({
+        clinicId: dto.clinicId,
+        doctorId: dto.doctorId,
+        legalEntity,
+        manualDueAt,
+        now: operationNow,
+        quantity: dto.quantity,
+        source: manualDueAt ? "MANUAL_OVERRIDE" : "CREATION",
+        startAt: operationNow,
+        workTypeId: dto.workTypeId,
+      });
       const code = await this.workOrderCodeService.generate(tx);
       const qrToken = await this.workQrTokenService.generate(tx);
       const preparedSubmission = await this.workFormSubmissionValidationService.prepareCreate(tx, {
@@ -215,6 +254,7 @@ export class WorksService {
         code,
         createdByUserId: context.actorUserId,
         currency: pricing.currency,
+        ...deadlineDataToPrisma(deadline, 1),
         doctorId: dto.doctorId,
         patientId: patient.id,
         patientName: toPatientSnapshotName(patient),
@@ -260,6 +300,13 @@ export class WorksService {
         requestMetadata: context.requestMetadata,
         resourceId: createdWorkOrder.id,
       });
+      await this.recordAudit(tx, {
+        action: deadline.deadlineMode === "UNRESOLVED" ? WORK_ORDER_AUDIT_ACTIONS.deadlineUnresolved : WORK_ORDER_AUDIT_ACTIONS.deadlineCreated,
+        actorUserId: context.actorUserId,
+        metadata: this.createDeadlineAuditMetadata(null, createdWorkOrder, deadline.deadlineReasonCode ?? "creation"),
+        requestMetadata: context.requestMetadata,
+        resourceId: createdWorkOrder.id,
+      });
       if (preparedSubmission) {
         await this.workFormSubmissionValidationService.recordSubmissionAudit(tx, {
           action: preparedSubmission.audit.action,
@@ -284,7 +331,7 @@ export class WorksService {
     return toWorkDetailView(workOrder, true);
   }
 
-  public async updateWork(context: ActorContext, workOrderId: string, dto: UpdateWorkDto): Promise<WorkDetailView> {
+  public async updateWork(context: ActorContext, legalEntity: LegalEntityContext, workOrderId: string, dto: UpdateWorkDto): Promise<WorkDetailView> {
     const before = await this.findWorkOrderOrThrow(workOrderId);
     this.rejectConflictingPatientPayload(dto.patientId, dto.patientName);
     const data = await this.toUpdateData(before, dto, context.actorUserId);
@@ -300,6 +347,32 @@ export class WorksService {
 
     if (Object.keys(data).length <= 2 && dto.workFormValues === undefined && dto.workFormSubmission === undefined) {
       throw new BadRequestException("No work order fields were provided.");
+    }
+
+    const candidateChangedFields = WORK_ORDER_MUTATION_FIELDS.filter((field) => Object.prototype.hasOwnProperty.call(dto, field) && isDtoFieldChanged(before, dto, field));
+    const shouldRecalculateDeadline = this.workDeadlineService.shouldRecalculate(candidateChangedFields, before.deadlineLockedAt !== null);
+    if (shouldRecalculateDeadline) {
+      if (dto.expectedDeadlineRevision === undefined) {
+        throw new BadRequestException("expectedDeadlineRevision este obligatoriu pentru modificări care pot recalcula termenul.");
+      }
+      this.workDeadlineService.assertExpectedRevision(before.deadlineRevision, dto.expectedDeadlineRevision);
+    }
+
+    const deadline = shouldRecalculateDeadline
+      ? await this.workDeadlineService.resolveForWork({
+          clinicId: dto.clinicId ?? before.clinicId,
+          doctorId: dto.doctorId ?? before.doctorId,
+          includeStartDay: before.deadlineIncludeStartDay ?? false,
+          legalEntity,
+          now: new Date(),
+          quantity: dto.quantity ?? before.quantity,
+          source: "WORK_UPDATE",
+          startAt: before.deadlineStartAt ?? before.createdAt,
+          workTypeId: dto.workTypeId ?? before.workTypeId,
+        })
+      : null;
+    if (deadline) {
+      Object.assign(data, deadlineDataToPrisma(deadline, before.deadlineRevision + 1));
     }
 
     const after = await this.prisma.$transaction(async (tx) => {
@@ -386,8 +459,100 @@ export class WorksService {
           resourceId: workOrderId,
         });
       }
+      if (deadline) {
+        await this.recordAudit(tx, {
+          action: WORK_ORDER_AUDIT_ACTIONS.updatedWithDeadlineRecalculation,
+          actorUserId: context.actorUserId,
+          metadata: this.createDeadlineAuditMetadata(before, updatedWorkOrder, "work_update", changedFields),
+          requestMetadata: context.requestMetadata,
+          resourceId: workOrderId,
+        });
+      }
 
       return updatedWorkOrder;
+    });
+
+    return toWorkDetailView(after, true);
+  }
+
+  public async recalculateDeadline(context: ActorContext, legalEntity: LegalEntityContext, workOrderId: string, dto: RecalculateWorkDeadlineDto): Promise<WorkDetailView> {
+    const before = await this.findWorkOrderOrThrow(workOrderId);
+    this.workDeadlineService.assertExpectedRevision(before.deadlineRevision, dto.expectedRevision);
+    if (before.deadlineLockedAt !== null) {
+      throw new BadRequestException("Termenul manual locked nu poate fi recalculat automat.");
+    }
+    const operationNow = new Date();
+    const deadline = await this.workDeadlineService.resolveForWork({
+      clinicId: before.clinicId,
+      doctorId: before.doctorId,
+      includeStartDay: dto.includeStartDay ?? before.deadlineIncludeStartDay ?? false,
+      legalEntity,
+      now: operationNow,
+      quantity: before.quantity,
+      source: "MANUAL_RECALCULATION",
+      startAt: before.deadlineStartAt ?? before.createdAt,
+      workTypeId: before.workTypeId,
+    });
+    const after = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.workOrder.update({
+        data: {
+          ...deadlineDataToPrisma(deadline, before.deadlineRevision + 1),
+          updatedByUserId: context.actorUserId,
+          version: { increment: 1 },
+        },
+        include: WORK_ORDER_INCLUDE,
+        where: { id: workOrderId },
+      });
+      await this.recordAudit(tx, {
+        action: deadline.deadlineMode === "UNRESOLVED" ? WORK_ORDER_AUDIT_ACTIONS.deadlineUnresolved : WORK_ORDER_AUDIT_ACTIONS.deadlineRecalculated,
+        actorUserId: context.actorUserId,
+        metadata: this.createDeadlineAuditMetadata(before, updated, "manual_recalculation"),
+        requestMetadata: context.requestMetadata,
+        resourceId: workOrderId,
+      });
+      return updated;
+    });
+
+    return toWorkDetailView(after, true);
+  }
+
+  public async setManualDeadline(context: ActorContext, legalEntity: LegalEntityContext, workOrderId: string, dto: SetManualWorkDeadlineDto): Promise<WorkDetailView> {
+    const before = await this.findWorkOrderOrThrow(workOrderId);
+    this.workDeadlineService.assertExpectedRevision(before.deadlineRevision, dto.expectedRevision);
+    const operationNow = new Date();
+    const deadline = await this.workDeadlineService.resolveForWork({
+      clinicId: before.clinicId,
+      doctorId: before.doctorId,
+      includeStartDay: before.deadlineIncludeStartDay ?? false,
+      legalEntity,
+      manualDueAt: new Date(dto.dueAt),
+      now: operationNow,
+      quantity: before.quantity,
+      source: "MANUAL_OVERRIDE",
+      startAt: before.deadlineStartAt ?? before.createdAt,
+      workTypeId: before.workTypeId,
+    });
+    const after = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.workOrder.update({
+        data: {
+          ...deadlineDataToPrisma({
+            ...deadline,
+            deadlineLockedReason: dto.reason ?? deadline.deadlineLockedReason,
+          }, before.deadlineRevision + 1),
+          updatedByUserId: context.actorUserId,
+          version: { increment: 1 },
+        },
+        include: WORK_ORDER_INCLUDE,
+        where: { id: workOrderId },
+      });
+      await this.recordAudit(tx, {
+        action: WORK_ORDER_AUDIT_ACTIONS.deadlineManualSet,
+        actorUserId: context.actorUserId,
+        metadata: this.createDeadlineAuditMetadata(before, updated, dto.reason ?? "manual_override"),
+        requestMetadata: context.requestMetadata,
+        resourceId: workOrderId,
+      });
+      return updated;
     });
 
     return toWorkDetailView(after, true);
@@ -622,6 +787,20 @@ export class WorksService {
     };
   }
 
+  private createDeadlineAuditMetadata(before: WorkOrderRecord | null, after: WorkOrderRecord, reason: string, triggerFields: readonly string[] = []): Prisma.InputJsonObject {
+    return {
+      newEffectiveDueAt: after.effectiveDueAt?.toISOString() ?? null,
+      newMode: after.deadlineMode,
+      newRevision: after.deadlineRevision,
+      previousEffectiveDueAt: before?.effectiveDueAt?.toISOString() ?? null,
+      previousMode: before?.deadlineMode ?? null,
+      previousRevision: before?.deadlineRevision ?? 0,
+      reason,
+      triggerFields,
+      workCode: after.code,
+    };
+  }
+
   private rejectConflictingPatientPayload(patientId: string | undefined, patientName: string | undefined): void {
     if (patientId !== undefined && patientName !== undefined) {
       throw new BadRequestException("Trimite fie pacient existent, fie nume legacy, nu ambele.");
@@ -704,4 +883,17 @@ export function parseDateOnly(value: string, rejectPast: boolean): Date {
   }
 
   return date;
+}
+
+function isDtoFieldChanged(before: WorkOrderRecord, dto: UpdateWorkDto, field: (typeof WORK_ORDER_MUTATION_FIELDS)[number]): boolean {
+  const value = dto[field];
+  if (value === undefined) {
+    return false;
+  }
+
+  if (field === "requestedDeliveryDate" && typeof value === "string") {
+    return before.requestedDeliveryDate.getTime() !== parseDateOnly(value, true).getTime();
+  }
+
+  return before[field] !== value;
 }

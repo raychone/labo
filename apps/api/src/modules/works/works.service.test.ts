@@ -10,6 +10,7 @@ import type { WorkQrTokenService } from "../qr/work-qr-token.service.js";
 import type { WorkFormSubmissionValidationService } from "../work-forms/work-form-submission-validation.service.js";
 import type { WorkflowExecutionService } from "../workflow-execution/workflow-execution.service.js";
 import { CreateWorkDto } from "./dto/works.dto.js";
+import type { WorkDeadlineService } from "./work-deadline.service.js";
 import type { WorkOrderCodeService } from "./work-order-code.service.js";
 import { calculateTotalPriceMinor, parseDateOnly, WorksService } from "./works.service.js";
 
@@ -131,6 +132,23 @@ function workOrder(overrides: Partial<WorkOrder> = {}) {
     doctor: doctor(),
     doctorId: "doctor_1",
     externalReference: null,
+    calculatedDueAt: new Date("2026-07-27T14:00:00.000Z"),
+    deadlineCalculatedAt: new Date("2026-07-22T12:00:00.000Z"),
+    deadlineDueHour: 17,
+    deadlineDueMinute: 0,
+    deadlineExecutionDays: 3,
+    deadlineExplanation: "Termen calculat.",
+    deadlineIncludeStartDay: false,
+    deadlineLockedAt: null,
+    deadlineLockedReason: null,
+    deadlineMode: "CALCULATED",
+    deadlineReasonCode: null,
+    deadlineRevision: 1,
+    deadlineRuleSnapshot: {},
+    deadlineSource: "CREATION",
+    deadlineStartAt: new Date("2026-07-22T12:00:00.000Z"),
+    deadlineTimezone: "Europe/Bucharest",
+    effectiveDueAt: new Date("2026-07-27T14:00:00.000Z"),
     id: "work_order_1",
     internalNotes: null,
     patient: patient(),
@@ -147,6 +165,12 @@ function workOrder(overrides: Partial<WorkOrder> = {}) {
     updatedAt: new Date("2026-07-22T12:00:00.000Z"),
     updatedByUserId: "actor_1",
     version: 1,
+    invoicedDocumentId: null,
+    logisticsEvents: [],
+    logisticsState: null,
+    deliveryPreparationItems: [],
+    manualDueAt: null,
+    workflowExecution: null,
     workFormSubmission: null,
     workType: workType(),
     workTypeId: "work_type_1",
@@ -168,6 +192,29 @@ function createService(
   workflowExecutionService: unknown = {
     createSnapshotForWork: vi.fn().mockResolvedValue(null),
   },
+  deadlineService: unknown = {
+    resolveForWork: vi.fn().mockResolvedValue({
+      calculatedDueAt: new Date("2026-07-27T14:00:00.000Z"),
+      deadlineCalculatedAt: new Date("2026-07-22T12:00:00.000Z"),
+      deadlineDueHour: 17,
+      deadlineDueMinute: 0,
+      deadlineExecutionDays: 3,
+      deadlineExplanation: "Termen calculat.",
+      deadlineIncludeStartDay: false,
+      deadlineLockedAt: null,
+      deadlineLockedReason: null,
+      deadlineMode: "CALCULATED",
+      deadlineReasonCode: null,
+      deadlineRuleSnapshot: {},
+      deadlineSource: "CREATION",
+      deadlineStartAt: new Date("2026-07-22T12:00:00.000Z"),
+      deadlineTimezone: "Europe/Bucharest",
+      effectiveDueAt: new Date("2026-07-27T14:00:00.000Z"),
+      manualDueAt: null,
+    }),
+    shouldRecalculate: vi.fn().mockReturnValue(false),
+    assertExpectedRevision: vi.fn(),
+  },
 ): WorksService {
   return new WorksService(
     prisma as PrismaService,
@@ -176,8 +223,15 @@ function createService(
     qrTokenService as WorkQrTokenService,
     submissionValidationService as WorkFormSubmissionValidationService,
     workflowExecutionService as WorkflowExecutionService,
+    deadlineService as WorkDeadlineService,
   );
 }
+
+const legalEntity = {
+  code: "NC",
+  displayName: "Nicolaie Cristina",
+  id: "legal_nc",
+} as const;
 
 const createDto = {
   clinicId: "clinic_1",
@@ -214,7 +268,9 @@ describe("WorksService", () => {
 
     const result = await service.createWork(
       { actorUserId: "actor_1", requestMetadata: { ipAddress: "127.0.0.1" } },
+      legalEntity,
       createDto,
+      false,
     );
 
     expect(codeService.generate).toHaveBeenCalled();
@@ -254,7 +310,7 @@ describe("WorksService", () => {
       ),
     });
 
-    await expect(service.createWork({ actorUserId: "actor_1", requestMetadata: {} }, createDto)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.createWork({ actorUserId: "actor_1", requestMetadata: {} }, legalEntity, createDto, false)).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it("rejects archived work types on create", async () => {
@@ -268,7 +324,7 @@ describe("WorksService", () => {
       ),
     });
 
-    await expect(service.createWork({ actorUserId: "actor_1", requestMetadata: {} }, createDto)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.createWork({ actorUserId: "actor_1", requestMetadata: {} }, legalEntity, createDto, false)).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it("masks pricing for readers without pricing.read", async () => {
@@ -300,7 +356,7 @@ describe("WorksService", () => {
       workOrder: { findUnique: vi.fn().mockResolvedValue(before) },
     });
 
-    await service.updateWork({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", { quantity: 3 });
+    await service.updateWork({ actorUserId: "actor_1", requestMetadata: {} }, legalEntity, "work_order_1", { expectedDeadlineRevision: 1, quantity: 3 });
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({

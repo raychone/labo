@@ -385,13 +385,21 @@ Resolver order:
 
 Money is stored as integer minor units. Percentage adjustments are stored as basis points. Execution-time rules are linked to catalog items and are available for deadline calculation.
 
-`WORK-DEADLINES-001A` adds deadline calculation infrastructure without changing WorkOrder persistence:
+`WORK-DEADLINES-001A` adds deadline calculation infrastructure:
 
 - `DeadlinesModule` contains a Romanian business-day calendar, a pure execution-rule selector and `DeadlineEngineService`.
 - The deterministic MVP calendar covers 2026-2030, excludes weekends and Romanian legal holidays, and does not shift holidays to Monday.
 - The default operational due time is `17:00` in `Europe/Bucharest`; calculations use local calendar dates so DST does not change the intended local due hour.
 - `includeStartDay` is explicit. Manual rules return `MANUAL`; missing or ambiguous rules return `UNRESOLVED` with a controlled reason such as `NO_EXECUTION_RULE` or `AMBIGUOUS_EXECUTION_RULES`.
-- Deadline snapshots on work orders, alerts and correction audit remain deferred to `WORK-DEADLINES-001B`.
+
+`WORK-DEADLINES-001B` persists deadline snapshots on work orders:
+
+- `effectiveDueAt` is the canonical operational deadline. `requestedDeliveryDate` remains available as the requested/legacy delivery date and is used by the migration backfill.
+- New work orders resolve a deadline snapshot at creation. Manual execution rules without a supplied manual date are persisted as `UNRESOLVED`.
+- Updates that change cabinet, doctor, work type or quantity require `expectedDeadlineRevision` and recalculate only when the existing deadline is not manually locked.
+- Managers can recalculate or set a manual deadline explicitly; manual deadlines are locked and audited.
+- `POST /works/deadline-preview` is side-effect free and does not expose prices, agreement IDs or internal rule IDs to non-financial roles.
+- Deadline alert colors, overdue filters, notifications and technical-claim start integration are deferred to later tasks.
 
 The frontend route is:
 

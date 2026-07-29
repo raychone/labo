@@ -68,11 +68,26 @@
 }
 
 .works-page__price-preview,
+.works-page__deadline-preview,
 .works-page__choice-field p,
 .works-page__tooth-field p {
   color: var(--dl-color-text-muted);
   font-size: var(--dl-font-size-sm);
   margin: 0;
+}
+
+.works-page__deadline-preview {
+  background: var(--dl-color-surface-muted);
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  display: grid;
+  gap: var(--dl-space-1);
+  margin-top: var(--dl-space-3);
+  padding: var(--dl-space-3);
+}
+
+.works-page__deadline-preview strong {
+  color: var(--dl-color-text);
 }
 
 .works-page__choice-field,

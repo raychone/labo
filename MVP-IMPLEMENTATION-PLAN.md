@@ -1738,17 +1738,31 @@ Aceste taskuri inlocuiesc ordinea veche dupa `SIGNATURES-001`. Detaliile complet
 
 ### WORK-DEADLINES-001B - Deadline persistence and workflow integration
 
+- Status: COMPLETED.
+- Obiectiv: persistenta snapshotului de deadline pe lucrare si recalculare controlata fara a astepta `TECH-CLAIM-001`.
+- Scope: campuri deadline pe `WorkOrder`, backfill deterministic din `requestedDeliveryDate`, preview operational fara preturi, calcul la creare, recalculare doar la modificari relevante, setare manuala manager-only, optimistic locking prin `deadlineRevision`.
+- Non-goals: claim tehnician, `executionStartedAt`, statusuri vizuale overdue/near-due, notificari, dashboard, stergere/rename `requestedDeliveryDate`, recalculare bulk istorica in afara migrarii aprobate.
+- Dependente: WORK-DEADLINES-001A, PRICING-002, ORG-CONTEXT-001.
+- Acceptance criteria: lucrarile noi primesc snapshot deadline, regulile manuale devin `UNRESOLVED` fara termen manual, manualul este blocat si auditat, update-ul de cabinet/medic/tip/cantitate cere `expectedDeadlineRevision`, update-urile fara impact nu recalculeaza, preview-ul nu expune date financiare.
+- Backend: migrare Prisma determinista, `WorkDeadlineService`, endpointuri `POST /works/deadline-preview`, `POST /works/:id/deadline/recalculate`, `POST /works/:id/deadline/manual`, validari DTO, RBAC, CSRF si context juridic activ.
+- Frontend: formularul de creare/editare afiseaza preview de termen, registrul arata `Termen efectiv`, drawer-ul afiseaza mod/revizie deadline.
+- Securitate: non-managerii pot previzualiza/citi termenul fara preturi, acorduri sau ID-uri interne de reguli; mutatiile manuale si recalcularile sunt server-side permissioned.
+- Audit: creare snapshot, recalculare, setare manuala si deadline nerezolvat.
+- Testare: Prisma validate/generate/migrate, seed baza, demo seed idempotent, typecheck, unit/controller/UI tests, build si smoke API/UI.
+
+### WORK-DEADLINES-001C - Workflow claim deadline start integration
+
 - Status: APPROVED.
-- Obiectiv: persistenta snapshotului de deadline la momentul operational corect.
-- Scope: legarea engine-ului 001A de claim/workflow, salvare `executionStartedAt` si `calculatedDueAt`, status vizual derivat.
-- Non-goals: schimbarea regulilor financiare sau recalcularea istoricului fara aprobare.
-- Dependente: WORK-DEADLINES-001A, TECH-CLAIM-001 sau decizie echivalenta de integrare workflow.
-- Acceptance criteria: primul claim operational seteaza snapshotul de termen, iar corectiile sunt controlate si auditate.
-- Backend: persistenta deadline snapshot, validari, tranzactii.
-- Frontend: alerte si filtre deadline.
-- Securitate: date operationale fara preturi pentru non-manageri.
-- Audit: snapshot si corectii.
-- Testare: integration workflow, UI state tests, regresii pricing.
+- Obiectiv: integrarea termenelor persistate cu primul claim/start tehnic real, dupa ce fluxul de self-claim devine disponibil.
+- Scope: stabilirea `executionStartedAt`, recalc optional pornind de la startul tehnic, blocarea companiei la primul claim si reguli de corectie manager.
+- Non-goals: refacerea engine-ului 001A, schimbarea snapshotului 001B, notificari, dashboard sau rapoarte.
+- Dependente: WORK-DEADLINES-001B, TECH-CLAIM-001.
+- Acceptance criteria: primul claim/start tehnic seteaza explicit momentul operational de executie si pastreaza auditul; conflictele de versiune sunt refuzate.
+- Backend: integrare claim/workflow cu deadline service si optimistic locking.
+- Frontend: workbench self-claim afiseaza si confirma efectul asupra termenului.
+- Securitate: tehnicianul poate actiona doar pe etapa permisa; managerul poate corecta explicit.
+- Audit: claim, start execution si correction.
+- Testare: integration workflow, conflict tests, UI workbench tests.
 
 ### TECH-CLAIM-001 - Technician self-claim
 

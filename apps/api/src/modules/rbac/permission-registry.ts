@@ -44,6 +44,11 @@ export type PermissionKey =
   | "works.assign"
   | "works.change_status"
   | "works.archive"
+  | "works.deadline.preview"
+  | "works.deadline.read"
+  | "works.deadline.recalculate"
+  | "works.deadline.set_manual"
+  | "works.deadline.override_lock"
   | "scan.use"
   | "scan.resolve"
   | "workflow.read"
@@ -169,6 +174,11 @@ export const PERMISSION_REGISTRY = [
   definePermission("works.assign", "Assign work orders."),
   definePermission("works.change_status", "Change work order status."),
   definePermission("works.archive", "Archive work orders."),
+  definePermission("works.deadline.preview", "Preview work order deadlines without financial fields."),
+  definePermission("works.deadline.read", "Read work order deadline snapshots."),
+  definePermission("works.deadline.recalculate", "Recalculate work order deadline snapshots."),
+  definePermission("works.deadline.set_manual", "Set manual work order deadlines."),
+  definePermission("works.deadline.override_lock", "Override locked work order deadlines."),
   definePermission("scan.use", "Use operational QR scanner."),
   definePermission("scan.resolve", "Resolve operational QR scan context."),
   definePermission("workflow.read", "Read workflows."),
@@ -311,6 +321,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "scan.resolve": "ASSIGNED",
     "scan.use": "ASSIGNED",
     "works.change_status": "OWN_DELIVERY",
+    "works.deadline.read": "OWN_DELIVERY",
     "works.read_assigned": "OWN_DELIVERY",
   }),
   LOGISTICA: grants({
@@ -350,6 +361,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "workflow.start_stage": "OWN_STAGE",
     "works.assign": "ALL",
     "works.change_status": "ALL",
+    "works.deadline.read": "ALL",
     "works.read_all": "ALL",
     "works.read_assigned": "ASSIGNED",
     "works.update": "ALL",
@@ -361,6 +373,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "files.read": "OWN_CLINIC",
     "files.upload": "OWN_CLINIC",
     "works.read_assigned": "OWN_CLINIC",
+    "works.deadline.read": "OWN_CLINIC",
   }),
   RECEPTIE: grants({
     "clinics.read": "ALL",
@@ -394,6 +407,8 @@ export const ROLE_PERMISSION_MATRIX = {
     "workflow.start_stage": "OWN_STAGE",
     "works.change_status": "ALL",
     "works.create": "ALL",
+    "works.deadline.preview": "ALL",
+    "works.deadline.read": "ALL",
     "works.read_all": "ALL",
     "works.read_assigned": "ASSIGNED",
     "works.update": "ALL",
@@ -416,6 +431,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "workflow.read": "ASSIGNED",
     "workflow.start_stage": "OWN_STAGE",
     "works.change_status": "OWN_STAGE",
+    "works.deadline.read": "OWN_STAGE",
     "works.read_assigned": "OWN_STAGE",
   }),
 } as const satisfies PermissionGrantMatrix;
@@ -499,6 +515,11 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "workflow.start_stage",
   "workflow.update",
   "works.create",
+  "works.deadline.override_lock",
+  "works.deadline.preview",
+  "works.deadline.recalculate",
+  "works.deadline.read",
+  "works.deadline.set_manual",
   "works.update",
 ] as const satisfies readonly PermissionKey[];
 

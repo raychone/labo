@@ -610,6 +610,21 @@ enum WorkflowTemplateStatus {
   ARCHIVED
 }
 
+enum WorkDeadlineMode {
+  CALCULATED
+  MANUAL
+  UNRESOLVED
+}
+
+enum WorkDeadlineSource {
+  CREATION
+  WORK_UPDATE
+  MANUAL_OVERRIDE
+  MANUAL_RECALCULATION
+  LEGACY_BACKFILL
+  FUTURE_TECH_CLAIM
+}
+
 model WorkOrder {
   id String @id @default(cuid())
   code String @unique @db.VarChar(24)
@@ -628,6 +643,24 @@ model WorkOrder {
   priority WorkPriority @default(NORMAL)
   status WorkStatus @default(REGISTERED)
   requestedDeliveryDate DateTime @map("requested_delivery_date")
+  deadlineMode WorkDeadlineMode? @map("deadline_mode")
+  calculatedDueAt DateTime? @map("calculated_due_at")
+  manualDueAt DateTime? @map("manual_due_at")
+  effectiveDueAt DateTime? @map("effective_due_at")
+  deadlineStartAt DateTime? @map("deadline_start_at")
+  deadlineIncludeStartDay Boolean? @map("deadline_include_start_day")
+  deadlineDueHour Int? @map("deadline_due_hour")
+  deadlineDueMinute Int? @map("deadline_due_minute")
+  deadlineTimezone String? @map("deadline_timezone") @db.VarChar(64)
+  deadlineExecutionDays Int? @map("deadline_execution_days")
+  deadlineRuleSnapshot Json? @map("deadline_rule_snapshot")
+  deadlineExplanation String? @map("deadline_explanation") @db.VarChar(1000)
+  deadlineReasonCode String? @map("deadline_reason_code") @db.VarChar(80)
+  deadlineCalculatedAt DateTime? @map("deadline_calculated_at")
+  deadlineSource WorkDeadlineSource? @map("deadline_source")
+  deadlineRevision Int @default(0) @map("deadline_revision")
+  deadlineLockedAt DateTime? @map("deadline_locked_at")
+  deadlineLockedReason String? @map("deadline_locked_reason") @db.VarChar(500)
   externalReference String? @map("external_reference") @db.VarChar(120)
   internalNotes String? @map("internal_notes") @db.VarChar(2000)
   clinicalNotes String? @map("clinical_notes") @db.VarChar(2000)
@@ -659,6 +692,8 @@ model WorkOrder {
   @@index([status])
   @@index([priority])
   @@index([requestedDeliveryDate])
+  @@index([effectiveDueAt])
+  @@index([deadlineMode])
   @@index([createdAt])
   @@index([updatedAt])
   @@index([createdByUserId])

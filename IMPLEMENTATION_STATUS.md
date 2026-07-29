@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-79%
+80%
 
 ## ROADMAP
 
@@ -52,7 +52,7 @@
 
 - [x] WORKS-001 - Work order creation
 - [x] WORK-DEADLINES-001A - Deadline engine and Romanian business-day calendar (COMPLETED)
-- [ ] WORK-DEADLINES-001B - Deadline persistence and workflow integration (APPROVED)
+- [x] WORK-DEADLINES-001B - Persisted work deadlines and controlled recalculation (COMPLETED)
 - [ ] WORK-CYCLES-001 - Clinic return cycles and repeated handoffs (NOT STARTED)
 
 ## QR
@@ -188,19 +188,75 @@ NONE / AWAITING APPROVAL
 
 Status: AWAITING APPROVAL
 
-Started: 2026-07-29T09:02:14Z
+Started: 2026-07-29T10:03:26Z
 
-Completed: 2026-07-29T09:17:10Z
+Completed: 2026-07-29T10:23:54Z
 
-Last completed task: WORK-DEADLINES-001A - Deadline engine and Romanian business-day calendar
+Last completed task: WORK-DEADLINES-001B - Persisted work deadlines and controlled recalculation
 
-Completed: 2026-07-29T09:17:10Z
+Completed: 2026-07-29T10:23:54Z
 
 ## Next Recommended Task
 
-WORK-DEADLINES-001B - APPROVED
+WORK-DEADLINES-001C - APPROVED
 
 ## Latest Completion Summary
+
+### WORK-DEADLINES-001B - Persisted work deadlines and controlled recalculation
+
+- Status: COMPLETED.
+- Started: 2026-07-29T10:03:26Z.
+- Completed: 2026-07-29T10:23:54Z.
+- Summary:
+  - Added persisted WorkOrder deadline snapshots with mode, source, calculated/manual/effective due dates, calculation inputs, rule snapshot, explanation, reason code, lock metadata and optimistic `deadlineRevision`.
+  - Added deterministic migration backfill from legacy `requestedDeliveryDate` into manual locked deadline snapshots with source `LEGACY_BACKFILL`.
+  - Added side-effect-free `POST /works/deadline-preview`, create-time deadline resolution, controlled update recalculation and manager-only manual set/recalculate endpoints.
+  - Kept non-manager deadline views free of prices, agreement IDs and internal rule IDs.
+  - Added RBAC permissions for deadline preview/read/recalculate/manual set/override lock and enforced active legal entity context on works endpoints.
+  - Updated Works UI with deadline preview in create/edit forms and an effective deadline column/detail summary.
+  - Updated demo seed with deterministic calculated, manual and unresolved deadline examples.
+- Main files modified:
+  - `apps/api/prisma/schema.prisma`
+  - `apps/api/prisma/migrations/20260729101121_work_deadline_snapshots/migration.sql`
+  - `apps/api/src/modules/works/*`
+  - `apps/api/src/modules/rbac/permission-registry.ts`
+  - `apps/web/src/features/works/*`
+  - `packages/shared/src/works.ts`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `REAL-LAB-WORKFLOW.md`
+  - `DEMO.md`
+  - `DEMO-SCRIPT.md`
+- Tests executed:
+  - `pnpm --filter @dental-lab/api prisma:validate` passed.
+  - `pnpm --filter @dental-lab/api prisma:generate` passed.
+  - `pnpm --filter @dental-lab/api prisma:migrate:dev --name work_deadline_snapshots` passed.
+  - `pnpm --filter @dental-lab/api prisma:db:seed` passed.
+  - `pnpm --filter @dental-lab/api prisma:db:seed:demo` passed twice for idempotency.
+  - `pnpm --filter @dental-lab/api typecheck` passed.
+  - `pnpm --filter @dental-lab/api test -- src/modules/works/work-deadline.service.test.ts` passed and covered no-catalog deadline preview fallback.
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed: packages/shared 11 files/37 tests, packages/ui 3 files/27 tests, apps/api 46 files/174 tests, apps/web 15 files/39 tests.
+  - `pnpm build` passed.
+- Manual verification:
+  - Temporary current API build started on `http://localhost:3020`.
+  - `GET /health` on the existing local API returned `200`.
+  - Demo manager login through CSRF + `POST /auth/demo-login` on `3020` succeeded.
+  - `POST /works/deadline-preview` on `3020` returned `UNRESOLVED/NO_EXECUTION_RULE` instead of `404` for a legacy demo work type without company catalog item.
+  - Deadline preview response was checked for no price/agreement/total fields.
+  - `GET /works?search=WO-2026-900001` returned a persisted `CALCULATED` deadline snapshot with `revision: 1`.
+  - Temporary Vite started on `http://localhost:3001`; `/login` and `/works` returned `200 text/html`.
+- Architecture decisions:
+  - `effectiveDueAt` is the canonical operational deadline; `requestedDeliveryDate` remains as legacy/requested delivery compatibility.
+  - Deadline recalculation is controlled and optimistic-lock guarded; non-relevant work edits do not recalculate.
+  - Manual deadlines are manager-only and locked until an explicit authorized change.
+  - Rule snapshots are sanitized operational data, not financial disclosure.
+- Technical debt introduced:
+  - Pricing/deadline resolution still reads through services around the transaction boundary; no observed failure, but a future transaction client adapter could make the read/write path stricter.
+- Remaining risks:
+  - Linting remains unconfigured.
+  - Frontend does not yet implement overdue/near-due filters or alert colors; these remain outside 001B.
+  - Backend shutdown still shows the existing `pg` deprecation warning, without request failures.
 
 ### WORK-DEADLINES-001A - Deadline engine and Romanian business-day calendar
 

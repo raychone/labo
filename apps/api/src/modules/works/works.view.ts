@@ -104,6 +104,7 @@ export interface WorkSummaryView {
   readonly code: string;
   readonly createdAt: string;
   readonly currency: string | null;
+  readonly deadline: WorkDeadlineView;
   readonly doctor: {
     readonly displayName: string;
     readonly id: string;
@@ -130,6 +131,23 @@ export interface WorkSummaryView {
     readonly id: string;
     readonly name: string;
   };
+}
+
+export interface WorkDeadlineView {
+  readonly calculatedAt: string | null;
+  readonly calculatedDueAt: string | null;
+  readonly effectiveDueAt: string | null;
+  readonly executionDays: number | null;
+  readonly explanation: string | null;
+  readonly includeStartDay: boolean | null;
+  readonly isLocked: boolean;
+  readonly manualDueAt: string | null;
+  readonly mode: string | null;
+  readonly reasonCode: string | null;
+  readonly revision: number;
+  readonly source: string | null;
+  readonly startAt: string | null;
+  readonly timezone: string | null;
 }
 
 export interface WorkDetailView extends Omit<WorkSummaryView, "workflow"> {
@@ -171,6 +189,7 @@ export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: bo
     code: workOrder.code,
     createdAt: workOrder.createdAt.toISOString(),
     currency: includePricing ? workOrder.currency : null,
+    deadline: toWorkDeadlineView(workOrder),
     doctor: {
       displayName: workOrder.doctor.displayName,
       id: workOrder.doctor.id,
@@ -199,6 +218,25 @@ export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: bo
       id: workOrder.workType.id,
       name: workOrder.workType.name,
     },
+  };
+}
+
+function toWorkDeadlineView(workOrder: WorkOrderRecord): WorkDeadlineView {
+  return {
+    calculatedAt: workOrder.deadlineCalculatedAt?.toISOString() ?? null,
+    calculatedDueAt: workOrder.calculatedDueAt?.toISOString() ?? null,
+    effectiveDueAt: workOrder.effectiveDueAt?.toISOString() ?? null,
+    executionDays: workOrder.deadlineExecutionDays,
+    explanation: workOrder.deadlineExplanation,
+    includeStartDay: workOrder.deadlineIncludeStartDay,
+    isLocked: workOrder.deadlineLockedAt !== null,
+    manualDueAt: workOrder.manualDueAt?.toISOString() ?? null,
+    mode: workOrder.deadlineMode,
+    reasonCode: workOrder.deadlineReasonCode,
+    revision: workOrder.deadlineRevision,
+    source: workOrder.deadlineSource,
+    startAt: workOrder.deadlineStartAt?.toISOString() ?? null,
+    timezone: workOrder.deadlineTimezone,
   };
 }
 

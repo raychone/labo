@@ -1,5 +1,5 @@
 import { Transform, Type } from "class-transformer";
-import { IsBoolean, IsIn, IsInt, IsISO8601, IsObject, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
+import { IsBoolean, IsIn, IsInt, IsISO8601, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
 
 import { MAX_WORK_ORDER_QUANTITY, SORT_DIRECTIONS, WORK_ORDER_SORT_FIELDS, WORK_PRIORITIES, WORK_STATUSES } from "../works.constants.js";
 
@@ -196,6 +196,11 @@ export class CreateWorkDto extends WorkMutationDto {
   public declare readonly requestedDeliveryDate: string;
 
   @IsOptional()
+  @IsISO8601({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}T.+(?:Z|[+-]\d{2}:\d{2})$/)
+  public readonly manualDueAt?: string | null;
+
+  @IsOptional()
   @ValidateNested()
   @Type(() => WorkFormSubmissionDto)
   public readonly workFormSubmission?: WorkFormSubmissionDto;
@@ -214,6 +219,12 @@ export class CreateWorkDto extends WorkMutationDto {
 
 export class UpdateWorkDto extends WorkMutationDto {
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  public readonly expectedDeadlineRevision?: number;
+
+  @IsOptional()
   @IsBoolean()
   public readonly confirmWorkTypeChange?: boolean;
 
@@ -225,4 +236,62 @@ export class UpdateWorkDto extends WorkMutationDto {
   @IsOptional()
   @IsObject()
   public readonly workFormValues?: Record<string, unknown>;
+}
+
+export class WorkDeadlinePreviewDto {
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  public readonly clinicId!: string;
+
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  public readonly doctorId!: string;
+
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  public readonly workTypeId!: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(MAX_WORK_ORDER_QUANTITY)
+  public readonly quantity!: number;
+
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}T.+(?:Z|[+-]\d{2}:\d{2})$/)
+  public readonly startAt?: string;
+
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}T.+(?:Z|[+-]\d{2}:\d{2})$/)
+  public readonly manualDueAt?: string | null;
+}
+
+export class RecalculateWorkDeadlineDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  public readonly expectedRevision!: number;
+
+  @IsOptional()
+  @IsBoolean()
+  public readonly includeStartDay?: boolean;
+}
+
+export class SetManualWorkDeadlineDto {
+  @IsISO8601({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}T.+(?:Z|[+-]\d{2}:\d{2})$/)
+  public readonly dueAt!: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  public readonly expectedRevision!: number;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(500)
+  public readonly reason?: string | null;
 }

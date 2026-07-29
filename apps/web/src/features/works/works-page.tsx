@@ -26,7 +26,7 @@ import {
   type DataTableColumn,
   type DataTableSort,
 } from "@dental-lab/ui";
-import { formatMoneyMinor, getWorkflowExecutionStatusLabel, type CreateWorkInput, type PatientOption, type UpdateWorkInput, type WorkFormTemplateDetail, type WorkSortField, type WorkSummary, type WorksListParams } from "@dental-lab/shared";
+import { formatMoneyMinor, getWorkflowExecutionStatusLabel, type CreateWorkInput, type PatientOption, type UpdateWorkInput, type WorkDeadlinePreviewInput, type WorkFormTemplateDetail, type WorkSortField, type WorkSummary, type WorksListParams } from "@dental-lab/shared";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
@@ -43,7 +43,7 @@ import { useActiveWorkFormTemplate } from "../work-forms/work-form-templates-api
 import { WorkForm, WorkFormActions, defaultWorkFormValues, toWorkFormValues } from "./work-form.js";
 import { WorkFormReadOnlyView } from "./work-dynamic-form.js";
 import { WorkWorkflowSection } from "./work-workflow-section.js";
-import { useCreateWork, useUpdateWork, useWork, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
+import { useCreateWork, useUpdateWork, useWork, useWorkDeadlinePreview, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
 import { workFormSchema, type WorkFormValues } from "./works-page.schema.js";
 import { WorkQrModal } from "./work-qr-modal.js";
 import { applyApiErrorsToForm, getErrorMessage, getFormErrorSummaryItems, UnsavedChangesPrompt, useBeforeUnloadPrompt, useCloseGuard, useErrorSummaryFocus } from "../../lib/form-utils.js";
@@ -112,12 +112,29 @@ function formatDate(value: string): string {
   return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium" }).format(new Date(value));
 }
 
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
 function formatPrice(value: number | null, currency: string, locale: string): string {
   return value === null ? "Restricționat" : formatMoneyMinor(value, currency, locale);
 }
 
 function hasMeaningfulDynamicValue(value: unknown): boolean {
   return value !== null && value !== undefined && value !== "" && (!Array.isArray(value) || value.length > 0);
+}
+
+function toDeadlinePreviewInput(values: Pick<WorkFormValues, "clinicId" | "doctorId" | "quantity" | "workTypeId">): WorkDeadlinePreviewInput | null {
+  if (values.clinicId === "" || values.doctorId === "" || values.workTypeId === "" || !Number.isFinite(values.quantity) || values.quantity < 1) {
+    return null;
+  }
+
+  return {
+    clinicId: values.clinicId,
+    doctorId: values.doctorId,
+    quantity: values.quantity,
+    workTypeId: values.workTypeId,
+  };
 }
 
 function validateDynamicWorkForm(form: import("react-hook-form").UseFormReturn<WorkFormValues>, template: WorkFormTemplateDetail | null | undefined): boolean {
@@ -247,6 +264,11 @@ export function WorksPage(): ReactNode {
       id: "requestedDeliveryDate",
       isSortable: true,
       renderCell: (work) => formatDate(work.requestedDeliveryDate),
+    },
+    {
+      header: "Termen efectiv",
+      id: "effectiveDueAt",
+      renderCell: (work) => work.deadline.effectiveDueAt ? formatDateTime(work.deadline.effectiveDueAt) : "Nerezolvat",
     },
   ], [canDownloadInvoices, currency, locale]);
 
@@ -427,8 +449,16 @@ function CreateWorkModal({
   const patientOptionsQuery = usePatientOptions("", isOpen);
   const createPatientMutation = useCreatePatient();
   const selectedClinicId = form.watch("clinicId");
+  const selectedDoctorId = form.watch("doctorId");
   const selectedWorkTypeId = form.watch("workTypeId");
   const quantity = form.watch("quantity");
+  const deadlinePreviewInput = useMemo(() => toDeadlinePreviewInput({
+    clinicId: selectedClinicId,
+    doctorId: selectedDoctorId,
+    quantity,
+    workTypeId: selectedWorkTypeId,
+  }), [quantity, selectedClinicId, selectedDoctorId, selectedWorkTypeId]);
+  const deadlinePreviewQuery = useWorkDeadlinePreview(deadlinePreviewInput, isOpen);
   const selectedPriceOption = pricingWorkTypeOptions.find((option) => option.id === selectedWorkTypeId);
   const totalPreview = selectedPriceOption && Number.isFinite(quantity)
     ? formatMoneyMinor(selectedPriceOption.basePriceMinor * quantity, currency, locale)
@@ -490,6 +520,8 @@ function CreateWorkModal({
           }}
           template={activeTemplateQuery.data}
           totalPreview={totalPreview}
+          deadlinePreview={deadlinePreviewQuery.data ?? null}
+          isDeadlinePreviewLoading={deadlinePreviewQuery.isFetching}
           workTypeOptions={formWorkTypeOptions}
           patientOptions={patientOptionsQuery.data ?? []}
         />
@@ -552,8 +584,16 @@ function WorkDetailsDrawer({
     resolver: zodResolver(workFormSchema),
   });
   const selectedClinicId = form.watch("clinicId");
+  const selectedDoctorId = form.watch("doctorId");
   const selectedWorkTypeId = form.watch("workTypeId");
   const quantity = form.watch("quantity");
+  const deadlinePreviewInput = useMemo(() => toDeadlinePreviewInput({
+    clinicId: selectedClinicId,
+    doctorId: selectedDoctorId,
+    quantity,
+    workTypeId: selectedWorkTypeId,
+  }), [quantity, selectedClinicId, selectedDoctorId, selectedWorkTypeId]);
+  const deadlinePreviewQuery = useWorkDeadlinePreview(deadlinePreviewInput, isOpen && canUpdate);
   const doctorsQuery = useQuery({
     enabled: isOpen && selectedClinicId !== "",
     queryFn: () => fetchDoctorOptions(selectedClinicId),
@@ -593,6 +633,7 @@ function WorkDetailsDrawer({
     const baseInput = toMutationInput(values, isWorkTypeChanging ? activeTemplateQuery.data : null);
     return {
       ...baseInput,
+      expectedDeadlineRevision: work?.deadline.revision ?? 0,
       ...(isWorkTypeChanging
         ? {
             confirmWorkTypeChange: true,
@@ -619,7 +660,9 @@ function WorkDetailsDrawer({
             <div className="works-page__meta">
               <StatusBadge label="Înregistrată" variant="registered" />
               <PriorityBadge label={work.priority === "URGENT" ? "Urgent" : "Normal"} variant={work.priority === "URGENT" ? "urgent" : "normal"} />
-              <span>Termen: {formatDate(work.requestedDeliveryDate)}</span>
+              <span>Termen promis: {formatDate(work.requestedDeliveryDate)}</span>
+              <span>Termen efectiv: {work.deadline.effectiveDueAt ? formatDateTime(work.deadline.effectiveDueAt) : "Nerezolvat"}</span>
+              <span>Deadline: {work.deadline.mode ?? "Legacy"} · rev. {work.deadline.revision}</span>
               {canReadPricing ? <span>Total: {formatPrice(work.totalPriceMinor, work.currency ?? currency, locale)}</span> : null}
             </div>
             <div className="works-page__actions">
@@ -670,6 +713,8 @@ function WorkDetailsDrawer({
                 workTypeId: work.workType.id,
               } : null}
               totalPreview={canReadPricing ? totalPreview : null}
+              deadlinePreview={deadlinePreviewQuery.data ?? null}
+              isDeadlinePreviewLoading={deadlinePreviewQuery.isFetching}
               workTypeOptions={formWorkTypeOptions}
               patientOptions={mergePatientOptions(patientOptionsQuery.data ?? [], work.patient)}
             />

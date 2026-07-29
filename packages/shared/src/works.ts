@@ -6,11 +6,15 @@ export const WORK_PRIORITIES = ["NORMAL", "URGENT"] as const;
 export const WORK_SORT_FIELDS = ["code", "createdAt", "priority", "requestedDeliveryDate", "status", "totalPriceMinor", "updatedAt"] as const;
 export const WORK_QR_PAYLOAD_PREFIX = "dl-work:" as const;
 export const SCAN_SOURCES = ["camera", "manual"] as const;
+export const WORK_DEADLINE_MODES = ["CALCULATED", "MANUAL", "UNRESOLVED"] as const;
+export const WORK_DEADLINE_SOURCES = ["CREATION", "WORK_UPDATE", "MANUAL_OVERRIDE", "MANUAL_RECALCULATION", "LEGACY_BACKFILL", "FUTURE_TECH_CLAIM"] as const;
 
 export type WorkStatus = (typeof WORK_STATUSES)[number];
 export type WorkPriority = (typeof WORK_PRIORITIES)[number];
 export type WorkSortField = (typeof WORK_SORT_FIELDS)[number];
 export type ScanSource = (typeof SCAN_SOURCES)[number];
+export type WorkDeadlineMode = (typeof WORK_DEADLINE_MODES)[number];
+export type WorkDeadlineSource = (typeof WORK_DEADLINE_SOURCES)[number];
 
 export interface WorkClinicSummary {
   readonly code: string;
@@ -40,6 +44,23 @@ export interface WorkWorkflowSummary {
   readonly status: WorkflowExecutionStatus | null;
 }
 
+export interface WorkDeadlineSummary {
+  readonly calculatedAt: string | null;
+  readonly calculatedDueAt: string | null;
+  readonly effectiveDueAt: string | null;
+  readonly executionDays: number | null;
+  readonly explanation: string | null;
+  readonly includeStartDay: boolean | null;
+  readonly isLocked: boolean;
+  readonly manualDueAt: string | null;
+  readonly mode: WorkDeadlineMode | null;
+  readonly reasonCode: string | null;
+  readonly revision: number;
+  readonly source: WorkDeadlineSource | null;
+  readonly startAt: string | null;
+  readonly timezone: string | null;
+}
+
 export interface WorkSummary {
   readonly clinic: WorkClinicSummary;
   readonly code: string;
@@ -48,6 +69,7 @@ export interface WorkSummary {
   readonly doctor: WorkDoctorSummary;
   readonly id: string;
   readonly invoicedDocumentId: string | null;
+  readonly deadline: WorkDeadlineSummary;
   readonly patientName: string;
   readonly patientReference: string | null;
   readonly patient: {
@@ -91,12 +113,14 @@ export interface CreateWorkInput {
   readonly priority: WorkPriority;
   readonly quantity: number;
   readonly requestedDeliveryDate: string;
+  readonly manualDueAt?: string | null;
   readonly workFormSubmission?: CreateWorkFormSubmissionInput;
   readonly workTypeId: string;
 }
 
 export type UpdateWorkInput = Partial<Omit<CreateWorkInput, "workFormSubmission">> & {
   readonly confirmWorkTypeChange?: boolean;
+  readonly expectedDeadlineRevision?: number;
   readonly workFormSubmission?: CreateWorkFormSubmissionInput;
   readonly workFormValues?: WorkFormValues;
 };
@@ -122,6 +146,45 @@ export interface PaginatedWorksResponse {
   readonly pageCount: number;
   readonly pageSize: number;
   readonly total: number;
+}
+
+export interface WorkDeadlinePreviewInput {
+  readonly clinicId: string;
+  readonly doctorId: string;
+  readonly manualDueAt?: string | null;
+  readonly quantity: number;
+  readonly startAt?: string;
+  readonly workTypeId: string;
+}
+
+export interface WorkDeadlineSourceSummary {
+  readonly executionRuleSource: "MANUAL_REQUIRED" | "NONE" | "RESOLVED";
+  readonly pricingSource: "CLINIC" | "DOCTOR" | "NONE" | "STANDARD";
+}
+
+export interface WorkDeadlinePreview {
+  readonly calculatedDueAt: string | null;
+  readonly effectiveDueAt: string | null;
+  readonly executionDays: number | null;
+  readonly explanation: string;
+  readonly includeStartDay: boolean;
+  readonly manualDueAt: string | null;
+  readonly mode: WorkDeadlineMode;
+  readonly reasonCode: string | null;
+  readonly sourceSummary: WorkDeadlineSourceSummary;
+  readonly startAt: string;
+  readonly timezone: string;
+}
+
+export interface RecalculateWorkDeadlineInput {
+  readonly expectedRevision: number;
+  readonly includeStartDay?: boolean;
+}
+
+export interface SetManualWorkDeadlineInput {
+  readonly dueAt: string;
+  readonly expectedRevision: number;
+  readonly reason?: string | null;
 }
 
 export interface WorkQrLabelView {

@@ -9,6 +9,7 @@ import { AuthGuard } from "../auth/auth.guard.js";
 import { CsrfGuard } from "../auth/csrf.guard.js";
 import { CsrfService } from "../auth/csrf.service.js";
 import { SessionService } from "../auth/session.service.js";
+import { LegalEntityContextGuard } from "../organization-context/legal-entity-context.guard.js";
 import { AuthorizationService } from "../rbac/authorization.service.js";
 import { PermissionsGuard } from "../rbac/permissions.guard.js";
 import { WorksController } from "./works.controller.js";
@@ -27,6 +28,22 @@ const responseBody = {
   id: "work_order_1",
   invoicedDocumentId: null,
   internalNotes: null,
+  deadline: {
+    calculatedAt: "2026-07-22T12:00:00.000Z",
+    calculatedDueAt: "2026-07-27T14:00:00.000Z",
+    effectiveDueAt: "2026-07-27T14:00:00.000Z",
+    executionDays: 3,
+    explanation: "Termen calculat.",
+    includeStartDay: false,
+    isLocked: false,
+    manualDueAt: null,
+    mode: "CALCULATED",
+    reasonCode: null,
+    revision: 1,
+    source: "CREATION",
+    startAt: "2026-07-22T12:00:00.000Z",
+    timezone: "Europe/Bucharest",
+  },
   patientName: "Ion Pop",
   patientReference: null,
   priority: "NORMAL",
@@ -57,6 +74,17 @@ describe("WorksController", () => {
       permission: "works.read_all",
     });
     hasPermission.mockResolvedValue({ allowed: false, effectiveScopes: [], permission: "pricing.read" });
+    const legalEntityGuard = {
+      canActivate: vi.fn().mockImplementation((context: { switchToHttp: () => { getRequest: () => { legalEntityContext?: unknown } } }) => {
+        context.switchToHttp().getRequest().legalEntityContext = {
+          code: "NC",
+          displayName: "Nicolaie Cristina",
+          id: "legal_nc",
+        };
+
+        return true;
+      }),
+    };
 
     const moduleRef = await Test.createTestingModule({
       controllers: [WorksController],
@@ -102,6 +130,21 @@ describe("WorksController", () => {
           provide: WorksService,
           useValue: {
             createWork: vi.fn().mockResolvedValue(responseBody),
+            previewDeadline: vi.fn().mockResolvedValue({
+              calculatedDueAt: "2026-07-27T14:00:00.000Z",
+              effectiveDueAt: "2026-07-27T14:00:00.000Z",
+              executionDays: 3,
+              explanation: "Termen calculat.",
+              includeStartDay: false,
+              manualDueAt: null,
+              mode: "CALCULATED",
+              reasonCode: null,
+              sourceSummary: { executionRuleSource: "RESOLVED", pricingSource: "STANDARD" },
+              startAt: "2026-07-22T12:00:00.000Z",
+              timezone: "Europe/Bucharest",
+            }),
+            recalculateDeadline: vi.fn().mockResolvedValue(responseBody),
+            setManualDeadline: vi.fn().mockResolvedValue(responseBody),
             getWork: vi.fn().mockResolvedValue({ ...responseBody, currency: null, totalPriceMinor: null }),
             listWorkTypeFormOptions: vi.fn().mockResolvedValue([{ code: "WT-0001", id: "work_type_1", name: "Coroana zirconiu", unit: "UNIT" }]),
             listWorks: vi.fn().mockResolvedValue({ items: [{ ...responseBody, currency: null, totalPriceMinor: null }], page: 1, pageCount: 1, pageSize: 20, total: 1 }),
@@ -109,7 +152,10 @@ describe("WorksController", () => {
           },
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(LegalEntityContextGuard)
+      .useValue(legalEntityGuard)
+      .compile();
 
     app = moduleRef.createNestApplication();
     app.use(cookieParser());
@@ -119,7 +165,7 @@ describe("WorksController", () => {
 
   afterEach(async () => {
     vi.clearAllMocks();
-    await app.close();
+    await app?.close();
   });
 
   it("returns 401 without auth", async () => {
@@ -151,7 +197,7 @@ describe("WorksController", () => {
       .send({
         clinicId: "clinic_1",
         doctorId: "doctor_1",
-        patientName: "Ion Pop",
+        patientId: "patient_1",
         priority: "NORMAL",
         quantity: 1,
         requestedDeliveryDate: "2026-08-01",
@@ -168,7 +214,7 @@ describe("WorksController", () => {
       .send({
         clinicId: "clinic_1",
         doctorId: "doctor_1",
-        patientName: "Ion Pop",
+        patientId: "patient_1",
         priority: "NORMAL",
         quantity: 1,
         requestedDeliveryDate: "2026-08-01",
