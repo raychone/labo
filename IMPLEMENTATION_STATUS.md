@@ -150,7 +150,7 @@
 
 ## PRICING
 
-- [ ] PRICING-002 - Company-specific pricing and agreements (NOT STARTED)
+- [x] PRICING-002 - Company-specific pricing and agreements (COMPLETED)
 
 ## DOCUMENTS
 
@@ -185,21 +185,85 @@
 
 NONE / AWAITING APPROVAL
 
-Status: COMPLETED
+Status: AWAITING APPROVAL
 
-Started: 2026-07-29T05:32:59Z
+Started: 2026-07-29T07:39:38Z
 
-Completed: 2026-07-29T06:11:51Z
+Completed: 2026-07-29T08:20:27Z
 
-Last completed task: PATIENTS-001 - Patient records and patient work history
+Last completed task: PRICING-002 - Company-specific pricing and agreements
 
-Completed: 2026-07-29T06:11:51Z
+Completed: 2026-07-29T08:20:27Z
 
 ## Next Recommended Task
 
-PRICING-002 - Company-specific pricing and agreements
+WORK-DEADLINES-001 - APPROVED
 
 ## Latest Completion Summary
+
+### PRICING-002 - Company-specific pricing and agreements
+
+- Status: COMPLETED.
+- Started: 2026-07-29T07:39:38Z.
+- Completed: 2026-07-29T08:20:27Z.
+- Summary:
+  - Added company-scoped price catalog models, execution-time rules and clinic/doctor commercial agreements.
+  - Added deterministic migrations `20260729074000_company_pricing_agreements` and `20260729081500_company_pricing_agreements`.
+  - Preserved `WorkType.basePriceMinor` as legacy base pricing and did not change existing WorkOrder pricing snapshots.
+  - Added `PricingModule` REST endpoints for catalog, execution rules, agreements, agreement rules, archive/restore and resolver preview.
+  - Added resolver priority `doctor applicable rule > clinic applicable rule > standard company catalog`.
+  - Added manager-only RBAC permissions `pricing.archive`, `pricing.resolve_preview`, `pricing.agreements.read` and `pricing.agreements.manage`.
+  - Added `/pricing` UI workspace with catalog, agreements, preview, termene and source/history tabs.
+  - Added deterministic demo pricing seed for both `NC` and `NG`, plus demo commercial agreements.
+  - Added `PRICING-ASSET-AUDIT.md`.
+- Files modified:
+  - `apps/api/prisma/schema.prisma`
+  - `apps/api/prisma/migrations/20260729074000_company_pricing_agreements/migration.sql`
+  - `apps/api/prisma/migrations/20260729081500_company_pricing_agreements/migration.sql`
+  - `apps/api/prisma/catalog/real-pricing-catalog.ts`
+  - `apps/api/prisma/demo/demo-seed.ts`
+  - `apps/api/prisma/demo/demo-reset.ts`
+  - `apps/api/src/modules/pricing/*`
+  - `apps/api/src/modules/rbac/permission-registry.ts`
+  - `apps/web/src/features/pricing/*`
+  - `apps/web/src/app/app.tsx`
+  - `apps/web/src/app/route-registry.tsx`
+  - `packages/shared/src/pricing.ts`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `IMPLEMENTATION_STATUS.md`
+  - `PRICING-ASSET-AUDIT.md`
+- Dependencies added:
+  - None.
+- Automated verification:
+  - `pnpm --filter @dental-lab/api prisma:validate` passed.
+  - `pnpm --filter @dental-lab/api prisma:generate` passed.
+  - `pnpm --filter @dental-lab/api prisma:migrate:dev --name company_pricing_agreements` passed.
+  - `pnpm --filter @dental-lab/api prisma:db:seed` passed.
+  - `pnpm --filter @dental-lab/api prisma:db:seed:demo` passed twice for idempotency.
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed.
+- Manual verification:
+  - Existing API on `http://localhost:3010` returned `GET /health` 200.
+  - Manager demo login succeeded.
+  - `GET /pricing/catalog` returned 35 active catalog items.
+  - `GET /pricing/agreements` returned active demo agreements.
+  - `POST /pricing/resolve-preview` returned a calculated preview with source and totals.
+  - Reception demo login received 403 on `GET /pricing/catalog`.
+  - Frontend started on `http://localhost:3001` because local port `3000` was already occupied by another process; `GET /pricing` returned 200.
+- Architecture decisions:
+  - Price catalog items are scoped by active legal entity from session; no legal entity is accepted from body/query/header.
+  - Work types remain common across companies; company-specific price lives in `PriceCatalogItem`.
+  - Execution-time rules are stored with price catalog items for later deadline calculation, but WorkOrder snapshot logic is unchanged.
+  - Demo pricing source was manually transcribed only where unambiguous.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Some source price-list rows are ambiguous and are marked in seed notes for client validation.
+  - `/pricing` direct browser smoke used port `3001` because port `3000` was occupied by an existing non-Vite process.
+  - Linting remains unconfigured.
+  - `assets/` remains intentionally untracked.
 
 ### PATIENTS-001 - Patient records and patient work history
 

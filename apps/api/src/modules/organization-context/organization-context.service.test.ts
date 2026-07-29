@@ -84,7 +84,7 @@ describe("OrganizationContextService", () => {
   it("preserves an existing active NG context", async () => {
     const { prisma, service } = createService({
       session: {
-        activeLegalEntity: { code: "NG", displayName: "Nicolaie Gabriel", isActive: true },
+        activeLegalEntity: { code: "NG", displayName: "Nicolaie Gabriel", id: "legal_ng", isActive: true },
         activeLegalEntityId: "legal_ng",
         expiresAt: new Date(Date.now() + 60_000),
         id: "session_1",
@@ -111,7 +111,7 @@ describe("OrganizationContextService", () => {
   it("switches only the current session and audits safe metadata", async () => {
     const { audit, prisma, service } = createService({
       session: {
-        activeLegalEntity: { code: "NC", displayName: "Nicolaie Cristina", isActive: true },
+        activeLegalEntity: { code: "NC", displayName: "Nicolaie Cristina", id: "legal_nc", isActive: true },
         activeLegalEntityId: "legal_nc",
         expiresAt: new Date(Date.now() + 60_000),
         id: "session_1",

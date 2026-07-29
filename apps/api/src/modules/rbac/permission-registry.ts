@@ -106,6 +106,10 @@ export type PermissionKey =
   | "pricing.read"
   | "pricing.create"
   | "pricing.update"
+  | "pricing.archive"
+  | "pricing.resolve_preview"
+  | "pricing.agreements.read"
+  | "pricing.agreements.manage"
   | "forms.read"
   | "forms.create"
   | "forms.update"
@@ -227,6 +231,10 @@ export const PERMISSION_REGISTRY = [
   definePermission("pricing.read", "Read pricing."),
   definePermission("pricing.create", "Create pricing entries."),
   definePermission("pricing.update", "Update pricing entries."),
+  definePermission("pricing.archive", "Archive pricing entries."),
+  definePermission("pricing.resolve_preview", "Preview resolved pricing."),
+  definePermission("pricing.agreements.read", "Read pricing agreements."),
+  definePermission("pricing.agreements.manage", "Manage pricing agreements."),
   definePermission("forms.read", "Read work form templates."),
   definePermission("forms.create", "Create work form templates."),
   definePermission("forms.update", "Update work form templates."),
@@ -457,6 +465,13 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "patients.documents.read",
   "patients.read",
   "patients.update",
+  "pricing.agreements.manage",
+  "pricing.agreements.read",
+  "pricing.archive",
+  "pricing.create",
+  "pricing.read",
+  "pricing.resolve_preview",
+  "pricing.update",
   "invoice.download",
   "invoice.read",
   "quality.approve",

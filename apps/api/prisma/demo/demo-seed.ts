@@ -1,9 +1,20 @@
-import { DeliveryEventType, DeliveryFailureReasonCode, DeliveryPreparationGroupStatus, DeliveryStatus, LogisticsBlockReasonCode, LogisticsLocationCode, WorkLogisticsStatus } from "@prisma/client";
+import {
+  DeliveryEventType,
+  DeliveryFailureReasonCode,
+  DeliveryPreparationGroupStatus,
+  DeliveryStatus,
+  LogisticsBlockReasonCode,
+  LogisticsLocationCode,
+  WorkLogisticsStatus,
+  type PricingAgreementSubjectType,
+  type PricingRuleScope,
+} from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
 import { Prisma, type WorkFormFieldType } from "@prisma/client";
 import { createHash } from "node:crypto";
 
 import { hashPassword } from "../../src/modules/auth/password.hashing.js";
+import { REAL_PRICING_CATALOG, REAL_PRICING_SOURCE_SUMMARY, type RealPricingCatalogEntry } from "../catalog/real-pricing-catalog.js";
 import { DEMO_INVOICE_SERIES, DEMO_PASSWORD, DEMO_PROFORMA_SERIES } from "./demo.constants.js";
 import { assertDemoDatasetConsistency, buildDemoDataset, getDocumentSeries, type DemoBillingDocumentSeed, type DemoDataset, type DemoWorkSeed } from "./demo-data.js";
 import { resetDemoData } from "./demo-reset.js";
@@ -20,6 +31,7 @@ export async function seedDemoData(prisma: PrismaClient, now = new Date()): Prom
   await seedDemoClinics(prisma, dataset);
   await seedDemoDoctors(prisma, dataset);
   await seedDemoWorkTypes(prisma, dataset);
+  await seedDemoPricing(prisma);
   await seedDemoWorkFormTemplates(prisma);
   await seedDemoWorkflowTemplates(prisma);
   await seedDemoPatients(prisma, dataset);
@@ -504,6 +516,319 @@ async function seedDemoWorkTypes(prisma: PrismaClient, dataset: DemoDataset): Pr
       },
     });
   }
+}
+
+async function seedDemoPricing(prisma: PrismaClient): Promise<void> {
+  for (const item of REAL_PRICING_CATALOG) {
+    await prisma.workType.create({
+      data: {
+        archivedAt: null,
+        basePriceMinor: item.priceMinor,
+        code: item.workTypeCode,
+        description: toDemoPricingDescription(item),
+        id: toDemoPricingWorkTypeId(item.key),
+        isActive: true,
+        name: item.displayName,
+        unit: item.unit,
+      },
+    });
+  }
+
+  const manager = await prisma.user.findUniqueOrThrow({
+    select: { id: true },
+    where: { id: "demo_user_manager" },
+  });
+  const legalEntities = await prisma.legalEntity.findMany({
+    select: { code: true, id: true },
+    where: { code: { in: ["NC", "NG"] } },
+  });
+
+  for (const legalEntity of legalEntities) {
+    for (const [index, item] of REAL_PRICING_CATALOG.entries()) {
+      const priceCatalogItemId = toDemoPriceCatalogItemId(legalEntity.code, item.key);
+
+      await prisma.priceCatalogItem.create({
+        data: {
+          category: item.category,
+          createdByUserId: manager.id,
+          displayName: item.displayName,
+          id: priceCatalogItemId,
+          isActive: true,
+          legalEntityId: legalEntity.id,
+          notes: toDemoPricingDescription(item),
+          sortOrder: index + 1,
+          standardPriceMinor: item.priceMinor,
+          unit: item.unit,
+          updatedByUserId: manager.id,
+          workTypeId: toDemoPricingWorkTypeId(item.key),
+        },
+      });
+
+      await seedDemoExecutionTimeRules(prisma, legalEntity.code, item, priceCatalogItemId, manager.id);
+    }
+  }
+
+  await seedDemoPricingAgreements(prisma, manager.id);
+}
+
+async function seedDemoExecutionTimeRules(
+  prisma: PrismaClient,
+  legalEntityCode: string,
+  item: RealPricingCatalogEntry,
+  priceCatalogItemId: string,
+  managerUserId: string,
+): Promise<void> {
+  const rules = getDemoExecutionRules(item.executionGroup);
+
+  for (const [index, rule] of rules.entries()) {
+    await prisma.executionTimeRule.create({
+      data: {
+        createdByUserId: managerUserId,
+        executionDays: rule.executionDays,
+        id: `demo_execution_time_${legalEntityCode.toLowerCase()}_${item.key}_${index + 1}`,
+        isActive: true,
+        maxQuantity: rule.maxQuantity,
+        minQuantity: rule.minQuantity,
+        priceCatalogItemId,
+        priority: index + 1,
+        requiresManualDueDate: rule.requiresManualDueDate,
+        updatedByUserId: managerUserId,
+      },
+    });
+  }
+}
+
+async function seedDemoPricingAgreements(prisma: PrismaClient, managerUserId: string): Promise<void> {
+  const nc = await prisma.legalEntity.findUniqueOrThrow({ select: { id: true }, where: { code: "NC" } });
+  const ng = await prisma.legalEntity.findUniqueOrThrow({ select: { id: true }, where: { code: "NG" } });
+
+  await createDemoPricingAgreement(prisma, {
+    id: "demo_pricing_agreement_nc_clinic_aurora",
+    legalEntityId: nc.id,
+    managerUserId,
+    name: "Aurora Demo - discount clinică 10%",
+    rules: [
+      {
+        adjustmentPercentageBasisPoints: 1_000,
+        adjustmentType: "PERCENTAGE",
+        scope: "ALL",
+      },
+    ],
+    subjectId: "demo_clinic_aurora",
+    subjectType: "CLINIC",
+    validFrom: new Date("2026-07-01T00:00:00.000Z"),
+  });
+
+  await createDemoPricingAgreement(prisma, {
+    id: "demo_pricing_agreement_nc_clinic_smile",
+    legalEntityId: nc.id,
+    managerUserId,
+    name: "Smile Avenue Demo - zirconiu +50 RON",
+    rules: [
+      {
+        adjustmentValueMinor: 5_000,
+        adjustmentType: "FIXED_AMOUNT",
+        category: "Zirconiu",
+        scope: "CATEGORY",
+      },
+    ],
+    subjectId: "demo_clinic_smile",
+    subjectType: "CLINIC",
+    validFrom: new Date("2026-07-01T00:00:00.000Z"),
+  });
+
+  await createDemoPricingAgreement(prisma, {
+    id: "demo_pricing_agreement_ng_clinic_future",
+    legalEntityId: ng.id,
+    managerUserId,
+    name: "Dental Point Demo - discount viitor",
+    rules: [
+      {
+        adjustmentPercentageBasisPoints: 500,
+        adjustmentType: "PERCENTAGE",
+        scope: "ALL",
+      },
+    ],
+    subjectId: "demo_clinic_point",
+    subjectType: "CLINIC",
+    validFrom: new Date("2027-01-01T00:00:00.000Z"),
+  });
+
+  await createDemoPricingAgreement(prisma, {
+    id: "demo_pricing_agreement_nc_doctor_ana",
+    legalEntityId: nc.id,
+    managerUserId,
+    name: "Dr. Ana Popescu - preț fix zirconiu multistrat",
+    rules: [
+      {
+        adjustmentType: "OVERRIDE_PRICE",
+        overridePriceMinor: 28_000,
+        priceCatalogItemId: toDemoPriceCatalogItemId("NC", "cor-zirconia-multistrat"),
+        scope: "ITEM",
+      },
+    ],
+    subjectId: "demo_doctor_aurora_ana",
+    subjectType: "DOCTOR",
+    validFrom: new Date("2026-07-01T00:00:00.000Z"),
+  });
+
+  await createDemoPricingAgreement(prisma, {
+    id: "demo_pricing_agreement_nc_doctor_mihai",
+    legalEntityId: nc.id,
+    managerUserId,
+    name: "Dr. Mihai Ionescu - +30 RON",
+    rules: [
+      {
+        adjustmentValueMinor: 3_000,
+        adjustmentType: "FIXED_AMOUNT",
+        scope: "ALL",
+      },
+    ],
+    subjectId: "demo_doctor_aurora_mihai",
+    subjectType: "DOCTOR",
+    validFrom: new Date("2026-07-01T00:00:00.000Z"),
+  });
+
+  await createDemoPricingAgreement(prisma, {
+    archivedAt: new Date("2026-07-20T00:00:00.000Z"),
+    archivedByUserId: managerUserId,
+    id: "demo_pricing_agreement_ng_doctor_archived",
+    isActive: false,
+    legalEntityId: ng.id,
+    managerUserId,
+    name: "Dr. Sorin Matei - acord arhivat implanturi",
+    rules: [
+      {
+        adjustmentPercentageBasisPoints: 750,
+        adjustmentType: "PERCENTAGE",
+        category: "Implanturi",
+        scope: "CATEGORY",
+      },
+    ],
+    subjectId: "demo_doctor_point_sorin",
+    subjectType: "DOCTOR",
+    validFrom: new Date("2026-07-01T00:00:00.000Z"),
+  });
+}
+
+interface DemoExecutionRuleSeed {
+  readonly executionDays: number | null;
+  readonly maxQuantity: number | null;
+  readonly minQuantity: number;
+  readonly requiresManualDueDate: boolean;
+}
+
+interface DemoPricingAgreementRuleSeed {
+  readonly adjustmentPercentageBasisPoints?: number;
+  readonly adjustmentValueMinor?: number;
+  readonly adjustmentType: "FIXED_AMOUNT" | "OVERRIDE_PRICE" | "PERCENTAGE";
+  readonly category?: string;
+  readonly overridePriceMinor?: number;
+  readonly priceCatalogItemId?: string;
+  readonly scope: PricingRuleScope;
+}
+
+interface DemoPricingAgreementSeed {
+  readonly archivedAt?: Date;
+  readonly archivedByUserId?: string;
+  readonly id: string;
+  readonly isActive?: boolean;
+  readonly legalEntityId: string;
+  readonly managerUserId: string;
+  readonly name: string;
+  readonly rules: readonly DemoPricingAgreementRuleSeed[];
+  readonly subjectId: string;
+  readonly subjectType: PricingAgreementSubjectType;
+  readonly validFrom: Date;
+  readonly validUntil?: Date;
+}
+
+async function createDemoPricingAgreement(prisma: PrismaClient, seed: DemoPricingAgreementSeed): Promise<void> {
+  await prisma.pricingAgreement.create({
+    data: {
+      archivedAt: seed.archivedAt ?? null,
+      archivedByUserId: seed.archivedByUserId ?? null,
+      clinicId: seed.subjectType === "CLINIC" ? seed.subjectId : null,
+      createdByUserId: seed.managerUserId,
+      doctorId: seed.subjectType === "DOCTOR" ? seed.subjectId : null,
+      id: seed.id,
+      isActive: seed.isActive ?? true,
+      legalEntityId: seed.legalEntityId,
+      name: seed.name,
+      notes: "Acord comercial fictiv pentru demonstrație.",
+      rules: {
+        create: seed.rules.map((rule, index) => toDemoPricingAgreementRuleCreateInput(seed.id, rule, index)),
+      },
+      subjectType: seed.subjectType,
+      updatedByUserId: seed.managerUserId,
+      validFrom: seed.validFrom,
+      validUntil: seed.validUntil ?? null,
+    },
+  });
+}
+
+function toDemoPricingAgreementRuleCreateInput(
+  agreementId: string,
+  rule: DemoPricingAgreementRuleSeed,
+  index: number,
+): Prisma.PricingAgreementRuleCreateWithoutPricingAgreementInput {
+  return {
+    adjustmentPercentageBasisPoints: rule.adjustmentPercentageBasisPoints ?? null,
+    adjustmentValueMinor: rule.adjustmentValueMinor ?? null,
+    adjustmentType: rule.adjustmentType,
+    category: rule.category ?? null,
+    id: `${agreementId}_rule_${index + 1}`,
+    overridePriceMinor: rule.overridePriceMinor ?? null,
+    ...(rule.priceCatalogItemId
+      ? {
+          priceCatalogItem: {
+            connect: { id: rule.priceCatalogItemId },
+          },
+        }
+      : {}),
+    scope: rule.scope,
+  };
+}
+
+function getDemoExecutionRules(group: RealPricingCatalogEntry["executionGroup"]): readonly DemoExecutionRuleSeed[] {
+  if (group === "PROVISIONAL_REPAIR") {
+    return [executionRule(1, null, 3)];
+  }
+
+  if (group === "MOBILE_PROSTHESIS") {
+    return [executionRule(1, null, 5)];
+  }
+
+  return [
+    executionRule(1, 3, 3),
+    executionRule(4, 7, 4),
+    executionRule(8, 12, 5),
+    { executionDays: null, maxQuantity: null, minQuantity: 13, requiresManualDueDate: true },
+  ];
+}
+
+function executionRule(minQuantity: number, maxQuantity: number | null, executionDays: number): DemoExecutionRuleSeed {
+  return {
+    executionDays,
+    maxQuantity,
+    minQuantity,
+    requiresManualDueDate: false,
+  };
+}
+
+function toDemoPricingWorkTypeId(key: string): string {
+  return `demo_wt_pricing_${key}`;
+}
+
+function toDemoPriceCatalogItemId(legalEntityCode: string, key: string): string {
+  return `demo_price_catalog_${legalEntityCode.toLowerCase()}_${key}`;
+}
+
+function toDemoPricingDescription(item: RealPricingCatalogEntry): string {
+  const validationNote = item.requiresClientValidation ? " Necesită validare client pentru valoarea finală." : "";
+  const sourceNote = item.sourceNote ? ` ${item.sourceNote}` : "";
+
+  return `${REAL_PRICING_SOURCE_SUMMARY}${sourceNote}${validationNote}`;
 }
 
 async function seedDemoPatients(prisma: PrismaClient, dataset: DemoDataset): Promise<void> {

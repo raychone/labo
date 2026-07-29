@@ -4,13 +4,14 @@ import { getNavigationRoutes, getSafeReturnTo, hasRouteAccess, scanPermissions, 
 
 describe("route registry", () => {
   it("filters navigation by permission snapshot", () => {
-    const labels = getNavigationRoutes(["works.read_all", "scan.use", "logistics.center.read", "settings.read", "finance.read"]).map((route) => route.label);
+    const labels = getNavigationRoutes(["works.read_all", "scan.use", "logistics.center.read", "settings.read", "finance.read", "pricing.read"]).map((route) => route.label);
 
     expect(labels).toContain("Panou principal");
     expect(labels).toContain("Lucrări");
     expect(labels).toContain("Scanare");
     expect(labels).toContain("Centru operațional");
     expect(labels).toContain("Facturare");
+    expect(labels).toContain("Prețuri și termene");
     expect(labels).toContain("Setări");
     expect(labels).not.toContain("Utilizatori");
   });

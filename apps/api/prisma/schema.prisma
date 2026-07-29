@@ -76,6 +76,14 @@ model User {
   updatedDeliveries Delivery[] @relation("DeliveryUpdatedBy")
   deliveryEvents DeliveryEvent[] @relation("DeliveryEventActor")
   confirmedDeliveryProofs DeliveryProof[] @relation("DeliveryProofConfirmedBy")
+  createdPriceCatalogItems PriceCatalogItem[] @relation("PriceCatalogItemCreatedBy")
+  updatedPriceCatalogItems PriceCatalogItem[] @relation("PriceCatalogItemUpdatedBy")
+  archivedPriceCatalogItems PriceCatalogItem[] @relation("PriceCatalogItemArchivedBy")
+  createdExecutionTimeRules ExecutionTimeRule[] @relation("ExecutionTimeRuleCreatedBy")
+  updatedExecutionTimeRules ExecutionTimeRule[] @relation("ExecutionTimeRuleUpdatedBy")
+  createdPricingAgreements PricingAgreement[] @relation("PricingAgreementCreatedBy")
+  updatedPricingAgreements PricingAgreement[] @relation("PricingAgreementUpdatedBy")
+  archivedPricingAgreements PricingAgreement[] @relation("PricingAgreementArchivedBy")
 
   @@index([isActive])
   @@index([createdAt])
@@ -123,6 +131,8 @@ model LegalEntity {
   updatedAt DateTime             @updatedAt @map("updated_at")
   sessions  Session[]            @relation("SessionActiveLegalEntity")
   settings  LegalEntitySettings?
+  priceCatalogItems PriceCatalogItem[]
+  pricingAgreements PricingAgreement[]
 
   @@index([isActive, sortOrder, code])
   @@map("legal_entities")
@@ -240,6 +250,7 @@ model Clinic {
   workOrders WorkOrder[]
   billingDocuments BillingDocument[]
   payments Payment[]
+  pricingAgreements PricingAgreement[]
   createdBy User? @relation("ClinicCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   updatedBy User? @relation("ClinicUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   archivedBy User? @relation("ClinicArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
@@ -275,6 +286,7 @@ model Doctor {
   clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
   workOrders WorkOrder[]
   billingDocuments BillingDocument[]
+  pricingAgreements PricingAgreement[]
 
   @@index([clinicId])
   @@index([clinicId, isActive])
@@ -304,6 +316,7 @@ model WorkType {
   workOrders WorkOrder[]
   formTemplates WorkFormTemplate[]
   workflowTemplates WorkflowTemplate[]
+  priceCatalogItems PriceCatalogItem[]
 
   @@index([name])
   @@index([basePriceMinor])
@@ -317,7 +330,147 @@ model WorkType {
 }
 
 enum WorkTypeUnit {
+  ELEMENT
   UNIT
+  ARCH
+  CASE
+  REPAIR
+  OTHER
+}
+
+model PriceCatalogItem {
+  id                 String                @id @default(cuid())
+  legalEntityId      String                @map("legal_entity_id")
+  workTypeId         String                @map("work_type_id")
+  category           String                @db.VarChar(100)
+  displayName        String                @map("display_name") @db.VarChar(160)
+  unit               WorkTypeUnit          @default(UNIT)
+  standardPriceMinor Int                   @map("standard_price_minor")
+  isActive           Boolean               @default(true) @map("is_active")
+  sortOrder          Int                   @default(0) @map("sort_order")
+  notes              String?               @db.VarChar(1000)
+  createdByUserId    String?               @map("created_by_user_id")
+  updatedByUserId    String?               @map("updated_by_user_id")
+  archivedAt         DateTime?             @map("archived_at")
+  archivedByUserId   String?               @map("archived_by_user_id")
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @default(now()) @updatedAt @map("updated_at")
+  legalEntity        LegalEntity           @relation(fields: [legalEntityId], references: [id], onDelete: Restrict)
+  workType           WorkType              @relation(fields: [workTypeId], references: [id], onDelete: Restrict)
+  createdBy          User?                 @relation("PriceCatalogItemCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy          User?                 @relation("PriceCatalogItemUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  archivedBy         User?                 @relation("PriceCatalogItemArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
+  executionTimeRules ExecutionTimeRule[]
+  agreementRules     PricingAgreementRule[]
+
+  @@index([legalEntityId])
+  @@index([workTypeId])
+  @@index([isActive])
+  @@index([legalEntityId, category, sortOrder, displayName])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@index([archivedByUserId])
+  @@map("price_catalog_items")
+}
+
+model ExecutionTimeRule {
+  id                    String           @id @default(cuid())
+  priceCatalogItemId    String           @map("price_catalog_item_id")
+  minQuantity           Int              @map("min_quantity")
+  maxQuantity           Int?             @map("max_quantity")
+  executionDays         Int?             @map("execution_days")
+  requiresManualDueDate Boolean          @default(false) @map("requires_manual_due_date")
+  priority              Int              @default(0)
+  isActive              Boolean          @default(true) @map("is_active")
+  createdByUserId       String?          @map("created_by_user_id")
+  updatedByUserId       String?          @map("updated_by_user_id")
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @default(now()) @updatedAt @map("updated_at")
+  priceCatalogItem      PriceCatalogItem @relation(fields: [priceCatalogItemId], references: [id], onDelete: Cascade)
+  createdBy             User?            @relation("ExecutionTimeRuleCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy             User?            @relation("ExecutionTimeRuleUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([priceCatalogItemId])
+  @@index([priceCatalogItemId, isActive, minQuantity])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@map("execution_time_rules")
+}
+
+model PricingAgreement {
+  id                 String                      @id @default(cuid())
+  legalEntityId      String                      @map("legal_entity_id")
+  subjectType        PricingAgreementSubjectType @map("subject_type")
+  clinicId           String?                     @map("clinic_id")
+  doctorId           String?                     @map("doctor_id")
+  name               String                      @db.VarChar(160)
+  validFrom          DateTime                    @map("valid_from") @db.Date
+  validUntil         DateTime?                   @map("valid_until") @db.Date
+  isActive           Boolean                     @default(true) @map("is_active")
+  notes              String?                     @db.VarChar(1000)
+  createdByUserId    String?                     @map("created_by_user_id")
+  updatedByUserId    String?                     @map("updated_by_user_id")
+  archivedAt         DateTime?                   @map("archived_at")
+  archivedByUserId   String?                     @map("archived_by_user_id")
+  createdAt          DateTime                    @default(now()) @map("created_at")
+  updatedAt          DateTime                    @default(now()) @updatedAt @map("updated_at")
+  legalEntity        LegalEntity                 @relation(fields: [legalEntityId], references: [id], onDelete: Restrict)
+  clinic             Clinic?                     @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  doctor             Doctor?                     @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  createdBy          User?                       @relation("PricingAgreementCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy          User?                       @relation("PricingAgreementUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  archivedBy         User?                       @relation("PricingAgreementArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
+  rules              PricingAgreementRule[]
+
+  @@index([legalEntityId])
+  @@index([clinicId])
+  @@index([doctorId])
+  @@index([subjectType])
+  @@index([isActive])
+  @@index([legalEntityId, subjectType, isActive, validFrom, validUntil])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@index([archivedByUserId])
+  @@map("pricing_agreements")
+}
+
+model PricingAgreementRule {
+  id                                  String                  @id @default(cuid())
+  pricingAgreementId                  String                  @map("pricing_agreement_id")
+  scope                               PricingRuleScope
+  priceCatalogItemId                  String?                 @map("price_catalog_item_id")
+  category                            String?                 @db.VarChar(100)
+  adjustmentType                      PricingAdjustmentType    @map("adjustment_type")
+  adjustmentValueMinor                Int?                    @map("adjustment_value_minor")
+  adjustmentPercentageBasisPoints     Int?                    @map("adjustment_percentage_basis_points")
+  overridePriceMinor                  Int?                    @map("override_price_minor")
+  createdAt                           DateTime                @default(now()) @map("created_at")
+  updatedAt                           DateTime                @default(now()) @updatedAt @map("updated_at")
+  pricingAgreement                    PricingAgreement        @relation(fields: [pricingAgreementId], references: [id], onDelete: Cascade)
+  priceCatalogItem                    PriceCatalogItem?       @relation(fields: [priceCatalogItemId], references: [id], onDelete: Restrict)
+
+  @@index([pricingAgreementId])
+  @@index([priceCatalogItemId])
+  @@index([scope])
+  @@index([category])
+  @@map("pricing_agreement_rules")
+}
+
+enum PricingAgreementSubjectType {
+  CLINIC
+  DOCTOR
+}
+
+enum PricingRuleScope {
+  ALL
+  CATEGORY
+  ITEM
+}
+
+enum PricingAdjustmentType {
+  FIXED_AMOUNT
+  PERCENTAGE
+  OVERRIDE_PRICE
 }
 
 model WorkFormTemplate {

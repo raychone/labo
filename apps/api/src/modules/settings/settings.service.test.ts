@@ -70,7 +70,7 @@ describe("SettingsService", () => {
       },
     });
 
-    const result = await service.getSettings({ code: "NC", displayName: "Nicolaie Cristina" });
+    const result = await service.getSettings({ code: "NC", displayName: "Nicolaie Cristina", id: "legal_nc" });
 
     expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
       where: { legalEntityId: "legal_nc" },
@@ -122,7 +122,7 @@ describe("SettingsService", () => {
     const result = await service.updateSettings(
       {
         actorUserId: "actor_1",
-        legalEntity: { code: "NC", displayName: "Nicolaie Cristina" },
+        legalEntity: { code: "NC", displayName: "Nicolaie Cristina", id: "legal_nc" },
         requestMetadata: { ipAddress: "127.0.0.1" },
       },
       { iban: "RO98BBBB1B31007593840000", legalName: "NC Actualizat" },
@@ -160,7 +160,7 @@ describe("SettingsService", () => {
     await expect(
       service.updateSettings({
         actorUserId: "actor_1",
-        legalEntity: { code: "NC", displayName: "Nicolaie Cristina" },
+        legalEntity: { code: "NC", displayName: "Nicolaie Cristina", id: "legal_nc" },
         requestMetadata: {},
       }, {}),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -172,7 +172,7 @@ describe("SettingsService", () => {
     await expect(
       service.updateSettings({
         actorUserId: "actor_1",
-        legalEntity: { code: "NC", displayName: "Nicolaie Cristina" },
+        legalEntity: { code: "NC", displayName: "Nicolaie Cristina", id: "legal_nc" },
         requestMetadata: {},
       }, { legalEntityCode: "NG" } as UpdateSettingsDto),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -185,7 +185,7 @@ describe("SettingsService", () => {
       },
     });
 
-    await expect(service.getSettings({ code: "NG", displayName: "Nicolaie Gabriel" })).rejects.toBeInstanceOf(UnprocessableEntityException);
+    await expect(service.getSettings({ code: "NG", displayName: "Nicolaie Gabriel", id: "legal_ng" })).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 });
 

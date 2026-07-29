@@ -14,6 +14,45 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
       },
     });
 
+    await tx.pricingAgreementRule.deleteMany({
+      where: {
+        OR: [
+          { pricingAgreementId: { startsWith: `${DEMO_ID_PREFIX}pricing_agreement_` } },
+          { priceCatalogItemId: { startsWith: `${DEMO_ID_PREFIX}price_catalog_` } },
+          { priceCatalogItem: { workTypeId: { startsWith: `${DEMO_ID_PREFIX}wt_` } } },
+        ],
+      },
+    });
+
+    await tx.pricingAgreement.deleteMany({
+      where: {
+        OR: [
+          { id: { startsWith: `${DEMO_ID_PREFIX}pricing_agreement_` } },
+          { clinicId: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
+          { doctorId: { startsWith: `${DEMO_ID_PREFIX}doctor_` } },
+        ],
+      },
+    });
+
+    await tx.executionTimeRule.deleteMany({
+      where: {
+        OR: [
+          { id: { startsWith: `${DEMO_ID_PREFIX}execution_time_` } },
+          { priceCatalogItemId: { startsWith: `${DEMO_ID_PREFIX}price_catalog_` } },
+          { priceCatalogItem: { workTypeId: { startsWith: `${DEMO_ID_PREFIX}wt_` } } },
+        ],
+      },
+    });
+
+    await tx.priceCatalogItem.deleteMany({
+      where: {
+        OR: [
+          { id: { startsWith: `${DEMO_ID_PREFIX}price_catalog_` } },
+          { workTypeId: { startsWith: `${DEMO_ID_PREFIX}wt_` } },
+        ],
+      },
+    });
+
     await tx.deliveryEvent.deleteMany({
       where: {
         OR: [

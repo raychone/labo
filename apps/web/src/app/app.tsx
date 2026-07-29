@@ -73,6 +73,10 @@ const BillingPrintPage = lazy(async () => {
   const module = await import("../features/billing/billing-print-page.js");
   return { default: module.BillingPrintPage };
 });
+const PricingPage = lazy(async () => {
+  const module = await import("../features/pricing/pricing-page.js");
+  return { default: module.PricingPage };
+});
 
 function LazyRoute({ children }: { readonly children: ReactNode }): ReactNode {
   return <Suspense fallback={<RouteLoading />}>{children}</Suspense>;
@@ -134,6 +138,10 @@ const router = createBrowserRouter([
       {
         element: <PermissionRoute requiredPermissions={["pricing.read"]}><LazyRoute><WorkTypesPage /></LazyRoute></PermissionRoute>,
         path: "work-types",
+      },
+      {
+        element: <PermissionRoute requiredPermissions={["pricing.read"]}><LazyRoute><PricingPage /></LazyRoute></PermissionRoute>,
+        path: "pricing",
       },
       {
         element: <PermissionRoute requiredPermissions={["forms.read"]}><LazyRoute><WorkFormBuilderPage /></LazyRoute></PermissionRoute>,

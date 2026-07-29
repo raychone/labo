@@ -340,6 +340,61 @@ http://localhost:3000/work-types
 
 Categories, clinic-specific pricing, discounts, VAT, invoices, quotations, price books, and price history tables are intentionally not implemented in WORKTYPES-001.
 
+## Company Pricing And Agreements
+
+PRICING-002 adds company-specific pricing for the active legal entity context (`NC` or `NG`).
+
+Backend endpoints:
+
+- `GET /pricing/catalog`: list active/archived price catalog items for the active company.
+- `GET /pricing/catalog/:id`: catalog item detail with execution-time rules.
+- `POST /pricing/catalog`: create a company-specific price item.
+- `PATCH /pricing/catalog/:id`: update a company-specific price item.
+- `POST /pricing/catalog/:id/archive`: archive a price item.
+- `POST /pricing/catalog/:id/restore`: restore a price item.
+- `PUT /pricing/catalog/:id/execution-rules`: replace execution-time rules.
+- `GET /pricing/agreements`: list clinic/doctor commercial agreements.
+- `GET /pricing/agreements/:id`: agreement detail.
+- `POST /pricing/agreements`: create an agreement.
+- `PATCH /pricing/agreements/:id`: update an agreement.
+- `PUT /pricing/agreements/:id/rules`: replace agreement rules.
+- `POST /pricing/agreements/:id/archive`: archive an agreement.
+- `POST /pricing/agreements/:id/restore`: restore an agreement.
+- `POST /pricing/resolve-preview`: preview resolved price and execution rule without changing a work order.
+
+Permissions used:
+
+- `pricing.read`
+- `pricing.create`
+- `pricing.update`
+- `pricing.archive`
+- `pricing.resolve_preview`
+- `pricing.agreements.read`
+- `pricing.agreements.manage`
+
+Pricing data is always resolved from the active company stored in the authenticated session. The API does not accept legal entity identifiers from request body, query or headers for pricing operations.
+
+`WorkType` remains common across companies. Company-specific money lives in `PriceCatalogItem`, while `WorkType.basePriceMinor` remains as a legacy/base field for existing workflows. Existing `WorkOrder` price snapshots are unchanged by PRICING-002.
+
+Resolver order:
+
+1. active catalog item for active company and work type;
+2. applicable doctor agreement rule;
+3. applicable clinic agreement rule;
+4. standard company catalog price.
+
+Money is stored as integer minor units. Percentage adjustments are stored as basis points. Execution-time rules are linked to catalog items and are available for later deadline calculation, but deadline snapshots are deferred to `WORK-DEADLINES-001`.
+
+The frontend route is:
+
+```text
+http://localhost:3000/pricing
+```
+
+The page includes catalog, agreements, preview calculation, execution terms and source/history tabs. Non-financial roles do not see the route and receive server-side `403` on pricing API access.
+
+Demo seed includes a manually transcribed Creative Dental price list for both `NC` and `NG`; ambiguous source rows are documented in `PRICING-ASSET-AUDIT.md`.
+
 ## Work Order Creation
 
 WORKS-001 adds the first work order intake flow for reception.

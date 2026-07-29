@@ -20,7 +20,7 @@ interface SwitchContextInput extends ResolveContextInput {
 }
 
 type SessionWithLegalEntity = {
-  readonly activeLegalEntity: Pick<LegalEntity, "code" | "displayName" | "isActive"> | null;
+  readonly activeLegalEntity: Pick<LegalEntity, "code" | "displayName" | "id" | "isActive"> | null;
   readonly activeLegalEntityId: string | null;
   readonly expiresAt: Date;
   readonly id: string;
@@ -117,13 +117,14 @@ export class OrganizationContextService {
   }
 
   public async requireActiveContext(input: ResolveContextInput): Promise<LegalEntityContext> {
-    const context = await this.getContext(input);
+    const available = await this.findActiveLegalEntities();
+    const active = await this.resolveOrInitializeActiveContext(input, available);
 
-    if (!context.active) {
+    if (!active) {
       throw new UnprocessableEntityException("Este necesară selectarea firmei active.");
     }
 
-    return context.active;
+    return active;
   }
 
   private async canSwitchContext(userId: string): Promise<boolean> {
@@ -201,6 +202,7 @@ export class OrganizationContextService {
           select: {
             code: true,
             displayName: true,
+            id: true,
             isActive: true,
           },
         },

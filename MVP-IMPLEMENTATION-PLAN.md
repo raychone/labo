@@ -1703,7 +1703,7 @@ Aceste taskuri inlocuiesc ordinea veche dupa `SIGNATURES-001`. Detaliile complet
 
 ### PRICING-002 - Company-specific pricing and agreements
 
-- Status: NOT STARTED.
+- Status: COMPLETED.
 - Obiectiv: preturi manager-only separate pentru `NC` si `NG`.
 - Scope: liste standard, negocieri clinic/medic, discounturi, perioade, istoric, rezolvare pret.
 - Non-goals: procesare plati, contabilitate, e-Factura, expunere preturi catre non-manageri.
@@ -1714,6 +1714,13 @@ Aceste taskuri inlocuiesc ordinea veche dupa `SIGNATURES-001`. Detaliile complet
 - Securitate: `pricing.*` si mascare server-side.
 - Audit: create/update/archive agreement.
 - Testare: unit resolver, API permission tests, UI tests.
+- Implementare: `PricingModule` expune catalogul companiei active sub `/pricing/catalog`, acordurile comerciale sub `/pricing/agreements` si preview-ul de rezolvare sub `/pricing/resolve-preview`.
+- Date: `PriceCatalogItem`, `ExecutionTimeRule`, `PricingAgreement` si `PricingAgreementRule` sunt legate de firma activa din sesiune; `WorkType` ramane comun, iar `WorkType.basePriceMinor` ramane camp legacy.
+- Resolver: foloseste doar firma activa, cauta catalog activ pentru `workTypeId`, aplica prima regula de medic aplicabila, apoi prima regula de clinica aplicabila, apoi pretul standard.
+- UI: ruta `/pricing` are taburi pentru catalog, acorduri, preview calcul, termene si sursa/istoric.
+- Seed demo: lista Creative Dental transcrisa manual este seeduita separat pentru `NC` si `NG`; randurile ambigue sunt marcate in note si documentate in `PRICING-ASSET-AUDIT.md`.
+- Securitate implementata: managerul are acces, receptia/logistica/tehnicienii/curierii nu primesc acces la `/pricing`; reception flow ramane fara preturi.
+- Verificari: prisma validate/generate/migrate, seed baza, demo seed idempotent, typecheck, test, build si smoke API/UI au trecut.
 
 ### WORK-DEADLINES-001 - Deadline rules
 

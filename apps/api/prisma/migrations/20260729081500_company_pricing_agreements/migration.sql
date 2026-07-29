@@ -1,0 +1,8 @@
+-- RenameIndex
+ALTER INDEX "execution_time_rules_item_active_min_idx" RENAME TO "execution_time_rules_price_catalog_item_id_is_active_min_qu_idx";
+
+-- RenameIndex
+ALTER INDEX "price_catalog_items_legal_entity_category_sort_display_idx" RENAME TO "price_catalog_items_legal_entity_id_category_sort_order_dis_idx";
+
+-- RenameIndex
+ALTER INDEX "pricing_agreements_entity_subject_active_dates_idx" RENAME TO "pricing_agreements_legal_entity_id_subject_type_is_active_v_idx";

@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 
 import { isForbiddenError } from "../../lib/api-client.js";
+import { pricingQueryKeys } from "../pricing/pricing-api.js";
 import { settingsQueryKey } from "../settings/settings-api.js";
 import { fetchOrganizationContext, organizationContextQueryKeys, switchOrganizationContext } from "./organization-context-api.js";
 import { getOrganizationContextSwitchBlockMessage } from "./organization-context-switch-guards.js";
@@ -36,6 +37,7 @@ export function OrganizationContextSwitch({ canRead, compact = false }: Organiza
     onSuccess: (context) => {
       queryClient.setQueryData(organizationContextQueryKeys.all, context);
       void queryClient.invalidateQueries({ queryKey: settingsQueryKey });
+      void queryClient.invalidateQueries({ queryKey: pricingQueryKeys.all });
       toast.showToast({
         message: context.active ? formatLegalEntityOption(context.active) : "Contextul activ a fost actualizat.",
         title: "Firma activă a fost schimbată",

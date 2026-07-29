@@ -1,4 +1,4 @@
-export const WORK_TYPE_UNITS = ["UNIT"] as const;
+export const WORK_TYPE_UNITS = ["ELEMENT", "UNIT", "ARCH", "CASE", "REPAIR", "OTHER"] as const;
 export const WORK_TYPE_SORT_FIELDS = ["basePriceMinor", "code", "createdAt", "name", "updatedAt"] as const;
 
 export type WorkTypeUnit = (typeof WORK_TYPE_UNITS)[number];
@@ -103,4 +103,17 @@ export function formatMoneyMinor(value: number, currency: string, locale = "ro-R
     currency,
     style: "currency",
   }).format(value / 100);
+}
+
+export const WORK_TYPE_UNIT_LABELS = {
+  ARCH: "arcadă",
+  CASE: "lucrare",
+  ELEMENT: "element",
+  OTHER: "altă unitate",
+  REPAIR: "reparație",
+  UNIT: "bucată",
+} as const satisfies Record<WorkTypeUnit, string>;
+
+export function formatWorkTypeUnit(unit: WorkTypeUnit): string {
+  return WORK_TYPE_UNIT_LABELS[unit];
 }

@@ -80,6 +80,15 @@ export const appRoutes = [
     showInNavigation: true,
   },
   {
+    icon: "PR",
+    label: "Prețuri și termene",
+    navigationGroup: "Financiar",
+    path: "/pricing",
+    permissionMode: "any",
+    requiredPermissions: ["pricing.read"],
+    showInNavigation: true,
+  },
+  {
     icon: "PA",
     label: "Pacienți",
     navigationGroup: "Administrare",

@@ -16,6 +16,7 @@ export interface OrganizationContextView {
 export interface LegalEntityContext {
   readonly code: LegalEntityCode;
   readonly displayName: string;
+  readonly id: string;
 }
 
 export function toLegalEntityOption(entity: Pick<LegalEntity, "code" | "displayName">): LegalEntityOption {
@@ -25,8 +26,12 @@ export function toLegalEntityOption(entity: Pick<LegalEntity, "code" | "displayN
   };
 }
 
-export function toLegalEntityContext(entity: Pick<LegalEntity, "code" | "displayName">): LegalEntityContext {
-  return toLegalEntityOption(entity);
+export function toLegalEntityContext(entity: Pick<LegalEntity, "code" | "displayName" | "id">): LegalEntityContext {
+  return {
+    code: entity.code as LegalEntityCode,
+    displayName: entity.displayName,
+    id: entity.id,
+  };
 }
 
 export function toOrganizationContextView(input: {
@@ -35,7 +40,7 @@ export function toOrganizationContextView(input: {
   readonly canSwitch: boolean;
 }): OrganizationContextView {
   return {
-    active: input.active,
+    active: input.active ? toLegalEntityOption(input.active) : null,
     available: input.available.map(toLegalEntityOption),
     canSwitch: input.canSwitch,
   };
