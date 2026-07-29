@@ -332,6 +332,30 @@
   gap: var(--dl-space-3);
 }
 
+.works-page__responsibility {
+  display: grid;
+  gap: var(--dl-space-3);
+  grid-template-columns: 1fr;
+}
+
+.works-page__responsibility > div {
+  display: grid;
+  gap: var(--dl-space-1);
+}
+
+.works-page__timeline > div {
+  border-left: 3px solid var(--dl-color-border);
+  display: grid;
+  gap: var(--dl-space-1);
+  padding-left: var(--dl-space-3);
+}
+
+.works-page__timeline > div span,
+.works-page__timeline > div p {
+  color: var(--dl-color-text-muted);
+  margin: 0;
+}
+
 .works-page__timeline li {
   border-left: 3px solid var(--dl-color-border);
   padding-left: var(--dl-space-3);
@@ -345,5 +369,9 @@
 
   .works-page__deadline-card {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .works-page__responsibility {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }

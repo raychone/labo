@@ -7,26 +7,35 @@ import {
   CardTitle,
   ErrorState,
   LoadingState,
+  Modal,
   PriorityBadge,
+  RadioGroup,
   Select,
   StatusBadge,
   TextInput,
+  Textarea,
   useToast,
 } from "@dental-lab/ui";
 import {
+  LEGAL_ENTITY_CODES,
   TECHNICIAN_QUEUE_CATEGORIES,
   getAssignmentStatusLabel,
+  getLegalEntityDisplayName,
   getTechnicianQueueCategoryLabel,
   getWorkStageExecutionStatusLabel,
+  type ClaimWorksListParams,
+  type LegalEntityCode,
   type TechnicianWorkbenchFilter,
   type TechnicianWorkbenchItem,
+  type WorkSummary,
 } from "@dental-lab/shared";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchPermissions } from "../auth/auth-api.js";
-import { useStartWorkflowStage, useCompleteWorkflowStage } from "../works/works-api.js";
+import { fetchOrganizationContext } from "../organization-context/organization-context-api.js";
+import { useAvailableWorksForClaim, useClaimWork, useReleaseWork, useStartWorkflowStage, useCompleteWorkflowStage, useMyClaimedWorks } from "../works/works-api.js";
 import { useTechnicianOptions, useTechnicianWorkbench, useTechnicianWorkload } from "./technician-workbench-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
 import { hasPermission } from "../users/users-api.js";
@@ -39,6 +48,18 @@ const defaultFilters: TechnicianWorkbenchFilter = {
   sortOrder: "asc",
 };
 const unassignedTechnicianFilter = "__UNASSIGNED__";
+type WorkbenchTab = "AVAILABLE" | "MINE";
+
+const defaultClaimFilters: ClaimWorksListParams = {
+  deadlineFilter: undefined,
+  page: 1,
+  pageSize: 20,
+  priority: undefined,
+  search: undefined,
+  sortBy: "effectiveDueAt",
+  sortDirection: "asc",
+  workTypeId: undefined,
+};
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium" }).format(new Date(value));
@@ -47,16 +68,27 @@ function formatDate(value: string): string {
 export function TechnicianWorkbenchPage(): ReactNode {
   const toast = useToast();
   const navigate = useNavigate();
+  const [tab, setTab] = useState<WorkbenchTab>("AVAILABLE");
   const [filters, setFilters] = useState<TechnicianWorkbenchFilter>(defaultFilters);
+  const [claimFilters, setClaimFilters] = useState<ClaimWorksListParams>(defaultClaimFilters);
+  const [claimTarget, setClaimTarget] = useState<WorkSummary | null>(null);
+  const [releaseTarget, setReleaseTarget] = useState<WorkSummary | null>(null);
   const permissionsResult = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
+  const organizationQuery = useQuery({ queryFn: fetchOrganizationContext, queryKey: ["organization-context"], retry: false });
   const canReadWorkbench = hasPermission(permissionsResult.data, "technician.workbench.read");
+  const canReadAvailable = hasPermission(permissionsResult.data, "works.claim.available.read");
+  const canReadOwnClaims = hasPermission(permissionsResult.data, "works.claim.own.read");
   const canReadWorkload = hasPermission(permissionsResult.data, "technician.workload.read");
   const canAssign = hasPermission(permissionsResult.data, "workflow.assign_stage");
   const workbenchQuery = useTechnicianWorkbench(filters, canReadWorkbench);
+  const availableQuery = useAvailableWorksForClaim(claimFilters, canReadAvailable && tab === "AVAILABLE");
+  const myClaimedQuery = useMyClaimedWorks(claimFilters, canReadOwnClaims && tab === "MINE");
   const workloadQuery = useTechnicianWorkload(canReadWorkload);
   const techniciansQuery = useTechnicianOptions(canReadWorkload || canAssign);
   const startMutation = useStartWorkflowStage();
   const completeMutation = useCompleteWorkflowStage();
+  const claimMutation = useClaimWork();
+  const releaseMutation = useReleaseWork();
 
   function startStage(item: TechnicianWorkbenchItem): void {
     startMutation.mutate({
@@ -115,11 +147,69 @@ export function TechnicianWorkbenchPage(): ReactNode {
 
         <Card>
           <CardHeader>
-            <CardTitle>Coada de lucru</CardTitle>
-            <CardDescription>Etape curente asignate și lucrări neasignate pentru manager.</CardDescription>
+            <CardTitle>Responsabilitate lucrări</CardTitle>
+            <CardDescription>Alege lucrări disponibile și vezi lucrările revendicate de tine.</CardDescription>
           </CardHeader>
           <CardContent className="technician-workbench__content">
             <div className="technician-workbench__tabs" role="list" aria-label="Filtre rapide">
+              <button aria-pressed={tab === "AVAILABLE"} onClick={() => setTab("AVAILABLE")} type="button">Lucrări disponibile</button>
+              <button aria-pressed={tab === "MINE"} onClick={() => setTab("MINE")} type="button">Lucrările mele</button>
+            </div>
+
+            <div className="technician-workbench__filters">
+              <TextInput
+                label="Căutare"
+                onChange={(event) => setClaimFilters((current) => ({ ...current, page: 1, search: event.target.value || undefined }))}
+                placeholder="Cod, pacient, clinică, medic"
+                type="search"
+                value={claimFilters.search ?? ""}
+              />
+              <Select
+                label="Prioritate"
+                onChange={(event) => setClaimFilters((current) => ({ ...current, page: 1, priority: event.target.value === "URGENT" ? "URGENT" : event.target.value === "NORMAL" ? "NORMAL" : undefined }))}
+                options={[
+                  { label: "Toate", value: "" },
+                  { label: "Normal", value: "NORMAL" },
+                  { label: "Urgent", value: "URGENT" },
+                ]}
+                value={claimFilters.priority ?? ""}
+              />
+            </div>
+
+            {tab === "AVAILABLE" ? (
+              <ClaimList
+                emptyDescription="Nu există lucrări disponibile pentru revendicare."
+                isLoading={availableQuery.isLoading}
+                error={availableQuery.error}
+                items={availableQuery.data?.items ?? []}
+                actionLabel="Revendică"
+                onAction={setClaimTarget}
+                onOpen={(work) => navigate(`/works?workId=${work.id}`)}
+                showRelease={false}
+              />
+            ) : (
+              <ClaimList
+                emptyDescription="Nu ai lucrări revendicate."
+                isLoading={myClaimedQuery.isLoading}
+                error={myClaimedQuery.error}
+                items={myClaimedQuery.data?.items ?? []}
+                actionLabel="Eliberează"
+                onAction={setReleaseTarget}
+                onOpen={(work) => navigate(`/works?workId=${work.id}`)}
+                showRelease
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        {tab === "MINE" ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Coada de etape</CardTitle>
+              <CardDescription>Etape curente asignate în fluxul de producție.</CardDescription>
+            </CardHeader>
+            <CardContent className="technician-workbench__content">
+              <div className="technician-workbench__tabs" role="list" aria-label="Filtre etape">
               {TECHNICIAN_QUEUE_CATEGORIES.map((category) => (
                 <button
                   aria-pressed={(filters.queue ?? "ALL") === category}
@@ -180,8 +270,9 @@ export function TechnicianWorkbenchPage(): ReactNode {
                 />
               ))}
             </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        ) : null}
 
         {canReadWorkload ? (
           <Card>
@@ -205,6 +296,64 @@ export function TechnicianWorkbenchPage(): ReactNode {
             </CardContent>
           </Card>
         ) : null}
+        <ClaimWorkModal
+          isLoading={claimMutation.isPending}
+          isOpen={claimTarget !== null}
+          legalEntityCodes={(organizationQuery.data?.available.map((entity) => entity.code) ?? [...LEGAL_ENTITY_CODES])}
+          onOpenChange={(isOpen) => {
+            if (!isOpen) {
+              setClaimTarget(null);
+            }
+          }}
+          onSubmit={(executionLegalEntityCode) => {
+            if (!claimTarget) {
+              return;
+            }
+            claimMutation.mutate({
+              input: {
+                executionLegalEntityCode,
+                expectedClaimRevision: claimTarget.claim.revision,
+              },
+              workOrderId: claimTarget.id,
+            }, {
+              onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost revendicată", variant: "error" }),
+              onSuccess: (work) => {
+                setClaimTarget(null);
+                setTab("MINE");
+                toast.showToast({ message: `${work.code} este acum în responsabilitatea ta.`, variant: "success" });
+              },
+            });
+          }}
+          work={claimTarget}
+        />
+        <ReleaseWorkModal
+          isLoading={releaseMutation.isPending}
+          isOpen={releaseTarget !== null}
+          onOpenChange={(isOpen) => {
+            if (!isOpen) {
+              setReleaseTarget(null);
+            }
+          }}
+          onSubmit={(reason) => {
+            if (!releaseTarget) {
+              return;
+            }
+            releaseMutation.mutate({
+              input: {
+                expectedClaimRevision: releaseTarget.claim.revision,
+                reason,
+              },
+              workOrderId: releaseTarget.id,
+            }, {
+              onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost eliberată", variant: "error" }),
+              onSuccess: (work) => {
+                setReleaseTarget(null);
+                toast.showToast({ message: `${work.code} a fost eliberată.`, variant: "success" });
+              },
+            });
+          }}
+          work={releaseTarget}
+        />
       </section>
     </main>
   );
@@ -216,6 +365,152 @@ function Metric({ label, value }: { readonly label: string; readonly value: numb
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
+  );
+}
+
+function ClaimList({
+  actionLabel,
+  emptyDescription,
+  error,
+  isLoading,
+  items,
+  onAction,
+  onOpen,
+  showRelease,
+}: {
+  readonly actionLabel: string;
+  readonly emptyDescription: string;
+  readonly error: unknown;
+  readonly isLoading: boolean;
+  readonly items: readonly WorkSummary[];
+  readonly onAction: (work: WorkSummary) => void;
+  readonly onOpen: (work: WorkSummary) => void;
+  readonly showRelease: boolean;
+}): ReactNode {
+  if (isLoading) {
+    return <LoadingState text="Se încarcă lucrările" />;
+  }
+  if (error) {
+    return <ErrorState title="Lucrările nu au fost încărcate" description={getErrorMessage(error)} />;
+  }
+  if (items.length === 0) {
+    return <ErrorState title="Nu există lucrări" description={emptyDescription} />;
+  }
+
+  return (
+    <div className="technician-workbench__list">
+      {items.map((work) => (
+        <article className="technician-workbench__item" key={work.id}>
+          <div className="technician-workbench__item-main">
+            <div>
+              <strong>{work.code}</strong>
+              <p>{work.patientName} · {work.workType.name}</p>
+            </div>
+            <PriorityBadge label={work.priority === "URGENT" ? "Urgent" : "Normal"} variant={work.priority === "URGENT" ? "urgent" : "normal"} />
+          </div>
+          <div className="technician-workbench__item-grid">
+            <span>Clinică: {work.clinic.name}</span>
+            <span>Medic: {work.doctor.displayName}</span>
+            <span>Termen: {formatDate(work.deadline.effectiveDueAt ?? work.requestedDeliveryDate)}</span>
+            <span>Responsabil: {work.claim.technician?.displayName ?? "Nerevendicată"}</span>
+            <span>Companie execuție: {work.claim.executionLegalEntity?.code ?? "Neselectată"}</span>
+            <span>Revizie responsabilitate: {work.claim.revision}</span>
+          </div>
+          <div className="technician-workbench__actions">
+            <StatusBadge label={work.claim.status === "CLAIMED" ? "Revendicată" : "Disponibilă"} variant={work.claim.status === "CLAIMED" ? "production" : "awaiting"} />
+            <Button onClick={() => onOpen(work)} variant="outline">Deschide</Button>
+            <Button disabled={showRelease ? !work.claim.canCurrentUserRelease : !work.claim.canCurrentUserClaim} onClick={() => onAction(work)}>
+              {actionLabel}
+            </Button>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function ClaimWorkModal({
+  isLoading,
+  isOpen,
+  legalEntityCodes,
+  onOpenChange,
+  onSubmit,
+  work,
+}: {
+  readonly isLoading: boolean;
+  readonly isOpen: boolean;
+  readonly legalEntityCodes: readonly LegalEntityCode[];
+  readonly onOpenChange: (isOpen: boolean) => void;
+  readonly onSubmit: (executionLegalEntityCode: LegalEntityCode) => void;
+  readonly work: WorkSummary | null;
+}): ReactNode {
+  const [selectedCode, setSelectedCode] = useState<LegalEntityCode>("NC");
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedCode(legalEntityCodes[0] ?? "NC");
+    }
+  }, [isOpen, legalEntityCodes]);
+
+  return (
+    <Modal
+      description={work ? `${work.code} · ${work.patientName}` : "Alege compania de execuție."}
+      footer={<Button isLoading={isLoading} onClick={() => onSubmit(selectedCode)}>Revendică lucrarea</Button>}
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      title="Revendică lucrare"
+    >
+      <RadioGroup
+        label="Companie de execuție"
+        name="executionLegalEntityCode"
+        onValueChange={(value) => {
+          if (value === "NC" || value === "NG") {
+            setSelectedCode(value);
+          }
+        }}
+        options={legalEntityCodes.map((code) => ({
+          description: getLegalEntityDisplayName(code),
+          label: code,
+          value: code,
+        }))}
+        required
+        value={selectedCode}
+      />
+    </Modal>
+  );
+}
+
+function ReleaseWorkModal({
+  isLoading,
+  isOpen,
+  onOpenChange,
+  onSubmit,
+  work,
+}: {
+  readonly isLoading: boolean;
+  readonly isOpen: boolean;
+  readonly onOpenChange: (isOpen: boolean) => void;
+  readonly onSubmit: (reason: string) => void;
+  readonly work: WorkSummary | null;
+}): ReactNode {
+  const [reason, setReason] = useState("");
+
+  useEffect(() => {
+    if (!isOpen) {
+      setReason("");
+    }
+  }, [isOpen]);
+
+  return (
+    <Modal
+      description={work ? `${work.code} · ${work.patientName}` : "Motivul rămâne în istoricul de responsabilitate."}
+      footer={<Button disabled={reason.trim().length < 3} isLoading={isLoading} onClick={() => onSubmit(reason.trim())}>Eliberează lucrarea</Button>}
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      title="Eliberează responsabilitatea"
+    >
+      <Textarea label="Motiv" onChange={(event) => setReason(event.target.value)} required rows={4} value={reason} />
+    </Modal>
   );
 }
 

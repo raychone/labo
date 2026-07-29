@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-80%
+82%
 
 ## ROADMAP
 
@@ -99,7 +99,7 @@
 
 - [x] WORKFLOW-001 - Workflow templates (COMPLETED)
 - [x] WORKFLOW-002 - Workflow execution snapshot (COMPLETED)
-- [ ] TECH-CLAIM-001A - Technician self-claim deadline start integration (APPROVED)
+- [x] TECH-CLAIM-001A - Technician claim, company selection and work ownership (COMPLETED)
 - [ ] TECH-CLAIM-001 - Technician self-claim and first technical company selection (NOT STARTED)
 
 ## PATIENTS
@@ -190,19 +190,77 @@ NONE / AWAITING APPROVAL
 
 Status: AWAITING APPROVAL
 
-Started: 2026-07-29T10:39:32Z
+Started: 2026-07-29T11:17:16Z
 
-Completed: 2026-07-29T11:03:59Z
+Completed: 2026-07-29T11:43:16Z
 
-Last completed task: WORK-DEADLINES-001C - Operational deadline UI, urgency indicators and work registry integration
+Last completed task: TECH-CLAIM-001A - Technician claim, company selection and work ownership
 
-Completed: 2026-07-29T11:03:59Z
+Completed: 2026-07-29T11:43:16Z
 
 ## Next Recommended Task
 
-TECH-CLAIM-001A - APPROVED
+TECH-CLAIM-001B - Awaiting approval
 
 ## Latest Completion Summary
+
+### TECH-CLAIM-001A - Technician claim, company selection and work ownership
+
+- Status: COMPLETED.
+- Started: 2026-07-29T11:17:16Z.
+- Completed: 2026-07-29T11:43:16Z.
+- Summary:
+  - Added work-order ownership fields for `UNCLAIMED`/`CLAIMED`, active technician, execution legal entity `NC`/`NG`, claim revision, release metadata and source.
+  - Added append-only `WorkAssignmentEvent` history for claim, release, assign and reassign.
+  - Added backend endpoints for available works, own claimed works, claim, release, reassign and assignment history.
+  - Added granular RBAC permissions `works.claim.*`, server-side CSRF/RBAC checks and optimistic locking conflict handling.
+  - Extended `/workbench` with `Lucrări disponibile` and `Lucrările mele`, claim modal with app-styled `NC`/`NG` selector and release modal.
+  - Extended `/works` with responsibility columns/filters, detail `Responsabilitate` card, history timeline and manager reassign modal.
+  - Extended demo seed with deterministic available, claimed, manager-assigned, reassigned and released scenarios.
+- Main files modified:
+  - `apps/api/prisma/schema.prisma`
+  - `apps/api/prisma/migrations/20260729112831_technician_work_claims/migration.sql`
+  - `apps/api/src/modules/works/*`
+  - `apps/api/src/modules/rbac/permission-registry.ts`
+  - `apps/api/prisma/demo/demo-seed.ts`
+  - `apps/api/prisma/demo/demo-reset.ts`
+  - `apps/web/src/features/technician-workbench/*`
+  - `apps/web/src/features/works/*`
+  - `packages/shared/src/works.ts`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `REAL-LAB-WORKFLOW.md`
+  - `DEMO.md`
+  - `DEMO-SCRIPT.md`
+  - `IMPLEMENTATION_STATUS.md`
+- Tests executed:
+  - `pnpm --filter @dental-lab/api prisma:validate` passed.
+  - `pnpm --filter @dental-lab/api prisma:generate` passed.
+  - `pnpm --filter @dental-lab/api prisma:migrate:dev --name technician_work_claims` passed.
+  - `pnpm typecheck` passed.
+  - First `pnpm test` failed on outdated mocks after the claim view shape changed; fixed mocks and added claim conflict tests.
+  - Final `pnpm test` passed: packages/shared 12 files/42 tests, packages/ui 3 files/27 tests, apps/api 46 files/177 tests, apps/web 15 files/39 tests.
+  - `pnpm build` passed, with the existing Vite chunk-size warning.
+  - `pnpm --filter @dental-lab/api run seed:demo` passed twice for demo seed idempotency.
+- Manual verification:
+  - Demo DB smoke confirmed 48 demo works, 45 `UNCLAIMED`, 3 `CLAIMED`, 6 assignment events.
+  - Demo scenarios confirmed:
+    - `WO-2026-900001` available.
+    - `WO-2026-900002` claimed by `demo_user_tehnician_1` under `NC`.
+    - `WO-2026-900003` assigned to `demo_user_tehnician_2` under `NG`.
+    - `WO-2026-900004` reassigned to `demo_user_tehnician_2` under `NC`.
+    - `WO-2026-900005` released back to available with revision 2.
+- Architecture decisions:
+  - Public claim payload uses `executionLegalEntityCode` (`NC`/`NG`) instead of exposing internal legal entity IDs.
+  - Work ownership is stored on `WorkOrder`; stage assignment remains stored on `WorkStageExecution`.
+  - Release clears the active technician and execution legal entity for 001A.
+  - Claim/release/reassign use `claimRevision` optimistic locking independently from `version` and `deadlineRevision`.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Final deadline recalculation/start-at integration is intentionally deferred to a later task.
+  - Vite chunk-size warning remains.
+  - Linting remains unconfigured.
 
 ### WORK-DEADLINES-001C - Operational deadline UI, urgency indicators and work registry integration
 

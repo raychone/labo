@@ -4,7 +4,7 @@ Acest document este ghidul de prezentare cap-coadă pentru stadiul curent al apl
 
 ## Notă ROADMAP-REALIGN-002
 
-Demo-ul curent prezintă funcționalitățile deja implementate, inclusiv contextul `NC`/`NG`, pacienți, prețuri pe companie, termene calculate, workflow operațional, logistică, livrări și facturare. Fluxul tehnicianului este încă bazat pe asignare; self-claim-ul și selecția firmei la primul claim tehnic vin într-un task următor.
+Demo-ul curent prezintă funcționalitățile deja implementate, inclusiv contextul `NC`/`NG`, pacienți, prețuri pe companie, termene calculate, workflow operațional, revendicare de lucrări de către tehnician, logistică, livrări și facturare.
 
 Nu prezenta demo-ul curent ca implementare finală a fluxului de atelier real. Pentru întâlniri comerciale, formulează-l ca demonstrație a modulelor existente până la realinierea completă prin `TECH-CLAIM-001`, `STATUS-001`, `BILLING-REALIGN-001` și `DEMO-REAL-DATA-001`.
 
@@ -625,11 +625,15 @@ Deschide `Lucrările mele`.
 
 Ce arati:
 
-- coada personala a tehnicianului;
+- tabul `Lucrări disponibile`;
+- revendicarea unei lucrări cu alegerea explicită `NC` sau `NG`;
+- tabul `Lucrările mele`, unde apare lucrarea revendicată;
+- eliberarea responsabilității cu motiv, dacă trebuie corectată o revendicare;
+- coada personală de etape pentru execuția workflow-ului;
 - filtrele rapide `Toate`, `De început`, `În lucru`, `Urgente`, `Astăzi`, `Întârziate`;
 - cardul de lucrare cu etapa curenta, termen, progres si responsabil;
 - actiunile `Începe etapa` si `Finalizează etapa`, disponibile doar cand statusul permite;
-- faptul ca tehnicianul vede numai lucrarea asignata lui.
+- faptul ca tehnicianul vede lucrările disponibile pentru revendicare și lucrările proprii revendicate.
 
 Revino ca manager si deschide `Lucrările mele`.
 
@@ -637,11 +641,17 @@ Ce arati:
 
 - managerul vede atelierul complet, inclusiv etape neasignate;
 - sectiunea `Încărcare tehnicieni`;
+- in `Lucrări`, coloanele `Responsabil` si `Companie execuție`;
+- in detaliul unei lucrări, cardul `Responsabilitate` cu istoric append-only;
+- actiunea manager-only `Reasignează`, cu motiv si selectie `NC`/`NG`;
 - in detaliul unei lucrari, sectiunea `Flux producție` are control `Responsabil` pentru asignare/reasignare/eliminare;
 - reasignarea unei etape deja pornite cere confirmare si ramane in istoric/audit.
 
 Ce explici:
 
+- responsabilitatea pe lucrare este separată de asignarea etapei curente;
+- claim-ul pe lucrare folosește optimistic locking si refuză conflictele;
+- firma de execuție este `NC` sau `NG` si nu se trimite ID intern in UI;
 - asignarea este pe etapa curenta, nu pe toata lucrarea;
 - etapa urmatoare ramane neasignata cand fluxul avanseaza;
 - backend-ul verifica permisiunile si assignment-ul, UI-ul doar ghideaza utilizatorul.
@@ -725,8 +735,8 @@ Ordine recomandata:
 22. Print/PDF si anexa.
 23. Inchidere luna si CSV.
 24. Utilizatori si roluri.
-25. Login cu tehnician si arata `Lucrările mele`.
-26. Login manager si arata asignarea responsabilului in fluxul lucrarii.
+25. Login cu tehnician si arata `Lucrări disponibile`, claim cu `NC`/`NG`, `Lucrările mele` si eliberare.
+26. Login manager si arata `Responsabilitate`, istoric, reassign si asignarea responsabilului in fluxul lucrarii.
 27. Login cu receptie/curier pentru meniuri diferite.
 28. Setari laborator.
 29. Recapitulare ce este gata si ce urmeaza.

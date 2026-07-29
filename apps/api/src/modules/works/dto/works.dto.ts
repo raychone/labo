@@ -1,7 +1,7 @@
 import { Transform, Type } from "class-transformer";
 import { IsBoolean, IsIn, IsInt, IsISO8601, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
 
-import { MAX_WORK_ORDER_QUANTITY, SORT_DIRECTIONS, WORK_ORDER_SORT_FIELDS, WORK_PRIORITIES, WORK_STATUSES } from "../works.constants.js";
+import { MAX_WORK_ORDER_QUANTITY, SORT_DIRECTIONS, WORK_CLAIM_STATUSES, WORK_ORDER_SORT_FIELDS, WORK_PRIORITIES, WORK_STATUSES } from "../works.constants.js";
 import { DEADLINE_FILTERS } from "../work-deadline-visual.js";
 
 function trimOptionalString(value: unknown): string | null | undefined {
@@ -81,12 +81,70 @@ export class ListWorksQueryDto {
   public readonly deadlineFilter?: (typeof DEADLINE_FILTERS)[number];
 
   @IsOptional()
+  @IsIn(WORK_CLAIM_STATUSES)
+  public readonly claimStatus?: (typeof WORK_CLAIM_STATUSES)[number];
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  public readonly executionLegalEntityCode?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  public readonly assignedTechnicianId?: string | null;
+
+  @IsOptional()
   @IsIn(WORK_ORDER_SORT_FIELDS)
   public readonly sortBy: (typeof WORK_ORDER_SORT_FIELDS)[number] = "createdAt";
 
   @IsOptional()
   @IsIn(SORT_DIRECTIONS)
   public readonly sortDirection: (typeof SORT_DIRECTIONS)[number] = "desc";
+}
+
+export class ListClaimWorksQueryDto extends ListWorksQueryDto {
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => value === true || value === "true")
+  public readonly onlyActive?: boolean;
+}
+
+export class ClaimWorkDto {
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  @IsIn(["NC", "NG"])
+  public readonly executionLegalEntityCode!: "NC" | "NG";
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  public readonly expectedClaimRevision!: number;
+}
+
+export class ReleaseWorkDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  public readonly expectedClaimRevision!: number;
+
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  @MinLength(3)
+  @MaxLength(500)
+  public readonly reason!: string;
+}
+
+export class ReassignWorkDto extends ClaimWorkDto {
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  public readonly technicianId!: string;
+
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  @MinLength(3)
+  @MaxLength(500)
+  public readonly reason!: string;
 }
 
 export class WorkMutationDto {

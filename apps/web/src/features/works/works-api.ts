@@ -1,14 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateWorkInput,
+  ClaimWorkInput,
+  ClaimWorksListParams,
   CompleteStageInput,
   PaginatedWorksResponse,
+  ReassignWorkInput,
+  ReleaseWorkInput,
   ResolveWorkQrInput,
   ResolveWorkQrResult,
   StartStageInput,
   WorkDeadlinePreview,
   WorkDeadlinePreviewInput,
   UpdateWorkInput,
+  WorkAssignmentEventSummary,
   WorkDetail,
   WorkQrView,
   WorkWorkflowExecutionView,
@@ -22,6 +27,9 @@ import { apiFetch, parseApiResponse } from "../../lib/api-client.js";
 export const worksQueryKeys = {
   all: ["works"] as const,
   detail: (workOrderId: string | null) => ["works", "detail", workOrderId] as const,
+  availableForClaim: (params: ClaimWorksListParams) => ["works", "available-for-claim", params] as const,
+  myClaimed: (params: ClaimWorksListParams) => ["works", "my-claimed", params] as const,
+  assignmentHistory: (workOrderId: string | null) => ["works", "assignment-history", workOrderId] as const,
   list: (params: WorksListParams) => ["works", "list", params] as const,
   qr: (workOrderId: string | null) => ["works", "qr", workOrderId] as const,
   qrImage: (workOrderId: string | null) => ["works", "qr-image", workOrderId] as const,
@@ -48,6 +56,9 @@ function toWorksQueryString(params: WorksListParams): string {
   appendOptional(query, "dateFrom", params.dateFrom);
   appendOptional(query, "dateTo", params.dateTo);
   appendOptional(query, "deadlineFilter", params.deadlineFilter);
+  appendOptional(query, "claimStatus", params.claimStatus);
+  appendOptional(query, "executionLegalEntityCode", params.executionLegalEntityCode);
+  appendOptional(query, "assignedTechnicianId", params.assignedTechnicianId);
   appendOptional(query, "doctorId", params.doctorId);
   appendOptional(query, "priority", params.priority);
   appendOptional(query, "search", params.search);
@@ -77,6 +88,18 @@ async function sendJson<TResponse>(path: string, method: "PATCH" | "POST", body?
 
 export async function fetchWorks(params: WorksListParams): Promise<PaginatedWorksResponse> {
   const response = await apiFetch(`/works?${toWorksQueryString(params)}`);
+
+  return parseApiResponse<PaginatedWorksResponse>(response);
+}
+
+export async function fetchAvailableWorksForClaim(params: ClaimWorksListParams): Promise<PaginatedWorksResponse> {
+  const response = await apiFetch(`/works/available-for-claim?${toWorksQueryString(params)}`);
+
+  return parseApiResponse<PaginatedWorksResponse>(response);
+}
+
+export async function fetchMyClaimedWorks(params: ClaimWorksListParams): Promise<PaginatedWorksResponse> {
+  const response = await apiFetch(`/works/my-claimed?${toWorksQueryString(params)}`);
 
   return parseApiResponse<PaginatedWorksResponse>(response);
 }
@@ -129,6 +152,24 @@ export async function updateWork(workOrderId: string, input: UpdateWorkInput): P
   return sendJson<WorkDetail>(`/works/${workOrderId}`, "PATCH", input);
 }
 
+export async function claimWork(workOrderId: string, input: ClaimWorkInput): Promise<WorkDetail> {
+  return sendJson<WorkDetail>(`/works/${workOrderId}/claim`, "POST", input);
+}
+
+export async function releaseWork(workOrderId: string, input: ReleaseWorkInput): Promise<WorkDetail> {
+  return sendJson<WorkDetail>(`/works/${workOrderId}/release`, "POST", input);
+}
+
+export async function reassignWork(workOrderId: string, input: ReassignWorkInput): Promise<WorkDetail> {
+  return sendJson<WorkDetail>(`/works/${workOrderId}/reassign`, "POST", input);
+}
+
+export async function fetchAssignmentHistory(workOrderId: string): Promise<readonly WorkAssignmentEventSummary[]> {
+  const response = await apiFetch(`/works/${workOrderId}/assignment-history`);
+
+  return parseApiResponse<readonly WorkAssignmentEventSummary[]>(response);
+}
+
 export async function fetchWorkWorkflow(workOrderId: string): Promise<WorkWorkflowExecutionView | null> {
   const response = await apiFetch(`/works/${workOrderId}/workflow`);
 
@@ -156,6 +197,24 @@ export function useWorks(params: WorksListParams, enabled: boolean) {
     enabled,
     queryFn: () => fetchWorks(params),
     queryKey: worksQueryKeys.list(params),
+    retry: false,
+  });
+}
+
+export function useAvailableWorksForClaim(params: ClaimWorksListParams, enabled: boolean) {
+  return useQuery({
+    enabled,
+    queryFn: () => fetchAvailableWorksForClaim(params),
+    queryKey: worksQueryKeys.availableForClaim(params),
+    retry: false,
+  });
+}
+
+export function useMyClaimedWorks(params: ClaimWorksListParams, enabled: boolean) {
+  return useQuery({
+    enabled,
+    queryFn: () => fetchMyClaimedWorks(params),
+    queryKey: worksQueryKeys.myClaimed(params),
     retry: false,
   });
 }
@@ -231,6 +290,53 @@ export function useUpdateWork() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: worksQueryKeys.all });
     },
+  });
+}
+
+function invalidateClaimQueries(queryClient: ReturnType<typeof useQueryClient>, workOrderId: string): Promise<readonly unknown[]> {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: worksQueryKeys.all }),
+    queryClient.invalidateQueries({ queryKey: worksQueryKeys.detail(workOrderId) }),
+    queryClient.invalidateQueries({ queryKey: worksQueryKeys.assignmentHistory(workOrderId) }),
+  ]);
+}
+
+export function useClaimWork() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ input, workOrderId }: { readonly input: ClaimWorkInput; readonly workOrderId: string }) => claimWork(workOrderId, input),
+    onSuccess: async (_work, variables) => {
+      await invalidateClaimQueries(queryClient, variables.workOrderId);
+    },
+  });
+}
+
+export function useReleaseWork() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ input, workOrderId }: { readonly input: ReleaseWorkInput; readonly workOrderId: string }) => releaseWork(workOrderId, input),
+    onSuccess: async (_work, variables) => {
+      await invalidateClaimQueries(queryClient, variables.workOrderId);
+    },
+  });
+}
+
+export function useReassignWork() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ input, workOrderId }: { readonly input: ReassignWorkInput; readonly workOrderId: string }) => reassignWork(workOrderId, input),
+    onSuccess: async (_work, variables) => {
+      await invalidateClaimQueries(queryClient, variables.workOrderId);
+    },
+  });
+}
+
+export function useAssignmentHistory(workOrderId: string | null, enabled: boolean) {
+  return useQuery({
+    enabled: enabled && workOrderId !== null,
+    queryFn: () => fetchAssignmentHistory(workOrderId ?? ""),
+    queryKey: worksQueryKeys.assignmentHistory(workOrderId),
+    retry: false,
   });
 }
 

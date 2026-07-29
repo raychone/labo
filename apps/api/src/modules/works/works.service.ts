@@ -1,16 +1,28 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
 import type { LegalEntityContext } from "../organization-context/organization-context.view.js";
 import { PatientsService } from "../patients/patients.service.js";
+import { AuthorizationService } from "../rbac/authorization.service.js";
 import { DEFAULT_LABORATORY_SETTINGS, SETTINGS_SINGLETON_KEY } from "../settings/settings.constants.js";
 import { WorkQrTokenService } from "../qr/work-qr-token.service.js";
 import { WorkFormSubmissionValidationService } from "../work-forms/work-form-submission-validation.service.js";
 import { WorkflowExecutionService } from "../workflow-execution/workflow-execution.service.js";
 import { WORK_ORDER_AUDIT_ACTIONS, WORK_ORDER_RESOURCE_TYPE } from "./works.constants.js";
-import type { CreateWorkDto, ListWorksQueryDto, RecalculateWorkDeadlineDto, SetManualWorkDeadlineDto, UpdateWorkDto, WorkDeadlinePreviewDto } from "./dto/works.dto.js";
+import type {
+  ClaimWorkDto,
+  CreateWorkDto,
+  ListClaimWorksQueryDto,
+  ListWorksQueryDto,
+  ReassignWorkDto,
+  RecalculateWorkDeadlineDto,
+  ReleaseWorkDto,
+  SetManualWorkDeadlineDto,
+  UpdateWorkDto,
+  WorkDeadlinePreviewDto,
+} from "./dto/works.dto.js";
 import { deadlineDataToPrisma, WorkDeadlineService } from "./work-deadline.service.js";
 import { accumulateDeadlineDashboardSummary, createEmptyDeadlineDashboardSummary, isDeadlineInFilter } from "./work-deadline-visual.js";
 import { WorkOrderCodeService } from "./work-order-code.service.js";
@@ -18,10 +30,14 @@ import {
   type PaginatedWorksView,
   type WorkDetailView,
   type WorkOrderRecord,
+  createWorkClaimAccess,
   type WorkTypeFormOptionView,
   toWorkDetailView,
   toWorkSummaryView,
   toWorkTypeFormOptionView,
+  type WorkAssignmentEventView,
+  toWorkAssignmentEventView,
+  type WorkClaimAccessViewInput,
 } from "./works.view.js";
 
 interface ActorContext {
@@ -38,8 +54,63 @@ interface PricingSnapshot {
 type AuditClient = Pick<Prisma.TransactionClient, "auditLog"> | Pick<PrismaService, "auditLog">;
 
 const WORK_ORDER_INCLUDE = {
+  assignedTechnician: {
+    select: {
+      displayName: true,
+      id: true,
+    },
+  },
+  assignmentEvents: {
+    include: {
+      actor: {
+        select: {
+          displayName: true,
+          id: true,
+        },
+      },
+      newLegalEntity: {
+        select: {
+          code: true,
+          displayName: true,
+        },
+      },
+      newTechnician: {
+        select: {
+          displayName: true,
+          id: true,
+        },
+      },
+      previousLegalEntity: {
+        select: {
+          code: true,
+          displayName: true,
+        },
+      },
+      previousTechnician: {
+        select: {
+          displayName: true,
+          id: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: 20,
+  },
   clinic: true,
   doctor: true,
+  executionLegalEntity: {
+    select: {
+      code: true,
+      displayName: true,
+    },
+  },
+  logisticsState: {
+    select: {
+      status: true,
+    },
+  },
   patient: true,
   workFormSubmission: true,
   workType: true,
@@ -109,6 +180,7 @@ const WORK_ORDER_MUTATION_FIELDS = [
 @Injectable()
 export class WorksService {
   public constructor(
+    @Inject(AuthorizationService) private readonly authorizationService: AuthorizationService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(PatientsService) private readonly patientsService: PatientsService,
     @Inject(WorkOrderCodeService) private readonly workOrderCodeService: WorkOrderCodeService,
@@ -118,7 +190,40 @@ export class WorksService {
     @Inject(WorkDeadlineService) private readonly workDeadlineService: WorkDeadlineService,
   ) {}
 
-  public async listWorks(query: ListWorksQueryDto, includePricing: boolean): Promise<PaginatedWorksView> {
+  public async listWorks(actorUserId: string, query: ListWorksQueryDto, includePricing: boolean): Promise<PaginatedWorksView> {
+    const access = await this.createClaimAccess(actorUserId);
+    return this.listWorksWithWhere(query, includePricing, access, {});
+  }
+
+  public async listAvailableForClaim(actorUserId: string, query: ListClaimWorksQueryDto): Promise<PaginatedWorksView> {
+    await this.authorizationService.requirePermission({
+      permission: "works.claim.available.read",
+      requiredScope: "ALL",
+      userId: actorUserId,
+    });
+    const access = await this.createClaimAccess(actorUserId);
+    return this.listWorksWithWhere(query, false, access, { claimStatus: "UNCLAIMED" });
+  }
+
+  public async listMyClaimed(actorUserId: string, query: ListClaimWorksQueryDto): Promise<PaginatedWorksView> {
+    await this.authorizationService.requirePermission({
+      permission: "works.claim.own.read",
+      requiredScope: "ASSIGNED",
+      userId: actorUserId,
+    });
+    const access = await this.createClaimAccess(actorUserId);
+    return this.listWorksWithWhere(query, false, access, {
+      assignedTechnicianId: actorUserId,
+      claimStatus: "CLAIMED",
+    });
+  }
+
+  private async listWorksWithWhere(
+    query: ListWorksQueryDto,
+    includePricing: boolean,
+    access: WorkClaimAccessViewInput,
+    enforcedWhere: Prisma.WorkOrderWhereInput,
+  ): Promise<PaginatedWorksView> {
     const pageSize = Math.min(query.pageSize, 100);
     const page = Math.max(query.page, 1);
     const search = query.search?.trim();
@@ -129,6 +234,9 @@ export class WorksService {
       ...(query.workTypeId ? { workTypeId: query.workTypeId } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.priority ? { priority: query.priority } : {}),
+      ...(query.claimStatus ? { claimStatus: query.claimStatus } : {}),
+      ...(query.assignedTechnicianId ? { assignedTechnicianId: query.assignedTechnicianId } : {}),
+      ...(query.executionLegalEntityCode ? { executionLegalEntity: { code: query.executionLegalEntityCode } } : {}),
       ...(query.dateFrom || query.dateTo
         ? {
             requestedDeliveryDate: {
@@ -147,6 +255,7 @@ export class WorksService {
             ],
           }
         : {}),
+      ...enforcedWhere,
     };
 
     const allMatchingWorkOrders = await this.prisma.workOrder.findMany({
@@ -168,7 +277,7 @@ export class WorksService {
 
     return {
       deadlineDashboard: this.createDeadlineDashboardSummary(allMatchingWorkOrders, now),
-      items: workOrders.map((workOrder) => toWorkSummaryView(workOrder, includePricing)),
+      items: workOrders.map((workOrder) => toWorkSummaryView(workOrder, includePricing, access)),
       page,
       pageCount: Math.max(1, Math.ceil(total / pageSize)),
       pageSize,
@@ -204,9 +313,248 @@ export class WorksService {
     return workTypes.map(toWorkTypeFormOptionView);
   }
 
-  public async getWork(workOrderId: string, includePricing: boolean): Promise<WorkDetailView> {
+  public async getWork(actorUserId: string, workOrderId: string, includePricing: boolean): Promise<WorkDetailView> {
     const workOrder = await this.findWorkOrderOrThrow(workOrderId);
-    return toWorkDetailView(workOrder, includePricing);
+    return toWorkDetailView(workOrder, includePricing, await this.createClaimAccess(actorUserId));
+  }
+
+  public async claimWork(context: ActorContext, workOrderId: string, dto: ClaimWorkDto): Promise<WorkDetailView> {
+    await this.authorizationService.requirePermission({
+      permission: "works.claim.create",
+      requiredScope: "ASSIGNED",
+      userId: context.actorUserId,
+    });
+    const legalEntity = await this.validateExecutionLegalEntity(this.prisma, dto.executionLegalEntityCode);
+    const before = await this.findWorkOrderOrThrow(workOrderId);
+    this.assertClaimRevision(before, dto.expectedClaimRevision);
+    this.assertClaimable(before);
+
+    const nextRevision = before.claimRevision + 1;
+    const after = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.workOrder.updateMany({
+        data: {
+          assignedTechnicianId: context.actorUserId,
+          assignmentUpdatedAt: new Date(),
+          claimedAt: new Date(),
+          claimedByUserId: context.actorUserId,
+          claimRevision: { increment: 1 },
+          claimSource: "TECHNICIAN_CLAIM",
+          claimStatus: "CLAIMED",
+          executionLegalEntityId: legalEntity.id,
+          releaseReason: null,
+          releasedAt: null,
+          releasedByUserId: null,
+          updatedByUserId: context.actorUserId,
+          version: { increment: 1 },
+        },
+        where: {
+          claimRevision: dto.expectedClaimRevision,
+          claimStatus: "UNCLAIMED",
+          id: workOrderId,
+        },
+      });
+      if (result.count !== 1) {
+        await this.recordAudit(tx, {
+          action: WORK_ORDER_AUDIT_ACTIONS.claimConflict,
+          actorUserId: context.actorUserId,
+          metadata: {
+            expectedClaimRevision: dto.expectedClaimRevision,
+            workCode: before.code,
+          },
+          requestMetadata: context.requestMetadata,
+          resourceId: workOrderId,
+        });
+        throw new ConflictException("Lucrarea a fost deja revendicată sau modificată. Reîncarcă lista.");
+      }
+      await tx.workAssignmentEvent.create({
+        data: {
+          actorUserId: context.actorUserId,
+          eventType: "CLAIMED",
+          newLegalEntityId: legalEntity.id,
+          newTechnicianId: context.actorUserId,
+          revision: nextRevision,
+          workOrderId,
+        },
+      });
+      const updated = await tx.workOrder.findUniqueOrThrow({
+        include: WORK_ORDER_INCLUDE,
+        where: { id: workOrderId },
+      });
+      await this.recordAudit(tx, {
+        action: WORK_ORDER_AUDIT_ACTIONS.claimed,
+        actorUserId: context.actorUserId,
+        metadata: this.createAssignmentAuditMetadata(before, updated, "claim"),
+        requestMetadata: context.requestMetadata,
+        resourceId: workOrderId,
+      });
+      return updated;
+    });
+
+    return toWorkDetailView(after, false, await this.createClaimAccess(context.actorUserId));
+  }
+
+  public async releaseWork(context: ActorContext, workOrderId: string, dto: ReleaseWorkDto): Promise<WorkDetailView> {
+    const before = await this.findWorkOrderOrThrow(workOrderId);
+    this.assertClaimRevision(before, dto.expectedClaimRevision);
+    if (before.claimStatus !== "CLAIMED" || !before.assignedTechnicianId) {
+      throw new BadRequestException("Lucrarea nu este revendicată.");
+    }
+    const canReleaseAny = await this.authorizationService.hasPermission({
+      permission: "works.claim.release_any",
+      requiredScope: "ALL",
+      userId: context.actorUserId,
+    });
+    const canReleaseOwn = await this.authorizationService.hasPermission({
+      permission: "works.claim.release_own",
+      requiredScope: "ASSIGNED",
+      userId: context.actorUserId,
+    });
+    if (!canReleaseAny.allowed && !(canReleaseOwn.allowed && before.assignedTechnicianId === context.actorUserId)) {
+      throw new ForbiddenException("Nu ai permisiunea necesară pentru eliberarea lucrării.");
+    }
+
+    const nextRevision = before.claimRevision + 1;
+    const source = canReleaseAny.allowed && before.assignedTechnicianId !== context.actorUserId ? "MANAGER_RELEASE" : "TECHNICIAN_RELEASE";
+    const after = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.workOrder.updateMany({
+        data: {
+          assignedTechnicianId: null,
+          assignmentUpdatedAt: new Date(),
+          claimedAt: null,
+          claimedByUserId: null,
+          claimRevision: { increment: 1 },
+          claimSource: source,
+          claimStatus: "UNCLAIMED",
+          executionLegalEntityId: null,
+          releasedAt: new Date(),
+          releasedByUserId: context.actorUserId,
+          releaseReason: dto.reason,
+          updatedByUserId: context.actorUserId,
+          version: { increment: 1 },
+        },
+        where: {
+          claimRevision: dto.expectedClaimRevision,
+          claimStatus: "CLAIMED",
+          id: workOrderId,
+        },
+      });
+      if (result.count !== 1) {
+        throw new ConflictException("Responsabilitatea lucrării s-a schimbat. Reîncarcă detaliile.");
+      }
+      await tx.workAssignmentEvent.create({
+        data: {
+          actorUserId: context.actorUserId,
+          eventType: "RELEASED",
+          previousLegalEntityId: before.executionLegalEntityId,
+          previousTechnicianId: before.assignedTechnicianId,
+          reason: dto.reason,
+          revision: nextRevision,
+          workOrderId,
+        },
+      });
+      const updated = await tx.workOrder.findUniqueOrThrow({
+        include: WORK_ORDER_INCLUDE,
+        where: { id: workOrderId },
+      });
+      await this.recordAudit(tx, {
+        action: WORK_ORDER_AUDIT_ACTIONS.released,
+        actorUserId: context.actorUserId,
+        metadata: this.createAssignmentAuditMetadata(before, updated, dto.reason),
+        requestMetadata: context.requestMetadata,
+        resourceId: workOrderId,
+      });
+      return updated;
+    });
+
+    return toWorkDetailView(after, false, await this.createClaimAccess(context.actorUserId));
+  }
+
+  public async reassignWork(context: ActorContext, workOrderId: string, dto: ReassignWorkDto): Promise<WorkDetailView> {
+    const before = await this.findWorkOrderOrThrow(workOrderId);
+    this.assertClaimRevision(before, dto.expectedClaimRevision);
+    const requiredPermission = before.claimStatus === "CLAIMED" ? "works.claim.reassign" : "works.claim.assign";
+    await this.authorizationService.requirePermission({
+      permission: requiredPermission,
+      requiredScope: "ALL",
+      userId: context.actorUserId,
+    });
+    const [legalEntity] = await Promise.all([
+      this.validateExecutionLegalEntity(this.prisma, dto.executionLegalEntityCode),
+      this.validateClaimTechnician(dto.technicianId),
+    ]);
+    if (before.logisticsState?.status === "DELIVERED" || before.logisticsState?.status === "HANDED_TO_DELIVERY") {
+      throw new BadRequestException("Lucrarea livrată nu poate fi reasignată.");
+    }
+
+    const nextRevision = before.claimRevision + 1;
+    const eventType = before.claimStatus === "CLAIMED" ? "REASSIGNED" : "ASSIGNED";
+    const after = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.workOrder.updateMany({
+        data: {
+          assignedTechnicianId: dto.technicianId,
+          assignmentUpdatedAt: new Date(),
+          claimedAt: before.claimedAt ?? new Date(),
+          claimedByUserId: before.claimedByUserId ?? context.actorUserId,
+          claimRevision: { increment: 1 },
+          claimSource: before.claimStatus === "CLAIMED" ? "MANAGER_REASSIGNMENT" : "MANAGER_ASSIGNMENT",
+          claimStatus: "CLAIMED",
+          executionLegalEntityId: legalEntity.id,
+          releaseReason: null,
+          releasedAt: null,
+          releasedByUserId: null,
+          updatedByUserId: context.actorUserId,
+          version: { increment: 1 },
+        },
+        where: {
+          claimRevision: dto.expectedClaimRevision,
+          id: workOrderId,
+        },
+      });
+      if (result.count !== 1) {
+        throw new ConflictException("Responsabilitatea lucrării s-a schimbat. Reîncarcă detaliile.");
+      }
+      await tx.workAssignmentEvent.create({
+        data: {
+          actorUserId: context.actorUserId,
+          eventType,
+          newLegalEntityId: legalEntity.id,
+          newTechnicianId: dto.technicianId,
+          previousLegalEntityId: before.executionLegalEntityId,
+          previousTechnicianId: before.assignedTechnicianId,
+          reason: dto.reason,
+          revision: nextRevision,
+          workOrderId,
+        },
+      });
+      const updated = await tx.workOrder.findUniqueOrThrow({
+        include: WORK_ORDER_INCLUDE,
+        where: { id: workOrderId },
+      });
+      await this.recordAudit(tx, {
+        action: before.claimStatus === "CLAIMED" ? WORK_ORDER_AUDIT_ACTIONS.reassigned : WORK_ORDER_AUDIT_ACTIONS.assigned,
+        actorUserId: context.actorUserId,
+        metadata: this.createAssignmentAuditMetadata(before, updated, dto.reason),
+        requestMetadata: context.requestMetadata,
+        resourceId: workOrderId,
+      });
+      return updated;
+    });
+
+    return toWorkDetailView(after, false, await this.createClaimAccess(context.actorUserId));
+  }
+
+  public async listAssignmentHistory(actorUserId: string, workOrderId: string): Promise<readonly WorkAssignmentEventView[]> {
+    const permission = await this.authorizationService.requirePermission({
+      permission: "works.claim.history.read",
+      requiredScope: "ASSIGNED",
+      userId: actorUserId,
+    });
+    const workOrder = await this.findWorkOrderOrThrow(workOrderId);
+    if (!permission.effectiveScopes.includes("ALL") && workOrder.assignedTechnicianId !== actorUserId) {
+      throw new ForbiddenException("Nu ai acces la istoricul responsabilității acestei lucrări.");
+    }
+
+    return workOrder.assignmentEvents.map(toWorkAssignmentEventView);
   }
 
   public async previewDeadline(legalEntity: LegalEntityContext, dto: WorkDeadlinePreviewDto, canSetManualDeadline: boolean) {
@@ -344,7 +692,7 @@ export class WorksService {
       });
     });
 
-    return toWorkDetailView(workOrder, true);
+    return toWorkDetailView(workOrder, true, await this.createClaimAccess(context.actorUserId));
   }
 
   public async updateWork(context: ActorContext, legalEntity: LegalEntityContext, workOrderId: string, dto: UpdateWorkDto): Promise<WorkDetailView> {
@@ -488,7 +836,7 @@ export class WorksService {
       return updatedWorkOrder;
     });
 
-    return toWorkDetailView(after, true);
+    return toWorkDetailView(after, true, await this.createClaimAccess(context.actorUserId));
   }
 
   public async recalculateDeadline(context: ActorContext, legalEntity: LegalEntityContext, workOrderId: string, dto: RecalculateWorkDeadlineDto): Promise<WorkDetailView> {
@@ -529,7 +877,7 @@ export class WorksService {
       return updated;
     });
 
-    return toWorkDetailView(after, true);
+    return toWorkDetailView(after, true, await this.createClaimAccess(context.actorUserId));
   }
 
   public async setManualDeadline(context: ActorContext, legalEntity: LegalEntityContext, workOrderId: string, dto: SetManualWorkDeadlineDto): Promise<WorkDetailView> {
@@ -571,7 +919,7 @@ export class WorksService {
       return updated;
     });
 
-    return toWorkDetailView(after, true);
+    return toWorkDetailView(after, true, await this.createClaimAccess(context.actorUserId));
   }
 
   private async findWorkOrderOrThrow(workOrderId: string): Promise<WorkOrderRecord> {
@@ -815,6 +1163,102 @@ export class WorksService {
       triggerFields,
       workCode: after.code,
     };
+  }
+
+  private createAssignmentAuditMetadata(before: WorkOrderRecord, after: WorkOrderRecord, reason: string): Prisma.InputJsonObject {
+    return {
+      newExecutionLegalEntityId: after.executionLegalEntityId,
+      newRevision: after.claimRevision,
+      newStatus: after.claimStatus,
+      newTechnicianId: after.assignedTechnicianId,
+      previousExecutionLegalEntityId: before.executionLegalEntityId,
+      previousRevision: before.claimRevision,
+      previousStatus: before.claimStatus,
+      previousTechnicianId: before.assignedTechnicianId,
+      reason,
+      workCode: before.code,
+    };
+  }
+
+  private async createClaimAccess(userId: string): Promise<WorkClaimAccessViewInput> {
+    const [canClaim, canReleaseOwn, canReleaseAny, canReassign] = await Promise.all([
+      this.authorizationService.hasPermission({ permission: "works.claim.create", requiredScope: "ASSIGNED", userId }),
+      this.authorizationService.hasPermission({ permission: "works.claim.release_own", requiredScope: "ASSIGNED", userId }),
+      this.authorizationService.hasPermission({ permission: "works.claim.release_any", requiredScope: "ALL", userId }),
+      this.authorizationService.hasPermission({ permission: "works.claim.reassign", requiredScope: "ALL", userId }),
+    ]);
+
+    return createWorkClaimAccess({
+      canClaim: canClaim.allowed,
+      canReassign: canReassign.allowed,
+      canReleaseAny: canReleaseAny.allowed,
+      canReleaseOwn: canReleaseOwn.allowed,
+      userId,
+    });
+  }
+
+  private assertClaimRevision(workOrder: WorkOrderRecord, expectedRevision: number): void {
+    if (workOrder.claimRevision !== expectedRevision) {
+      throw new ConflictException("Responsabilitatea lucrării s-a schimbat. Reîncarcă detaliile.");
+    }
+  }
+
+  private assertClaimable(workOrder: WorkOrderRecord): void {
+    if (workOrder.claimStatus !== "UNCLAIMED") {
+      throw new ConflictException("Lucrarea este deja revendicată.");
+    }
+    const logisticsStatus = workOrder.logisticsState?.status;
+    if (logisticsStatus === "BLOCKED") {
+      throw new BadRequestException("Lucrarea blocată nu poate fi revendicată.");
+    }
+    if (logisticsStatus === "HANDED_TO_DELIVERY" || logisticsStatus === "DELIVERED") {
+      throw new BadRequestException("Lucrarea predată sau livrată nu poate fi revendicată.");
+    }
+  }
+
+  private async validateExecutionLegalEntity(
+    client: Prisma.TransactionClient | PrismaService,
+    legalEntityCode: "NC" | "NG",
+  ): Promise<{ readonly id: string; readonly code: string; readonly displayName: string }> {
+    const legalEntity = await client.legalEntity.findUnique({
+      select: {
+        code: true,
+        displayName: true,
+        id: true,
+        isActive: true,
+      },
+      where: {
+        code: legalEntityCode,
+      },
+    });
+
+    if (!legalEntity || !legalEntity.isActive || (legalEntity.code !== "NC" && legalEntity.code !== "NG")) {
+      throw new BadRequestException("Alege o companie activă NC sau NG pentru execuție.");
+    }
+
+    return legalEntity;
+  }
+
+  private async validateClaimTechnician(userId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      select: {
+        isActive: true,
+      },
+      where: {
+        id: userId,
+      },
+    });
+    if (!user?.isActive) {
+      throw new BadRequestException("Tehnicianul selectat nu este activ.");
+    }
+    const permission = await this.authorizationService.hasPermission({
+      permission: "works.claim.create",
+      requiredScope: "ASSIGNED",
+      userId,
+    });
+    if (!permission.allowed) {
+      throw new BadRequestException("Utilizatorul selectat nu poate revendica lucrări.");
+    }
   }
 
   private rejectConflictingPatientPayload(patientId: string | undefined, patientName: string | undefined): void {

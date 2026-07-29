@@ -1764,19 +1764,19 @@ Aceste taskuri inlocuiesc ordinea veche dupa `SIGNATURES-001`. Detaliile complet
 - Audit: fara audit nou deoarece taskul este read-only.
 - Testare: resolver unit tests, service/controller work list tests, UI registry/detail/dashboard tests, regression typecheck/test/build.
 
-### TECH-CLAIM-001A - Technician self-claim deadline start integration
+### TECH-CLAIM-001A - Technician claim, company selection and work ownership
 
-- Status: APPROVED.
-- Obiectiv: integrarea termenelor persistate cu primul claim/start tehnic real, dupa ce fluxul de self-claim devine disponibil.
-- Scope: stabilirea momentului operational de start tehnic, recalc optional pornind de la startul tehnic, blocarea companiei la primul claim si reguli de corectie manager.
-- Non-goals: refacerea engine-ului 001A, schimbarea snapshotului 001B, notificari, dashboard sau rapoarte.
-- Dependente: WORK-DEADLINES-001B, WORK-DEADLINES-001C, TECH-CLAIM-001.
-- Acceptance criteria: primul claim/start tehnic seteaza explicit momentul operational de executie si pastreaza auditul; conflictele de versiune sunt refuzate; deadline-ul afisat ramane derivat din `effectiveDueAt`.
-- Backend: integrare claim/workflow cu deadline service si optimistic locking.
-- Frontend: workbench self-claim afiseaza si confirma efectul asupra termenului.
-- Securitate: tehnicianul poate actiona doar pe etapa permisa; managerul poate corecta explicit.
-- Audit: claim, start execution si correction.
-- Testare: integration workflow, conflict tests, UI workbench tests.
+- Status: COMPLETED.
+- Obiectiv: adaugarea responsabilitatii active pe lucrare, cu revendicare de catre tehnician si selectie explicita `NC`/`NG` ca firma de executie.
+- Scope: `claimStatus`, tehnician responsabil, firma de executie, revizie optimista, istoric append-only, claim/release/reassign, liste disponibile/proprii si vizibilitate in registru/detaliu.
+- Non-goals: snapshot final de pret, recalcul final de termen la claim, cicluri de lucru, materiale, stocuri, notificari, rapoarte, fisiere, billing sau offline.
+- Dependente: ORG-CONTEXT-001, WORKFLOW-002, TECH-001, RBAC-001.
+- Acceptance criteria: tehnicianul vede lucrari disponibile si proprii, revendica atomic cu `NC`/`NG`, conflictul concurent returneaza 409, release-ul curata responsabilitatea si firma, managerul poate assign/reassign cu motiv, istoricul ramane append-only, seed-ul demo include scenarii disponibile/revendicate/reasignate/eliberate.
+- Backend: campuri `WorkOrder` pentru ownership, `WorkAssignmentEvent`, endpointuri `/works/available-for-claim`, `/works/my-claimed`, `/works/:id/claim`, `/release`, `/reassign`, `/assignment-history`, RBAC granular si audit.
+- Frontend: `/workbench` cu taburi `Lucrări disponibile` si `Lucrările mele`, selector aplicatie pentru `NC`/`NG`, release modal, coloane/filtre ownership in `/works`, card `Responsabilitate` in drawer.
+- Securitate: codul companiei este payload public, nu ID intern; toate mutatiile sunt server-side RBAC + CSRF + optimistic locking.
+- Audit: claim, conflict claim, release, assign si reassign pe work order, plus istoric append-only.
+- Testare: service conflict tests, RBAC registry tests, UI regression, seed idempotency, typecheck/test/build.
 
 ### TECH-CLAIM-001 - Technician self-claim
 

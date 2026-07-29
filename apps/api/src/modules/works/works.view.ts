@@ -35,9 +35,64 @@ export interface WorkFormSubmissionView {
 
 export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
   include: {
+    assignedTechnician: {
+      select: {
+        displayName: true;
+        id: true;
+      };
+    };
+    assignmentEvents: {
+      include: {
+        actor: {
+          select: {
+            displayName: true;
+            id: true;
+          };
+        };
+        newLegalEntity: {
+          select: {
+            code: true;
+            displayName: true;
+          };
+        };
+        newTechnician: {
+          select: {
+            displayName: true;
+            id: true;
+          };
+        };
+        previousLegalEntity: {
+          select: {
+            code: true;
+            displayName: true;
+          };
+        };
+        previousTechnician: {
+          select: {
+            displayName: true;
+            id: true;
+          };
+        };
+      };
+      orderBy: {
+        createdAt: "desc";
+      };
+      take: 20;
+    };
     clinic: true;
     doctor: true;
+    executionLegalEntity: {
+      select: {
+        code: true;
+        displayName: true;
+      };
+    };
     patient: true;
+    logisticsState: {
+      select: {
+        status: true;
+      };
+    };
     workFormSubmission: true;
     workType: true;
     workflowExecution: {
@@ -89,6 +144,14 @@ export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
   };
 }>;
 
+export interface WorkClaimAccessViewInput {
+  readonly canClaim: boolean;
+  readonly canReassign: boolean;
+  readonly canReleaseAny: boolean;
+  readonly canReleaseOwn: boolean;
+  readonly userId: string;
+}
+
 export interface WorkTypeFormOptionView {
   readonly code: string;
   readonly id: string;
@@ -103,6 +166,7 @@ export interface WorkSummaryView {
     readonly name: string;
   };
   readonly code: string;
+  readonly claim: WorkClaimView;
   readonly createdAt: string;
   readonly currency: string | null;
   readonly deadline: WorkDeadlineView;
@@ -134,6 +198,33 @@ export interface WorkSummaryView {
   };
 }
 
+export interface WorkClaimView {
+  readonly canCurrentUserClaim: boolean;
+  readonly canCurrentUserReassign: boolean;
+  readonly canCurrentUserRelease: boolean;
+  readonly claimedAt: string | null;
+  readonly executionLegalEntity: { readonly code: string; readonly displayName: string } | null;
+  readonly releasedAt: string | null;
+  readonly releaseReason: string | null;
+  readonly revision: number;
+  readonly source: string | null;
+  readonly status: string;
+  readonly technician: { readonly displayName: string; readonly publicId: string } | null;
+}
+
+export interface WorkAssignmentEventView {
+  readonly actor: { readonly displayName: string; readonly publicId: string };
+  readonly createdAt: string;
+  readonly eventType: string;
+  readonly id: string;
+  readonly newLegalEntity: { readonly code: string; readonly displayName: string } | null;
+  readonly newTechnician: { readonly displayName: string; readonly publicId: string } | null;
+  readonly previousLegalEntity: { readonly code: string; readonly displayName: string } | null;
+  readonly previousTechnician: { readonly displayName: string; readonly publicId: string } | null;
+  readonly reason: string | null;
+  readonly revision: number;
+}
+
 export interface WorkDeadlineView {
   readonly badge: string;
   readonly calculatedAt: string | null;
@@ -157,6 +248,7 @@ export interface WorkDeadlineView {
 }
 
 export interface WorkDetailView extends Omit<WorkSummaryView, "workflow"> {
+  readonly assignmentHistory: readonly WorkAssignmentEventView[];
   readonly baseUnitPriceMinor: number | null;
   readonly clinicalNotes: string | null;
   readonly createdByUserId: string | null;
@@ -166,6 +258,16 @@ export interface WorkDetailView extends Omit<WorkSummaryView, "workflow"> {
   readonly version: number;
   readonly workflow: ReturnType<typeof toWorkflowExecutionView> | null;
   readonly workForm: WorkFormSubmissionView | null;
+}
+
+export function createWorkClaimAccess(input: Partial<WorkClaimAccessViewInput> & { readonly userId: string }): WorkClaimAccessViewInput {
+  return {
+    canClaim: input.canClaim ?? false,
+    canReassign: input.canReassign ?? false,
+    canReleaseAny: input.canReleaseAny ?? false,
+    canReleaseOwn: input.canReleaseOwn ?? false,
+    userId: input.userId,
+  };
 }
 
 export interface PaginatedWorksView {
@@ -186,7 +288,7 @@ export function toWorkTypeFormOptionView(workType: { readonly code: string; read
   };
 }
 
-export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: boolean): WorkSummaryView {
+export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: boolean, access: WorkClaimAccessViewInput): WorkSummaryView {
   return {
     clinic: {
       code: workOrder.clinic.code,
@@ -194,6 +296,7 @@ export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: bo
       name: workOrder.clinic.name,
     },
     code: workOrder.code,
+    claim: toWorkClaimView(workOrder, access),
     createdAt: workOrder.createdAt.toISOString(),
     currency: includePricing ? workOrder.currency : null,
     deadline: toWorkDeadlineView(workOrder),
@@ -228,6 +331,52 @@ export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: bo
   };
 }
 
+function toWorkClaimView(workOrder: WorkOrderRecord, access: WorkClaimAccessViewInput): WorkClaimView {
+  const isOwnClaim = workOrder.assignedTechnicianId === access.userId;
+
+  return {
+    canCurrentUserClaim: access.canClaim && workOrder.claimStatus === "UNCLAIMED",
+    canCurrentUserReassign: access.canReassign,
+    canCurrentUserRelease: workOrder.claimStatus === "CLAIMED" && (access.canReleaseAny || (access.canReleaseOwn && isOwnClaim)),
+    claimedAt: workOrder.claimedAt?.toISOString() ?? null,
+    executionLegalEntity: workOrder.executionLegalEntity
+      ? {
+          code: workOrder.executionLegalEntity.code,
+          displayName: workOrder.executionLegalEntity.displayName,
+        }
+      : null,
+    releasedAt: workOrder.releasedAt?.toISOString() ?? null,
+    releaseReason: workOrder.releaseReason,
+    revision: workOrder.claimRevision,
+    source: workOrder.claimSource,
+    status: workOrder.claimStatus,
+    technician: workOrder.assignedTechnician
+      ? {
+          displayName: workOrder.assignedTechnician.displayName,
+          publicId: workOrder.assignedTechnician.id,
+        }
+      : null,
+  };
+}
+
+export function toWorkAssignmentEventView(event: WorkOrderRecord["assignmentEvents"][number]): WorkAssignmentEventView {
+  return {
+    actor: {
+      displayName: event.actor.displayName,
+      publicId: event.actor.id,
+    },
+    createdAt: event.createdAt.toISOString(),
+    eventType: event.eventType,
+    id: event.id,
+    newLegalEntity: event.newLegalEntity ? { code: event.newLegalEntity.code, displayName: event.newLegalEntity.displayName } : null,
+    newTechnician: event.newTechnician ? { displayName: event.newTechnician.displayName, publicId: event.newTechnician.id } : null,
+    previousLegalEntity: event.previousLegalEntity ? { code: event.previousLegalEntity.code, displayName: event.previousLegalEntity.displayName } : null,
+    previousTechnician: event.previousTechnician ? { displayName: event.previousTechnician.displayName, publicId: event.previousTechnician.id } : null,
+    reason: event.reason,
+    revision: event.revision,
+  };
+}
+
 function toWorkDeadlineView(workOrder: WorkOrderRecord): WorkDeadlineView {
   const effectiveDueAt = workOrder.effectiveDueAt?.toISOString() ?? null;
   const visual = resolveDeadlineVisualState({
@@ -259,9 +408,10 @@ function toWorkDeadlineView(workOrder: WorkOrderRecord): WorkDeadlineView {
   };
 }
 
-export function toWorkDetailView(workOrder: WorkOrderRecord, includePricing: boolean): WorkDetailView {
+export function toWorkDetailView(workOrder: WorkOrderRecord, includePricing: boolean, access: WorkClaimAccessViewInput): WorkDetailView {
   return {
-    ...toWorkSummaryView(workOrder, includePricing),
+    ...toWorkSummaryView(workOrder, includePricing, access),
+    assignmentHistory: workOrder.assignmentEvents.map(toWorkAssignmentEventView),
     baseUnitPriceMinor: includePricing ? workOrder.baseUnitPriceMinor : null,
     clinicalNotes: workOrder.clinicalNotes,
     createdByUserId: workOrder.createdByUserId,

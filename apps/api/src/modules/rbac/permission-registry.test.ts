@@ -43,6 +43,14 @@ const expectedPermissionKeys = [
   "works.deadline.recalculate",
   "works.deadline.set_manual",
   "works.deadline.override_lock",
+  "works.claim.available.read",
+  "works.claim.own.read",
+  "works.claim.create",
+  "works.claim.release_own",
+  "works.claim.release_any",
+  "works.claim.assign",
+  "works.claim.reassign",
+  "works.claim.history.read",
   "scan.use",
   "scan.resolve",
   "workflow.read",
@@ -184,6 +192,11 @@ describe("PERMISSION_REGISTRY", () => {
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["forms.read"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["forms.archive"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["technician.workbench.read"]).toBe("ASSIGNED");
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.claim.available.read"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.claim.create"]).toBe("ASSIGNED");
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.claim.release_own"]).toBe("ASSIGNED");
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.claim.release_any"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.MANAGER["works.claim.reassign"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["scan.use"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["scan.resolve"]).toBe("ASSIGNED");
     expect(ROLE_PERMISSION_MATRIX.MEDIC["scan.use"]).toBeNull();

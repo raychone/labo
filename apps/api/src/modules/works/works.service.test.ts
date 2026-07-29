@@ -1,4 +1,4 @@
-import { BadRequestException } from "@nestjs/common";
+import { BadRequestException, ConflictException } from "@nestjs/common";
 import type { Clinic, Doctor, Patient, WorkOrder, WorkType } from "@prisma/client";
 import { plainToInstance } from "class-transformer";
 import { validate } from "class-validator";
@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { PrismaService } from "../database/prisma.service.js";
 import type { PatientsService } from "../patients/patients.service.js";
 import type { WorkQrTokenService } from "../qr/work-qr-token.service.js";
+import type { AuthorizationService } from "../rbac/authorization.service.js";
 import type { WorkFormSubmissionValidationService } from "../work-forms/work-form-submission-validation.service.js";
 import type { WorkflowExecutionService } from "../workflow-execution/workflow-execution.service.js";
 import { CreateWorkDto } from "./dto/works.dto.js";
@@ -122,7 +123,16 @@ function patient(overrides: Partial<Patient> = {}): Patient {
 function workOrder(overrides: Partial<WorkOrder> = {}) {
   return {
     baseUnitPriceMinor: 35000,
+    assignedTechnician: null,
+    assignedTechnicianId: null,
+    assignmentEvents: [],
+    assignmentUpdatedAt: null,
     clinicalNotes: null,
+    claimedAt: null,
+    claimedByUserId: null,
+    claimRevision: 0,
+    claimSource: null,
+    claimStatus: "UNCLAIMED",
     clinic: clinic(),
     clinicId: "clinic_1",
     code: "WO-2026-000001",
@@ -131,6 +141,8 @@ function workOrder(overrides: Partial<WorkOrder> = {}) {
     currency: "RON",
     doctor: doctor(),
     doctorId: "doctor_1",
+    executionLegalEntity: null,
+    executionLegalEntityId: null,
     externalReference: null,
     calculatedDueAt: new Date("2026-07-27T14:00:00.000Z"),
     deadlineCalculatedAt: new Date("2026-07-22T12:00:00.000Z"),
@@ -158,6 +170,9 @@ function workOrder(overrides: Partial<WorkOrder> = {}) {
     priority: "NORMAL",
     qrCreatedAt: new Date("2026-07-22T12:00:00.000Z"),
     qrToken: "qr_token_1",
+    releaseReason: null,
+    releasedAt: null,
+    releasedByUserId: null,
     quantity: 2,
     requestedDeliveryDate: new Date("2026-08-01T00:00:00.000Z"),
     status: "REGISTERED",
@@ -180,6 +195,10 @@ function workOrder(overrides: Partial<WorkOrder> = {}) {
 
 function createService(
   prisma: unknown,
+  authorizationService: unknown = {
+    hasPermission: vi.fn().mockResolvedValue({ allowed: false, effectiveScopes: [], permission: "pricing.read" }),
+    requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ALL"], permission: "works.read_all" }),
+  },
   patientsService: unknown = { findActivePatientOrThrow: vi.fn().mockResolvedValue(patient()) },
   codeService: unknown = { generate: vi.fn().mockResolvedValue("WO-2026-000001") },
   qrTokenService: unknown = { generate: vi.fn().mockResolvedValue("qr_token_1") },
@@ -217,6 +236,7 @@ function createService(
   },
 ): WorksService {
   return new WorksService(
+    authorizationService as AuthorizationService,
     prisma as PrismaService,
     patientsService as PatientsService,
     codeService as WorkOrderCodeService,
@@ -264,7 +284,7 @@ describe("WorksService", () => {
           workType: { findUnique: vi.fn().mockResolvedValue({ basePriceMinor: 35000, isActive: true }) },
         }),
       ),
-    }, undefined, codeService, qrTokenService);
+    }, undefined, undefined, codeService, qrTokenService);
 
     const result = await service.createWork(
       { actorUserId: "actor_1", requestMetadata: { ipAddress: "127.0.0.1" } },
@@ -336,7 +356,7 @@ describe("WorksService", () => {
       $transaction: vi.fn((operations: readonly Promise<unknown>[]) => Promise.all(operations)),
     });
 
-    const result = await service.listWorks({ page: 1, pageSize: 20, sortBy: "createdAt", sortDirection: "desc" }, false);
+    const result = await service.listWorks("actor_1", { page: 1, pageSize: 20, sortBy: "createdAt", sortDirection: "desc" }, false);
 
     expect(result.items[0]?.currency).toBeNull();
     expect(result.items[0]?.totalPriceMinor).toBeNull();
@@ -370,7 +390,7 @@ describe("WorksService", () => {
     });
 
     try {
-      const result = await service.listWorks({ deadlineFilter: "LATE", page: 1, pageSize: 20, sortBy: "effectiveDueAt", sortDirection: "asc" }, false);
+      const result = await service.listWorks("actor_1", { deadlineFilter: "LATE", page: 1, pageSize: 20, sortBy: "effectiveDueAt", sortDirection: "asc" }, false);
 
       expect(result.items).toHaveLength(1);
       expect(result.items[0]?.code).toBe("WO-2026-000002");
@@ -387,6 +407,73 @@ describe("WorksService", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("claims an available work atomically with execution company code", async () => {
+    const before = workOrder();
+    const after = workOrder({
+      assignedTechnicianId: "actor_1",
+      claimRevision: 1,
+      claimSource: "TECHNICIAN_CLAIM",
+      claimStatus: "CLAIMED",
+      executionLegalEntityId: "legal_nc",
+    });
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const assignmentCreate = vi.fn().mockResolvedValue({});
+    const auditCreate = vi.fn().mockResolvedValue({});
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          auditLog: { create: auditCreate },
+          workAssignmentEvent: { create: assignmentCreate },
+          workOrder: { findUniqueOrThrow: vi.fn().mockResolvedValue(after), updateMany },
+        }),
+      ),
+      legalEntity: { findUnique: vi.fn().mockResolvedValue({ code: "NC", displayName: "Nicolaie Cristina", id: "legal_nc", isActive: true }) },
+      workOrder: { findUnique: vi.fn().mockResolvedValue(before) },
+    }, {
+      hasPermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ASSIGNED"], permission: "works.claim.create" }),
+      requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ASSIGNED"], permission: "works.claim.create" }),
+    });
+
+    const result = await service.claimWork({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {
+      executionLegalEntityCode: "NC",
+      expectedClaimRevision: 0,
+    });
+
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { claimRevision: 0, claimStatus: "UNCLAIMED", id: "work_order_1" },
+    }));
+    expect(assignmentCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        eventType: "CLAIMED",
+        newLegalEntityId: "legal_nc",
+        newTechnicianId: "actor_1",
+        revision: 1,
+      }),
+    });
+    expect(result.claim.status).toBe("CLAIMED");
+  });
+
+  it("returns a conflict when concurrent claim already changed the revision", async () => {
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          auditLog: { create: vi.fn().mockResolvedValue({}) },
+          workOrder: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+        }),
+      ),
+      legalEntity: { findUnique: vi.fn().mockResolvedValue({ code: "NC", displayName: "Nicolaie Cristina", id: "legal_nc", isActive: true }) },
+      workOrder: { findUnique: vi.fn().mockResolvedValue(workOrder()) },
+    }, {
+      hasPermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ASSIGNED"], permission: "works.claim.create" }),
+      requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ASSIGNED"], permission: "works.claim.create" }),
+    });
+
+    await expect(service.claimWork({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {
+      executionLegalEntityCode: "NC",
+      expectedClaimRevision: 0,
+    })).rejects.toBeInstanceOf(ConflictException);
   });
 
   it("keeps existing pricing snapshot when catalog price changes later", async () => {

@@ -301,9 +301,15 @@ Implemented in `WORK-DEADLINES-001C`:
 - Work detail deadline card with snapshot metadata and timeline-oriented labels.
 - Visual states resolved in `Europe/Bucharest`: `UNKNOWN`, `UNRESOLVED`, `ON_TIME`, `DUE_TODAY`, `DUE_TOMORROW`, `WARNING`, `LATE`, `MANUAL`.
 
-Deferred to `TECH-CLAIM-001A` and later tasks:
+Implemented in `TECH-CLAIM-001A`:
 
-- First technical claim integration and `executionStartedAt`.
+- Work-order ownership through technician claim, manager assignment/reassignment and release.
+- Explicit `NC`/`NG` execution company selection at claim/assignment time.
+- Append-only work assignment history and optimistic locking through `claimRevision`.
+
+Deferred to later tasks:
+
+- Final `executionStartedAt`/deadline recalculation integration.
 - Notifications, cron jobs and overdue reporting.
 
 Required deadline colors:

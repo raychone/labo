@@ -886,6 +886,170 @@ async function seedDemoWorks(prisma: PrismaClient, dataset: DemoDataset): Promis
       },
     });
   }
+
+  await seedDemoWorkClaims(prisma, dataset);
+}
+
+async function seedDemoWorkClaims(prisma: PrismaClient, dataset: DemoDataset): Promise<void> {
+  const [nc, ng] = await Promise.all([
+    prisma.legalEntity.findUniqueOrThrow({ select: { id: true }, where: { code: "NC" } }),
+    prisma.legalEntity.findUniqueOrThrow({ select: { id: true }, where: { code: "NG" } }),
+  ]);
+  const scenarios = [
+    claimScenario(dataset, 1, "demo_user_tehnician_1", nc.id, "CLAIMED", "TECHNICIAN_CLAIM", 1),
+    claimScenario(dataset, 2, "demo_user_tehnician_2", ng.id, "CLAIMED", "MANAGER_ASSIGNMENT", 1),
+    claimScenario(dataset, 3, "demo_user_tehnician_2", nc.id, "CLAIMED", "MANAGER_REASSIGNMENT", 2),
+    claimScenario(dataset, 4, null, null, "UNCLAIMED", "TECHNICIAN_RELEASE", 2),
+  ] as const;
+
+  for (const scenario of scenarios) {
+    if (!scenario) {
+      continue;
+    }
+    await prisma.workOrder.update({
+      data: {
+        assignedTechnicianId: scenario.technicianId,
+        assignmentUpdatedAt: scenario.updatedAt,
+        claimedAt: scenario.technicianId ? scenario.claimedAt : null,
+        claimedByUserId: scenario.technicianId ? scenario.claimedByUserId : null,
+        claimRevision: scenario.revision,
+        claimSource: scenario.source,
+        claimStatus: scenario.status,
+        executionLegalEntityId: scenario.legalEntityId,
+        releasedAt: scenario.status === "UNCLAIMED" ? scenario.updatedAt : null,
+        releasedByUserId: scenario.status === "UNCLAIMED" ? scenario.claimedByUserId : null,
+        releaseReason: scenario.status === "UNCLAIMED" ? "Demo: lucrare eliberată pentru a arăta revenirea în lista disponibilă." : null,
+      },
+      where: { id: scenario.workId },
+    });
+  }
+
+  await createDemoAssignmentEvent(prisma, dataset, 1, {
+    actorUserId: "demo_user_tehnician_1",
+    eventType: "CLAIMED",
+    newLegalEntityId: nc.id,
+    newTechnicianId: "demo_user_tehnician_1",
+    revision: 1,
+  });
+  await createDemoAssignmentEvent(prisma, dataset, 2, {
+    actorUserId: "demo_user_manager",
+    eventType: "ASSIGNED",
+    newLegalEntityId: ng.id,
+    newTechnicianId: "demo_user_tehnician_2",
+    reason: "Demo: asignare directă de manager.",
+    revision: 1,
+  });
+  await createDemoAssignmentEvent(prisma, dataset, 3, {
+    actorUserId: "demo_user_manager",
+    eventType: "ASSIGNED",
+    newLegalEntityId: nc.id,
+    newTechnicianId: "demo_user_tehnician_1",
+    reason: "Demo: asignare inițială.",
+    revision: 1,
+  });
+  await createDemoAssignmentEvent(prisma, dataset, 3, {
+    actorUserId: "demo_user_manager",
+    eventType: "REASSIGNED",
+    newLegalEntityId: nc.id,
+    newTechnicianId: "demo_user_tehnician_2",
+    previousLegalEntityId: nc.id,
+    previousTechnicianId: "demo_user_tehnician_1",
+    reason: "Demo: transfer către alt tehnician.",
+    revision: 2,
+  });
+  await createDemoAssignmentEvent(prisma, dataset, 4, {
+    actorUserId: "demo_user_tehnician_1",
+    eventType: "CLAIMED",
+    newLegalEntityId: ng.id,
+    newTechnicianId: "demo_user_tehnician_1",
+    revision: 1,
+  });
+  await createDemoAssignmentEvent(prisma, dataset, 4, {
+    actorUserId: "demo_user_tehnician_1",
+    eventType: "RELEASED",
+    previousLegalEntityId: ng.id,
+    previousTechnicianId: "demo_user_tehnician_1",
+    reason: "Demo: lucrare eliberată pentru a arăta revenirea în lista disponibilă.",
+    revision: 2,
+  });
+}
+
+interface DemoClaimScenario {
+  readonly claimedAt: Date;
+  readonly claimedByUserId: string;
+  readonly legalEntityId: string | null;
+  readonly revision: number;
+  readonly source: "MANAGER_ASSIGNMENT" | "MANAGER_REASSIGNMENT" | "TECHNICIAN_CLAIM" | "TECHNICIAN_RELEASE";
+  readonly status: "CLAIMED" | "UNCLAIMED";
+  readonly technicianId: string | null;
+  readonly updatedAt: Date;
+  readonly workId: string;
+}
+
+interface DemoAssignmentEventInput {
+  readonly actorUserId: string;
+  readonly eventType: "ASSIGNED" | "CLAIMED" | "REASSIGNED" | "RELEASED";
+  readonly newLegalEntityId?: string;
+  readonly newTechnicianId?: string;
+  readonly previousLegalEntityId?: string;
+  readonly previousTechnicianId?: string;
+  readonly reason?: string;
+  readonly revision: number;
+}
+
+function claimScenario(
+  dataset: DemoDataset,
+  workIndex: number,
+  technicianId: string | null,
+  legalEntityId: string | null,
+  status: "CLAIMED" | "UNCLAIMED",
+  source: DemoClaimScenario["source"],
+  revision: number,
+): DemoClaimScenario | null {
+  const work = dataset.works[workIndex];
+  if (!work) {
+    return null;
+  }
+
+  return {
+    claimedAt: new Date(work.createdAt.getTime() + 900_000),
+    claimedByUserId: technicianId ?? "demo_user_tehnician_1",
+    legalEntityId,
+    revision,
+    source,
+    status,
+    technicianId,
+    updatedAt: new Date(work.createdAt.getTime() + (revision + 1) * 900_000),
+    workId: work.id,
+  };
+}
+
+async function createDemoAssignmentEvent(
+  prisma: PrismaClient,
+  dataset: DemoDataset,
+  workIndex: number,
+  input: DemoAssignmentEventInput,
+): Promise<void> {
+  const work = dataset.works[workIndex];
+  if (!work) {
+    return;
+  }
+
+  await prisma.workAssignmentEvent.create({
+    data: {
+      actorUserId: input.actorUserId,
+      createdAt: new Date(work.createdAt.getTime() + input.revision * 900_000),
+      eventType: input.eventType,
+      id: `demo_assignment_event_${work.id.replace("demo_work_", "")}_${String(input.revision).padStart(2, "0")}_${input.eventType.toLowerCase()}`,
+      newLegalEntityId: input.newLegalEntityId ?? null,
+      newTechnicianId: input.newTechnicianId ?? null,
+      previousLegalEntityId: input.previousLegalEntityId ?? null,
+      previousTechnicianId: input.previousTechnicianId ?? null,
+      reason: input.reason ?? null,
+      revision: input.revision,
+      workOrderId: work.id,
+    },
+  });
 }
 
 interface DemoDeadlineSnapshot {

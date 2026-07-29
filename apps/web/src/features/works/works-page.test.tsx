@@ -50,6 +50,19 @@ function createPngResponse(): Response {
 
 const workSummary = {
   clinic: { code: "CL-0001", id: "clinic_1", name: "Clinica Test" },
+  claim: {
+    canCurrentUserClaim: true,
+    canCurrentUserReassign: false,
+    canCurrentUserRelease: false,
+    claimedAt: null,
+    executionLegalEntity: null,
+    releasedAt: null,
+    releaseReason: null,
+    revision: 0,
+    source: null,
+    status: "UNCLAIMED",
+    technician: null,
+  },
   code: "WO-2026-000001",
   createdAt: "2026-07-22T12:00:00.000Z",
   currency: null,
@@ -115,6 +128,7 @@ const worksListResponse = {
 
 const workDetail = {
   ...workSummary,
+  assignmentHistory: [],
   baseUnitPriceMinor: null,
   clinicalNotes: null,
   createdByUserId: "user_1",

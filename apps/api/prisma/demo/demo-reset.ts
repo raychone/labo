@@ -159,6 +159,12 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
       where: demoWorkflowExecutionWhere(),
     });
 
+    await tx.workAssignmentEvent.deleteMany({
+      where: {
+        workOrder: demoWorkOrderWhere(),
+      },
+    });
+
     await tx.workOrder.deleteMany({
       where: demoWorkOrderWhere(),
     });

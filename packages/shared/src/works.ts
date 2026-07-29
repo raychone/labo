@@ -1,5 +1,6 @@
 import type { CreateWorkFormSubmissionInput, WorkFormSubmissionView, WorkFormValues } from "./work-forms.js";
 import type { DeadlineDashboardSummary, DeadlineFilter } from "./work-deadline-visual-state.js";
+import type { LegalEntityCode } from "./organization-context.js";
 import type { WorkWorkflowExecutionView, WorkflowExecutionStatus } from "./workflow-execution.js";
 
 export const WORK_STATUSES = ["REGISTERED"] as const;
@@ -9,6 +10,9 @@ export const WORK_QR_PAYLOAD_PREFIX = "dl-work:" as const;
 export const SCAN_SOURCES = ["camera", "manual"] as const;
 export const WORK_DEADLINE_MODES = ["CALCULATED", "MANUAL", "UNRESOLVED"] as const;
 export const WORK_DEADLINE_SOURCES = ["CREATION", "WORK_UPDATE", "MANUAL_OVERRIDE", "MANUAL_RECALCULATION", "LEGACY_BACKFILL", "FUTURE_TECH_CLAIM"] as const;
+export const WORK_CLAIM_STATUSES = ["UNCLAIMED", "CLAIMED"] as const;
+export const WORK_CLAIM_SOURCES = ["TECHNICIAN_CLAIM", "MANAGER_ASSIGNMENT", "MANAGER_REASSIGNMENT", "TECHNICIAN_RELEASE", "MANAGER_RELEASE", "LEGACY_BACKFILL"] as const;
+export const WORK_ASSIGNMENT_EVENT_TYPES = ["CLAIMED", "RELEASED", "ASSIGNED", "REASSIGNED"] as const;
 
 export type WorkStatus = (typeof WORK_STATUSES)[number];
 export type WorkPriority = (typeof WORK_PRIORITIES)[number];
@@ -16,6 +20,9 @@ export type WorkSortField = (typeof WORK_SORT_FIELDS)[number];
 export type ScanSource = (typeof SCAN_SOURCES)[number];
 export type WorkDeadlineMode = (typeof WORK_DEADLINE_MODES)[number];
 export type WorkDeadlineSource = (typeof WORK_DEADLINE_SOURCES)[number];
+export type WorkClaimStatus = (typeof WORK_CLAIM_STATUSES)[number];
+export type WorkClaimSource = (typeof WORK_CLAIM_SOURCES)[number];
+export type WorkAssignmentEventType = (typeof WORK_ASSIGNMENT_EVENT_TYPES)[number];
 
 export interface WorkClinicSummary {
   readonly code: string;
@@ -67,11 +74,49 @@ export interface WorkDeadlineSummary {
   readonly timezone: string | null;
 }
 
+export interface WorkClaimUserSummary {
+  readonly displayName: string;
+  readonly publicId: string;
+}
+
+export interface WorkClaimLegalEntitySummary {
+  readonly code: LegalEntityCode;
+  readonly displayName: string;
+}
+
+export interface WorkClaimSummary {
+  readonly canCurrentUserClaim: boolean;
+  readonly canCurrentUserReassign: boolean;
+  readonly canCurrentUserRelease: boolean;
+  readonly claimedAt: string | null;
+  readonly executionLegalEntity: WorkClaimLegalEntitySummary | null;
+  readonly releasedAt: string | null;
+  readonly releaseReason: string | null;
+  readonly revision: number;
+  readonly source: WorkClaimSource | null;
+  readonly status: WorkClaimStatus;
+  readonly technician: WorkClaimUserSummary | null;
+}
+
+export interface WorkAssignmentEventSummary {
+  readonly actor: WorkClaimUserSummary;
+  readonly createdAt: string;
+  readonly eventType: WorkAssignmentEventType;
+  readonly id: string;
+  readonly newLegalEntity: WorkClaimLegalEntitySummary | null;
+  readonly newTechnician: WorkClaimUserSummary | null;
+  readonly previousLegalEntity: WorkClaimLegalEntitySummary | null;
+  readonly previousTechnician: WorkClaimUserSummary | null;
+  readonly reason: string | null;
+  readonly revision: number;
+}
+
 export interface WorkSummary {
   readonly clinic: WorkClinicSummary;
   readonly code: string;
   readonly createdAt: string;
   readonly currency: string | null;
+  readonly claim: WorkClaimSummary;
   readonly doctor: WorkDoctorSummary;
   readonly id: string;
   readonly invoicedDocumentId: string | null;
@@ -95,6 +140,7 @@ export interface WorkSummary {
 }
 
 export interface WorkDetail extends Omit<WorkSummary, "workflow"> {
+  readonly assignmentHistory: readonly WorkAssignmentEventSummary[];
   readonly baseUnitPriceMinor: number | null;
   readonly clinicalNotes: string | null;
   readonly createdByUserId: string | null;
@@ -132,19 +178,26 @@ export type UpdateWorkInput = Partial<Omit<CreateWorkInput, "workFormSubmission"
 };
 
 export interface WorksListParams {
-  readonly clinicId: string | undefined;
-  readonly dateFrom: string | undefined;
-  readonly dateTo: string | undefined;
+  readonly clinicId?: string | undefined;
+  readonly dateFrom?: string | undefined;
+  readonly dateTo?: string | undefined;
   readonly deadlineFilter: DeadlineFilter | undefined;
-  readonly doctorId: string | undefined;
+  readonly claimStatus?: WorkClaimStatus | undefined;
+  readonly executionLegalEntityCode?: LegalEntityCode | undefined;
+  readonly assignedTechnicianId?: string | undefined;
+  readonly doctorId?: string | undefined;
   readonly page: number;
   readonly pageSize: number;
-  readonly priority: WorkPriority | undefined;
-  readonly search: string | undefined;
+  readonly priority?: WorkPriority | undefined;
+  readonly search?: string | undefined;
   readonly sortBy: WorkSortField;
   readonly sortDirection: "asc" | "desc";
-  readonly status: WorkStatus | undefined;
-  readonly workTypeId: string | undefined;
+  readonly status?: WorkStatus | undefined;
+  readonly workTypeId?: string | undefined;
+}
+
+export interface ClaimWorksListParams extends Omit<WorksListParams, "dateFrom" | "dateTo" | "status"> {
+  readonly onlyActive?: boolean | undefined;
 }
 
 export interface PaginatedWorksResponse {
@@ -155,6 +208,23 @@ export interface PaginatedWorksResponse {
   readonly pageSize: number;
   readonly total: number;
 }
+
+export type ClaimWorkInput = {
+  readonly executionLegalEntityCode: LegalEntityCode;
+  readonly expectedClaimRevision: number;
+};
+
+export type ReleaseWorkInput = {
+  readonly expectedClaimRevision: number;
+  readonly reason: string;
+};
+
+export type ReassignWorkInput = {
+  readonly executionLegalEntityCode: LegalEntityCode;
+  readonly expectedClaimRevision: number;
+  readonly reason: string;
+  readonly technicianId: string;
+};
 
 export interface WorkDeadlinePreviewInput {
   readonly clinicId: string;

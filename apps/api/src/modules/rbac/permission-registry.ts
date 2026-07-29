@@ -49,6 +49,14 @@ export type PermissionKey =
   | "works.deadline.recalculate"
   | "works.deadline.set_manual"
   | "works.deadline.override_lock"
+  | "works.claim.available.read"
+  | "works.claim.own.read"
+  | "works.claim.create"
+  | "works.claim.release_own"
+  | "works.claim.release_any"
+  | "works.claim.assign"
+  | "works.claim.reassign"
+  | "works.claim.history.read"
   | "scan.use"
   | "scan.resolve"
   | "workflow.read"
@@ -179,6 +187,14 @@ export const PERMISSION_REGISTRY = [
   definePermission("works.deadline.recalculate", "Recalculate work order deadline snapshots."),
   definePermission("works.deadline.set_manual", "Set manual work order deadlines."),
   definePermission("works.deadline.override_lock", "Override locked work order deadlines."),
+  definePermission("works.claim.available.read", "Read work orders available for technician claim."),
+  definePermission("works.claim.own.read", "Read own claimed work orders."),
+  definePermission("works.claim.create", "Claim an available work order."),
+  definePermission("works.claim.release_own", "Release own claimed work order."),
+  definePermission("works.claim.release_any", "Release any claimed work order."),
+  definePermission("works.claim.assign", "Assign an unclaimed work order to a technician."),
+  definePermission("works.claim.reassign", "Reassign a claimed work order to another technician."),
+  definePermission("works.claim.history.read", "Read work assignment history."),
   definePermission("scan.use", "Use operational QR scanner."),
   definePermission("scan.resolve", "Resolve operational QR scan context."),
   definePermission("workflow.read", "Read workflows."),
@@ -361,6 +377,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "workflow.start_stage": "OWN_STAGE",
     "works.assign": "ALL",
     "works.change_status": "ALL",
+    "works.claim.history.read": "ALL",
     "works.deadline.read": "ALL",
     "works.read_all": "ALL",
     "works.read_assigned": "ASSIGNED",
@@ -406,6 +423,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "workflow.read": "ALL",
     "workflow.start_stage": "OWN_STAGE",
     "works.change_status": "ALL",
+    "works.claim.history.read": "ALL",
     "works.create": "ALL",
     "works.deadline.preview": "ALL",
     "works.deadline.read": "ALL",
@@ -430,6 +448,11 @@ export const ROLE_PERMISSION_MATRIX = {
     "workflow.pause_stage": "OWN_STAGE",
     "workflow.read": "ASSIGNED",
     "workflow.start_stage": "OWN_STAGE",
+    "works.claim.available.read": "ALL",
+    "works.claim.create": "ASSIGNED",
+    "works.claim.history.read": "ASSIGNED",
+    "works.claim.own.read": "ASSIGNED",
+    "works.claim.release_own": "ASSIGNED",
     "works.change_status": "OWN_STAGE",
     "works.deadline.read": "OWN_STAGE",
     "works.read_assigned": "OWN_STAGE",
@@ -515,6 +538,14 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "workflow.start_stage",
   "workflow.update",
   "works.create",
+  "works.claim.assign",
+  "works.claim.available.read",
+  "works.claim.create",
+  "works.claim.history.read",
+  "works.claim.own.read",
+  "works.claim.reassign",
+  "works.claim.release_any",
+  "works.claim.release_own",
   "works.deadline.override_lock",
   "works.deadline.preview",
   "works.deadline.recalculate",

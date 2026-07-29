@@ -5,7 +5,7 @@ import QRCode from "qrcode";
 import type { AuthenticatedUser, RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { AuthorizationService } from "../rbac/authorization.service.js";
-import { toWorkDetailView, type WorkOrderRecord } from "../works/works.view.js";
+import { createWorkClaimAccess, toWorkDetailView, type WorkOrderRecord } from "../works/works.view.js";
 import { QR_AUDIT_ACTIONS, QR_PAYLOAD_PREFIX, QR_RESOURCE_TYPE, WORK_CODE_PATTERN, WORK_QR_TOKEN_PATTERN } from "./qr.constants.js";
 import { QrRateLimitService } from "./qr-rate-limit.service.js";
 import { createQrPayload, toWorkQrView, type QrWorkRecord, type WorkQrView } from "./qr.view.js";
@@ -39,8 +39,63 @@ const QR_WORK_INCLUDE = {
 } as const satisfies Prisma.WorkOrderInclude;
 
 const WORK_DETAIL_INCLUDE = {
+  assignedTechnician: {
+    select: {
+      displayName: true,
+      id: true,
+    },
+  },
+  assignmentEvents: {
+    include: {
+      actor: {
+        select: {
+          displayName: true,
+          id: true,
+        },
+      },
+      newLegalEntity: {
+        select: {
+          code: true,
+          displayName: true,
+        },
+      },
+      newTechnician: {
+        select: {
+          displayName: true,
+          id: true,
+        },
+      },
+      previousLegalEntity: {
+        select: {
+          code: true,
+          displayName: true,
+        },
+      },
+      previousTechnician: {
+        select: {
+          displayName: true,
+          id: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: 20,
+  },
   clinic: true,
   doctor: true,
+  executionLegalEntity: {
+    select: {
+      code: true,
+      displayName: true,
+    },
+  },
+  logisticsState: {
+    select: {
+      status: true,
+    },
+  },
   patient: true,
   workFormSubmission: true,
   workType: true,
@@ -149,7 +204,7 @@ export class QrService {
     });
 
     return {
-      work: toWorkDetailView(workOrder, await this.canReadPricing(context.actor.id)),
+      work: toWorkDetailView(workOrder, await this.canReadPricing(context.actor.id), createWorkClaimAccess({ userId: context.actor.id })),
     };
   }
 

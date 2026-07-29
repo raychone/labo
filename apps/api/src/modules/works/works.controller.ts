@@ -13,7 +13,18 @@ import type { AuthenticatedUser } from "../auth/auth.types.js";
 import { AuthorizationService } from "../rbac/authorization.service.js";
 import { PermissionsGuard } from "../rbac/permissions.guard.js";
 import { RequirePermission } from "../rbac/require-permission.decorator.js";
-import { CreateWorkDto, ListWorksQueryDto, RecalculateWorkDeadlineDto, SetManualWorkDeadlineDto, UpdateWorkDto, WorkDeadlinePreviewDto } from "./dto/works.dto.js";
+import {
+  ClaimWorkDto,
+  CreateWorkDto,
+  ListClaimWorksQueryDto,
+  ListWorksQueryDto,
+  ReassignWorkDto,
+  RecalculateWorkDeadlineDto,
+  ReleaseWorkDto,
+  SetManualWorkDeadlineDto,
+  UpdateWorkDto,
+  WorkDeadlinePreviewDto,
+} from "./dto/works.dto.js";
 import { WorksService } from "./works.service.js";
 
 @Controller("works")
@@ -28,7 +39,19 @@ export class WorksController {
   @Get()
   @RequirePermission("works.read_all", "ALL")
   public async listWorks(@CurrentUser() actor: AuthenticatedUser, @Query() query: ListWorksQueryDto) {
-    return this.worksService.listWorks(query, await this.canReadPricing(actor.id));
+    return this.worksService.listWorks(actor.id, query, await this.canReadPricing(actor.id));
+  }
+
+  @Get("available-for-claim")
+  @RequirePermission("works.claim.available.read", "ALL")
+  public listAvailableForClaim(@CurrentUser() actor: AuthenticatedUser, @Query() query: ListClaimWorksQueryDto) {
+    return this.worksService.listAvailableForClaim(actor.id, query);
+  }
+
+  @Get("my-claimed")
+  @RequirePermission("works.claim.own.read", "ASSIGNED")
+  public listMyClaimed(@CurrentUser() actor: AuthenticatedUser, @Query() query: ListClaimWorksQueryDto) {
+    return this.worksService.listMyClaimed(actor.id, query);
   }
 
   @Get("work-type-options")
@@ -51,7 +74,32 @@ export class WorksController {
   @Get(":id")
   @RequirePermission("works.read_all", "ALL")
   public async getWork(@CurrentUser() actor: AuthenticatedUser, @Param("id") workOrderId: string) {
-    return this.worksService.getWork(workOrderId, await this.canReadPricing(actor.id));
+    return this.worksService.getWork(actor.id, workOrderId, await this.canReadPricing(actor.id));
+  }
+
+  @Get(":id/assignment-history")
+  @RequirePermission("works.claim.history.read", "ASSIGNED")
+  public listAssignmentHistory(@CurrentUser() actor: AuthenticatedUser, @Param("id") workOrderId: string) {
+    return this.worksService.listAssignmentHistory(actor.id, workOrderId);
+  }
+
+  @Post(":id/claim")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("works.claim.create", "ASSIGNED")
+  public claimWork(@Param("id") workOrderId: string, @Body() dto: ClaimWorkDto, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
+    return this.worksService.claimWork({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, workOrderId, dto);
+  }
+
+  @Post(":id/release")
+  @UseGuards(CsrfGuard)
+  public releaseWork(@Param("id") workOrderId: string, @Body() dto: ReleaseWorkDto, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
+    return this.worksService.releaseWork({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, workOrderId, dto);
+  }
+
+  @Post(":id/reassign")
+  @UseGuards(CsrfGuard)
+  public reassignWork(@Param("id") workOrderId: string, @Body() dto: ReassignWorkDto, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
+    return this.worksService.reassignWork({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, workOrderId, dto);
   }
 
   @Post()

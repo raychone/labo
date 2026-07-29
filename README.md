@@ -721,6 +721,27 @@ The `/workbench` UI is mobile-first and shows “Lucrările mele”, queue categ
 
 TECH-001 does not implement logistics handoffs, courier delivery, QC, files, notifications, time tracking, payroll, or SCAN-002 actions.
 
+## Technician Claim And Work Ownership
+
+TECH-CLAIM-001A adds active responsibility on the whole work order.
+
+Backend endpoints:
+
+- `GET /works/available-for-claim`
+- `GET /works/my-claimed`
+- `POST /works/:id/claim`
+- `POST /works/:id/release`
+- `POST /works/:id/reassign`
+- `GET /works/:id/assignment-history`
+
+Technicians can claim available works from `/workbench` and must select the execution company as `NC` or `NG`. The public payload uses the company code, not an internal legal entity ID. Claims are atomic through `claimRevision`; concurrent stale claims return `409`.
+
+Releasing a work removes the active technician and execution company for this task version. Managers can assign or reassign with a required reason. Every claim/release/assign/reassign writes append-only `WorkAssignmentEvent` history and work-order audit entries.
+
+The `/works` registry shows responsibility, technician, execution company and filters for claim status, company and technician. The work drawer includes a `Responsabilitate` card and timeline.
+
+TECH-CLAIM-001A does not implement final pricing snapshots at execution time, deadline recalculation at claim, material cycles, time tracking, billing changes, files, notifications or reports.
+
 ## Laboratory Operations
 
 LOGISTICS-001 adds the authenticated operational center at `/logistics`.
