@@ -42,7 +42,7 @@ export class OrganizationContextService {
   public async getContext(input: ResolveContextInput): Promise<OrganizationContextView> {
     const canSwitch = await this.canSwitchContext(input.userId);
     const available = await this.findActiveLegalEntities();
-    const active = canSwitch ? await this.resolveOrInitializeActiveContext(input, available) : null;
+    const active = await this.resolveOrInitializeActiveContext(input, available);
 
     return toOrganizationContextView({
       active,

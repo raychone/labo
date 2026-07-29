@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatCurrency,
+  formatContextualSettingsLabel,
   formatDateTime,
   isSupportedCurrency,
   isSupportedCountryCode,
@@ -30,5 +31,12 @@ describe("settings contracts", () => {
 
     expect(formatCurrency(1234.5, settings)).toContain("RON");
     expect(formatDateTime("2026-01-01T10:00:00.000Z", settings)).toContain("2026");
+  });
+
+  it("formats contextual settings labels without internal IDs", () => {
+    expect(formatContextualSettingsLabel({
+      legalEntityCode: "NC",
+      legalEntityDisplayName: "Nicolaie Cristina",
+    })).toBe("NC — Nicolaie Cristina");
   });
 });

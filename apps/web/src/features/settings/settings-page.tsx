@@ -18,6 +18,7 @@ import { useEffect, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 
 import { fetchPermissions } from "../auth/auth-api.js";
+import { registerOrganizationContextSwitchGuard } from "../organization-context/organization-context-switch-guards.js";
 import { hasPermission } from "../users/users-api.js";
 import { useSettings, useUpdateSettings } from "./settings-api.js";
 import { settingsFormSchema, type SettingsFormValues } from "./settings-page.schema.js";
@@ -28,6 +29,7 @@ function toFormValues(settings: LaboratorySettings): SettingsFormValues {
   return {
     addressLine1: settings.addressLine1,
     addressLine2: settings.addressLine2,
+    bankName: settings.bankName,
     city: settings.city,
     companyRegistrationNumber: settings.companyRegistrationNumber,
     countryCode: settings.countryCode,
@@ -35,8 +37,8 @@ function toFormValues(settings: LaboratorySettings): SettingsFormValues {
     currency: settings.currency,
     documentFooter: settings.documentFooter,
     email: settings.email,
-    laboratoryName: settings.laboratoryName,
-    legalName: settings.legalName,
+    iban: settings.iban,
+    legalName: settings.legalName ?? "",
     locale: settings.locale,
     phone: settings.phone,
     postalCode: settings.postalCode,
@@ -50,6 +52,7 @@ function toFormValues(settings: LaboratorySettings): SettingsFormValues {
 const settingsFieldLabels: Record<keyof SettingsFormValues, string> = {
   addressLine1: "Adresa",
   addressLine2: "Adresă secundară",
+  bankName: "Bancă",
   city: "Oraș",
   companyRegistrationNumber: "Număr registru/comerț",
   countryCode: "Țară",
@@ -57,7 +60,7 @@ const settingsFieldLabels: Record<keyof SettingsFormValues, string> = {
   currency: "Moneda",
   documentFooter: "Footer documente",
   email: "Email",
-  laboratoryName: "Nume laborator",
+  iban: "IBAN",
   legalName: "Denumire legală",
   locale: "Limbă și format",
   phone: "Telefon",
@@ -93,6 +96,18 @@ export function SettingsPage(): ReactNode {
       form.reset(toFormValues(settingsQuery.data));
     }
   }, [form, settingsQuery.data]);
+
+  useEffect(() => {
+    if (!form.formState.isDirty || !settingsQuery.data) {
+      return undefined;
+    }
+
+    const currentName = settingsQuery.data.legalEntityDisplayName;
+
+    return registerOrganizationContextSwitchGuard(({ current }) =>
+      `Ai modificări nesalvate pentru ${current?.displayName ?? currentName}. Schimbi firma și pierzi modificările?`,
+    );
+  }, [form.formState.isDirty, settingsQuery.data]);
 
   useBeforeUnloadPrompt(form.formState.isDirty && !updateMutation.isPending);
 
@@ -141,18 +156,23 @@ export function SettingsPage(): ReactNode {
       },
       onSuccess: (settings) => {
         form.reset(toFormValues(settings));
-        toast.showToast({ message: "Setările au fost salvate.", variant: "success" });
+        toast.showToast({ message: `Setările pentru ${settings.legalEntityDisplayName} au fost salvate.`, variant: "success" });
       },
     });
   }
+
+  const activeFirm = settingsQuery.data
+    ? `${settingsQuery.data.legalEntityCode} — ${settingsQuery.data.legalEntityDisplayName}`
+    : "-";
 
   return (
     <main className="settings-page">
       <section className="dl-container settings-page__layout" aria-labelledby="settings-title">
         <header className="settings-page__header">
           <div>
-            <h1 id="settings-title">Setări laborator</h1>
-            <p>Profilul laboratorului, date de contact, adresă și branding.</p>
+            <h1 id="settings-title">Setări firmă</h1>
+            <p>Firmă activă: <strong>{activeFirm}</strong></p>
+            <p>Modificările se aplică numai firmei active.</p>
           </div>
           {!canUpdate ? (
             <p className="settings-page__readonly">Ai acces de citire, dar nu poți modifica aceste setări.</p>
@@ -163,11 +183,10 @@ export function SettingsPage(): ReactNode {
 
         <FormLayout className="settings-page__form" onSubmit={(event) => void form.handleSubmit(submit)(event)}>
           <FormErrorSummary errors={summaryItems} ref={summaryRef} />
-          <FormSection title="Profil laborator" description="Date afișate în aplicație și pe documente.">
+          <FormSection title="Identitate juridică" description="Datele fiscale trebuie validate cu clientul înainte de utilizare reală.">
             <FormGrid>
-              <TextInput error={form.formState.errors.laboratoryName?.message} id="laboratoryName" label="Nume laborator" required {...form.register("laboratoryName")} />
-              <TextInput error={form.formState.errors.legalName?.message} id="legalName" label="Denumire legală" {...form.register("legalName")} />
-              <TextInput error={form.formState.errors.companyRegistrationNumber?.message} id="companyRegistrationNumber" label="Număr registru/comerț" {...form.register("companyRegistrationNumber")} />
+              <TextInput error={form.formState.errors.legalName?.message} id="legalName" label="Denumire juridică" required {...form.register("legalName")} />
+              <TextInput error={form.formState.errors.companyRegistrationNumber?.message} id="companyRegistrationNumber" label="Număr registrul comerțului" {...form.register("companyRegistrationNumber")} />
               <TextInput error={form.formState.errors.taxId?.message} id="taxId" label="Cod fiscal" {...form.register("taxId")} />
             </FormGrid>
           </FormSection>
@@ -187,12 +206,19 @@ export function SettingsPage(): ReactNode {
               <TextInput error={form.formState.errors.city?.message} id="city" label="Oraș" {...form.register("city")} />
               <TextInput error={form.formState.errors.countyOrRegion?.message} id="countyOrRegion" label="Județ" {...form.register("countyOrRegion")} />
               <TextInput error={form.formState.errors.postalCode?.message} id="postalCode" label="Cod poștal" {...form.register("postalCode")} />
-              <ReadOnlySetting label="Țară" value="România (RO)" />
             </FormGrid>
           </FormSection>
 
-          <FormSection title="Format România" description="Aplicația este configurată pentru laborator din România.">
+          <FormSection title="Date bancare" description="Date informative pentru documentele viitoare.">
             <FormGrid>
+              <TextInput error={form.formState.errors.iban?.message} id="iban" label="IBAN" {...form.register("iban")} />
+              <TextInput error={form.formState.errors.bankName?.message} id="bankName" label="Bancă" {...form.register("bankName")} />
+            </FormGrid>
+          </FormSection>
+
+          <FormSection title="Setări regionale" description="Aplicația este configurată pentru laborator din România.">
+            <FormGrid>
+              <ReadOnlySetting label="Țară" value="România" />
               <ReadOnlySetting label="Fus orar" value="Europe/Bucharest" />
               <ReadOnlySetting label="Limbă și format" value="Română (ro-RO)" />
               <ReadOnlySetting label="Monedă" value="RON" />

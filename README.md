@@ -33,7 +33,16 @@ The current demo data still shows the already implemented prior flow: single-com
 - RBAC permissions `organization_context.read` and `organization_context.switch`.
 - A shell selector labelled “Firmă activă”.
 
-Temporary compatibility limits remain intentional: `LaboratorySettings` is still singleton, billing documents and series are not yet separated by company, and work orders do not yet store a company. Those changes belong to later approved roadmap tasks.
+`ORG-DATA-MIGRATION-001` adds company-aware legal settings:
+
+- `LegalEntitySettings` stores one settings row per `LegalEntity`.
+- `GET /settings` and `PATCH /settings` use the active server-side session context.
+- The request body cannot choose or spoof another company.
+- The legacy `laboratory_settings` table is preserved for compatibility.
+- Billing and existing print views still use the legacy singleton until `BILLING-REALIGN-001`.
+- Work orders, pricing, billing documents and payments are intentionally not linked to `NC`/`NG` in this task.
+
+Temporary compatibility limits remain intentional: billing documents and series are not yet separated by company, work orders do not yet store a company, and existing issued document headers do not change when a manager switches the active context. Those changes belong to later approved roadmap tasks.
 
 ## Workspace
 
@@ -207,31 +216,32 @@ The page is mobile-first and uses the shared UI components for controls, table, 
 
 ## Laboratory Settings
 
-SETTINGS-001 adds a global singleton settings record for the single laboratory instance. The Prisma model is `LaboratorySettings`, stored in `laboratory_settings`, with a unique `key = "default"` so the API cannot create arbitrary settings rows.
+`SETTINGS-001` originally added a global singleton settings record for the single laboratory instance. `ORG-DATA-MIGRATION-001` keeps that legacy `LaboratorySettings` table for billing/print compatibility, but moves the `/settings` API and UI to company-aware `LegalEntitySettings`.
+
+`LegalEntitySettings` has a required 1:1 relationship with `LegalEntity`, enforced by a unique `legalEntityId` foreign key. The migration backfills missing `NC` and `NG` settings from `laboratory_settings.key = "default"` for local development compatibility without overwriting existing company settings and without dropping legacy data.
+
+Backend endpoints:
+
+- `GET /settings`: protected with `settings.read`, requires an active legal entity context and returns the settings for the active session context.
+- `PATCH /settings`: protected with `settings.update`, CSRF and active context; updates only the active company settings.
+
+The response includes `legalEntityCode` and `legalEntityDisplayName` and does not expose internal Prisma IDs. The request body cannot send `legalEntityCode`, `legalEntityId`, `activeLegalEntityId` or `code`; company switching remains exclusively `PUT /organization-context`.
+
+Company settings are Romania-only for the current MVP:
 
 Default development values:
 
-- `laboratoryName`: `Dental Lab Management`
 - `countryCode`: `RO`
 - `timezone`: `Europe/Bucharest`
 - `locale`: `ro-RO`
 - `currency`: `RON`
 - `primaryColor`: `#0f766e`
 
-Backend endpoints:
+The `/settings` frontend route displays “Setări firmă”, the active company, legal identity, contact, address, bank fields, regional read-only values and branding. Users with only `settings.read` get read-only access. Dirty forms block company switching until the user confirms that unsaved changes will be lost. Logo upload is intentionally deferred until private file storage is implemented; `logoFileKey` remains nullable.
 
-- `GET /settings`: protected with `settings.read`.
-- `PATCH /settings`: protected with `settings.update` and CSRF.
+Settings updates write `settings.updated` audit events with `legalEntityCode`, changed field names and previous `updatedAt`. Audit metadata does not include full IBAN, fiscal values or full settings payloads.
 
-Supported locale/timezone/currency values for MVP:
-
-- Locales: `ro-RO`, `en-US`, `fr-FR`
-- Timezones: `Europe/Bucharest`, `Europe/Paris`, `UTC`
-- Currencies: `RON`, `EUR`
-
-The `/settings` frontend route displays profile, fiscal identity, contact, address, localization, and minimal branding fields. Users with only `settings.read` get read-only access. Logo upload is intentionally deferred until private file storage is implemented; `logoFileKey` remains nullable.
-
-Settings updates write `settings.updated` audit events with changed field names and safe before/after metadata.
+Optional local-only seed overrides are documented in `.env.example` with prefixes `NC_` and `NG_`. Do not put real client fiscal or bank data in Git. Local `assets/` files are reserved for future document work and are not imported by seed.
 
 ## Clinic And Doctor Management
 

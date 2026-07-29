@@ -18,6 +18,7 @@ export {
   SUPPORTED_LOCALES,
   SUPPORTED_TIMEZONES,
   formatCurrency,
+  formatContextualSettingsLabel,
   formatDateTime,
   isSupportedCurrency,
   isSupportedCountryCode,
@@ -25,7 +26,10 @@ export {
   isSupportedTimezone,
 } from "./settings.js";
 export type {
+  ContextualSettingsView,
   LaboratorySettings,
+  LegalEntitySettingsInput,
+  LegalEntitySettingsView,
   SupportedCurrency,
   SupportedCountryCode,
   SupportedLocale,

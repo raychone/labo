@@ -1,27 +1,29 @@
-import { BadRequestException, Inject, Injectable } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, UnprocessableEntityException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
+import type { LegalEntityContext } from "../organization-context/organization-context.view.js";
+import type { UpdateSettingsDto } from "./dto/update-settings.dto.js";
 import {
   DEFAULT_LABORATORY_SETTINGS,
+  DEFAULT_LEGAL_ENTITY_SETTINGS,
   SETTINGS_AUDIT_ACTIONS,
   SETTINGS_RESOURCE_TYPE,
   SETTINGS_SINGLETON_KEY,
 } from "./settings.constants.js";
-import type { UpdateSettingsDto } from "./dto/update-settings.dto.js";
-import { toLaboratorySettingsView } from "./settings.view.js";
-
-type SettingsView = ReturnType<typeof toLaboratorySettingsView>;
+import { toContextualSettingsView, type ContextualSettingsView, type LegalEntitySettingsRecord } from "./settings.view.js";
 
 interface ActorContext {
   readonly actorUserId: string;
+  readonly legalEntity: LegalEntityContext;
   readonly requestMetadata: RequestMetadata;
 }
 
 const EDITABLE_FIELDS = [
   "addressLine1",
   "addressLine2",
+  "bankName",
   "city",
   "companyRegistrationNumber",
   "countryCode",
@@ -29,7 +31,7 @@ const EDITABLE_FIELDS = [
   "currency",
   "documentFooter",
   "email",
-  "laboratoryName",
+  "iban",
   "legalName",
   "phone",
   "postalCode",
@@ -42,42 +44,38 @@ const EDITABLE_FIELDS = [
 
 @Injectable()
 export class SettingsService {
-  public constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  public constructor(
+    @Inject(PrismaService)
+    private readonly prisma: PrismaService,
+  ) {}
 
-  public async getSettings(): Promise<SettingsView> {
-    const settings = await this.prisma.laboratorySettings.upsert({
-      create: DEFAULT_LABORATORY_SETTINGS,
-      update: {},
-      where: {
-        key: SETTINGS_SINGLETON_KEY,
-      },
-    });
+  public async getSettings(legalEntity: LegalEntityContext): Promise<ContextualSettingsView> {
+    const settings = await this.findOrCreateSettings(this.prisma, legalEntity);
 
-    return toLaboratorySettingsView(settings);
+    return toContextualSettingsView(settings);
   }
 
-  public async updateSettings(context: ActorContext, dto: UpdateSettingsDto): Promise<SettingsView> {
-    const data = this.toUpdateData(dto, context.actorUserId);
+  public async updateSettings(context: ActorContext, dto: UpdateSettingsDto): Promise<ContextualSettingsView> {
+    this.rejectSpoofedContextFields(dto);
 
     if (this.getProvidedEditableFields(dto).length === 0) {
       throw new BadRequestException("No settings fields were provided.");
     }
 
     const updatedSettings = await this.prisma.$transaction(async (tx) => {
-      const before = await tx.laboratorySettings.upsert({
-        create: {
-          ...DEFAULT_LABORATORY_SETTINGS,
-          updatedByUserId: context.actorUserId,
+      const before = await this.findOrCreateSettings(tx, context.legalEntity);
+      const after = await tx.legalEntitySettings.update({
+        data: this.toUpdateData(dto, context.actorUserId),
+        include: {
+          legalEntity: {
+            select: {
+              code: true,
+              displayName: true,
+            },
+          },
         },
-        update: {},
         where: {
-          key: SETTINGS_SINGLETON_KEY,
-        },
-      });
-      const after = await tx.laboratorySettings.update({
-        data,
-        where: {
-          key: SETTINGS_SINGLETON_KEY,
+          legalEntityId: before.legalEntityId,
         },
       });
       const changedFields = this.getChangedFields(before, after);
@@ -87,11 +85,11 @@ export class SettingsService {
           action: SETTINGS_AUDIT_ACTIONS.updated,
           actorUserId: context.actorUserId,
           metadata: {
-            after: this.pickFields(after, changedFields),
-            before: this.pickFields(before, changedFields),
-            fieldsChanged: changedFields,
+            changedFields,
+            legalEntityCode: context.legalEntity.code,
+            previousUpdatedAt: before.updatedAt.toISOString(),
           },
-          resourceId: after.id,
+          resourceId: context.legalEntity.code,
           resourceType: SETTINGS_RESOURCE_TYPE,
         };
 
@@ -103,19 +101,81 @@ export class SettingsService {
           auditData.userAgent = context.requestMetadata.userAgent;
         }
 
-        await tx.auditLog.create({
-          data: auditData,
-        });
+        await tx.auditLog.create({ data: auditData });
       }
 
       return after;
     });
 
-    return toLaboratorySettingsView(updatedSettings);
+    return toContextualSettingsView(updatedSettings);
   }
 
-  private toUpdateData(dto: UpdateSettingsDto, actorUserId: string): Prisma.LaboratorySettingsUncheckedUpdateInput {
-    const data: Prisma.LaboratorySettingsUncheckedUpdateInput = {
+  private async findOrCreateSettings(
+    client: Prisma.TransactionClient | PrismaService,
+    legalEntityContext: LegalEntityContext,
+  ): Promise<LegalEntitySettingsRecord> {
+    const legalEntity = await client.legalEntity.findFirst({
+      select: {
+        code: true,
+        displayName: true,
+        id: true,
+        isActive: true,
+      },
+      where: {
+        code: legalEntityContext.code,
+        isActive: true,
+      },
+    });
+
+    if (!legalEntity) {
+      throw new UnprocessableEntityException("Firma activă nu mai este disponibilă.");
+    }
+
+    const legacySettings = await client.laboratorySettings.findUnique({
+      where: {
+        key: SETTINGS_SINGLETON_KEY,
+      },
+    });
+
+    return client.legalEntitySettings.upsert({
+      create: {
+        addressLine1: legacySettings?.addressLine1 ?? null,
+        addressLine2: legacySettings?.addressLine2 ?? null,
+        city: legacySettings?.city ?? null,
+        companyRegistrationNumber: legacySettings?.companyRegistrationNumber ?? null,
+        countryCode: "RO",
+        countyOrRegion: legacySettings?.countyOrRegion ?? null,
+        currency: "RON",
+        documentFooter: legacySettings?.documentFooter ?? DEFAULT_LEGAL_ENTITY_SETTINGS.documentFooter,
+        email: legacySettings?.email ?? null,
+        legalEntityId: legalEntity.id,
+        legalName: legacySettings?.legalName ?? legalEntity.displayName,
+        locale: "ro-RO",
+        logoFileKey: legacySettings?.logoFileKey ?? null,
+        phone: legacySettings?.phone ?? null,
+        postalCode: legacySettings?.postalCode ?? null,
+        primaryColor: legacySettings?.primaryColor ?? DEFAULT_LABORATORY_SETTINGS.primaryColor,
+        taxId: legacySettings?.taxId ?? null,
+        timezone: "Europe/Bucharest",
+        website: legacySettings?.website ?? null,
+      },
+      include: {
+        legalEntity: {
+          select: {
+            code: true,
+            displayName: true,
+          },
+        },
+      },
+      update: {},
+      where: {
+        legalEntityId: legalEntity.id,
+      },
+    });
+  }
+
+  private toUpdateData(dto: UpdateSettingsDto, actorUserId: string): Prisma.LegalEntitySettingsUncheckedUpdateInput {
+    const data: Prisma.LegalEntitySettingsUncheckedUpdateInput = {
       updatedByUserId: actorUserId,
     };
 
@@ -125,8 +185,8 @@ export class SettingsService {
       }
 
       const value = dto[field];
-      if (field === "laboratoryName" && (value === null || value === "")) {
-        throw new BadRequestException("Laboratory name is required.");
+      if (field === "legalName" && (value === null || value === "")) {
+        throw new BadRequestException("Legal name is required.");
       }
 
       this.assignUpdateValue(data, field, value);
@@ -139,8 +199,16 @@ export class SettingsService {
     return EDITABLE_FIELDS.filter((field) => field in dto);
   }
 
+  private rejectSpoofedContextFields(dto: UpdateSettingsDto): void {
+    for (const field of ["activeLegalEntityId", "code", "legalEntityCode", "legalEntityId"] as const) {
+      if (dto[field] !== undefined) {
+        throw new BadRequestException("Firma activă nu poate fi schimbată din payload-ul setărilor.");
+      }
+    }
+  }
+
   private assignUpdateValue(
-    data: Prisma.LaboratorySettingsUncheckedUpdateInput,
+    data: Prisma.LegalEntitySettingsUncheckedUpdateInput,
     field: (typeof EDITABLE_FIELDS)[number],
     value: string | null | undefined,
   ): void {
@@ -155,6 +223,9 @@ export class SettingsService {
       case "addressLine2":
         data.addressLine2 = value;
         return;
+      case "bankName":
+        data.bankName = value;
+        return;
       case "city":
         data.city = value;
         return;
@@ -162,19 +233,17 @@ export class SettingsService {
         data.companyRegistrationNumber = value;
         return;
       case "countryCode":
-        if (value === null) {
-          return;
+        if (value !== null) {
+          data.countryCode = value;
         }
-        data.countryCode = value;
         return;
       case "countyOrRegion":
         data.countyOrRegion = value;
         return;
       case "currency":
-        if (value === null) {
-          return;
+        if (value !== null) {
+          data.currency = value;
         }
-        data.currency = value;
         return;
       case "documentFooter":
         data.documentFooter = value;
@@ -182,20 +251,18 @@ export class SettingsService {
       case "email":
         data.email = value;
         return;
-      case "laboratoryName":
-        if (value === null) {
-          return;
-        }
-        data.laboratoryName = value;
+      case "iban":
+        data.iban = value;
         return;
       case "legalName":
-        data.legalName = value;
+        if (value !== null) {
+          data.legalName = value;
+        }
         return;
       case "locale":
-        if (value === null) {
-          return;
+        if (value !== null) {
+          data.locale = value;
         }
-        data.locale = value;
         return;
       case "phone":
         data.phone = value;
@@ -204,19 +271,17 @@ export class SettingsService {
         data.postalCode = value;
         return;
       case "primaryColor":
-        if (value === null) {
-          return;
+        if (value !== null) {
+          data.primaryColor = value;
         }
-        data.primaryColor = value;
         return;
       case "taxId":
         data.taxId = value;
         return;
       case "timezone":
-        if (value === null) {
-          return;
+        if (value !== null) {
+          data.timezone = value;
         }
-        data.timezone = value;
         return;
       case "website":
         data.website = value;
@@ -225,16 +290,9 @@ export class SettingsService {
   }
 
   private getChangedFields(
-    before: Prisma.LaboratorySettingsGetPayload<object>,
-    after: Prisma.LaboratorySettingsGetPayload<object>,
+    before: LegalEntitySettingsRecord,
+    after: LegalEntitySettingsRecord,
   ): readonly (typeof EDITABLE_FIELDS)[number][] {
     return EDITABLE_FIELDS.filter((field) => before[field] !== after[field]);
-  }
-
-  private pickFields(
-    settings: Prisma.LaboratorySettingsGetPayload<object>,
-    fields: readonly (typeof EDITABLE_FIELDS)[number][],
-  ): Record<string, string | null> {
-    return Object.fromEntries(fields.map((field) => [field, settings[field]]));
   }
 }

@@ -18,6 +18,57 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString }),
 });
 
+interface LegalEntitySettingsSeed {
+  readonly addressLine1: string;
+  readonly bankName: string | null;
+  readonly city: string;
+  readonly companyRegistrationNumber: string;
+  readonly email: string;
+  readonly iban: string | null;
+  readonly legalName: string;
+  readonly taxId: string;
+}
+
+function getOptionalEnv(name: string): string | null {
+  const value = process.env[name]?.trim();
+  return value && value.length > 0 ? value : null;
+}
+
+function getLegalEntitySettingsSeed(prefix: "NC" | "NG"): LegalEntitySettingsSeed {
+  const fallback = prefix === "NC"
+    ? {
+      addressLine1: "Adresă NC de validat",
+      bankName: null,
+      city: "București",
+      companyRegistrationNumber: "J40/000001/2026",
+      email: "nc.dev@example.test",
+      iban: null,
+      legalName: "NC Date Juridice De Validat",
+      taxId: "RO10000001",
+    }
+    : {
+      addressLine1: "Adresă NG de validat",
+      bankName: null,
+      city: "București",
+      companyRegistrationNumber: "J40/000002/2026",
+      email: "ng.dev@example.test",
+      iban: null,
+      legalName: "NG Date Juridice De Validat",
+      taxId: "RO10000002",
+    };
+
+  return {
+    addressLine1: getOptionalEnv(`${prefix}_ADDRESS_LINE_1`) ?? fallback.addressLine1,
+    bankName: getOptionalEnv(`${prefix}_BANK_NAME`) ?? fallback.bankName,
+    city: getOptionalEnv(`${prefix}_CITY`) ?? fallback.city,
+    companyRegistrationNumber: getOptionalEnv(`${prefix}_COMPANY_REGISTRATION_NUMBER`) ?? fallback.companyRegistrationNumber,
+    email: getOptionalEnv(`${prefix}_EMAIL`) ?? fallback.email,
+    iban: getOptionalEnv(`${prefix}_IBAN`) ?? fallback.iban,
+    legalName: getOptionalEnv(`${prefix}_LEGAL_NAME`) ?? fallback.legalName,
+    taxId: getOptionalEnv(`${prefix}_TAX_ID`) ?? fallback.taxId,
+  };
+}
+
 async function main(): Promise<void> {
   const email = process.env.AUTH_SEED_EMAIL?.trim().toLowerCase();
   const password = process.env.AUTH_SEED_PASSWORD;
@@ -177,6 +228,53 @@ async function main(): Promise<void> {
       },
     },
   });
+
+  for (const code of ["NC", "NG"] as const) {
+    const legalEntity = await prisma.legalEntity.findUniqueOrThrow({
+      where: { code },
+    });
+    const settings = getLegalEntitySettingsSeed(code);
+
+    await prisma.legalEntitySettings.upsert({
+      create: {
+        addressLine1: settings.addressLine1,
+        bankName: settings.bankName,
+        city: settings.city,
+        companyRegistrationNumber: settings.companyRegistrationNumber,
+        countryCode: "RO",
+        currency: "RON",
+        documentFooter: "Date juridice de dezvoltare. Validați informațiile reale cu clientul.",
+        email: settings.email,
+        iban: settings.iban,
+        legalEntityId: legalEntity.id,
+        legalName: settings.legalName,
+        locale: "ro-RO",
+        postalCode: "000000",
+        primaryColor: "#0f766e",
+        taxId: settings.taxId,
+        timezone: "Europe/Bucharest",
+        updatedByUserId: managerUser.id,
+      },
+      update: {
+        addressLine1: settings.addressLine1,
+        bankName: settings.bankName,
+        city: settings.city,
+        companyRegistrationNumber: settings.companyRegistrationNumber,
+        countryCode: "RO",
+        currency: "RON",
+        email: settings.email,
+        iban: settings.iban,
+        legalName: settings.legalName,
+        locale: "ro-RO",
+        taxId: settings.taxId,
+        timezone: "Europe/Bucharest",
+        updatedByUserId: managerUser.id,
+      },
+      where: {
+        legalEntityId: legalEntity.id,
+      },
+    });
+  }
 
   await prisma.laboratorySettings.upsert({
     create: {

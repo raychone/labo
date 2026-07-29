@@ -9,16 +9,25 @@ import { AuthGuard } from "../auth/auth.guard.js";
 import { CsrfGuard } from "../auth/csrf.guard.js";
 import { CsrfService } from "../auth/csrf.service.js";
 import { SessionService } from "../auth/session.service.js";
+import { LegalEntityContextGuard } from "../organization-context/legal-entity-context.guard.js";
 import { AuthorizationService } from "../rbac/authorization.service.js";
 import { PermissionsGuard } from "../rbac/permissions.guard.js";
 import { SettingsController } from "./settings.controller.js";
 import { SettingsService } from "./settings.service.js";
 
 const responseBody = {
+  bankName: "Banca NC",
   countryCode: "RO",
   currency: "RON",
-  id: "settings_1",
-  laboratoryName: "Dental Lab",
+  iban: "RO49AAAA1B31007593840000",
+  laboratoryName: "Nicolaie Cristina",
+  legalEntity: {
+    code: "NC",
+    displayName: "Nicolaie Cristina",
+  },
+  legalEntityCode: "NC",
+  legalEntityDisplayName: "Nicolaie Cristina",
+  legalName: "NC Demo Tehnică Dentară",
   locale: "ro-RO",
   primaryColor: "#0f766e",
   timezone: "Europe/Bucharest",
@@ -39,6 +48,17 @@ describe("SettingsController", () => {
       effectiveScopes: ["ALL"],
       permission: "settings.read",
     });
+
+    const legalEntityGuard = {
+      canActivate: vi.fn().mockImplementation((context: { switchToHttp: () => { getRequest: () => { legalEntityContext?: unknown } } }) => {
+        context.switchToHttp().getRequest().legalEntityContext = {
+          code: "NC",
+          displayName: "Nicolaie Cristina",
+        };
+
+        return true;
+      }),
+    };
 
     const moduleRef = await Test.createTestingModule({
       controllers: [SettingsController],
@@ -88,12 +108,15 @@ describe("SettingsController", () => {
             getSettings: vi.fn().mockResolvedValue(responseBody),
             updateSettings: vi.fn().mockResolvedValue({
               ...responseBody,
-              laboratoryName: "Updated Lab",
+              legalName: "NC Actualizat",
             }),
           },
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(LegalEntityContextGuard)
+      .useValue(legalEntityGuard)
+      .compile();
 
     app = moduleRef.createNestApplication();
     app.use(cookieParser());
@@ -107,7 +130,7 @@ describe("SettingsController", () => {
 
   afterEach(async () => {
     vi.clearAllMocks();
-    await app.close();
+    await app?.close();
   });
 
   it("returns 401 without auth", async () => {
@@ -144,14 +167,23 @@ describe("SettingsController", () => {
       .patch("/settings")
       .set("Cookie", ["dl_session=session-token", "dl_csrf=csrf-token"])
       .set("x-csrf-token", "csrf-token")
-      .send({ laboratoryName: "Updated Lab" })
+      .send({ legalName: "NC Actualizat" })
       .expect(200)
       .expect({
         ...responseBody,
-        laboratoryName: "Updated Lab",
+        legalName: "NC Actualizat",
       });
     expect(requirePermission).toHaveBeenCalledWith(expect.objectContaining({
       permission: "settings.update",
     }));
+  });
+
+  it("rejects attempts to spoof another legal entity through the body", async () => {
+    await request(app.getHttpServer() as App)
+      .patch("/settings")
+      .set("Cookie", ["dl_session=session-token", "dl_csrf=csrf-token"])
+      .set("x-csrf-token", "csrf-token")
+      .send({ legalEntityCode: "NG", legalName: "NC Actualizat" })
+      .expect(400);
   });
 });

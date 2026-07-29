@@ -1,10 +1,13 @@
 import { formatLegalEntityOption, type LegalEntityCode, type OrganizationContextView } from "@dental-lab/shared";
-import { Button, ErrorState, LoadingState, Select, Tooltip, useToast } from "@dental-lab/ui";
+import { Button, ConfirmActionModal, ErrorState, LoadingState, Select, Tooltip, useToast } from "@dental-lab/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
+import { useState } from "react";
 
 import { isForbiddenError } from "../../lib/api-client.js";
+import { settingsQueryKey } from "../settings/settings-api.js";
 import { fetchOrganizationContext, organizationContextQueryKeys, switchOrganizationContext } from "./organization-context-api.js";
+import { getOrganizationContextSwitchBlockMessage } from "./organization-context-switch-guards.js";
 
 interface OrganizationContextSwitchProps {
   readonly canRead: boolean;
@@ -14,6 +17,7 @@ interface OrganizationContextSwitchProps {
 export function OrganizationContextSwitch({ canRead, compact = false }: OrganizationContextSwitchProps): ReactNode {
   const queryClient = useQueryClient();
   const toast = useToast();
+  const [pendingSwitch, setPendingSwitch] = useState<{ readonly code: LegalEntityCode; readonly message: string } | null>(null);
   const contextQuery = useQuery({
     enabled: canRead,
     queryFn: fetchOrganizationContext,
@@ -31,6 +35,7 @@ export function OrganizationContextSwitch({ canRead, compact = false }: Organiza
     },
     onSuccess: (context) => {
       queryClient.setQueryData(organizationContextQueryKeys.all, context);
+      void queryClient.invalidateQueries({ queryKey: settingsQueryKey });
       toast.showToast({
         message: context.active ? formatLegalEntityOption(context.active) : "Contextul activ a fost actualizat.",
         title: "Firma activă a fost schimbată",
@@ -73,10 +78,58 @@ export function OrganizationContextSwitch({ canRead, compact = false }: Organiza
     return null;
   }
 
-  return compact ? (
-    <MobileOrganizationContext context={context} isPending={switchMutation.isPending} onSwitch={(code) => switchMutation.mutate(code)} />
+  const requestSwitch = (code: LegalEntityCode): void => {
+    if (code === context.active?.code) {
+      return;
+    }
+
+    const next = context.available.find((option) => option.code === code);
+
+    if (!next) {
+      return;
+    }
+
+    const message = getOrganizationContextSwitchBlockMessage({
+      current: context.active,
+      next,
+    });
+
+    if (message) {
+      setPendingSwitch({ code, message });
+      return;
+    }
+
+    switchMutation.mutate(code);
+  };
+
+  const content = compact ? (
+    <MobileOrganizationContext context={context} isPending={switchMutation.isPending} onSwitch={requestSwitch} />
   ) : (
-    <DesktopOrganizationContext context={context} isPending={switchMutation.isPending} onSwitch={(code) => switchMutation.mutate(code)} />
+    <DesktopOrganizationContext context={context} isPending={switchMutation.isPending} onSwitch={requestSwitch} />
+  );
+
+  return (
+    <>
+      {content}
+      <ConfirmActionModal
+        confirmLabel="Schimbă firma"
+        description={pendingSwitch?.message ?? ""}
+        isLoading={switchMutation.isPending}
+        isOpen={pendingSwitch !== null}
+        onCancel={() => setPendingSwitch(null)}
+        onConfirm={() => {
+          if (!pendingSwitch) {
+            return;
+          }
+
+          const nextCode = pendingSwitch.code;
+          setPendingSwitch(null);
+          switchMutation.mutate(nextCode);
+        }}
+        title="Schimbi firma activă?"
+        variant="danger"
+      />
+    </>
   );
 }
 

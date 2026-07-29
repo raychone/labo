@@ -328,6 +328,82 @@ async function seedDemoSettings(prisma: PrismaClient): Promise<void> {
     },
     where: { key: "default" },
   });
+
+  for (const settings of [
+    {
+      addressLine1: "Strada Nicolaie Cristina Demo nr. 12",
+      bankName: "Banca Demo NC",
+      city: "Bucuresti",
+      companyRegistrationNumber: "J40/900001/2026",
+      documentFooter: "Document demonstrativ NC. Date fictive.",
+      email: "contact.nc@demo.local",
+      iban: "RO49AAAA1B31007593840000",
+      legalName: "NC Demo Tehnică Dentară",
+      postalCode: "010901",
+      taxId: "RO90000001",
+      code: "NC",
+    },
+    {
+      addressLine1: "Strada Nicolaie Gabriel Demo nr. 18",
+      bankName: "Banca Demo NG",
+      city: "Bucuresti",
+      companyRegistrationNumber: "J40/900002/2026",
+      documentFooter: "Document demonstrativ NG. Date fictive.",
+      email: "contact.ng@demo.local",
+      iban: "RO98BBBB1B31007593840000",
+      legalName: "NG Demo Tehnică Dentară",
+      postalCode: "010902",
+      taxId: "RO90000002",
+      code: "NG",
+    },
+  ] as const) {
+    const legalEntity = await prisma.legalEntity.findUniqueOrThrow({
+      where: { code: settings.code },
+    });
+
+    await prisma.legalEntitySettings.upsert({
+      create: {
+        addressLine1: settings.addressLine1,
+        bankName: settings.bankName,
+        city: settings.city,
+        companyRegistrationNumber: settings.companyRegistrationNumber,
+        countryCode: "RO",
+        currency: "RON",
+        documentFooter: settings.documentFooter,
+        email: settings.email,
+        iban: settings.iban,
+        legalEntityId: legalEntity.id,
+        legalName: settings.legalName,
+        locale: "ro-RO",
+        postalCode: settings.postalCode,
+        primaryColor: "#0f766e",
+        taxId: settings.taxId,
+        timezone: "Europe/Bucharest",
+        updatedByUserId: manager?.id ?? null,
+        website: "https://demo.local",
+      },
+      update: {
+        addressLine1: settings.addressLine1,
+        bankName: settings.bankName,
+        city: settings.city,
+        companyRegistrationNumber: settings.companyRegistrationNumber,
+        countryCode: "RO",
+        currency: "RON",
+        documentFooter: settings.documentFooter,
+        email: settings.email,
+        iban: settings.iban,
+        legalName: settings.legalName,
+        locale: "ro-RO",
+        postalCode: settings.postalCode,
+        primaryColor: "#0f766e",
+        taxId: settings.taxId,
+        timezone: "Europe/Bucharest",
+        updatedByUserId: manager?.id ?? null,
+        website: "https://demo.local",
+      },
+      where: { legalEntityId: legalEntity.id },
+    });
+  }
 }
 
 async function seedDemoUsers(prisma: PrismaClient, dataset: DemoDataset, passwordHash: string): Promise<void> {

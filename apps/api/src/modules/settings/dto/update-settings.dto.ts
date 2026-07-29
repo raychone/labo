@@ -1,5 +1,6 @@
 import {
   IsEmail,
+  IsEmpty,
   IsIn,
   IsOptional,
   IsString,
@@ -38,6 +39,11 @@ function uppercaseOptionalString(value: unknown): string | null | undefined {
   return typeof trimmed === "string" ? trimmed.toUpperCase() : trimmed;
 }
 
+function normalizeIban(value: unknown): string | null | undefined {
+  const trimmed = trimOptionalString(value);
+  return typeof trimmed === "string" ? trimmed.replace(/\s+/g, "").toUpperCase() : trimmed;
+}
+
 function normalizeWebsite(value: unknown): string | null | undefined {
   const trimmed = trimOptionalString(value);
   if (typeof trimmed !== "string") {
@@ -74,28 +80,36 @@ function normalizeHexColor(value: unknown): string | undefined {
 }
 
 export class UpdateSettingsDto {
-  @IsOptional()
-  @Transform(({ value }) => trimOptionalString(value))
-  @IsString()
-  @MinLength(2)
-  @MaxLength(120)
-  public readonly laboratoryName?: string | null;
+  @IsEmpty()
+  public readonly activeLegalEntityId?: never;
+
+  @IsEmpty()
+  public readonly code?: never;
+
+  @IsEmpty()
+  public readonly legalEntityCode?: never;
+
+  @IsEmpty()
+  public readonly legalEntityId?: never;
 
   @IsOptional()
   @Transform(({ value }) => trimOptionalString(value))
   @IsString()
+  @MinLength(2)
   @MaxLength(160)
   public readonly legalName?: string | null;
 
   @IsOptional()
   @Transform(({ value }) => trimOptionalString(value))
   @IsString()
+  @Matches(/^J[0-9A-Z./ -]{2,79}$/i)
   @MaxLength(80)
   public readonly companyRegistrationNumber?: string | null;
 
   @IsOptional()
-  @Transform(({ value }) => trimOptionalString(value))
+  @Transform(({ value }) => uppercaseOptionalString(value))
   @IsString()
+  @Matches(/^(RO)?[0-9]{2,13}$/)
   @MaxLength(80)
   public readonly taxId?: string | null;
 
@@ -170,6 +184,19 @@ export class UpdateSettingsDto {
   @Transform(({ value }) => uppercaseOptionalString(value))
   @IsIn(SETTINGS_SUPPORTED_CURRENCIES)
   public readonly currency?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => normalizeIban(value))
+  @IsString()
+  @Matches(/^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/)
+  @MaxLength(34)
+  public readonly iban?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(120)
+  public readonly bankName?: string | null;
 
   @IsOptional()
   @Transform(({ value }) => normalizeHexColor(value))

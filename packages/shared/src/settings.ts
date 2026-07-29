@@ -8,9 +8,10 @@ export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
 export type SupportedTimezone = (typeof SUPPORTED_TIMEZONES)[number];
 export type SupportedCountryCode = (typeof SUPPORTED_COUNTRY_CODES)[number];
 
-export interface LaboratorySettings {
+export interface LegalEntitySettingsView {
   readonly addressLine1: string | null;
   readonly addressLine2: string | null;
+  readonly bankName: string | null;
   readonly city: string | null;
   readonly companyRegistrationNumber: string | null;
   readonly countryCode: SupportedCountryCode;
@@ -19,7 +20,7 @@ export interface LaboratorySettings {
   readonly currency: SupportedCurrency;
   readonly documentFooter: string | null;
   readonly email: string | null;
-  readonly id: string;
+  readonly iban: string | null;
   readonly laboratoryName: string;
   readonly legalName: string | null;
   readonly locale: SupportedLocale;
@@ -30,15 +31,26 @@ export interface LaboratorySettings {
   readonly taxId: string | null;
   readonly timezone: SupportedTimezone;
   readonly updatedAt: string;
-  readonly updatedByUserId: string | null;
   readonly website: string | null;
 }
 
-export type UpdateLaboratorySettingsInput = Partial<
+export interface ContextualSettingsView extends LegalEntitySettingsView {
+  readonly legalEntity: {
+    readonly code: "NC" | "NG";
+    readonly displayName: string;
+  };
+  readonly legalEntityCode: "NC" | "NG";
+  readonly legalEntityDisplayName: string;
+}
+
+export type LaboratorySettings = ContextualSettingsView;
+
+export type LegalEntitySettingsInput = Partial<
   Pick<
-    LaboratorySettings,
+    LegalEntitySettingsView,
     | "addressLine1"
     | "addressLine2"
+    | "bankName"
     | "city"
     | "companyRegistrationNumber"
     | "countryCode"
@@ -46,7 +58,7 @@ export type UpdateLaboratorySettingsInput = Partial<
     | "currency"
     | "documentFooter"
     | "email"
-    | "laboratoryName"
+    | "iban"
     | "legalName"
     | "locale"
     | "phone"
@@ -57,6 +69,8 @@ export type UpdateLaboratorySettingsInput = Partial<
     | "website"
   >
 >;
+
+export type UpdateLaboratorySettingsInput = LegalEntitySettingsInput;
 
 export function isSupportedLocale(value: string): value is SupportedLocale {
   return (SUPPORTED_LOCALES as readonly string[]).includes(value);
@@ -76,7 +90,7 @@ export function isSupportedCountryCode(value: string): value is SupportedCountry
 
 export function formatDateTime(
   value: Date | number | string,
-  settings: Pick<LaboratorySettings, "locale" | "timezone">,
+  settings: Pick<LegalEntitySettingsView, "locale" | "timezone">,
 ): string {
   return new Intl.DateTimeFormat(settings.locale, {
     dateStyle: "medium",
@@ -87,10 +101,14 @@ export function formatDateTime(
 
 export function formatCurrency(
   amount: number,
-  settings: Pick<LaboratorySettings, "currency" | "locale">,
+  settings: Pick<LegalEntitySettingsView, "currency" | "locale">,
 ): string {
   return new Intl.NumberFormat(settings.locale, {
     currency: settings.currency,
     style: "currency",
   }).format(amount);
+}
+
+export function formatContextualSettingsLabel(settings: Pick<ContextualSettingsView, "legalEntityCode" | "legalEntityDisplayName">): string {
+  return `${settings.legalEntityCode} — ${settings.legalEntityDisplayName}`;
 }

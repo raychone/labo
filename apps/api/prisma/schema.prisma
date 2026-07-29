@@ -24,6 +24,7 @@ model User {
   permissionOverrides UserPermissionOverride[] @relation("UserPermissionOverrides")
   assignedPermissionOverrides UserPermissionOverride[] @relation("AssignedPermissionOverrides")
   updatedLaboratorySettings LaboratorySettings[] @relation("LaboratorySettingsUpdatedBy")
+  updatedLegalEntitySettings LegalEntitySettings[] @relation("LegalEntitySettingsUpdatedBy")
   createdClinics Clinic[] @relation("ClinicCreatedBy")
   updatedClinics Clinic[] @relation("ClinicUpdatedBy")
   archivedClinics Clinic[] @relation("ClinicArchivedBy")
@@ -110,17 +111,51 @@ model LaboratorySettings {
 }
 
 model LegalEntity {
-  id          String    @id @default(cuid())
-  code        String    @unique @db.VarChar(8)
-  displayName String    @map("display_name") @db.VarChar(120)
-  isActive    Boolean   @default(true) @map("is_active")
-  sortOrder   Int       @default(0) @map("sort_order")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  sessions    Session[] @relation("SessionActiveLegalEntity")
+  id        String               @id @default(cuid())
+  code      String               @unique @db.VarChar(8)
+  displayName String             @map("display_name") @db.VarChar(120)
+  isActive  Boolean              @default(true) @map("is_active")
+  sortOrder Int                  @default(0) @map("sort_order")
+  createdAt DateTime             @default(now()) @map("created_at")
+  updatedAt DateTime             @updatedAt @map("updated_at")
+  sessions  Session[]            @relation("SessionActiveLegalEntity")
+  settings  LegalEntitySettings?
 
   @@index([isActive, sortOrder, code])
   @@map("legal_entities")
+}
+
+model LegalEntitySettings {
+  id                        String      @id @default(cuid())
+  legalEntityId             String      @unique @map("legal_entity_id")
+  legalName                 String      @map("legal_name") @db.VarChar(160)
+  companyRegistrationNumber String?     @map("company_registration_number") @db.VarChar(80)
+  taxId                     String?     @map("tax_id") @db.VarChar(80)
+  email                     String?     @db.VarChar(254)
+  phone                     String?     @db.VarChar(40)
+  website                   String?     @db.VarChar(2048)
+  addressLine1              String?     @map("address_line_1") @db.VarChar(160)
+  addressLine2              String?     @map("address_line_2") @db.VarChar(160)
+  city                      String?     @db.VarChar(100)
+  countyOrRegion            String?     @map("county_or_region") @db.VarChar(100)
+  postalCode                String?     @map("postal_code") @db.VarChar(20)
+  countryCode               String      @default("RO") @map("country_code") @db.Char(2)
+  timezone                  String      @default("Europe/Bucharest") @db.VarChar(64)
+  locale                    String      @default("ro-RO") @db.VarChar(12)
+  currency                  String      @default("RON") @db.Char(3)
+  iban                      String?     @db.VarChar(34)
+  bankName                  String?     @map("bank_name") @db.VarChar(120)
+  primaryColor              String      @default("#0f766e") @map("primary_color") @db.Char(7)
+  logoFileKey               String?     @map("logo_file_key") @db.VarChar(512)
+  documentFooter            String?     @map("document_footer") @db.VarChar(500)
+  updatedByUserId           String?     @map("updated_by_user_id")
+  createdAt                 DateTime    @default(now()) @map("created_at")
+  updatedAt                 DateTime    @default(now()) @updatedAt @map("updated_at")
+  legalEntity               LegalEntity @relation(fields: [legalEntityId], references: [id], onDelete: Restrict)
+  updatedBy                 User?       @relation("LegalEntitySettingsUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([updatedByUserId])
+  @@map("legal_entity_settings")
 }
 
 model Clinic {

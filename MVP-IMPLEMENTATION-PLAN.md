@@ -1673,17 +1673,19 @@ Aceste taskuri inlocuiesc ordinea veche dupa `SIGNATURES-001`. Detaliile complet
 
 ### ORG-DATA-MIGRATION-001 - Company-aware local data migration
 
-- Status: NOT STARTED.
-- Obiectiv: alinierea datelor locale/demo la structura cu `NC`/`NG`.
-- Scope: migrare determinista si seed compatibil cu contextul firmei.
-- Non-goals: migrari destructive fara aprobare, pricing complet, billing rewrite.
+- Status: COMPLETED.
+- Obiectiv: alinierea setarilor locale/demo la structura cu `NC`/`NG`.
+- Scope: migrare determinista, model `LegalEntitySettings`, seed compatibil si `/settings` context-aware.
+- Non-goals: migrari destructive fara aprobare, pricing complet, billing rewrite, firma pe lucrare, document center.
 - Dependente: ORG-CONTEXT-001.
-- Acceptance criteria: datele locale au referinte de firma unde sunt cerute si seed-ul ramane idempotent.
-- Backend: Prisma migration/seed doar dupa aprobare explicita.
-- Frontend: compatibilitate minima daca este necesara.
+- Acceptance criteria: `NC` si `NG` au fiecare exact un rand de settings, seed-ul ramane idempotent, singletonul legacy este pastrat si `/settings` citeste/scrie doar contextul activ.
+- Backend: model `LegalEntitySettings`, migrare fara DROP, backfill din `laboratory_settings.default`, SettingsModule cu context guard si audit sigur.
+- Frontend: pagina `/settings` afiseaza firma activa, valori diferite NC/NG, mod read-only si confirmare pentru schimbarea firmei cand formularul este dirty.
 - Securitate: refuz productie/remote pentru resetari destructive.
-- Audit: documenteaza presupunerile de migrare.
+- Audit: `settings.updated` include `legalEntityCode` si campurile schimbate fara IBAN complet sau payload fiscal complet.
 - Testare: Prisma validate/generate/migrate, seed, demo seed idempotency, typecheck, test, build.
+- Implementare: tabela `legal_entity_settings`, relatie 1:1 cu `LegalEntity`, seed NC/NG cu date fictive si override-uri locale optionale.
+- Compatibilitate: billing/print raman pe singleton legacy pana la `BILLING-REALIGN-001`; works, pricing, payments si seriile de documente nu sunt modificate.
 
 ### PATIENTS-001 - Patient records and history
 

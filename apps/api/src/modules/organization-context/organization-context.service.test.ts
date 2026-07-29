@@ -99,12 +99,12 @@ describe("OrganizationContextService", () => {
     expect((prisma as { session: { updateMany: ReturnType<typeof vi.fn> } }).session.updateMany).not.toHaveBeenCalled();
   });
 
-  it("does not require context for users without switch permission", async () => {
+  it("initializes active context for users without switch permission without granting switch access", async () => {
     const { service } = createService({ canSwitch: false });
 
     const context = await service.getContext({ sessionId: "session_1", userId: "user_1" });
 
-    expect(context.active).toBeNull();
+    expect(context.active).toStrictEqual({ code: "NC", displayName: "Nicolaie Cristina" });
     expect(context.canSwitch).toBe(false);
   });
 

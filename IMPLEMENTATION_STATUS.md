@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-76%
+78%
 
 ## ROADMAP
 
@@ -11,7 +11,7 @@
 ## ORGANIZATION
 
 - [x] ORG-CONTEXT-001 - Global NC/NG company context (COMPLETED)
-- [ ] ORG-DATA-MIGRATION-001 - Company-aware local data migration (NOT STARTED)
+- [x] ORG-DATA-MIGRATION-001 - Company-aware local data migration (COMPLETED)
 
 ## FOUNDATION
 
@@ -187,19 +187,74 @@ NONE / AWAITING APPROVAL
 
 Status: COMPLETED
 
-Started: 2026-07-29T02:59:02Z
+Started: 2026-07-29T03:31:35Z
 
-Completed: 2026-07-29T03:21:41Z
+Completed: 2026-07-29T03:58:33Z
 
-Last completed task: ORG-CONTEXT-001 - Global NC/NG company context
+Last completed task: ORG-DATA-MIGRATION-001 - Company-aware local data migration
 
-Completed: 2026-07-29T03:21:41Z
+Completed: 2026-07-29T03:58:33Z
 
 ## Next Recommended Task
 
-ORG-DATA-MIGRATION-001 - Company-aware local data migration
+PATIENTS-001 - APPROVED
 
 ## Latest Completion Summary
+
+### ORG-DATA-MIGRATION-001 - Company-aware local data migration
+
+- Added contextual `LegalEntitySettings` as a deterministic, non-destructive migration with one settings row per active legal entity.
+- Backfilled NC and NG settings from the legacy singleton where needed and kept `laboratory_settings` intact for billing, print and legacy consumers.
+- Kept works, work types, billing documents and payments unsegmented; no `legal_entity_id` was added to those tables.
+- Updated `/settings` to resolve and update only the authenticated session's active legal entity context.
+- Rejected spoofed context fields in the settings payload and kept server-side validation for all editable company settings.
+- Added settings audit entries with changed field names and legal entity code only, without full fiscal data or IBAN payloads.
+- Updated base and demo seeds to create deterministic NC/NG settings with fictive default/demo data and optional local env overrides.
+- Updated the settings UI to show active firm context, legal/banking fields and a dirty-form guard before switching NC/NG.
+- Preserved `assets/` as untracked local client material for future tasks; no asset file was processed, committed or used as source data.
+- Updated `README.md`, `REAL-LAB-WORKFLOW.md`, `MVP-IMPLEMENTATION-PLAN.md`, `DEMO.md` and `DEMO-SCRIPT.md`.
+
+Main files modified:
+
+- `apps/api/prisma/schema.prisma`
+- `apps/api/prisma/migrations/20260729033135_company_aware_legal_entity_settings/migration.sql`
+- `apps/api/prisma/seed.ts`
+- `apps/api/prisma/demo/demo-seed.ts`
+- `apps/api/src/modules/settings/*`
+- `apps/api/src/modules/organization-context/organization-context.service.ts`
+- `apps/web/src/features/settings/*`
+- `apps/web/src/features/organization-context/*`
+- `packages/shared/src/settings.ts`
+- `README.md`
+- `REAL-LAB-WORKFLOW.md`
+- `MVP-IMPLEMENTATION-PLAN.md`
+- `DEMO.md`
+- `DEMO-SCRIPT.md`
+
+Verification:
+
+- `pnpm --filter @dental-lab/api prisma:validate` passed.
+- `pnpm --filter @dental-lab/api prisma:generate` passed.
+- `pnpm --filter @dental-lab/api prisma:migrate:dev` passed.
+- `pnpm --filter @dental-lab/api prisma:db:seed` passed.
+- `ALLOW_DEMO_SEED=true pnpm --filter @dental-lab/api prisma:db:seed:demo` passed twice for idempotency.
+- `pnpm typecheck` passed.
+- `pnpm test` passed.
+- `pnpm build` passed.
+- Manual API smoke passed for manager demo login, organization context switch NC to NG, contextual settings read/update/restore, CSRF rejection and spoofed context rejection.
+- Manual DB checks confirmed one settings row for NC, one for NG, one legacy settings row and zero forbidden company columns on works, work types, billing documents and payments.
+- Manual web smoke returned `200` for `/` and `/settings`.
+
+Technical debt introduced:
+
+- None.
+
+Remaining risks:
+
+- Billing, document rendering, pricing and payment modules intentionally remain legacy/singleton until their dedicated realignment tasks.
+- Client files in `assets/` remain local-only and must not be committed until a dedicated document/template ingestion task defines exactly how to use them.
+- Linting remains unconfigured.
+- Backend shutdown can still show the existing `pg` deprecation warning, without request failures.
 
 ### ORG-CONTEXT-001 - Global NC/NG company context
 

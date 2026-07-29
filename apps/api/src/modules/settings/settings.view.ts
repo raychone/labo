@@ -1,8 +1,10 @@
-import type { LaboratorySettings as PrismaLaboratorySettings } from "@prisma/client";
+import type { LegalEntity, LegalEntitySettings as PrismaLegalEntitySettings } from "@prisma/client";
+import type { LegalEntityCode } from "../organization-context/dto/organization-context.dto.js";
 
-export interface LaboratorySettingsView {
+export interface LegalEntitySettingsView {
   readonly addressLine1: string | null;
   readonly addressLine2: string | null;
+  readonly bankName: string | null;
   readonly city: string | null;
   readonly companyRegistrationNumber: string | null;
   readonly countryCode: string;
@@ -11,7 +13,7 @@ export interface LaboratorySettingsView {
   readonly currency: string;
   readonly documentFooter: string | null;
   readonly email: string | null;
-  readonly id: string;
+  readonly iban: string | null;
   readonly laboratoryName: string;
   readonly legalName: string | null;
   readonly locale: string;
@@ -22,14 +24,29 @@ export interface LaboratorySettingsView {
   readonly taxId: string | null;
   readonly timezone: string;
   readonly updatedAt: string;
-  readonly updatedByUserId: string | null;
   readonly website: string | null;
 }
 
-export function toLaboratorySettingsView(settings: PrismaLaboratorySettings): LaboratorySettingsView {
+export interface ContextualSettingsView extends LegalEntitySettingsView {
+  readonly legalEntity: {
+    readonly code: LegalEntityCode;
+    readonly displayName: string;
+  };
+  readonly legalEntityCode: LegalEntityCode;
+  readonly legalEntityDisplayName: string;
+}
+
+export type LegalEntitySettingsRecord = PrismaLegalEntitySettings & {
+  readonly legalEntity: Pick<LegalEntity, "code" | "displayName">;
+};
+
+export function toContextualSettingsView(settings: LegalEntitySettingsRecord): ContextualSettingsView {
+  const code = settings.legalEntity.code as LegalEntityCode;
+
   return {
     addressLine1: settings.addressLine1,
     addressLine2: settings.addressLine2,
+    bankName: settings.bankName,
     city: settings.city,
     companyRegistrationNumber: settings.companyRegistrationNumber,
     countryCode: settings.countryCode,
@@ -38,8 +55,14 @@ export function toLaboratorySettingsView(settings: PrismaLaboratorySettings): La
     currency: settings.currency,
     documentFooter: settings.documentFooter,
     email: settings.email,
-    id: settings.id,
-    laboratoryName: settings.laboratoryName,
+    iban: settings.iban,
+    laboratoryName: settings.legalEntity.displayName,
+    legalEntity: {
+      code,
+      displayName: settings.legalEntity.displayName,
+    },
+    legalEntityCode: code,
+    legalEntityDisplayName: settings.legalEntity.displayName,
     legalName: settings.legalName,
     locale: settings.locale,
     logoFileKey: settings.logoFileKey,
@@ -49,7 +72,6 @@ export function toLaboratorySettingsView(settings: PrismaLaboratorySettings): La
     taxId: settings.taxId,
     timezone: settings.timezone,
     updatedAt: settings.updatedAt.toISOString(),
-    updatedByUserId: settings.updatedByUserId,
     website: settings.website,
   };
 }

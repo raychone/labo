@@ -15,8 +15,17 @@ export const DEFAULT_LABORATORY_SETTINGS = {
   timezone: "Europe/Bucharest",
 } as const;
 
+export const DEFAULT_LEGAL_ENTITY_SETTINGS = {
+  countryCode: "RO",
+  currency: "RON",
+  documentFooter: "Document demonstrativ. Datele juridice trebuie validate cu clientul.",
+  locale: "ro-RO",
+  primaryColor: "#0f766e",
+  timezone: "Europe/Bucharest",
+} as const;
+
 export const SETTINGS_AUDIT_ACTIONS = {
   updated: "settings.updated",
 } as const;
 
-export const SETTINGS_RESOURCE_TYPE = "laboratory_settings";
+export const SETTINGS_RESOURCE_TYPE = "legal_entity_settings";

@@ -8,14 +8,16 @@ Demo-ul curent prezintă funcționalitățile deja implementate în fluxul anter
 
 Nu prezenta demo-ul curent ca implementare finală a fluxului `NC`/`NG`. Pentru întâlniri comerciale, formulează-l ca demonstrație a modulelor existente până la realinierea completă prin `ORG-CONTEXT-001`, `TECH-CLAIM-001`, `STATUS-001`, `BILLING-REALIGN-001` și `DEMO-REAL-DATA-001`.
 
-`ORG-CONTEXT-001` adaugă selectorul global „Firmă activă”. Pentru demo:
+`ORG-CONTEXT-001` adaugă selectorul global „Firmă activă”, iar `ORG-DATA-MIGRATION-001` mută pagina Setări pe date juridice distincte pentru `NC` și `NG`. Pentru demo:
 
 1. Intră ca Manager.
 2. Observă „Firmă activă” în shell.
 3. Schimbă `NC` → `NG`.
 4. Arată că utilizatorul rămâne același și nu apare logout.
 5. Arată că fluxurile operaționale, precum `/works`, rămân accesibile.
-6. Spune explicit că separarea facturilor, seriilor, prețurilor și setărilor pe firmă vine în taskurile următoare.
+6. Deschide Setări și arată datele NC.
+7. Schimbă în NG și arată că Setări afișează date juridice diferite.
+8. Spune explicit că separarea facturilor, seriilor, prețurilor și documentelor emise vine în taskurile următoare.
 
 ## 1. Pregătire înainte de prezentare
 
@@ -95,6 +97,7 @@ Spune clar:
 - aplicația nu procesează bani;
 - încasările sunt înregistrări manuale ale unor plăți făcute în afara aplicației;
 - factura printabila este interna/demo, nu integrare RO e-Factura;
+- datele juridice NC/NG din Setări sunt fictive și trebuie validate cu clienta înainte de folosire reală;
 - configurarea si execuția workflow-ului, scanarea operațională, logistica internă, livrările curierului și semnătura internă de primire sunt disponibile în demo;
 - semnătura este doar “Confirmare internă de primire”, nu semnătură electronică calificată;
 - fișierele și dovada foto sunt taskuri următoare.
@@ -121,7 +124,33 @@ Ce explici:
 - autentificarea este pe cookie securizat;
 - validarea si permisiunile sunt aplicate si pe backend, nu doar in UI.
 
-## 5. Dashboard
+## 5. Setări firmă NC/NG
+
+Deschide `Setări`.
+
+Ce arăți:
+
+1. Titlul „Setări firmă”.
+2. „Firmă activă: NC — Nicolaie Cristina”.
+3. Date juridice fictive pentru NC:
+   - Denumire juridică;
+   - Număr registrul comerțului;
+   - Cod fiscal;
+   - IBAN;
+   - Bancă.
+4. Textul „Modificările se aplică numai firmei active.”
+5. Schimbă contextul din shell la `NG`.
+6. Arată că formularul se reîncarcă cu date diferite pentru NG.
+
+Ce explici:
+
+- aplicația păstrează setări juridice separate pentru cele două firme;
+- contextul activ este stocat pe sesiune, nu în localStorage;
+- dacă formularul are modificări nesalvate, aplicația cere confirmare înainte de schimbarea firmei;
+- fluxul operațional rămâne comun;
+- facturile, seriile, prețurile și documentele reale vor fi realiniate în taskuri dedicate.
+
+## 6. Dashboard
 
 Deschide Dashboard.
 
@@ -135,7 +164,7 @@ Ce spui:
 
 Dashboard-ul este momentan punctul de intrare. Datele operationale detaliate se vad acum in Lucrari si Facturare.
 
-## 6. Lucrări
+## 7. Lucrări
 
 Deschide `Lucrări`.
 
@@ -197,7 +226,7 @@ Pentru creare lucrare nouă, alege `Coroană zirconiu`. Arată secțiunea “Det
 - Probă solicitată;
 - Observații specifice.
 
-## 7. QR și scanare
+## 8. QR și scanare
 
 Din detaliul unei lucrări, arată QR-ul.
 
@@ -235,7 +264,7 @@ WO-2026-900030
 
 Arată că livrarea este `În tranzit` și butonul duce către confirmarea predării.
 
-## 8. Livrări și semnătură internă
+## 9. Livrări și semnătură internă
 
 Intră ca Manager și deschide `Livrările mele`.
 
@@ -267,7 +296,7 @@ Ce explici:
 - aplicația nu stochează PNG/base64, ci coordonate normalizate și hash SHA-256;
 - dovada nu este expusă în liste, exporturi sau audit raw.
 
-## 9. Clinici și medici
+## 10. Clinici și medici
 
 Deschide `Clinici și medici`.
 
@@ -293,7 +322,7 @@ Ce explici:
 - fiecare medic apartine unei clinici;
 - datele de facturare ale clinicii sunt folosite în documentele printabile.
 
-## 9. Tipuri de lucrări și prețuri
+## 11. Tipuri de lucrări și prețuri
 
 Deschide `Tipuri de lucrări`.
 
@@ -339,7 +368,7 @@ Ce explici:
 - template-urile active/arhivate sunt read-only;
 - acest ecran configureaza fluxul standard, dar nu porneste inca executia etapelor pe o lucrare existenta.
 
-## 10. Facturare
+## 12. Facturare
 
 Deschide `Facturare`.
 
@@ -391,7 +420,7 @@ Ce explici:
 - statusurile `UNPAID`, `PARTIALLY_PAID`, `PAID` sunt derivate din incasari active;
 - overpayment este refuzat de backend.
 
-## 11. Scenarii financiare de aratat
+## 13. Scenarii financiare de aratat
 
 ### Factura neachitata/restanta
 
@@ -479,7 +508,7 @@ Arata:
 - nu accepta incasari noi;
 - ramane in istoric.
 
-## 12. Print preview si anexa
+## 14. Print preview si anexa
 
 Dintr-o factura, apasa `Print / PDF`.
 
@@ -506,7 +535,7 @@ Ce explici:
 - documentul este intern/demo;
 - RO e-Factura/SPV nu este implementat in acest stadiu.
 
-## 13. Export CSV
+## 15. Export CSV
 
 In `Facturare`, mergi la `Inchidere luna` si apasa export registru lunar CSV.
 
@@ -516,7 +545,7 @@ Ce explici:
 - valorile sunt protejate impotriva formula injection;
 - exportul este auditat pe backend.
 
-## 14. Utilizatori si RBAC
+## 16. Utilizatori si RBAC
 
 Deschide `Utilizatori`.
 
@@ -545,7 +574,7 @@ curier@demo.local
 
 Arata ca meniurile si accesul sunt diferite.
 
-## 15. Lucrarile mele pentru tehnicieni
+## 17. Lucrarile mele pentru tehnicieni
 
 Din acces rapid demo, intra ca `tehnician1@demo.local` sau foloseste butonul “Intră ca tehnician”.
 
@@ -574,29 +603,7 @@ Ce explici:
 - etapa urmatoare ramane neasignata cand fluxul avanseaza;
 - backend-ul verifica permisiunile si assignment-ul, UI-ul doar ghideaza utilizatorul.
 
-## 16. Setari laborator
-
-Deschide `Setari`.
-
-Ce arati:
-
-- nume laborator;
-- nume legal;
-- CUI fictiv;
-- numar registru fictiv;
-- adresa;
-- moneda;
-- locale;
-- timezone;
-- culoare principala;
-- footer document.
-
-Ce explici:
-
-- aceste date sunt folosite in documentele printabile;
-- datele demo sunt fictive si marcate ca demo.
-
-## 17. Ce este gata acum
+## 18. Ce este gata acum
 
 Gata in stadiul curent:
 
@@ -631,7 +638,7 @@ Gata in stadiul curent:
 - CSV;
 - dataset demo realist si resetabil.
 
-## 18. Ce nu este gata inca
+## 19. Ce nu este gata inca
 
 Nu prezenta ca finalizat:
 
@@ -646,7 +653,7 @@ Nu prezenta ca finalizat:
 - RO e-Factura/SPV;
 - procesare reala de plati.
 
-## 19. Flow recomandat de prezentare
+## 20. Flow recomandat de prezentare
 
 Ordine recomandata:
 
@@ -678,6 +685,6 @@ Ordine recomandata:
 26. Setari laborator.
 27. Recapitulare ce este gata si ce urmeaza.
 
-## 20. Fraza de inchidere
+## 21. Fraza de inchidere
 
 Aplicatia acopera deja baza operationala: utilizatori, roluri, clinici, medici, catalog de lucrari, receptie lucrari, QR, scanare operationala cu actiuni confirmate, formulare dinamice, template-uri de workflow, executia etapelor curente cu asignare pe tehnicieni, facturare, incasari manuale si documente printabile. Urmatorul pas natural este logistica: planificare, predari fizice si flux curier.

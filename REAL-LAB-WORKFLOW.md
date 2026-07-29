@@ -599,17 +599,19 @@ Architecture direction:
 
 ### ORG-DATA-MIGRATION-001 - Company-aware local data migration
 
-- Status: NOT STARTED.
-- Objective: migrate development/demo data to the new NC/NG-aware structure after ORG-CONTEXT-001.
-- Scope: deterministic local migration and data normalization for company records.
-- Non-goals: production destructive migration, pricing rules, billing realignment.
+- Status: COMPLETED.
+- Objective: migrate development/demo settings data to the new NC/NG-aware legal settings structure after ORG-CONTEXT-001.
+- Scope: deterministic local migration, `LegalEntitySettings`, settings API/UI context alignment and seed compatibility for company records.
+- Non-goals: production destructive migration, pricing rules, billing realignment, company on work orders, document center.
 - Dependencies: ORG-CONTEXT-001.
-- Acceptance criteria: local data has explicit company references where required and existing smoke/demo flows remain understandable.
-- Backend: Prisma migration and seed adaptation only when explicitly approved.
-- Frontend: no major UI work except compatibility if needed.
+- Acceptance criteria: `NC` and `NG` each have exactly one settings row, `/settings` reads and writes only the active session context, legacy singleton data is preserved, and existing smoke/demo flows remain understandable.
+- Backend: `LegalEntitySettings` model, nondestructive migration/backfill, context-enforced SettingsModule, safe audit metadata and idempotent base/demo seed.
+- Frontend: `/settings` shows "Setări firmă", active company, company-specific values, read-only mode and dirty-form confirmation before context switch.
 - Security: refuse production destructive operations.
-- Audit: document migration assumptions.
+- Audit: `settings.updated` includes `legalEntityCode` and changed field names without full IBAN or full fiscal payloads.
 - Testing: Prisma validate/generate/migrate, seed, demo seed idempotency, typecheck, test, build.
+- Implementation: `legal_entity_settings` keeps a required 1:1 `LegalEntity` relation; `laboratory_settings` remains legacy for billing/print compatibility until `BILLING-REALIGN-001`.
+- Compatibility: billing, print views, works, pricing, payments and document series remain unmodified and are not driven by the current manager context.
 
 ### PATIENTS-001 - Patient records and history
 
