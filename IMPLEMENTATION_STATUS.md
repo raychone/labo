@@ -2,7 +2,16 @@
 
 ## Overall Progress
 
-73%
+74%
+
+## ROADMAP
+
+- [x] ROADMAP-REALIGN-002 - Realign product roadmap to validated laboratory workflow (COMPLETED)
+
+## ORGANIZATION
+
+- [ ] ORG-CONTEXT-001 - Global NC/NG company context (APPROVED)
+- [ ] ORG-DATA-MIGRATION-001 - Company-aware local data migration (NOT STARTED)
 
 ## FOUNDATION
 
@@ -42,6 +51,8 @@
 ## WORKS
 
 - [x] WORKS-001 - Work order creation
+- [ ] WORK-DEADLINES-001 - Deadline rules from pricing and work complexity (NOT STARTED)
+- [ ] WORK-CYCLES-001 - Clinic return cycles and repeated handoffs (NOT STARTED)
 
 ## QR
 
@@ -53,7 +64,8 @@
 
 ## DASHBOARD
 
-- [ ] DASHBOARD-001 - Operational dashboard (NOT STARTED)
+- [ ] DASHBOARD-001 - Operational dashboard (SUPERSEDED BY DASHBOARD-002)
+- [ ] DASHBOARD-002 - Real workflow dashboard (NOT STARTED)
 
 ## FORMS
 
@@ -69,7 +81,8 @@
 ## DEMO
 
 - [x] DEMO-SEED-001 - Realistic demonstration dataset (COMPLETED)
-- [ ] DEMO-POLISH-001 - Commercial demo polish (NOT STARTED)
+- [ ] DEMO-POLISH-001 - Commercial demo polish (SUPERSEDED BY DEMO-REAL-DATA-001)
+- [ ] DEMO-REAL-DATA-001 - Validated NC/NG workflow demo dataset (NOT STARTED)
 
 ## FILES
 
@@ -84,6 +97,11 @@
 
 - [x] WORKFLOW-001 - Workflow templates (COMPLETED)
 - [x] WORKFLOW-002 - Workflow execution snapshot (COMPLETED)
+- [ ] TECH-CLAIM-001 - Technician self-claim and first technical company selection (NOT STARTED)
+
+## PATIENTS
+
+- [ ] PATIENTS-001 - Patient records and patient work history (NOT STARTED)
 
 ## SCAN
 
@@ -116,6 +134,7 @@
 ## PAYMENTS
 
 - [x] PAYMENTS-001 - Payments and balances (covered by BILLING-001)
+- [ ] PAYMENTS-002 - Manual payment evidence realignment (NOT STARTED)
 
 ## INVOICE
 
@@ -128,6 +147,23 @@
 ## SEARCH
 
 - [ ] SEARCH-001 - Global search (NOT STARTED)
+
+## PRICING
+
+- [ ] PRICING-002 - Company-specific pricing and agreements (NOT STARTED)
+
+## DOCUMENTS
+
+- [ ] DOCUMENTS-001 - Company-aware printable document center (NOT STARTED)
+- [ ] COLLABORATION-TERMS-001 - Versioned collaboration terms (NOT STARTED)
+
+## OFFLINE
+
+- [ ] OFFLINE-001 - Essential offline operation and synchronization (NOT STARTED)
+
+## STATUS
+
+- [ ] STATUS-001 - Operational status page (NOT STARTED)
 
 ## AUDIT
 
@@ -147,23 +183,67 @@
 
 ## Current Task
 
-NONE / AWAITING APPROVAL
+ROADMAP-REALIGN-002 - COMPLETED
 
-Status: AWAITING APPROVAL
+Status: COMPLETED
 
-Started: 2026-07-27T01:30:42Z
+Started: 2026-07-29T02:30:00Z
 
-Completed: 2026-07-27T03:24:00Z
+Completed: 2026-07-29T02:48:05Z
 
-Last completed task: SIGNATURES-001 - Delivery signature capture and proof of handover
+Last completed task: ROADMAP-REALIGN-002 - Realign product roadmap to validated laboratory workflow
 
-Completed: 2026-07-27T03:24:00Z
+Completed: 2026-07-29T02:48:05Z
 
 ## Next Recommended Task
 
-DASHBOARD-001 - Operational and financial dashboards
+ORG-CONTEXT-001 - APPROVED
 
 ## Latest Completion Summary
+
+### ROADMAP-REALIGN-002 - Realign product roadmap to validated laboratory workflow
+
+- Realigned the product roadmap to the validated real laboratory workflow with one shared operational laboratory and two legal/financial contexts: `NC` - Nicolaie Cristina and `NG` - Nicolaie Gabriel.
+- Added `REAL-LAB-WORKFLOW.md` as the architectural source of truth for global company context, manager visibility, technician self-claim, operational status, patients, pricing, deadlines, work cycles, billing, payments, documents, collaboration terms and offline mode.
+- Updated `MVP-IMPLEMENTATION-PLAN.md` with the new active roadmap order and explicit future task definitions.
+- Marked the current demo documentation as prior-flow/single-company until `DEMO-REAL-DATA-001`.
+- No implementation code, schema, migration, seed, endpoint, frontend page, package manifest or lockfile was changed.
+
+Main files modified:
+
+- `REAL-LAB-WORKFLOW.md`
+- `MVP-IMPLEMENTATION-PLAN.md`
+- `IMPLEMENTATION_STATUS.md`
+- `README.md`
+- `DEMO.md`
+- `DEMO-SCRIPT.md`
+
+Verification:
+
+- Docs-only scope checked with `git diff --name-only`.
+- Formatting checked with `git diff --check`.
+- Automated app tests were not run because this task changes documentation only.
+
+Manual verification:
+
+- Reviewed the current Prisma schema, backend module assumptions, frontend route assumptions and demo seed assumptions during preflight.
+
+Architecture decisions:
+
+- One shared operational app and database, not multi-tenant SaaS.
+- Two legal/financial contexts, `NC` and `NG`, selected globally in the shell in future `ORG-CONTEXT-001`.
+- Both managers see both contexts.
+- Reception creates operational work without choosing company.
+- Technician selects company at first technical self-claim; company belongs to the work.
+- Existing demo remains prior-flow documentation until `DEMO-REAL-DATA-001`.
+
+Technical debt introduced:
+
+- None; documentation-only change.
+
+Remaining risks:
+
+- Current implementation still reflects the old single-company, assignment-driven workflow until the new roadmap tasks are implemented.
 
 ### SIGNATURES-001 - Delivery signature capture and proof of handover
 
@@ -500,6 +580,16 @@ None.
 
 ## Architecture Decisions
 
+- ROADMAP-REALIGN-002 makes `REAL-LAB-WORKFLOW.md` the source of truth for the validated real laboratory workflow.
+- Keep one shared operational application and one shared database; do not convert the product into multi-tenant SaaS.
+- Support two legal/financial contexts: `NC` - Nicolaie Cristina and `NG` - Nicolaie Gabriel.
+- Both managers must be able to see and operate both `NC` and `NG`; do not create automatic single-company manager isolation.
+- Add a future global shell context switch for `NC`/`NG`; it affects financial/company records, documents, pricing and reports, but not identity or shared operational visibility.
+- Reception registers work operationally without selecting a company.
+- Technician self-claim becomes the target production model; the technician selects `NC`/`NG` at first technical claim and the company is attached to the work.
+- Existing assignment-driven technician screens are prior-flow implementation until `TECH-CLAIM-001`.
+- Patient data will move from work-order text fields to a real patient model in `PATIENTS-001`; the work code remains the operational identifier.
+- Current demo remains prior-flow/single-company until `DEMO-REAL-DATA-001`.
 - Use a pnpm workspace monorepo with `apps/web`, `apps/api`, `packages/shared`, `packages/ui`, and `packages/config`.
 - Use TypeScript strict mode everywhere.
 - Use React + Vite for the frontend.
@@ -534,7 +624,7 @@ None.
 - Use `WorkOrder.invoicedDocumentId` as the active invoice relation instead of a billing boolean.
 - Keep patient names out of billing audit metadata; document line snapshots may contain patient names for internal annex/search views.
 - Keep existing Payment models/endpoints as optional manual evidence only; the MVP does not process money, cards, POS transactions, cash register flows or bank reconciliation.
-- Approved roadmap order after BILLING-001: BILLING-002, DEMO-SEED-001, WORKFORMS-001, WORKFORMS-002, WORKFLOW-001, WORKFLOW-002, TECH-001, SCAN-002, LOGISTICS-001, DELIVERY-001, SIGNATURES-001, DASHBOARD-001, SEARCH-001, REPORTS-001, AUDIT-UI-001, DEMO-POLISH-001, E2E-001, SECURITY-001, DEPLOY-001.
+- Superseded by ROADMAP-REALIGN-002: the previous post-BILLING-001 roadmap order was completed through SIGNATURES-001 and is no longer the active next-task sequence.
 - Workflow templates are linear and versioned per WorkType; initial/final stages are derived from order, and the database enforces at most one ACTIVE workflow template per WorkType.
 - Evaluate RBAC from the database so access changes take effect without relogin.
 - Treat `ALL` as the only broad scope; ownership scopes remain distinct.
@@ -587,7 +677,7 @@ None.
 
 ### DASHBOARD-001 - Operational dashboard
 
-- Status: COMPLETED.
+- Status: SUPERSEDED BY DASHBOARD-002.
 - Obiectiv: ecran initial cu indicatori operationali pentru utilizatori autentificati.
 - Scope: sumar lucrari, urgente, termene apropiate, linkuri rapide si stari goale.
 - Non-goals: rapoarte financiare, grafice complexe, exporturi, notificari realtime.

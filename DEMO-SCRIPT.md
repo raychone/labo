@@ -1,5 +1,7 @@
 # Demo script
 
+Current note: this script demonstrates the implemented prior flow. It is not the final validated `NC`/`NG` self-claim workflow. Present it as a module walkthrough until `DEMO-REAL-DATA-001` replaces it with the real two-company, self-claim, patient, pricing, deadline and cycle demo.
+
 1. Open `/login` and use “Acces rapid pentru demonstrație” → “Intră ca manager” when demo mode is enabled.
 2. Open Panou principal and show the authenticated shell.
 3. Open Lucrări.

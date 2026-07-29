@@ -46,13 +46,71 @@ MVP Extended include portalul medicului, rapoarte suplimentare, export contabil 
 
 ## 4. Assumptions
 
-- Aplicatia deserveste initial un singur laborator.
+- Aplicatia deserveste un singur laborator operational comun, cu doua contexte juridice/financiare: `NC` - Nicolaie Cristina si `NG` - Nicolaie Gabriel.
 - Utilizatorii sunt creati doar de manager.
-- Datele pacientului pot fi minimizate la identificator pacient, cand laboratorul decide astfel.
+- Datele pacientului trebuie modelate explicit in etapa viitoare `PATIENTS-001`; codul operational ramane codul lucrarii.
 - Fisierele private sunt accesibile doar prin backend autorizat.
 - Facturarea MVP genereaza PDF si numerotare controlata, dar elementele fiscale finale se valideaza cu contabilul clientului.
 - Interfata trebuie sa fie mobile-first si full responsive, inclusiv pentru tablet si desktop.
 - Utilizatorii pot fi non-tehnici; UI-ul trebuie sa foloseasca limbaj clar, actiuni evidente si ecrane fara aglomerare.
+
+## 4.1 Real Lab Workflow Realignment
+
+`ROADMAP-REALIGN-002` realiniaza produsul dupa fluxul real validat in laborator. Documentul sursa pentru aceasta decizie este `REAL-LAB-WORKFLOW.md`.
+
+Decizii obligatorii:
+
+- exista o singura aplicatie, o singura baza de date si un singur flux operational comun;
+- exista doua contexte juridice/financiare, `NC` si `NG`;
+- cei doi manageri vad si opereaza ambele contexte;
+- utilizatorii nu sunt duplicati pe companie;
+- receptia nu alege firma la creare lucrare;
+- tehnicianul alege `NC`/`NG` la primul claim tehnic, iar firma ramane atasata lucrarii;
+- fluxul tehnicianului devine self-claim, nu asignare obligatorie de manager;
+- preturile, documentele, seriile, incasarile si rapoartele financiare sunt separate prin contextul global;
+- statusul operational este comun si vizibil intern cu mascare de permisiuni;
+- pacientul devine entitate proprie, fara cod intern de pacient;
+- demo-ul existent ramane demonstratie a fluxului anterior pana la `DEMO-REAL-DATA-001`.
+
+### Active Roadmap After ROADMAP-REALIGN-002
+
+Faza 1 - Realiniere structurala:
+
+1. `ROADMAP-REALIGN-002`
+2. `ORG-CONTEXT-001`
+3. `ORG-DATA-MIGRATION-001`
+
+Faza 2 - Datele reale:
+
+4. `PATIENTS-001`
+5. `PRICING-002`
+6. `WORK-DEADLINES-001`
+
+Faza 3 - Atelierul real:
+
+7. `TECH-CLAIM-001`
+8. `STATUS-001`
+9. `WORK-CYCLES-001`
+10. `WORKFORM-REAL-001`
+
+Faza 4 - Financiar si documente:
+
+11. `BILLING-REALIGN-001`
+12. `PAYMENTS-002`
+13. `DOCUMENTS-001`
+14. `COLLABORATION-TERMS-001`
+
+Faza 5 - Rezilienta si finalizare:
+
+15. `OFFLINE-001`
+16. `DASHBOARD-002`
+17. `SEARCH-001`
+18. `REPORTS-001`
+19. `AUDIT-UI-001`
+20. `DEMO-REAL-DATA-001`
+21. `E2E-001`
+22. `SECURITY-001`
+23. `DEPLOY-001`
 
 ## 5. Open Questions for Client
 
@@ -1144,7 +1202,7 @@ Decizie concreta SETTINGS-001:
 
 ### DASHBOARD-001 - Operational dashboard
 
-- Status: COMPLETED.
+- Status: SUPERSEDED BY DASHBOARD-002.
 - Obiectiv: ecran initial cu indicatori operationali pentru utilizatori autentificati.
 - Scope: sumar lucrari, urgente, termene apropiate, linkuri rapide si stari goale.
 - Non-goals: rapoarte financiare, grafice complexe, exporturi, notificari realtime.
@@ -1578,6 +1636,248 @@ Decizie concreta SETTINGS-001:
 - DoD: staging stabil.
 - Estimare: M.
 
+## 44.1 Realigned Future Task Definitions
+
+Aceste taskuri inlocuiesc ordinea veche dupa `SIGNATURES-001`. Detaliile complete si deciziile validate sunt in `REAL-LAB-WORKFLOW.md`.
+
+### ROADMAP-REALIGN-002 - Real lab workflow roadmap alignment
+
+- Status: COMPLETED.
+- Obiectiv: realinierea documentatiei si roadmap-ului la fluxul real validat.
+- Scope: plan, status, README, demo docs si document arhitectural nou.
+- Non-goals: cod, migrare, seed, endpoint, UI, pricing, pacienti, offline, context switch.
+- Dependente: SIGNATURES-001.
+- Acceptance criteria: noua ordine este documentata, impact matrix exista, demo-ul curent este marcat ca flux anterior.
+- Backend: fara modificari.
+- Frontend: fara modificari.
+- Securitate: fara relaxari.
+- Audit: documenteaza auditul necesar pentru taskurile viitoare.
+- Testare: `git diff --check` si verificare docs-only.
+
+### ORG-CONTEXT-001 - Global NC/NG company context
+
+- Status: APPROVED.
+- Obiectiv: context global vizibil `NC`/`NG` pentru ecrane si actiuni sensibile la firma.
+- Scope: registru firme, selector in shell, persistenta context, validare backend a contextului.
+- Non-goals: pricing, billing rewrite, pacienti, self-claim, migrare date existente.
+- Dependente: ROADMAP-REALIGN-002, SHELL-001, SETTINGS-001, RBAC-001.
+- Acceptance criteria: managerii pot comuta `NC`/`NG`, contextul este vizibil, backendul refuza contexte nepermise, workflow-ul operational ramane comun.
+- Backend: guard/helper context firma si extensie setari unde este necesar.
+- Frontend: selector responsive in shell, in stilul aplicatiei.
+- Securitate: contextul este verificat server-side, nu doar in browser.
+- Audit: include contextul in actiunile critice sensibile la firma.
+- Testare: unit, integration unde se valideaza contextul, frontend tests, typecheck, test, build.
+
+### ORG-DATA-MIGRATION-001 - Company-aware local data migration
+
+- Status: NOT STARTED.
+- Obiectiv: alinierea datelor locale/demo la structura cu `NC`/`NG`.
+- Scope: migrare determinista si seed compatibil cu contextul firmei.
+- Non-goals: migrari destructive fara aprobare, pricing complet, billing rewrite.
+- Dependente: ORG-CONTEXT-001.
+- Acceptance criteria: datele locale au referinte de firma unde sunt cerute si seed-ul ramane idempotent.
+- Backend: Prisma migration/seed doar dupa aprobare explicita.
+- Frontend: compatibilitate minima daca este necesara.
+- Securitate: refuz productie/remote pentru resetari destructive.
+- Audit: documenteaza presupunerile de migrare.
+- Testare: Prisma validate/generate/migrate, seed, demo seed idempotency, typecheck, test, build.
+
+### PATIENTS-001 - Patient records and history
+
+- Status: NOT STARTED.
+- Obiectiv: pacienti reutilizabili cu istoric de lucrari.
+- Scope: model pacient, CRUD, istoric lucrari, medici/clinici, documente, cautare.
+- Non-goals: portal pacient, dosar medical complet, medic permanent obligatoriu.
+- Dependente: ORG-CONTEXT-001, WORKS-001, CLINICS-001.
+- Acceptance criteria: pacientul are nume/prenume, campuri optionale limitate, multe lucrari, fara cod intern.
+- Backend: model, DTO validation, relatii WorkOrder si permisiuni.
+- Frontend: pagina pacient cu taburi Prezentare, Lucrari, Medici si clinici, Documente, Istoric.
+- Securitate: citire/scriere filtrata server-side.
+- Audit: create/update/corectii sensibile.
+- Testare: unit, integration, frontend, migration checks.
+
+### PRICING-002 - Company-specific pricing and agreements
+
+- Status: NOT STARTED.
+- Obiectiv: preturi manager-only separate pentru `NC` si `NG`.
+- Scope: liste standard, negocieri clinic/medic, discounturi, perioade, istoric, rezolvare pret.
+- Non-goals: procesare plati, contabilitate, e-Factura, expunere preturi catre non-manageri.
+- Dependente: ORG-CONTEXT-001, WORKTYPES-001, CLINICS-001.
+- Acceptance criteria: pretul se rezolva doctor > clinica > standard firma si non-financiarul nu primeste campuri de pret.
+- Backend: modele pricing, resolver pur, DTO validation, tranzactii.
+- Frontend: workspace manager pentru preturi si istoric.
+- Securitate: `pricing.*` si mascare server-side.
+- Audit: create/update/archive agreement.
+- Testare: unit resolver, API permission tests, UI tests.
+
+### WORK-DEADLINES-001 - Deadline rules
+
+- Status: NOT STARTED.
+- Obiectiv: termene calculate din regulile de pret/lucrare.
+- Scope: reguli pe numar elemente/serviciu, snapshot la primul claim, alerte vizuale.
+- Non-goals: planificare calendaristica avansata, rute curier, penalitati.
+- Dependente: PRICING-002, TECH-CLAIM-001.
+- Acceptance criteria: primul claim seteaza execution start, due date si culoare derivata corect.
+- Backend: deadline resolver si snapshot.
+- Frontend: alerte si filtre deadline.
+- Securitate: date operationale fara preturi pentru non-manageri.
+- Audit: snapshot si corectii.
+- Testare: unit resolver, API integration, UI state tests.
+
+### TECH-CLAIM-001 - Technician self-claim
+
+- Status: NOT STARTED.
+- Obiectiv: inlocuirea fluxului implicit de asignare cu self-claim.
+- Scope: coada etape disponibile, claim/start/complete, radio `NC`/`NG` la primul claim tehnic, release/corectie manager.
+- Non-goals: transfer etapa, payroll, planning obligatoriu de manager.
+- Dependente: ORG-CONTEXT-001, WORKFLOW-002, TECH-001, PRICING-002.
+- Acceptance criteria: tehnicianul claim-uieste etapa, firma se blocheaza pe lucrare, auditul include claimed/started/completed/duration.
+- Backend: claim endpoints, optimistic locking, reguli firma.
+- Frontend: workbench self-claim si radio selector.
+- Securitate: ownership si RBAC server-side.
+- Audit: claim, release, correction, start, complete.
+- Testare: conflict, permission, component si smoke mobile.
+
+### STATUS-001 - Operational status page
+
+- Status: NOT STARTED.
+- Obiectiv: `/status` pentru vizibilitate operationala comuna.
+- Scope: taburi Astazi/In lucru/Disponibile/Intarziate/Plecate/Revenite/Finalizate, filtre si progres.
+- Non-goals: dashboard financiar, panou public, analytics complex.
+- Dependente: ORG-CONTEXT-001, TECH-CLAIM-001, WORK-DEADLINES-001, WORK-CYCLES-001.
+- Acceptance criteria: toti utilizatorii interni vad status operational permis; doar managerii vad financiar.
+- Backend: endpoint agregat permission-aware.
+- Frontend: pagina responsive cu taburi si filtre.
+- Securitate: fara scurgeri de preturi/financiar.
+- Audit: fara audit read standard.
+- Testare: aggregation, permissions, UI filters.
+
+### WORK-CYCLES-001 - Clinic return cycles
+
+- Status: NOT STARTED.
+- Obiectiv: modelarea ciclurilor plecat la medic, revenit, retrimis.
+- Scope: return types, timeline cicluri, integrare logistics/delivery/status.
+- Non-goals: portal medic, upload fisiere, rewrite QC.
+- Dependente: DELIVERY-001, LOGISTICS-001, STATUS-001.
+- Acceptance criteria: istoricul nu este suprascris, current cycle este vizibil.
+- Backend: cycle transitions si optimistic locking.
+- Frontend: actiuni retur/ciclu si timeline.
+- Securitate: actiuni pe roluri.
+- Audit: return/resend/correction.
+- Testare: state transitions, API permissions, UI.
+
+### WORKFORM-REAL-001 - Real laboratory work form
+
+- Status: NOT STARTED.
+- Obiectiv: formular digital conform fisei reale de laborator.
+- Scope: numar fisa, medic, pacient, varsta, sex, tip lucrare, nuanta, dinti FDI, faze, termene faze, note, QR print.
+- Non-goals: scripting custom, fisiere generice, patru faze hardcodate.
+- Dependente: PATIENTS-001, WORKFORMS-002, WORKFLOW-002, WORK-DEADLINES-001.
+- Acceptance criteria: formular printabil, snapshot imuabil, faze din workflow.
+- Backend: validari si snapshot extins.
+- Frontend: accordions/tabs/radios/selects/reusable controls.
+- Securitate: acces pacient/lucrare permissioned.
+- Audit: create/update submission.
+- Testare: validators, print smoke, frontend tests.
+
+### BILLING-REALIGN-001 - Company-aware billing
+
+- Status: NOT STARTED.
+- Obiectiv: facturare separata pe contextul `NC`/`NG`.
+- Scope: lucrari finalizate, proforme, facturi, anexe, incasari, restante si filtre.
+- Non-goals: e-Factura, SPV, procesare plati, contabilitate generala.
+- Dependente: ORG-CONTEXT-001, PRICING-002, WORK-DEADLINES-001, BILLING-002.
+- Acceptance criteria: documentele nu amesteca lucrari NC/NG si folosesc seria/headerul corect.
+- Backend: query-uri context-aware, serii si validari documente.
+- Frontend: billing workspace dupa context activ.
+- Securitate: finance RBAC si context validation.
+- Audit: firma inclusa in evenimente financiare.
+- Testare: grouping, filters, permissions, print.
+
+### PAYMENTS-002 - Manual payment evidence realignment
+
+- Status: NOT STARTED.
+- Obiectiv: evidenta manuala completa a incasarilor pe factura company-aware.
+- Scope: plati multiple/partiale, metode, referinte, anulare, recalcul sold/status.
+- Non-goals: POS, card processing, bank sync, bon fiscal.
+- Dependente: BILLING-REALIGN-001.
+- Acceptance criteria: unpaid/partial/paid si soldul se recalculeaza corect; overpayment, zero si negativ sunt refuzate.
+- Backend: validari stricte si tranzactii.
+- Frontend: "Inregistreaza incasare", istoric si filtre.
+- Securitate: finance-only.
+- Audit: record/cancel payment.
+- Testare: status/balance/search/filter tests.
+
+### DOCUMENTS-001 - Company-aware document center
+
+- Status: NOT STARTED.
+- Obiectiv: documente operationale si financiare cu header de firma.
+- Scope: fisa laborator, proforma, factura, anexa, nota incasare, dovada predare, termeni colaborare.
+- Non-goals: XML e-Factura, semnatura calificata, URL public.
+- Dependente: ORG-CONTEXT-001, BILLING-REALIGN-001, WORKFORM-REAL-001.
+- Acceptance criteria: open new tab, print, download, link pacient/lucrare, snapshot, A4/A5 unde trebuie.
+- Backend: render si acces autorizat.
+- Frontend: actiuni documente si taburi.
+- Securitate: storage/acces privat.
+- Audit: print/download critic.
+- Testare: render, permissions, print smoke.
+
+### COLLABORATION-TERMS-001 - Versioned collaboration terms
+
+- Status: NOT STARTED.
+- Obiectiv: termeni de colaborare versionati pe firma.
+- Scope: detalii amprenta, nuanta, probe, termene, refaceri, costuri extra, versiune, firma emitenta.
+- Non-goals: pagina statica hardcodata, consultanta juridica, semnare contractuala.
+- Dependente: DOCUMENTS-001.
+- Acceptance criteria: managerul publica versiuni si documentele folosesc versiunea corecta.
+- Backend: model versionat si validari.
+- Frontend: management si print/download.
+- Securitate: write manager-only.
+- Audit: create/publish/archive.
+- Testare: versioning si permissions.
+
+### OFFLINE-001 - Essential offline operation
+
+- Status: NOT STARTED.
+- Obiectiv: operatiuni esentiale disponibile offline cu sincronizare ulterioara.
+- Scope: IndexedDB, coada mutatii, `clientMutationId`, sync auto/manual, conflicte.
+- Non-goals: offline pricing, billing, payments, series, settings.
+- Dependente: TECH-CLAIM-001, STATUS-001, WORKFORM-REAL-001.
+- Acceptance criteria: create work, complete form, claim/start/complete stage, notes si status operational se pot sincroniza sigur.
+- Backend: idempotency si optimistic locking.
+- Frontend: stari Online/Offline/sync si conflict UI.
+- Securitate: cache doar pentru date autorizate.
+- Audit: actiuni sincronizate.
+- Testare: sync/conflict/browser offline smoke.
+
+### DASHBOARD-002 - Real workflow dashboard
+
+- Status: NOT STARTED.
+- Obiectiv: dashboard aliniat cu status, deadlines, cycles si context firma.
+- Scope: sumar operational si financiar manager-only.
+- Non-goals: inlocuirea `/status`, analytics complex.
+- Dependente: STATUS-001, BILLING-REALIGN-001.
+- Acceptance criteria: sumarul reconciliaza cu status si billing.
+- Backend: agregari permissioned.
+- Frontend: carduri responsive.
+- Securitate: financiar manager-only.
+- Audit: fara audit read standard.
+- Testare: aggregation si UI tests.
+
+### DEMO-REAL-DATA-001 - Validated workflow demo dataset
+
+- Status: NOT STARTED.
+- Obiectiv: demo realist pentru fluxul validat `NC`/`NG`.
+- Scope: doi manageri, trei tehnicieni, pacienti, pricing, deadlines, self-claim, cycles, billing, documents.
+- Non-goals: date reale, seed productie.
+- Dependente: DOCUMENTS-001, PAYMENTS-002, STATUS-001.
+- Acceptance criteria: demo script prezinta fluxul real cap-coada.
+- Backend: seed idempotent guarded.
+- Frontend: demo script si acces rapid daca este necesar.
+- Securitate: date fictive.
+- Audit: fara audit pentru seed local.
+- Testare: seed idempotency, typecheck, test, build, smoke demo.
+
 ## 45. Dependency Graph
 
 ```text
@@ -1594,8 +1894,12 @@ SHELL-001 -> FORMS-001
 WORKS-001 -> BILLING-001 -> BILLING-002 -> DEMO-SEED-001
 BILLING-002 -> WORKFORMS-001 -> WORKFORMS-002
 WORKFORMS-001 -> WORKFLOW-001 -> WORKFLOW-002 -> TECH-001 -> SCAN-002 -> LOGISTICS-001 -> DELIVERY-001 -> SIGNATURES-001
-BILLING-002 -> DASHBOARD-001 -> SEARCH-001 -> REPORTS-001 -> AUDIT-UI-001 -> DEMO-POLISH-001 -> E2E-001 -> SECURITY-001 -> DEPLOY-001
-Deferred: FILES-001, FILES-002, QC-001, NOTIFICATIONS-001
+SIGNATURES-001 -> ROADMAP-REALIGN-002 -> ORG-CONTEXT-001 -> ORG-DATA-MIGRATION-001
+ORG-CONTEXT-001 -> PATIENTS-001 -> WORKFORM-REAL-001
+ORG-CONTEXT-001 -> PRICING-002 -> WORK-DEADLINES-001 -> TECH-CLAIM-001 -> STATUS-001 -> WORK-CYCLES-001
+WORK-CYCLES-001 -> BILLING-REALIGN-001 -> PAYMENTS-002 -> DOCUMENTS-001 -> COLLABORATION-TERMS-001
+STATUS-001 -> OFFLINE-001 -> DASHBOARD-002 -> SEARCH-001 -> REPORTS-001 -> AUDIT-UI-001 -> DEMO-REAL-DATA-001 -> E2E-001 -> SECURITY-001 -> DEPLOY-001
+Deferred legacy tasks: FILES-001, FILES-002, QC-001, NOTIFICATIONS-001, DEMO-POLISH-001
 WORKS-001 -> PAYMENTS-001 -> INVOICE-001 (legacy split, covered operationally by BILLING-001/BILLING-002)
 WORKS-001 -> REPORTS-001
 RBAC-001 -> AUDIT-UI-001

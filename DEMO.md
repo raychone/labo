@@ -2,6 +2,12 @@
 
 Acest document este ghidul de prezentare cap-coadă pentru stadiul curent al aplicației. Toate datele demo sunt fictive și sunt doar pentru development/prezentare.
 
+## Notă ROADMAP-REALIGN-002
+
+Demo-ul curent prezintă funcționalitățile deja implementate în fluxul anterior: setări single-company și lucru tehnician bazat pe asignare. Fluxul real validat pentru laborator va avea două contexte juridice/financiare `NC` și `NG`, doi manageri cu acces la ambele contexte, self-claim pentru tehnicieni și selecția firmei la primul claim tehnic.
+
+Nu prezenta demo-ul curent ca implementare finală a fluxului `NC`/`NG`. Pentru întâlniri comerciale, formulează-l ca demonstrație a modulelor existente până la realinierea completă prin `ORG-CONTEXT-001`, `TECH-CLAIM-001`, `STATUS-001`, `BILLING-REALIGN-001` și `DEMO-REAL-DATA-001`.
+
 ## 1. Pregătire înainte de prezentare
 
 Pornește baza de date, API-ul și frontend-ul:

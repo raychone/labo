@@ -9,6 +9,21 @@ Custom management application for a Romanian dental laboratory.
 - Database: PostgreSQL with Prisma.
 - Package manager: pnpm workspace.
 
+## Real Lab Workflow
+
+`ROADMAP-REALIGN-002` realigns the product to the validated laboratory workflow. The architectural source of truth is [REAL-LAB-WORKFLOW.md](REAL-LAB-WORKFLOW.md).
+
+The target model is one shared operational laboratory with two legal/financial contexts:
+
+- `NC` - Nicolaie Cristina.
+- `NG` - Nicolaie Gabriel.
+
+Both managers can see and operate both contexts. The future shell context switch changes company settings, legal data, document headers, document series, invoices, proformas, payments, pricing and financial reports. It does not change the authenticated user and does not split the operational workflow into tenants.
+
+Reception registers work operationally without choosing the company. The technician chooses `NC` or `NG` at the first technical self-claim; from that point the company belongs to the work and later correction is manager-only, reasoned and audited.
+
+The current demo data still shows the already implemented prior flow: single-company settings and assignment-driven technician work. It remains useful for presenting completed modules, but the validated NC/NG self-claim workflow will be represented by `ORG-CONTEXT-001` and later roadmap tasks.
+
 ## Workspace
 
 ```text
@@ -694,18 +709,17 @@ RBAC uses existing permissions: `finance.read`, `finance.record_payment`, `finan
 
 Billing document lines now store `workCreatedAtSnapshot` so printable attachments can show the work entry date from immutable billing snapshots.
 
-## Roadmap After Billing
+## Active Roadmap
 
-After BILLING-001, the approved order is:
+After `ROADMAP-REALIGN-002`, the approved order is:
 
-1. `BILLING-002` - printable billing documents and clinic statements.
-2. `DEMO-SEED-001` - realistic demonstration dataset.
-3. `WORKFORMS-001` - work form template builder.
-4. `WORKFORMS-002` - work form completion and immutable snapshot.
-5. `WORKFLOW-001`, `WORKFLOW-002`, `TECH-001`, `SCAN-002`, `LOGISTICS-001`, `DELIVERY-001`, `SIGNATURES-001`.
-6. `DASHBOARD-001`, `SEARCH-001`, `REPORTS-001`, `AUDIT-UI-001`, `DEMO-POLISH-001`, `E2E-001`, `SECURITY-001`, `DEPLOY-001`.
+1. `ORG-CONTEXT-001`, then `ORG-DATA-MIGRATION-001`.
+2. `PATIENTS-001`, `PRICING-002`, `WORK-DEADLINES-001`.
+3. `TECH-CLAIM-001`, `STATUS-001`, `WORK-CYCLES-001`, `WORKFORM-REAL-001`.
+4. `BILLING-REALIGN-001`, `PAYMENTS-002`, `DOCUMENTS-001`, `COLLABORATION-TERMS-001`.
+5. `OFFLINE-001`, `DASHBOARD-002`, `SEARCH-001`, `REPORTS-001`, `AUDIT-UI-001`, `DEMO-REAL-DATA-001`, `E2E-001`, `SECURITY-001`, `DEPLOY-001`.
 
-Deferred but preserved in the plan: `FILES-001`, `FILES-002`, `QC-001`, and `NOTIFICATIONS-001`.
+Deferred legacy tasks remain documented until revalidated: `FILES-001`, `FILES-002`, `QC-001`, `NOTIFICATIONS-001`, and `DEMO-POLISH-001`.
 
 Payments in the current MVP are manual evidence only. Users can record partial or full collections, receipt numbers, receipt dates, bank references and notes, and the app derives `UNPAID`, `PARTIALLY_PAID` and `PAID` from active records. The application does not process cards, POS transactions, cash register flows, checkout, bank reconciliation, legal fiscal receipts, or automated receipt fiscalization.
 
