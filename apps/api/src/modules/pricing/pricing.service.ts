@@ -3,6 +3,9 @@ import type { Prisma } from "@prisma/client";
 
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
+import { BusinessCalendarService } from "../deadlines/business-calendar.service.js";
+import { DEADLINE_DEFAULT_TIMEZONE } from "../deadlines/deadline.constants.js";
+import { DeadlineEngineService } from "../deadlines/deadline-engine.service.js";
 import { PRICING_AUDIT_ACTIONS, PRICING_RESOURCE_TYPES } from "./pricing.constants.js";
 import type {
   ExecutionTimeRuleDto,
@@ -43,6 +46,8 @@ type AuditClient = Pick<Prisma.TransactionClient, "auditLog"> | Pick<PrismaServi
 export class PricingService {
   public constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(BusinessCalendarService) private readonly businessCalendar: BusinessCalendarService,
+    @Inject(DeadlineEngineService) private readonly deadlineEngine: DeadlineEngineService,
     @Inject(PricingResolverService) private readonly pricingResolver: PricingResolverService,
   ) {}
 
@@ -432,10 +437,15 @@ export class PricingService {
       workTypeId: dto.workTypeId,
     });
 
+    const deadlinePreview = dto.startAt
+      ? await this.resolveDeadlinePreview(legalEntity.id, dto.startAt, dto.includeStartDay ?? false, resolution.executionTimeRules, dto.quantity)
+      : null;
+
     return {
       adjustment: resolution.adjustment,
       appliedRuleScope: resolution.appliedRuleScope,
       currency: resolution.currency,
+      deadlinePreview,
       evaluationDate: evaluationDate.toISOString().slice(0, 10),
       executionTimeRule: resolution.executionTimeRule
         ? {
@@ -456,6 +466,42 @@ export class PricingService {
       totalPriceMinor: resolution.totalPriceMinor,
       workTypeId: resolution.workTypeId,
     };
+  }
+
+  private async resolveDeadlinePreview(
+    legalEntityId: string,
+    startAt: string,
+    includeStartDay: boolean,
+    rules: readonly {
+      readonly executionDays: number | null;
+      readonly isActive: boolean;
+      readonly maxQuantity: number | null;
+      readonly minQuantity: number;
+      readonly priority: number;
+      readonly requiresManualDueDate: boolean;
+    }[],
+    quantity: number,
+  ) {
+    const settings = await this.prisma.legalEntitySettings.findUnique({
+      select: { timezone: true },
+      where: { legalEntityId },
+    });
+    const timezone = settings?.timezone ?? DEADLINE_DEFAULT_TIMEZONE;
+    const calendar = this.businessCalendar.getRomanianBusinessCalendar();
+    const result = this.deadlineEngine.calculate({
+      calendar,
+      includeStartDay,
+      quantity,
+      rules,
+      startAt,
+      timezone,
+    });
+
+    if (result.reason === "INVALID_START_DATE" || result.reason === "INVALID_TIMEZONE" || result.reason === "INVALID_QUANTITY" || result.reason === "INVALID_CALENDAR" || result.reason === "INVALID_DUE_TIME") {
+      throw new BadRequestException(result.explanation);
+    }
+
+    return result;
   }
 
   private toCatalogWhere(legalEntityId: string, query: PricingCatalogQueryDto): Prisma.PriceCatalogItemWhereInput {

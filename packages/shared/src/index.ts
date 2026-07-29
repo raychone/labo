@@ -37,6 +37,28 @@ export type {
   UpdateLaboratorySettingsInput,
 } from "./settings.js";
 export {
+  DEADLINE_CALCULATION_MODES,
+  DEADLINE_UNRESOLVED_REASONS,
+  DEFAULT_DEADLINE_DUE_HOUR,
+  DEFAULT_DEADLINE_DUE_MINUTE,
+  DEFAULT_DEADLINE_TIMEZONE,
+  ROMANIAN_BUSINESS_CALENDAR_SUPPORTED_YEARS,
+  ROMANIAN_BUSINESS_WORKING_WEEKDAYS,
+  formatDeadlineMode,
+  formatDeadlineUnresolvedReason,
+} from "./deadlines.js";
+export type {
+  BusinessCalendar,
+  BusinessHoliday,
+  DeadlineCalculationInput,
+  DeadlineCalculationMode,
+  DeadlineCalculationResult,
+  DeadlineExecutionRuleInput,
+  DeadlineMatchedRule,
+  DeadlineUnresolvedReason,
+  RomanianBusinessCalendarSupportedYear,
+} from "./deadlines.js";
+export {
   CLINIC_SORT_FIELDS,
   DOCTOR_SORT_FIELDS,
   SORT_DIRECTIONS,

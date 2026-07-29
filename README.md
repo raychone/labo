@@ -360,7 +360,7 @@ Backend endpoints:
 - `PUT /pricing/agreements/:id/rules`: replace agreement rules.
 - `POST /pricing/agreements/:id/archive`: archive an agreement.
 - `POST /pricing/agreements/:id/restore`: restore an agreement.
-- `POST /pricing/resolve-preview`: preview resolved price and execution rule without changing a work order.
+- `POST /pricing/resolve-preview`: preview resolved price and execution rule without changing a work order. When `startAt` is provided as an ISO date-time with timezone offset, the response also includes `deadlinePreview`.
 
 Permissions used:
 
@@ -383,7 +383,15 @@ Resolver order:
 3. applicable clinic agreement rule;
 4. standard company catalog price.
 
-Money is stored as integer minor units. Percentage adjustments are stored as basis points. Execution-time rules are linked to catalog items and are available for later deadline calculation, but deadline snapshots are deferred to `WORK-DEADLINES-001`.
+Money is stored as integer minor units. Percentage adjustments are stored as basis points. Execution-time rules are linked to catalog items and are available for deadline calculation.
+
+`WORK-DEADLINES-001A` adds deadline calculation infrastructure without changing WorkOrder persistence:
+
+- `DeadlinesModule` contains a Romanian business-day calendar, a pure execution-rule selector and `DeadlineEngineService`.
+- The deterministic MVP calendar covers 2026-2030, excludes weekends and Romanian legal holidays, and does not shift holidays to Monday.
+- The default operational due time is `17:00` in `Europe/Bucharest`; calculations use local calendar dates so DST does not change the intended local due hour.
+- `includeStartDay` is explicit. Manual rules return `MANUAL`; missing or ambiguous rules return `UNRESOLVED` with a controlled reason such as `NO_EXECUTION_RULE` or `AMBIGUOUS_EXECUTION_RULES`.
+- Deadline snapshots on work orders, alerts and correction audit remain deferred to `WORK-DEADLINES-001B`.
 
 The frontend route is:
 

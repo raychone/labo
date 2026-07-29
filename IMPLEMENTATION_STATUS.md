@@ -51,7 +51,8 @@
 ## WORKS
 
 - [x] WORKS-001 - Work order creation
-- [ ] WORK-DEADLINES-001 - Deadline rules from pricing and work complexity (NOT STARTED)
+- [x] WORK-DEADLINES-001A - Deadline engine and Romanian business-day calendar (COMPLETED)
+- [ ] WORK-DEADLINES-001B - Deadline persistence and workflow integration (APPROVED)
 - [ ] WORK-CYCLES-001 - Clinic return cycles and repeated handoffs (NOT STARTED)
 
 ## QR
@@ -187,19 +188,70 @@ NONE / AWAITING APPROVAL
 
 Status: AWAITING APPROVAL
 
-Started: 2026-07-29T07:39:38Z
+Started: 2026-07-29T09:02:14Z
 
-Completed: 2026-07-29T08:20:27Z
+Completed: 2026-07-29T09:17:10Z
 
-Last completed task: PRICING-002 - Company-specific pricing and agreements
+Last completed task: WORK-DEADLINES-001A - Deadline engine and Romanian business-day calendar
 
-Completed: 2026-07-29T08:20:27Z
+Completed: 2026-07-29T09:17:10Z
 
 ## Next Recommended Task
 
-WORK-DEADLINES-001 - APPROVED
+WORK-DEADLINES-001B - APPROVED
 
 ## Latest Completion Summary
+
+### WORK-DEADLINES-001A - Deadline engine and Romanian business-day calendar
+
+- Status: COMPLETED.
+- Started: 2026-07-29T09:02:14Z.
+- Completed: 2026-07-29T09:17:10Z.
+- Summary:
+  - Added a reusable backend `DeadlinesModule` with deterministic Romanian business-day calendar coverage for 2026-2030.
+  - Added pure execution-rule selection with controlled `MANUAL` and `UNRESOLVED` outcomes, including `AMBIGUOUS_EXECUTION_RULES`.
+  - Added `DeadlineEngineService` with explicit `includeStartDay`, default `17:00 Europe/Bucharest`, weekend/holiday exclusion and DST-safe local-date calculation.
+  - Extended `POST /pricing/resolve-preview` compatibly with optional `startAt` and `includeStartDay`; when absent, deadline preview remains `null`.
+  - Preserved existing pricing source/total behavior, RBAC/CSRF and no-internal-ID response shape.
+  - Did not modify Prisma schema, migrations, WorkOrder persistence, QR implementation, registry UI or `assets/`.
+- Files modified:
+  - `apps/api/src/modules/deadlines/*`
+  - `apps/api/src/modules/pricing/dto/pricing.dto.ts`
+  - `apps/api/src/modules/pricing/pricing-resolver.service.ts`
+  - `apps/api/src/modules/pricing/pricing.service.ts`
+  - `apps/api/src/modules/pricing/pricing.module.ts`
+  - `apps/api/src/modules/pricing/pricing.controller.test.ts`
+  - `packages/shared/src/deadlines.ts`
+  - `packages/shared/src/pricing.ts`
+  - `packages/shared/src/index.ts`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `REAL-LAB-WORKFLOW.md`
+  - `IMPLEMENTATION_STATUS.md`
+- Dependencies added:
+  - None.
+- Automated verification:
+  - `pnpm --filter @dental-lab/api prisma:validate` passed.
+  - `pnpm --filter @dental-lab/api prisma:generate` passed.
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed.
+  - `git diff --check` passed.
+- Manual verification:
+  - API smoke started on `http://localhost:3025` with `DEMO_MODE=true`.
+  - `GET /health` returned 200 with database `ok`.
+  - Demo manager login via `/auth/demo-login` returned 200 for `manager@demo.local`.
+  - `GET /pricing/catalog?pageSize=1` returned an active catalog item with execution rules.
+  - `POST /pricing/resolve-preview` with `startAt` returned `deadlinePreview.mode = CALCULATED`, `dueLocalDate = 2026-08-04`, `calculatedDueAt = 2026-08-04T14:00:00.000Z`.
+- Architecture decisions:
+  - API deadline types stay local to avoid pulling `packages/shared/src` into the API `rootDir`; shared types remain the public contract surface.
+  - Calendar holidays are versioned in code for deterministic local development and tests.
+  - 001A only previews deadlines; 001B owns persistence and visible work-order deadline states.
+- Technical debt introduced:
+  - None.
+- Remaining risks:
+  - Lint remains unconfigured.
+  - Calendar coverage intentionally ends at 2030 and returns `UNSUPPORTED_CALENDAR_YEAR` outside that range.
 
 ### PRICING-002 - Company-specific pricing and agreements
 
@@ -847,6 +899,10 @@ None.
 - Keep reusable TypeScript configuration in `packages/config`.
 - Resolve frontend workspace packages to source files in Vite and Vitest during development.
 - Keep the API independent from shared frontend contracts until real cross-package API contracts are introduced.
+- Keep API deadline implementation types local while exporting shared deadline response contracts from `packages/shared`.
+- Use a deterministic Romanian business-day calendar in code for 2026-2030; do not call external calendar services during deadline calculation.
+- Calculate deadlines by local calendar dates in `Europe/Bucharest` and convert only the final due date/time to ISO UTC.
+- Keep deadline preview side-effect free until `WORK-DEADLINES-001B` persists snapshots on work orders.
 - Use Docker Compose for local PostgreSQL development.
 - Use host port `55439` for local PostgreSQL to avoid common conflicts with existing local databases.
 - Validate backend runtime environment with Zod before starting the NestJS app.

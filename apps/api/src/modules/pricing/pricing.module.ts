@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 
 import { AuthModule } from "../auth/auth.module.js";
 import { DatabaseModule } from "../database/database.module.js";
+import { DeadlinesModule } from "../deadlines/deadlines.module.js";
 import { OrganizationContextModule } from "../organization-context/organization-context.module.js";
 import { RbacModule } from "../rbac/rbac.module.js";
 import { PricingController } from "./pricing.controller.js";
@@ -10,7 +11,7 @@ import { PricingService } from "./pricing.service.js";
 
 @Module({
   controllers: [PricingController],
-  imports: [AuthModule, DatabaseModule, OrganizationContextModule, RbacModule],
+  imports: [AuthModule, DatabaseModule, DeadlinesModule, OrganizationContextModule, RbacModule],
   providers: [PricingResolverService, PricingService],
   exports: [PricingResolverService],
 })

@@ -253,7 +253,7 @@ Each work must keep a financial snapshot:
 
 ## Deadlines
 
-Future task `WORK-DEADLINES-001` connects execution time to pricing.
+`WORK-DEADLINES-001A` adds the reusable calculation layer for execution deadlines. It does not persist a work deadline and does not change the operational claim flow.
 
 Managers configure execution time in the pricing page.
 
@@ -274,6 +274,23 @@ At first technical claim:
 5. the application sets `executionStartedAt`;
 6. the application sets `calculatedDueAt`;
 7. the UI displays the deadline alert.
+
+Implemented in `WORK-DEADLINES-001A`:
+
+- Romanian business-day calendar for 2026-2030, using fixed and Orthodox mobile legal holidays without Monday shifting.
+- Weekend exclusion with working weekdays `1-5` (`Monday-Friday`).
+- Explicit `includeStartDay` convention.
+- Default due time `17:00` in `Europe/Bucharest`, calculated by local calendar date so DST does not shift the intended local due hour.
+- Controlled modes: `CALCULATED`, `MANUAL`, `UNRESOLVED`.
+- Controlled unresolved reason `AMBIGUOUS_EXECUTION_RULES` when active matching rules are not uniquely resolved by priority.
+- Optional manager-only deadline preview through `POST /pricing/resolve-preview` when `startAt` is provided.
+
+Deferred to `WORK-DEADLINES-001B`:
+
+- WorkOrder deadline persistence.
+- First-claim deadline snapshot.
+- Deadline alerts and work registry filters.
+- Deadline correction audit.
 
 Required deadline colors:
 

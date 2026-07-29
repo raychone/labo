@@ -1,5 +1,5 @@
 import { Transform, Type } from "class-transformer";
-import { IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
+import { IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
 
 import { WORK_TYPE_UNITS } from "../../work-types/work-types.constants.js";
 import {
@@ -326,4 +326,13 @@ export class ResolvePreviewDto {
   @IsOptional()
   @IsISO8601({ strict: true })
   public readonly evaluationDate?: string;
+
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}T.+(?:Z|[+-]\d{2}:\d{2})$/)
+  public readonly startAt?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  public readonly includeStartDay?: boolean;
 }

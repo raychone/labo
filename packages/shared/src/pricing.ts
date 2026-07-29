@@ -1,4 +1,5 @@
 import type { WorkTypeUnit } from "./work-types.js";
+import type { DeadlineCalculationResult } from "./deadlines.js";
 import { formatMoneyMinor } from "./work-types.js";
 
 export const PRICING_CATEGORIES = [
@@ -167,7 +168,9 @@ export interface PricingResolvePreviewInput {
   readonly clinicId: string;
   readonly doctorId: string;
   readonly evaluationDate?: string | undefined;
+  readonly includeStartDay?: boolean | undefined;
   readonly quantity: number;
+  readonly startAt?: string | undefined;
   readonly workTypeId: string;
 }
 
@@ -180,6 +183,7 @@ export interface PricingResolvePreviewResult {
   };
   readonly appliedRuleScope: PricingRuleScope | null;
   readonly currency: string;
+  readonly deadlinePreview: DeadlineCalculationResult | null;
   readonly evaluationDate: string;
   readonly executionTimeRule: {
     readonly executionDays: number | null;

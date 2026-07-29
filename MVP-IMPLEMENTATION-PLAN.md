@@ -1722,19 +1722,33 @@ Aceste taskuri inlocuiesc ordinea veche dupa `SIGNATURES-001`. Detaliile complet
 - Securitate implementata: managerul are acces, receptia/logistica/tehnicienii/curierii nu primesc acces la `/pricing`; reception flow ramane fara preturi.
 - Verificari: prisma validate/generate/migrate, seed baza, demo seed idempotent, typecheck, test, build si smoke API/UI au trecut.
 
-### WORK-DEADLINES-001 - Deadline rules
+### WORK-DEADLINES-001A - Deadline engine and Romanian business-day calendar
 
-- Status: NOT STARTED.
-- Obiectiv: termene calculate din regulile de pret/lucrare.
-- Scope: reguli pe numar elemente/serviciu, snapshot la primul claim, alerte vizuale.
-- Non-goals: planificare calendaristica avansata, rute curier, penalitati.
-- Dependente: PRICING-002, TECH-CLAIM-001.
-- Acceptance criteria: primul claim seteaza execution start, due date si culoare derivata corect.
-- Backend: deadline resolver si snapshot.
+- Status: COMPLETED.
+- Obiectiv: infrastructura determinista pentru calculul termenelor din regulile de executie.
+- Scope: tipuri shared, calendar lucrator romanesc 2026-2030, selector reguli, engine pur, preview optional in `/pricing/resolve-preview`.
+- Non-goals: snapshot pe WorkOrder, modificari Prisma, UI registry lucrari, alerte vizuale, claim tehnician, planificare curier.
+- Dependente: PRICING-002, ORG-CONTEXT-001.
+- Acceptance criteria: weekendurile si sarbatorile RO sunt excluse, `includeStartDay` este explicit, ora default este 17:00 `Europe/Bucharest`, regulile manuale returneaza `MANUAL`, lipsa/ambiguitatea returneaza `UNRESOLVED`.
+- Backend: `DeadlinesModule` cu `BusinessCalendarService`, `DeadlineEngineService` si selector pur.
+- Frontend: fara schimbari de UI in 001A; preview-ul poate fi consumat ulterior.
+- Securitate: preview-ul pastreaza RBAC/CSRF manager-only al pricing si nu expune ID-uri interne de reguli.
+- Audit: fara audit nou, deoarece preview-ul nu persista date.
+- Testare: unit selector/calendar/engine, controller preview RBAC/CSRF, typecheck, test, build.
+
+### WORK-DEADLINES-001B - Deadline persistence and workflow integration
+
+- Status: APPROVED.
+- Obiectiv: persistenta snapshotului de deadline la momentul operational corect.
+- Scope: legarea engine-ului 001A de claim/workflow, salvare `executionStartedAt` si `calculatedDueAt`, status vizual derivat.
+- Non-goals: schimbarea regulilor financiare sau recalcularea istoricului fara aprobare.
+- Dependente: WORK-DEADLINES-001A, TECH-CLAIM-001 sau decizie echivalenta de integrare workflow.
+- Acceptance criteria: primul claim operational seteaza snapshotul de termen, iar corectiile sunt controlate si auditate.
+- Backend: persistenta deadline snapshot, validari, tranzactii.
 - Frontend: alerte si filtre deadline.
 - Securitate: date operationale fara preturi pentru non-manageri.
 - Audit: snapshot si corectii.
-- Testare: unit resolver, API integration, UI state tests.
+- Testare: integration workflow, UI state tests, regresii pricing.
 
 ### TECH-CLAIM-001 - Technician self-claim
 

@@ -33,6 +33,7 @@ export interface PricingResolution {
   readonly catalogItemId: string;
   readonly currency: string;
   readonly executionTimeRule: ExecutionTimeRule | null;
+  readonly executionTimeRules: readonly ExecutionTimeRule[];
   readonly explanation: string;
   readonly finalUnitPriceMinor: number;
   readonly legalEntityCode: string;
@@ -121,6 +122,7 @@ export class PricingResolverService {
       catalogItemId: catalogItem.id,
       currency: settings?.currency ?? "RON",
       executionTimeRule: executionRule,
+      executionTimeRules: catalogItem.executionTimeRules,
       explanation: createExplanation(source, applied?.rule.scope ?? null),
       finalUnitPriceMinor,
       legalEntityCode: input.legalEntityCode,
