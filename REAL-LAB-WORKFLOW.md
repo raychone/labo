@@ -307,6 +307,15 @@ Implemented in `TECH-CLAIM-001A`:
 - Explicit `NC`/`NG` execution company selection at claim/assignment time.
 - Append-only work assignment history and optimistic locking through `claimRevision`.
 
+Implemented in `TECH-CLAIM-001B`:
+
+- The first successful work claim or manager assignment creates a locked `WorkExecutionSnapshot` version `1`.
+- The snapshot captures execution company, original technician, claim revision/time, pricing source, pricing values in minor units, final deadline context and a small versioned execution context.
+- Pricing is resolved server-side through the canonical company pricing resolver: doctor agreement, clinic agreement, company catalog. Claims without an applicable price are refused.
+- Automatic deadline start is the claim timestamp and is recalculated once for the execution snapshot. Manual deadlines are preserved. Unresolved deadlines remain explicit and are not invented.
+- Release preserves the snapshot and clears only active responsibility. Reclaim and reassign must keep the fixed company; reassign changes only the current technician.
+- Financial snapshot fields are masked server-side for roles without pricing access.
+
 Deferred to later tasks:
 
 - Final `executionStartedAt`/deadline recalculation integration.

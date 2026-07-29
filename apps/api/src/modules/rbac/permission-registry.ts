@@ -57,6 +57,11 @@ export type PermissionKey =
   | "works.claim.assign"
   | "works.claim.reassign"
   | "works.claim.history.read"
+  | "works.execution_snapshot.read"
+  | "works.execution_snapshot.read_pricing"
+  | "works.execution_snapshot.read_deadline"
+  | "works.execution_snapshot.history.read"
+  | "works.execution_snapshot.create"
   | "scan.use"
   | "scan.resolve"
   | "workflow.read"
@@ -195,6 +200,11 @@ export const PERMISSION_REGISTRY = [
   definePermission("works.claim.assign", "Assign an unclaimed work order to a technician."),
   definePermission("works.claim.reassign", "Reassign a claimed work order to another technician."),
   definePermission("works.claim.history.read", "Read work assignment history."),
+  definePermission("works.execution_snapshot.read", "Read fixed execution context snapshots."),
+  definePermission("works.execution_snapshot.read_pricing", "Read financial execution snapshot fields."),
+  definePermission("works.execution_snapshot.read_deadline", "Read execution snapshot deadline fields."),
+  definePermission("works.execution_snapshot.history.read", "Read execution snapshot references in assignment history."),
+  definePermission("works.execution_snapshot.create", "Create execution snapshots through claim or manager assignment."),
   definePermission("scan.use", "Use operational QR scanner."),
   definePermission("scan.resolve", "Resolve operational QR scan context."),
   definePermission("workflow.read", "Read workflows."),
@@ -379,6 +389,9 @@ export const ROLE_PERMISSION_MATRIX = {
     "works.change_status": "ALL",
     "works.claim.history.read": "ALL",
     "works.deadline.read": "ALL",
+    "works.execution_snapshot.read": "ALL",
+    "works.execution_snapshot.read_deadline": "ALL",
+    "works.execution_snapshot.history.read": "ALL",
     "works.read_all": "ALL",
     "works.read_assigned": "ASSIGNED",
     "works.update": "ALL",
@@ -391,6 +404,8 @@ export const ROLE_PERMISSION_MATRIX = {
     "files.upload": "OWN_CLINIC",
     "works.read_assigned": "OWN_CLINIC",
     "works.deadline.read": "OWN_CLINIC",
+    "works.execution_snapshot.read": "OWN_CLINIC",
+    "works.execution_snapshot.read_deadline": "OWN_CLINIC",
   }),
   RECEPTIE: grants({
     "clinics.read": "ALL",
@@ -427,6 +442,9 @@ export const ROLE_PERMISSION_MATRIX = {
     "works.create": "ALL",
     "works.deadline.preview": "ALL",
     "works.deadline.read": "ALL",
+    "works.execution_snapshot.read": "ALL",
+    "works.execution_snapshot.read_deadline": "ALL",
+    "works.execution_snapshot.history.read": "ALL",
     "works.read_all": "ALL",
     "works.read_assigned": "ASSIGNED",
     "works.update": "ALL",
@@ -455,6 +473,10 @@ export const ROLE_PERMISSION_MATRIX = {
     "works.claim.release_own": "ASSIGNED",
     "works.change_status": "OWN_STAGE",
     "works.deadline.read": "OWN_STAGE",
+    "works.execution_snapshot.create": "ASSIGNED",
+    "works.execution_snapshot.read": "ASSIGNED",
+    "works.execution_snapshot.read_deadline": "ASSIGNED",
+    "works.execution_snapshot.history.read": "ASSIGNED",
     "works.read_assigned": "OWN_STAGE",
   }),
 } as const satisfies PermissionGrantMatrix;
@@ -551,6 +573,11 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "works.deadline.recalculate",
   "works.deadline.read",
   "works.deadline.set_manual",
+  "works.execution_snapshot.create",
+  "works.execution_snapshot.history.read",
+  "works.execution_snapshot.read",
+  "works.execution_snapshot.read_deadline",
+  "works.execution_snapshot.read_pricing",
   "works.update",
 ] as const satisfies readonly PermissionKey[];
 

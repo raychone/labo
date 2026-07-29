@@ -124,6 +124,12 @@
   align-items: center;
 }
 
+.technician-workbench__modal-note {
+  color: var(--dl-color-text-muted);
+  font-size: var(--dl-font-size-sm);
+  margin: 0 0 var(--dl-space-3);
+}
+
 @media (min-width: 720px) {
   .technician-workbench__summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));

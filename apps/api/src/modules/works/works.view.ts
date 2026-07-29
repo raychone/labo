@@ -87,6 +87,23 @@ export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
         displayName: true;
       };
     };
+    executionSnapshot: {
+      include: {
+        executionLegalEntity: {
+          select: {
+            code: true;
+            displayName: true;
+            id: true;
+          };
+        };
+        technician: {
+          select: {
+            displayName: true;
+            id: true;
+          };
+        };
+      };
+    };
     patient: true;
     logisticsState: {
       select: {
@@ -189,6 +206,7 @@ export interface WorkSummaryView {
   readonly requestedDeliveryDate: string;
   readonly status: string;
   readonly totalPriceMinor: number | null;
+  readonly executionSnapshot: ExecutionSnapshotView;
   readonly updatedAt: string;
   readonly workflow: ReturnType<typeof toWorkflowSummaryView>;
   readonly workType: {
@@ -223,6 +241,10 @@ export interface WorkAssignmentEventView {
   readonly previousTechnician: { readonly displayName: string; readonly publicId: string } | null;
   readonly reason: string | null;
   readonly revision: number;
+  readonly executionSnapshot: {
+    readonly status: string | null;
+    readonly version: number | null;
+  };
 }
 
 export interface WorkDeadlineView {
@@ -258,6 +280,43 @@ export interface WorkDetailView extends Omit<WorkSummaryView, "workflow"> {
   readonly version: number;
   readonly workflow: ReturnType<typeof toWorkflowExecutionView> | null;
   readonly workForm: WorkFormSubmissionView | null;
+}
+
+export interface ExecutionSnapshotSummaryView {
+  readonly createdAt: string | null;
+  readonly exists: boolean;
+  readonly legalEntity: { readonly code: string; readonly displayName: string; readonly publicId: string } | null;
+  readonly lockedAt: string | null;
+  readonly status: "INVALID" | "LOCKED" | "NOT_CREATED";
+  readonly version: number | null;
+}
+
+export interface ExecutionPricingSnapshotView {
+  readonly currency: string;
+  readonly explanation: string | null;
+  readonly quantity: number | string | null;
+  readonly sourceLabel: string | null;
+  readonly sourceType: string | null;
+  readonly totalMinor: number | null;
+  readonly unit: string | null;
+  readonly unitPriceMinor: number | null;
+}
+
+export interface ExecutionDeadlineSnapshotView {
+  readonly effectiveDueAt: string | null;
+  readonly executionDays: number | null;
+  readonly explanation: string | null;
+  readonly mode: string;
+  readonly startAt: string | null;
+  readonly timezone: string | null;
+}
+
+export interface ExecutionSnapshotView {
+  readonly currentTechnician: { readonly displayName: string; readonly publicId: string } | null;
+  readonly deadline: ExecutionDeadlineSnapshotView | null;
+  readonly originalTechnician: { readonly displayName: string; readonly publicId: string } | null;
+  readonly pricing: ExecutionPricingSnapshotView | null;
+  readonly summary: ExecutionSnapshotSummaryView;
 }
 
 export function createWorkClaimAccess(input: Partial<WorkClaimAccessViewInput> & { readonly userId: string }): WorkClaimAccessViewInput {
@@ -321,6 +380,7 @@ export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: bo
     requestedDeliveryDate: workOrder.requestedDeliveryDate.toISOString(),
     status: workOrder.status,
     totalPriceMinor: includePricing ? workOrder.totalPriceMinor : null,
+    executionSnapshot: toExecutionSnapshotView(workOrder, includePricing),
     updatedAt: workOrder.updatedAt.toISOString(),
     workflow: toWorkflowSummaryView(workOrder.workflowExecution),
     workType: {
@@ -374,6 +434,10 @@ export function toWorkAssignmentEventView(event: WorkOrderRecord["assignmentEven
     previousTechnician: event.previousTechnician ? { displayName: event.previousTechnician.displayName, publicId: event.previousTechnician.id } : null,
     reason: event.reason,
     revision: event.revision,
+    executionSnapshot: {
+      status: event.executionSnapshotStatus,
+      version: event.executionSnapshotVersion,
+    },
   };
 }
 
@@ -406,6 +470,79 @@ function toWorkDeadlineView(workOrder: WorkOrderRecord): WorkDeadlineView {
     tooltip: visual.tooltip,
     timezone: workOrder.deadlineTimezone,
   };
+}
+
+function toExecutionSnapshotView(workOrder: WorkOrderRecord, includePricing: boolean): ExecutionSnapshotView {
+  const snapshot = workOrder.executionSnapshot;
+
+  if (!snapshot) {
+    return {
+      currentTechnician: workOrder.assignedTechnician
+        ? { displayName: workOrder.assignedTechnician.displayName, publicId: workOrder.assignedTechnician.id }
+        : null,
+      deadline: null,
+      originalTechnician: null,
+      pricing: null,
+      summary: {
+        createdAt: null,
+        exists: false,
+        legalEntity: null,
+        lockedAt: null,
+        status: "NOT_CREATED",
+        version: null,
+      },
+    };
+  }
+
+  return {
+    currentTechnician: workOrder.assignedTechnician
+      ? { displayName: workOrder.assignedTechnician.displayName, publicId: workOrder.assignedTechnician.id }
+      : null,
+    deadline: {
+      effectiveDueAt: snapshot.deadlineEffectiveDueAt?.toISOString() ?? null,
+      executionDays: snapshot.deadlineExecutionDays,
+      explanation: snapshot.deadlineExplanation,
+      mode: snapshot.deadlineMode,
+      startAt: snapshot.deadlineStartAt?.toISOString() ?? null,
+      timezone: snapshot.deadlineTimezone,
+    },
+    originalTechnician: {
+      displayName: snapshot.technician.displayName,
+      publicId: snapshot.technician.id,
+    },
+    pricing: includePricing
+      ? {
+          currency: snapshot.pricingCurrency,
+          explanation: getPricingSnapshotExplanation(snapshot.pricingSnapshotJson),
+          quantity: snapshot.pricingQuantity?.toString() ?? null,
+          sourceLabel: snapshot.pricingSourceLabel,
+          sourceType: snapshot.pricingSourceType,
+          totalMinor: snapshot.pricingTotalMinor,
+          unit: snapshot.pricingUnit,
+          unitPriceMinor: snapshot.pricingUnitPriceMinor,
+        }
+      : null,
+    summary: {
+      createdAt: snapshot.snapshotCreatedAt.toISOString(),
+      exists: true,
+      legalEntity: {
+        code: snapshot.executionLegalEntity.code,
+        displayName: snapshot.executionLegalEntity.displayName,
+        publicId: snapshot.executionLegalEntity.id,
+      },
+      lockedAt: snapshot.snapshotLockedAt?.toISOString() ?? null,
+      status: snapshot.status,
+      version: snapshot.version,
+    },
+  };
+}
+
+function getPricingSnapshotExplanation(value: Prisma.JsonValue): string | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+  const explanation = value.explanation;
+  return typeof explanation === "string" ? explanation : null;
 }
 
 export function toWorkDetailView(workOrder: WorkOrderRecord, includePricing: boolean, access: WorkClaimAccessViewInput): WorkDetailView {

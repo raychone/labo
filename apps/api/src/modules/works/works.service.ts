@@ -8,6 +8,7 @@ import { PatientsService } from "../patients/patients.service.js";
 import { AuthorizationService } from "../rbac/authorization.service.js";
 import { DEFAULT_LABORATORY_SETTINGS, SETTINGS_SINGLETON_KEY } from "../settings/settings.constants.js";
 import { WorkQrTokenService } from "../qr/work-qr-token.service.js";
+import { PricingResolverService, type PricingResolution } from "../pricing/pricing-resolver.service.js";
 import { WorkFormSubmissionValidationService } from "../work-forms/work-form-submission-validation.service.js";
 import { WorkflowExecutionService } from "../workflow-execution/workflow-execution.service.js";
 import { WORK_ORDER_AUDIT_ACTIONS, WORK_ORDER_RESOURCE_TYPE } from "./works.constants.js";
@@ -24,6 +25,16 @@ import type {
   WorkDeadlinePreviewDto,
 } from "./dto/works.dto.js";
 import { deadlineDataToPrisma, WorkDeadlineService } from "./work-deadline.service.js";
+import type { WorkDeadlineData } from "./work-deadline.service.js";
+import {
+  EXECUTION_SNAPSHOT_VERSION,
+  buildDeadlineSnapshot,
+  buildExecutionContextSnapshot,
+  buildPricingSnapshot,
+  getPricingSourceLabel,
+  getPricingSourceType,
+  type ExecutionSnapshotSource,
+} from "./work-execution-snapshot.js";
 import { accumulateDeadlineDashboardSummary, createEmptyDeadlineDashboardSummary, isDeadlineInFilter } from "./work-deadline-visual.js";
 import { WorkOrderCodeService } from "./work-order-code.service.js";
 import {
@@ -50,6 +61,8 @@ interface PricingSnapshot {
   readonly currency: string;
   readonly totalPriceMinor: number;
 }
+
+type WorkDeadlinePrismaUpdate = ReturnType<typeof deadlineDataToPrisma>;
 
 type AuditClient = Pick<Prisma.TransactionClient, "auditLog"> | Pick<PrismaService, "auditLog">;
 
@@ -104,6 +117,23 @@ const WORK_ORDER_INCLUDE = {
     select: {
       code: true,
       displayName: true,
+    },
+  },
+  executionSnapshot: {
+    include: {
+      executionLegalEntity: {
+        select: {
+          code: true,
+          displayName: true,
+          id: true,
+        },
+      },
+      technician: {
+        select: {
+          displayName: true,
+          id: true,
+        },
+      },
     },
   },
   logisticsState: {
@@ -188,6 +218,7 @@ export class WorksService {
     @Inject(WorkFormSubmissionValidationService) private readonly workFormSubmissionValidationService: WorkFormSubmissionValidationService,
     @Inject(WorkflowExecutionService) private readonly workflowExecutionService: WorkflowExecutionService,
     @Inject(WorkDeadlineService) private readonly workDeadlineService: WorkDeadlineService,
+    @Inject(PricingResolverService) private readonly pricingResolverService: PricingResolverService,
   ) {}
 
   public async listWorks(actorUserId: string, query: ListWorksQueryDto, includePricing: boolean): Promise<PaginatedWorksView> {
@@ -324,6 +355,11 @@ export class WorksService {
       requiredScope: "ASSIGNED",
       userId: context.actorUserId,
     });
+    await this.authorizationService.requirePermission({
+      permission: "works.execution_snapshot.create",
+      requiredScope: "ASSIGNED",
+      userId: context.actorUserId,
+    });
     const legalEntity = await this.validateExecutionLegalEntity(this.prisma, dto.executionLegalEntityCode);
     const before = await this.findWorkOrderOrThrow(workOrderId);
     this.assertClaimRevision(before, dto.expectedClaimRevision);
@@ -331,11 +367,23 @@ export class WorksService {
 
     const nextRevision = before.claimRevision + 1;
     const after = await this.prisma.$transaction(async (tx) => {
+      const operationNow = new Date();
+      const snapshot = await this.prepareExecutionSnapshot(tx, {
+        actorUserId: context.actorUserId,
+        claimedAt: operationNow,
+        legalEntity,
+        nextClaimRevision: nextRevision,
+        requestMetadata: context.requestMetadata,
+        source: "TECHNICIAN_FIRST_CLAIM",
+        technicianId: context.actorUserId,
+        workOrder: before,
+      });
       const result = await tx.workOrder.updateMany({
         data: {
+          ...(snapshot.deadlineUpdate ?? {}),
           assignedTechnicianId: context.actorUserId,
-          assignmentUpdatedAt: new Date(),
-          claimedAt: new Date(),
+          assignmentUpdatedAt: operationNow,
+          claimedAt: operationNow,
           claimedByUserId: context.actorUserId,
           claimRevision: { increment: 1 },
           claimSource: "TECHNICIAN_CLAIM",
@@ -369,6 +417,8 @@ export class WorksService {
       await tx.workAssignmentEvent.create({
         data: {
           actorUserId: context.actorUserId,
+          executionSnapshotStatus: snapshot.status,
+          executionSnapshotVersion: snapshot.version,
           eventType: "CLAIMED",
           newLegalEntityId: legalEntity.id,
           newTechnicianId: context.actorUserId,
@@ -387,7 +437,30 @@ export class WorksService {
         requestMetadata: context.requestMetadata,
         resourceId: workOrderId,
       });
+      await this.recordSnapshotAudit(tx, {
+        action: snapshot.created ? WORK_ORDER_AUDIT_ACTIONS.executionSnapshotCreated : WORK_ORDER_AUDIT_ACTIONS.executionSnapshotReused,
+        actorUserId: context.actorUserId,
+        requestMetadata: context.requestMetadata,
+        resourceId: workOrderId,
+        snapshot,
+        workCode: before.code,
+      });
+      if (snapshot.created) {
+        await this.recordSnapshotAudit(tx, {
+          action: WORK_ORDER_AUDIT_ACTIONS.executionSnapshotLocked,
+          actorUserId: context.actorUserId,
+          requestMetadata: context.requestMetadata,
+          resourceId: workOrderId,
+          snapshot,
+          workCode: before.code,
+        });
+      }
       return updated;
+    }).catch((error: unknown) => {
+      if (isPrismaErrorCode(error, "P2002")) {
+        throw new ConflictException("Contextul de execuție al lucrării a fost deja stabilit.");
+      }
+      throw error;
     });
 
     return toWorkDetailView(after, false, await this.createClaimAccess(context.actorUserId));
@@ -444,6 +517,8 @@ export class WorksService {
       await tx.workAssignmentEvent.create({
         data: {
           actorUserId: context.actorUserId,
+          executionSnapshotStatus: before.executionSnapshot?.status ?? null,
+          executionSnapshotVersion: before.executionSnapshot?.version ?? null,
           eventType: "RELEASED",
           previousLegalEntityId: before.executionLegalEntityId,
           previousTechnicianId: before.assignedTechnicianId,
@@ -464,6 +539,11 @@ export class WorksService {
         resourceId: workOrderId,
       });
       return updated;
+    }).catch((error: unknown) => {
+      if (isPrismaErrorCode(error, "P2002")) {
+        throw new ConflictException("Contextul de execuție al lucrării a fost deja stabilit.");
+      }
+      throw error;
     });
 
     return toWorkDetailView(after, false, await this.createClaimAccess(context.actorUserId));
@@ -478,6 +558,11 @@ export class WorksService {
       requiredScope: "ALL",
       userId: context.actorUserId,
     });
+    await this.authorizationService.requirePermission({
+      permission: "works.execution_snapshot.create",
+      requiredScope: "ALL",
+      userId: context.actorUserId,
+    });
     const [legalEntity] = await Promise.all([
       this.validateExecutionLegalEntity(this.prisma, dto.executionLegalEntityCode),
       this.validateClaimTechnician(dto.technicianId),
@@ -489,11 +574,23 @@ export class WorksService {
     const nextRevision = before.claimRevision + 1;
     const eventType = before.claimStatus === "CLAIMED" ? "REASSIGNED" : "ASSIGNED";
     const after = await this.prisma.$transaction(async (tx) => {
+      const operationNow = new Date();
+      const snapshot = await this.prepareExecutionSnapshot(tx, {
+        actorUserId: context.actorUserId,
+        claimedAt: before.claimedAt ?? operationNow,
+        legalEntity,
+        nextClaimRevision: nextRevision,
+        requestMetadata: context.requestMetadata,
+        source: "MANAGER_ASSIGNMENT",
+        technicianId: dto.technicianId,
+        workOrder: before,
+      });
       const result = await tx.workOrder.updateMany({
         data: {
+          ...(snapshot.deadlineUpdate ?? {}),
           assignedTechnicianId: dto.technicianId,
-          assignmentUpdatedAt: new Date(),
-          claimedAt: before.claimedAt ?? new Date(),
+          assignmentUpdatedAt: operationNow,
+          claimedAt: before.claimedAt ?? operationNow,
           claimedByUserId: before.claimedByUserId ?? context.actorUserId,
           claimRevision: { increment: 1 },
           claimSource: before.claimStatus === "CLAIMED" ? "MANAGER_REASSIGNMENT" : "MANAGER_ASSIGNMENT",
@@ -516,6 +613,8 @@ export class WorksService {
       await tx.workAssignmentEvent.create({
         data: {
           actorUserId: context.actorUserId,
+          executionSnapshotStatus: snapshot.status,
+          executionSnapshotVersion: snapshot.version,
           eventType,
           newLegalEntityId: legalEntity.id,
           newTechnicianId: dto.technicianId,
@@ -537,6 +636,24 @@ export class WorksService {
         requestMetadata: context.requestMetadata,
         resourceId: workOrderId,
       });
+      await this.recordSnapshotAudit(tx, {
+        action: snapshot.created ? WORK_ORDER_AUDIT_ACTIONS.executionSnapshotCreated : WORK_ORDER_AUDIT_ACTIONS.executionSnapshotReused,
+        actorUserId: context.actorUserId,
+        requestMetadata: context.requestMetadata,
+        resourceId: workOrderId,
+        snapshot,
+        workCode: before.code,
+      });
+      if (snapshot.created) {
+        await this.recordSnapshotAudit(tx, {
+          action: WORK_ORDER_AUDIT_ACTIONS.executionSnapshotLocked,
+          actorUserId: context.actorUserId,
+          requestMetadata: context.requestMetadata,
+          resourceId: workOrderId,
+          snapshot,
+          workCode: before.code,
+        });
+      }
       return updated;
     });
 
@@ -1180,6 +1297,308 @@ export class WorksService {
     };
   }
 
+  private async prepareExecutionSnapshot(
+    tx: Prisma.TransactionClient,
+    input: {
+      readonly actorUserId: string;
+      readonly claimedAt: Date;
+      readonly legalEntity: { readonly code: "NC" | "NG"; readonly displayName: string; readonly id: string };
+      readonly nextClaimRevision: number;
+      readonly requestMetadata: RequestMetadata;
+      readonly source: ExecutionSnapshotSource;
+      readonly technicianId: string;
+      readonly workOrder: WorkOrderRecord;
+    },
+  ): Promise<{
+    readonly created: boolean;
+    readonly deadlineMode: string | null;
+    readonly deadlineUpdate: WorkDeadlinePrismaUpdate | null;
+    readonly legalEntityCode: string;
+    readonly pricingCurrency: string | null;
+    readonly pricingSourceLabel: string | null;
+    readonly pricingSourceType: string | null;
+    readonly pricingTotalMinor: number | null;
+    readonly pricingUnitPriceMinor: number | null;
+    readonly status: "INVALID" | "LOCKED" | "NOT_CREATED";
+    readonly version: number | null;
+  }> {
+    const existingSnapshot = input.workOrder.executionSnapshot;
+    if (existingSnapshot) {
+      if (existingSnapshot.executionLegalEntityCode !== input.legalEntity.code) {
+        await this.recordAudit(tx, {
+          action: WORK_ORDER_AUDIT_ACTIONS.executionSnapshotEntityMismatchRejected,
+          actorUserId: input.actorUserId,
+          metadata: {
+            attemptedLegalEntityCode: input.legalEntity.code,
+            fixedLegalEntityCode: existingSnapshot.executionLegalEntityCode,
+            snapshotVersion: existingSnapshot.version,
+            workCode: input.workOrder.code,
+          },
+          requestMetadata: input.requestMetadata,
+          resourceId: input.workOrder.id,
+        });
+        throw new ConflictException("Lucrarea are deja firma de execuție fixată și nu poate fi mutată prin claim.");
+      }
+
+      return {
+        created: false,
+        deadlineMode: existingSnapshot.deadlineMode,
+        deadlineUpdate: null,
+        legalEntityCode: existingSnapshot.executionLegalEntityCode,
+        pricingCurrency: existingSnapshot.pricingCurrency,
+        pricingSourceLabel: existingSnapshot.pricingSourceLabel,
+        pricingSourceType: existingSnapshot.pricingSourceType,
+        pricingTotalMinor: existingSnapshot.pricingTotalMinor,
+        pricingUnitPriceMinor: existingSnapshot.pricingUnitPriceMinor,
+        status: existingSnapshot.status,
+        version: existingSnapshot.version,
+      };
+    }
+
+    const technician = await tx.user.findUnique({
+      select: {
+        displayName: true,
+        id: true,
+      },
+      where: {
+        id: input.technicianId,
+      },
+    });
+    if (!technician) {
+      throw new BadRequestException("Tehnicianul selectat nu este activ.");
+    }
+
+    const pricing = await this.resolveExecutionPricing(tx, input);
+    const deadline = await this.resolveExecutionDeadline(tx, input);
+    const deadlineUpdate = deadlineDataToPrisma(deadline, input.workOrder.deadlineRevision + 1);
+    const pricingSnapshot = buildPricingSnapshot(pricing, input.workOrder.workType.unit, input.claimedAt);
+    const deadlineSnapshot = buildDeadlineSnapshot(deadline, input.claimedAt);
+    const contextSnapshot = buildExecutionContextSnapshot({
+      claim: {
+        claimedAt: input.claimedAt,
+        revision: input.nextClaimRevision,
+        source: input.source,
+      },
+      legalEntity: {
+        code: input.legalEntity.code as "NC" | "NG",
+        displayName: input.legalEntity.displayName,
+        publicId: input.legalEntity.id,
+      },
+      technician: {
+        displayName: technician.displayName,
+        publicId: technician.id,
+      },
+      work: {
+        clinicName: input.workOrder.clinic.name,
+        clinicPublicId: input.workOrder.clinic.id,
+        doctorName: input.workOrder.doctor.displayName,
+        doctorPublicId: input.workOrder.doctor.id,
+        quantity: input.workOrder.quantity,
+        workCode: input.workOrder.code,
+        workTypeCode: input.workOrder.workType.code,
+        workTypeName: input.workOrder.workType.name,
+        workTypePublicId: input.workOrder.workType.id,
+      },
+    });
+
+    await tx.workExecutionSnapshot.create({
+      data: {
+        claimRevision: input.nextClaimRevision,
+        claimedAt: input.claimedAt,
+        contextSnapshotJson: contextSnapshot,
+        createdByUserId: input.actorUserId,
+        deadlineEffectiveDueAt: deadline.effectiveDueAt,
+        deadlineExecutionDays: deadline.deadlineExecutionDays,
+        deadlineExplanation: deadline.deadlineExplanation,
+        deadlineDueHour: deadline.deadlineDueHour,
+        deadlineIncludeStartDay: deadline.deadlineIncludeStartDay,
+        deadlineMode: deadline.deadlineMode,
+        deadlineReasonCode: deadline.deadlineReasonCode,
+        deadlineRuleVersion: EXECUTION_SNAPSHOT_VERSION,
+        deadlineSnapshotJson: deadlineSnapshot,
+        deadlineStartAt: deadline.deadlineStartAt,
+        deadlineTimezone: deadline.deadlineTimezone,
+        executionLegalEntityCode: input.legalEntity.code,
+        executionLegalEntityId: input.legalEntity.id,
+        pricingAgreementId: pricing.appliedAgreementId,
+        pricingCatalogItemId: pricing.catalogItemId,
+        pricingCurrency: pricing.currency,
+        pricingQuantity: pricing.quantity.toString(),
+        pricingRuleVersion: EXECUTION_SNAPSHOT_VERSION,
+        pricingSnapshotJson: pricingSnapshot,
+        pricingSourceLabel: getPricingSourceLabel(pricing),
+        pricingSourceType: getPricingSourceType(pricing),
+        pricingTotalMinor: pricing.totalPriceMinor,
+        pricingUnit: input.workOrder.workType.unit,
+        pricingUnitPriceMinor: pricing.finalUnitPriceMinor,
+        snapshotCreatedAt: input.claimedAt,
+        snapshotLockedAt: input.claimedAt,
+        source: input.source,
+        status: "LOCKED",
+        technicianDisplayName: technician.displayName,
+        technicianId: technician.id,
+        version: EXECUTION_SNAPSHOT_VERSION,
+        workOrderId: input.workOrder.id,
+      },
+    });
+
+    if (deadline.deadlineMode === "UNRESOLVED") {
+      await this.recordAudit(tx, {
+        action: WORK_ORDER_AUDIT_ACTIONS.executionSnapshotDeadlineUnresolved,
+        actorUserId: input.actorUserId,
+        metadata: {
+          legalEntityCode: input.legalEntity.code,
+          reasonCode: deadline.deadlineReasonCode,
+          snapshotVersion: EXECUTION_SNAPSHOT_VERSION,
+          workCode: input.workOrder.code,
+        },
+        requestMetadata: input.requestMetadata,
+        resourceId: input.workOrder.id,
+      });
+    }
+
+    return {
+      created: true,
+      deadlineMode: deadline.deadlineMode,
+      deadlineUpdate,
+      legalEntityCode: input.legalEntity.code,
+      pricingCurrency: pricing.currency,
+      pricingSourceLabel: getPricingSourceLabel(pricing),
+      pricingSourceType: getPricingSourceType(pricing),
+      pricingTotalMinor: pricing.totalPriceMinor,
+      pricingUnitPriceMinor: pricing.finalUnitPriceMinor,
+      status: "LOCKED",
+      version: EXECUTION_SNAPSHOT_VERSION,
+    };
+  }
+
+  private async resolveExecutionPricing(
+    tx: Prisma.TransactionClient,
+    input: {
+      readonly actorUserId: string;
+      readonly claimedAt: Date;
+      readonly legalEntity: { readonly code: "NC" | "NG"; readonly id: string };
+      readonly requestMetadata: RequestMetadata;
+      readonly workOrder: WorkOrderRecord;
+    },
+  ): Promise<PricingResolution> {
+    try {
+      return await this.pricingResolverService.resolve({
+        clinicId: input.workOrder.clinicId,
+        doctorId: input.workOrder.doctorId,
+        evaluationDate: input.claimedAt,
+        legalEntityCode: input.legalEntity.code,
+        legalEntityId: input.legalEntity.id,
+        quantity: input.workOrder.quantity,
+        workTypeId: input.workOrder.workTypeId,
+      }, tx);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        await this.recordAudit(tx, {
+          action: WORK_ORDER_AUDIT_ACTIONS.executionSnapshotPricingUnresolved,
+          actorUserId: input.actorUserId,
+          metadata: {
+            legalEntityCode: input.legalEntity.code,
+            workCode: input.workOrder.code,
+            workTypeId: input.workOrder.workTypeId,
+          },
+          requestMetadata: input.requestMetadata,
+          resourceId: input.workOrder.id,
+        });
+        throw new ConflictException("Lucrarea nu poate fi preluată deoarece nu există un preț aplicabil pentru firma selectată.");
+      }
+
+      throw error;
+    }
+  }
+
+  private async resolveExecutionDeadline(
+    tx: Prisma.TransactionClient,
+    input: {
+      readonly claimedAt: Date;
+      readonly legalEntity: { readonly code: "NC" | "NG"; readonly displayName: string; readonly id: string };
+      readonly workOrder: WorkOrderRecord;
+    },
+  ): Promise<WorkDeadlineData> {
+    if (input.workOrder.deadlineMode === "MANUAL" && input.workOrder.effectiveDueAt) {
+      return this.createDeadlineDataFromExistingManualWork(input.workOrder, input.claimedAt);
+    }
+
+    return this.workDeadlineService.resolveForWork({
+      client: tx,
+      clinicId: input.workOrder.clinicId,
+      doctorId: input.workOrder.doctorId,
+      includeStartDay: input.workOrder.deadlineIncludeStartDay ?? false,
+      legalEntity: input.legalEntity,
+      now: input.claimedAt,
+      quantity: input.workOrder.quantity,
+      source: "FUTURE_TECH_CLAIM",
+      startAt: input.claimedAt,
+      workTypeId: input.workOrder.workTypeId,
+    });
+  }
+
+  private createDeadlineDataFromExistingManualWork(workOrder: WorkOrderRecord, claimedAt: Date): WorkDeadlineData {
+    return {
+      calculatedDueAt: workOrder.calculatedDueAt,
+      deadlineCalculatedAt: workOrder.deadlineCalculatedAt ?? claimedAt,
+      deadlineDueHour: workOrder.deadlineDueHour ?? 17,
+      deadlineDueMinute: workOrder.deadlineDueMinute ?? 0,
+      deadlineExecutionDays: workOrder.deadlineExecutionDays,
+      deadlineExplanation: workOrder.deadlineExplanation ?? "Termen manual păstrat la preluarea lucrării.",
+      deadlineIncludeStartDay: workOrder.deadlineIncludeStartDay ?? false,
+      deadlineLockedAt: workOrder.deadlineLockedAt ?? claimedAt,
+      deadlineLockedReason: workOrder.deadlineLockedReason ?? "Termen manual păstrat în snapshotul de execuție.",
+      deadlineMode: "MANUAL",
+      deadlineReasonCode: workOrder.deadlineReasonCode,
+      deadlineRuleSnapshot: (workOrder.deadlineRuleSnapshot ?? { version: 1, sourceType: "MANUAL" }) as Prisma.InputJsonObject,
+      deadlineSource: "MANUAL_OVERRIDE",
+      deadlineStartAt: workOrder.deadlineStartAt ?? claimedAt,
+      deadlineTimezone: workOrder.deadlineTimezone ?? "Europe/Bucharest",
+      effectiveDueAt: workOrder.effectiveDueAt,
+      manualDueAt: workOrder.manualDueAt ?? workOrder.effectiveDueAt,
+    };
+  }
+
+  private async recordSnapshotAudit(
+    client: AuditClient,
+    input: {
+      readonly action: string;
+      readonly actorUserId: string;
+      readonly requestMetadata: RequestMetadata;
+      readonly resourceId: string;
+      readonly snapshot: {
+        readonly deadlineMode: string | null;
+        readonly legalEntityCode: string;
+        readonly pricingCurrency: string | null;
+        readonly pricingSourceLabel: string | null;
+        readonly pricingSourceType: string | null;
+        readonly pricingTotalMinor: number | null;
+        readonly pricingUnitPriceMinor: number | null;
+        readonly version: number | null;
+      };
+      readonly workCode: string;
+    },
+  ): Promise<void> {
+    await this.recordAudit(client, {
+      action: input.action,
+      actorUserId: input.actorUserId,
+      metadata: {
+        deadlineMode: input.snapshot.deadlineMode,
+        legalEntityCode: input.snapshot.legalEntityCode,
+        pricingCurrency: input.snapshot.pricingCurrency,
+        pricingSourceLabel: input.snapshot.pricingSourceLabel,
+        pricingSourceType: input.snapshot.pricingSourceType,
+        pricingTotalMinor: input.snapshot.pricingTotalMinor,
+        pricingUnitPriceMinor: input.snapshot.pricingUnitPriceMinor,
+        snapshotVersion: input.snapshot.version,
+        workCode: input.workCode,
+      },
+      requestMetadata: input.requestMetadata,
+      resourceId: input.resourceId,
+    });
+  }
+
   private async createClaimAccess(userId: string): Promise<WorkClaimAccessViewInput> {
     const [canClaim, canReleaseOwn, canReleaseAny, canReassign] = await Promise.all([
       this.authorizationService.hasPermission({ permission: "works.claim.create", requiredScope: "ASSIGNED", userId }),
@@ -1219,7 +1638,7 @@ export class WorksService {
   private async validateExecutionLegalEntity(
     client: Prisma.TransactionClient | PrismaService,
     legalEntityCode: "NC" | "NG",
-  ): Promise<{ readonly id: string; readonly code: string; readonly displayName: string }> {
+  ): Promise<{ readonly id: string; readonly code: "NC" | "NG"; readonly displayName: string }> {
     const legalEntity = await client.legalEntity.findUnique({
       select: {
         code: true,
@@ -1236,7 +1655,11 @@ export class WorksService {
       throw new BadRequestException("Alege o companie activă NC sau NG pentru execuție.");
     }
 
-    return legalEntity;
+    return {
+      code: legalEntity.code,
+      displayName: legalEntity.displayName,
+      id: legalEntity.id,
+    };
   }
 
   private async validateClaimTechnician(userId: string): Promise<void> {
@@ -1356,6 +1779,10 @@ function isDtoFieldChanged(before: WorkOrderRecord, dto: UpdateWorkDto, field: (
   }
 
   return before[field] !== value;
+}
+
+function isPrismaErrorCode(error: unknown, code: string): boolean {
+  return typeof error === "object" && error !== null && "code" in error && (error as { readonly code?: unknown }).code === code;
 }
 
 function isCompletedOnTimeInWindow(workOrder: WorkOrderRecord, windowStart: Date): boolean {

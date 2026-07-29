@@ -317,10 +317,10 @@ export function TechnicianWorkbenchPage(): ReactNode {
               workOrderId: claimTarget.id,
             }, {
               onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost revendicată", variant: "error" }),
-              onSuccess: (work) => {
+              onSuccess: () => {
                 setClaimTarget(null);
                 setTab("MINE");
-                toast.showToast({ message: `${work.code} este acum în responsabilitatea ta.`, variant: "success" });
+                toast.showToast({ message: "Lucrarea a fost preluată, iar contextul de execuție a fost fixat.", variant: "success" });
               },
             });
           }}
@@ -414,6 +414,7 @@ function ClaimList({
             <span>Termen: {formatDate(work.deadline.effectiveDueAt ?? work.requestedDeliveryDate)}</span>
             <span>Responsabil: {work.claim.technician?.displayName ?? "Nerevendicată"}</span>
             <span>Companie execuție: {work.claim.executionLegalEntity?.code ?? "Neselectată"}</span>
+            <span>Context execuție: {work.executionSnapshot.summary.exists ? "Fixat" : "Nefixat"}</span>
             <span>Revizie responsabilitate: {work.claim.revision}</span>
           </div>
           <div className="technician-workbench__actions">
@@ -445,12 +446,13 @@ function ClaimWorkModal({
   readonly work: WorkSummary | null;
 }): ReactNode {
   const [selectedCode, setSelectedCode] = useState<LegalEntityCode>("NC");
+  const fixedCode = work?.executionSnapshot.summary.legalEntity?.code ?? null;
 
   useEffect(() => {
     if (isOpen) {
-      setSelectedCode(legalEntityCodes[0] ?? "NC");
+      setSelectedCode(fixedCode ?? legalEntityCodes[0] ?? "NC");
     }
-  }, [isOpen, legalEntityCodes]);
+  }, [fixedCode, isOpen, legalEntityCodes]);
 
   return (
     <Modal
@@ -460,6 +462,11 @@ function ClaimWorkModal({
       onOpenChange={onOpenChange}
       title="Revendică lucrare"
     >
+      <p className="technician-workbench__modal-note">
+        {fixedCode
+          ? "Firma a fost deja stabilită la prima preluare."
+          : "Prin preluare, firma și termenul de execuție vor fi fixate pentru această lucrare."}
+      </p>
       <RadioGroup
         label="Companie de execuție"
         name="executionLegalEntityCode"
@@ -474,6 +481,7 @@ function ClaimWorkModal({
           value: code,
         }))}
         required
+        disabled={fixedCode !== null}
         value={selectedCode}
       />
     </Modal>
@@ -509,6 +517,9 @@ function ReleaseWorkModal({
       onOpenChange={onOpenChange}
       title="Eliberează responsabilitatea"
     >
+      <p className="technician-workbench__modal-note">
+        Eliberarea lucrării nu va modifica firma, prețul sau termenul deja fixate.
+      </p>
       <Textarea label="Motiv" onChange={(event) => setReason(event.target.value)} required rows={4} value={reason} />
     </Modal>
   );

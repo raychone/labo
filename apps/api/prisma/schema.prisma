@@ -39,6 +39,8 @@ model User {
   assignedClaimedWorkOrders           WorkOrder[]                @relation("WorkOrderAssignedTechnician")
   claimedWorkOrders                   WorkOrder[]                @relation("WorkOrderClaimedBy")
   releasedWorkOrders                  WorkOrder[]                @relation("WorkOrderReleasedBy")
+  originalExecutionSnapshots          WorkExecutionSnapshot[]    @relation("WorkExecutionSnapshotOriginalTechnician")
+  createdExecutionSnapshots           WorkExecutionSnapshot[]    @relation("WorkExecutionSnapshotCreatedBy")
   actorWorkAssignmentEvents           WorkAssignmentEvent[]      @relation("WorkAssignmentEventActor")
   previousWorkAssignmentEvents        WorkAssignmentEvent[]      @relation("WorkAssignmentEventPreviousTechnician")
   newWorkAssignmentEvents             WorkAssignmentEvent[]      @relation("WorkAssignmentEventNewTechnician")
@@ -128,20 +130,21 @@ model LaboratorySettings {
 }
 
 model LegalEntity {
-  id                           String                @id @default(cuid())
-  code                         String                @unique @db.VarChar(8)
-  displayName                  String                @map("display_name") @db.VarChar(120)
-  isActive                     Boolean               @default(true) @map("is_active")
-  sortOrder                    Int                   @default(0) @map("sort_order")
-  createdAt                    DateTime              @default(now()) @map("created_at")
-  updatedAt                    DateTime              @updatedAt @map("updated_at")
-  sessions                     Session[]             @relation("SessionActiveLegalEntity")
+  id                           String                  @id @default(cuid())
+  code                         String                  @unique @db.VarChar(8)
+  displayName                  String                  @map("display_name") @db.VarChar(120)
+  isActive                     Boolean                 @default(true) @map("is_active")
+  sortOrder                    Int                     @default(0) @map("sort_order")
+  createdAt                    DateTime                @default(now()) @map("created_at")
+  updatedAt                    DateTime                @updatedAt @map("updated_at")
+  sessions                     Session[]               @relation("SessionActiveLegalEntity")
   settings                     LegalEntitySettings?
   priceCatalogItems            PriceCatalogItem[]
   pricingAgreements            PricingAgreement[]
-  executionWorkOrders          WorkOrder[]           @relation("WorkOrderExecutionLegalEntity")
-  previousWorkAssignmentEvents WorkAssignmentEvent[] @relation("WorkAssignmentEventPreviousLegalEntity")
-  newWorkAssignmentEvents      WorkAssignmentEvent[] @relation("WorkAssignmentEventNewLegalEntity")
+  executionWorkOrders          WorkOrder[]             @relation("WorkOrderExecutionLegalEntity")
+  executionSnapshots           WorkExecutionSnapshot[]
+  previousWorkAssignmentEvents WorkAssignmentEvent[]   @relation("WorkAssignmentEventPreviousLegalEntity")
+  newWorkAssignmentEvents      WorkAssignmentEvent[]   @relation("WorkAssignmentEventNewLegalEntity")
 
   @@index([isActive, sortOrder, code])
   @@map("legal_entities")
@@ -708,6 +711,7 @@ model WorkOrder {
   logisticsEvents          LogisticsEvent[]
   deliveryPreparationItems DeliveryPreparationItem[]
   assignmentEvents         WorkAssignmentEvent[]
+  executionSnapshot        WorkExecutionSnapshot?
 
   @@index([clinicId])
   @@index([doctorId])
@@ -734,23 +738,25 @@ model WorkOrder {
 }
 
 model WorkAssignmentEvent {
-  id                    String                  @id @default(cuid())
-  workOrderId           String                  @map("work_order_id")
-  eventType             WorkAssignmentEventType @map("event_type")
-  previousTechnicianId  String?                 @map("previous_technician_id")
-  newTechnicianId       String?                 @map("new_technician_id")
-  previousLegalEntityId String?                 @map("previous_legal_entity_id")
-  newLegalEntityId      String?                 @map("new_legal_entity_id")
-  actorUserId           String                  @map("actor_user_id")
-  reason                String?                 @db.VarChar(500)
-  revision              Int
-  createdAt             DateTime                @default(now()) @map("created_at")
-  workOrder             WorkOrder               @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
-  previousTechnician    User?                   @relation("WorkAssignmentEventPreviousTechnician", fields: [previousTechnicianId], references: [id], onDelete: SetNull)
-  newTechnician         User?                   @relation("WorkAssignmentEventNewTechnician", fields: [newTechnicianId], references: [id], onDelete: SetNull)
-  previousLegalEntity   LegalEntity?            @relation("WorkAssignmentEventPreviousLegalEntity", fields: [previousLegalEntityId], references: [id], onDelete: SetNull)
-  newLegalEntity        LegalEntity?            @relation("WorkAssignmentEventNewLegalEntity", fields: [newLegalEntityId], references: [id], onDelete: SetNull)
-  actor                 User                    @relation("WorkAssignmentEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  id                       String                   @id @default(cuid())
+  workOrderId              String                   @map("work_order_id")
+  eventType                WorkAssignmentEventType  @map("event_type")
+  previousTechnicianId     String?                  @map("previous_technician_id")
+  newTechnicianId          String?                  @map("new_technician_id")
+  previousLegalEntityId    String?                  @map("previous_legal_entity_id")
+  newLegalEntityId         String?                  @map("new_legal_entity_id")
+  actorUserId              String                   @map("actor_user_id")
+  reason                   String?                  @db.VarChar(500)
+  revision                 Int
+  executionSnapshotVersion Int?                     @map("execution_snapshot_version")
+  executionSnapshotStatus  ExecutionSnapshotStatus? @map("execution_snapshot_status")
+  createdAt                DateTime                 @default(now()) @map("created_at")
+  workOrder                WorkOrder                @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  previousTechnician       User?                    @relation("WorkAssignmentEventPreviousTechnician", fields: [previousTechnicianId], references: [id], onDelete: SetNull)
+  newTechnician            User?                    @relation("WorkAssignmentEventNewTechnician", fields: [newTechnicianId], references: [id], onDelete: SetNull)
+  previousLegalEntity      LegalEntity?             @relation("WorkAssignmentEventPreviousLegalEntity", fields: [previousLegalEntityId], references: [id], onDelete: SetNull)
+  newLegalEntity           LegalEntity?             @relation("WorkAssignmentEventNewLegalEntity", fields: [newLegalEntityId], references: [id], onDelete: SetNull)
+  actor                    User                     @relation("WorkAssignmentEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@index([workOrderId, createdAt])
   @@index([actorUserId, createdAt])
@@ -759,6 +765,57 @@ model WorkAssignmentEvent {
   @@index([previousLegalEntityId])
   @@index([newLegalEntityId])
   @@map("work_assignment_events")
+}
+
+model WorkExecutionSnapshot {
+  id                       String                  @id @default(cuid())
+  workOrderId              String                  @unique @map("work_order_id")
+  version                  Int                     @default(1)
+  status                   ExecutionSnapshotStatus
+  source                   ExecutionSnapshotSource
+  executionLegalEntityId   String                  @map("execution_legal_entity_id")
+  executionLegalEntityCode String                  @map("execution_legal_entity_code") @db.VarChar(8)
+  technicianId             String                  @map("technician_id")
+  technicianDisplayName    String                  @map("technician_display_name") @db.VarChar(160)
+  claimRevision            Int                     @map("claim_revision")
+  claimedAt                DateTime                @map("claimed_at")
+  snapshotCreatedAt        DateTime                @default(now()) @map("snapshot_created_at")
+  snapshotLockedAt         DateTime?               @map("snapshot_locked_at")
+  pricingCurrency          String                  @map("pricing_currency") @db.Char(3)
+  pricingUnit              String?                 @map("pricing_unit") @db.VarChar(40)
+  pricingQuantity          Decimal?                @map("pricing_quantity") @db.Decimal(12, 3)
+  pricingUnitPriceMinor    Int?                    @map("pricing_unit_price_minor")
+  pricingTotalMinor        Int?                    @map("pricing_total_minor")
+  pricingSourceType        String?                 @map("pricing_source_type") @db.VarChar(40)
+  pricingSourceLabel       String?                 @map("pricing_source_label") @db.VarChar(160)
+  pricingAgreementId       String?                 @map("pricing_agreement_id")
+  pricingCatalogItemId     String?                 @map("pricing_catalog_item_id")
+  pricingRuleVersion       Int?                    @map("pricing_rule_version")
+  pricingSnapshotJson      Json                    @map("pricing_snapshot_json")
+  deadlineMode             String                  @map("deadline_mode") @db.VarChar(40)
+  deadlineStartAt          DateTime?               @map("deadline_start_at")
+  deadlineEffectiveDueAt   DateTime?               @map("deadline_effective_due_at")
+  deadlineExecutionDays    Int?                    @map("deadline_execution_days")
+  deadlineIncludeStartDay  Boolean?                @map("deadline_include_start_day")
+  deadlineDueHour          Int?                    @map("deadline_due_hour")
+  deadlineTimezone         String?                 @map("deadline_timezone") @db.VarChar(64)
+  deadlineReasonCode       String?                 @map("deadline_reason_code") @db.VarChar(80)
+  deadlineExplanation      String?                 @map("deadline_explanation") @db.VarChar(1000)
+  deadlineRuleVersion      Int?                    @map("deadline_rule_version")
+  deadlineSnapshotJson     Json                    @map("deadline_snapshot_json")
+  contextSnapshotJson      Json                    @map("context_snapshot_json")
+  createdByUserId          String                  @map("created_by_user_id")
+  createdAt                DateTime                @default(now()) @map("created_at")
+  updatedAt                DateTime                @updatedAt @map("updated_at")
+  workOrder                WorkOrder               @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  executionLegalEntity     LegalEntity             @relation(fields: [executionLegalEntityId], references: [id], onDelete: Restrict)
+  technician               User                    @relation("WorkExecutionSnapshotOriginalTechnician", fields: [technicianId], references: [id], onDelete: Restrict)
+  createdBy                User                    @relation("WorkExecutionSnapshotCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([status])
+  @@index([executionLegalEntityId, status])
+  @@index([snapshotCreatedAt])
+  @@map("work_execution_snapshots")
 }
 
 model WorkFormSubmission {
@@ -962,6 +1019,19 @@ enum WorkClaimSource {
   TECHNICIAN_RELEASE
   MANAGER_RELEASE
   LEGACY_BACKFILL
+}
+
+enum ExecutionSnapshotStatus {
+  NOT_CREATED
+  LOCKED
+  INVALID
+}
+
+enum ExecutionSnapshotSource {
+  TECHNICIAN_FIRST_CLAIM
+  MANAGER_ASSIGNMENT
+  LEGACY_BACKFILL
+  ADMIN_REPAIR
 }
 
 enum WorkAssignmentEventType {

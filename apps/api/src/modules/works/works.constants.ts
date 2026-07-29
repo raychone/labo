@@ -18,6 +18,12 @@ export const WORK_ORDER_AUDIT_ACTIONS = {
   assigned: "work_orders.assigned",
   reassigned: "work_orders.reassigned",
   executionEntityChanged: "work_orders.execution_entity_changed",
+  executionSnapshotCreated: "work.execution_snapshot.created",
+  executionSnapshotLocked: "work.execution_snapshot.locked",
+  executionSnapshotReused: "work.execution_snapshot.reused",
+  executionSnapshotEntityMismatchRejected: "work.execution_snapshot.entity_mismatch_rejected",
+  executionSnapshotPricingUnresolved: "work.execution_snapshot.pricing_unresolved",
+  executionSnapshotDeadlineUnresolved: "work.execution_snapshot.deadline_unresolved",
   updated: "work_orders.updated",
   updatedWithDeadlineRecalculation: "work_orders.updated_deadline_recalculated",
 } as const;

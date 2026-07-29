@@ -736,6 +736,16 @@ Ordine recomandata:
 23. Inchidere luna si CSV.
 24. Utilizatori si roluri.
 25. Login cu tehnician si arata `Lucrări disponibile`, claim cu `NC`/`NG`, `Lucrările mele` si eliberare.
+26. Explică faptul că prima preluare fixează contextul de execuție: firma, tehnicianul inițial, termenul și pricing-ul intern.
+27. Deschide o lucrare claimuită din `Lucrări` și arată cardul `Context de execuție`:
+    - status `Fixat`;
+    - firma `NC`/`NG`;
+    - tehnician inițial și tehnician curent;
+    - start execuție și termen final;
+    - pentru manager, prețul fixat și sursa prețului.
+28. Revino pe rol tehnician și arată aceeași lucrare: firma și termenul sunt vizibile, dar informațiile financiare sunt mascate.
+29. Eliberează o lucrare și explică faptul că eliberarea nu modifică firma, prețul sau termenul deja fixate.
+30. Reia/reasignează aceeași lucrare și arată că firma este blocată; schimbarea firmei este refuzată de backend și nu există buton de edit snapshot.
 26. Login manager si arata `Responsabilitate`, istoric, reassign si asignarea responsabilului in fluxul lucrarii.
 27. Login cu receptie/curier pentru meniuri diferite.
 28. Setari laborator.

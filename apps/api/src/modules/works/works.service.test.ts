@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { PrismaService } from "../database/prisma.service.js";
 import type { PatientsService } from "../patients/patients.service.js";
+import type { PricingResolverService } from "../pricing/pricing-resolver.service.js";
 import type { WorkQrTokenService } from "../qr/work-qr-token.service.js";
 import type { AuthorizationService } from "../rbac/authorization.service.js";
 import type { WorkFormSubmissionValidationService } from "../work-forms/work-form-submission-validation.service.js";
@@ -143,6 +144,7 @@ function workOrder(overrides: Partial<WorkOrder> = {}) {
     doctorId: "doctor_1",
     executionLegalEntity: null,
     executionLegalEntityId: null,
+    executionSnapshot: null,
     externalReference: null,
     calculatedDueAt: new Date("2026-07-27T14:00:00.000Z"),
     deadlineCalculatedAt: new Date("2026-07-22T12:00:00.000Z"),
@@ -234,6 +236,9 @@ function createService(
     shouldRecalculate: vi.fn().mockReturnValue(false),
     assertExpectedRevision: vi.fn(),
   },
+  pricingResolverService: unknown = {
+    resolve: vi.fn(),
+  },
 ): WorksService {
   return new WorksService(
     authorizationService as AuthorizationService,
@@ -244,6 +249,7 @@ function createService(
     submissionValidationService as WorkFormSubmissionValidationService,
     workflowExecutionService as WorkflowExecutionService,
     deadlineService as WorkDeadlineService,
+    pricingResolverService as PricingResolverService,
   );
 }
 
@@ -420,12 +426,38 @@ describe("WorksService", () => {
     });
     const updateMany = vi.fn().mockResolvedValue({ count: 1 });
     const assignmentCreate = vi.fn().mockResolvedValue({});
+    const snapshotCreate = vi.fn().mockResolvedValue({});
     const auditCreate = vi.fn().mockResolvedValue({});
+    const pricingResolve = vi.fn().mockResolvedValue({
+      adjustment: {
+        basisPoints: null,
+        fixedAmountMinor: null,
+        overridePriceMinor: null,
+        type: null,
+      },
+      appliedAgreementId: null,
+      appliedAgreementType: null,
+      appliedRuleScope: null,
+      catalogItemId: "catalog_nc_1",
+      currency: "RON",
+      executionTimeRule: null,
+      executionTimeRules: [],
+      explanation: "Se folosește prețul standard al firmei active.",
+      finalUnitPriceMinor: 40000,
+      legalEntityCode: "NC",
+      quantity: 2,
+      resolutionTrace: ["Catalog NC găsit pentru tipul de lucrare."],
+      standardUnitPriceMinor: 40000,
+      totalPriceMinor: 80000,
+      workTypeId: "work_type_1",
+    });
     const service = createService({
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
           auditLog: { create: auditCreate },
+          user: { findUnique: vi.fn().mockResolvedValue({ displayName: "Actor", id: "actor_1" }) },
           workAssignmentEvent: { create: assignmentCreate },
+          workExecutionSnapshot: { create: snapshotCreate },
           workOrder: { findUniqueOrThrow: vi.fn().mockResolvedValue(after), updateMany },
         }),
       ),
@@ -434,7 +466,7 @@ describe("WorksService", () => {
     }, {
       hasPermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ASSIGNED"], permission: "works.claim.create" }),
       requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ASSIGNED"], permission: "works.claim.create" }),
-    });
+    }, undefined, undefined, undefined, undefined, undefined, undefined, { resolve: pricingResolve });
 
     const result = await service.claimWork({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {
       executionLegalEntityCode: "NC",
@@ -446,10 +478,21 @@ describe("WorksService", () => {
     }));
     expect(assignmentCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
+        executionSnapshotStatus: "LOCKED",
+        executionSnapshotVersion: 1,
         eventType: "CLAIMED",
         newLegalEntityId: "legal_nc",
         newTechnicianId: "actor_1",
         revision: 1,
+      }),
+    });
+    expect(snapshotCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        executionLegalEntityCode: "NC",
+        pricingTotalMinor: 80000,
+        snapshotLockedAt: expect.any(Date) as Date,
+        status: "LOCKED",
+        version: 1,
       }),
     });
     expect(result.claim.status).toBe("CLAIMED");
@@ -460,6 +503,8 @@ describe("WorksService", () => {
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
           auditLog: { create: vi.fn().mockResolvedValue({}) },
+          user: { findUnique: vi.fn().mockResolvedValue({ displayName: "Actor", id: "actor_1" }) },
+          workExecutionSnapshot: { create: vi.fn().mockResolvedValue({}) },
           workOrder: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
         }),
       ),
@@ -468,6 +513,25 @@ describe("WorksService", () => {
     }, {
       hasPermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ASSIGNED"], permission: "works.claim.create" }),
       requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ASSIGNED"], permission: "works.claim.create" }),
+    }, undefined, undefined, undefined, undefined, undefined, undefined, {
+      resolve: vi.fn().mockResolvedValue({
+        adjustment: { basisPoints: null, fixedAmountMinor: null, overridePriceMinor: null, type: null },
+        appliedAgreementId: null,
+        appliedAgreementType: null,
+        appliedRuleScope: null,
+        catalogItemId: "catalog_nc_1",
+        currency: "RON",
+        executionTimeRule: null,
+        executionTimeRules: [],
+        explanation: "Se folosește prețul standard al firmei active.",
+        finalUnitPriceMinor: 40000,
+        legalEntityCode: "NC",
+        quantity: 2,
+        resolutionTrace: [],
+        standardUnitPriceMinor: 40000,
+        totalPriceMinor: 80000,
+        workTypeId: "work_type_1",
+      }),
     });
 
     await expect(service.claimWork({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {

@@ -91,6 +91,23 @@ const WORK_DETAIL_INCLUDE = {
       displayName: true,
     },
   },
+  executionSnapshot: {
+    include: {
+      executionLegalEntity: {
+        select: {
+          code: true,
+          displayName: true,
+          id: true,
+        },
+      },
+      technician: {
+        select: {
+          displayName: true,
+          id: true,
+        },
+      },
+    },
+  },
   logisticsState: {
     select: {
       status: true,

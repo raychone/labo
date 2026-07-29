@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-82%
+84%
 
 ## ROADMAP
 
@@ -100,6 +100,7 @@
 - [x] WORKFLOW-001 - Workflow templates (COMPLETED)
 - [x] WORKFLOW-002 - Workflow execution snapshot (COMPLETED)
 - [x] TECH-CLAIM-001A - Technician claim, company selection and work ownership (COMPLETED)
+- [x] TECH-CLAIM-001B - Final execution snapshot for pricing, deadline and execution context (COMPLETED)
 - [ ] TECH-CLAIM-001 - Technician self-claim and first technical company selection (NOT STARTED)
 
 ## PATIENTS
@@ -190,19 +191,83 @@ NONE / AWAITING APPROVAL
 
 Status: AWAITING APPROVAL
 
-Started: 2026-07-29T11:17:16Z
+Started: 2026-07-29T14:04:46Z
 
-Completed: 2026-07-29T11:43:16Z
+Completed: 2026-07-29T14:41:56Z
 
-Last completed task: TECH-CLAIM-001A - Technician claim, company selection and work ownership
+Last completed task: TECH-CLAIM-001B - Final execution snapshot for pricing, deadline and execution context
 
-Completed: 2026-07-29T11:43:16Z
+Completed: 2026-07-29T14:41:56Z
 
 ## Next Recommended Task
 
-TECH-CLAIM-001B - Awaiting approval
+TECH-CLAIM-001C - Awaiting approval
 
 ## Latest Completion Summary
+
+### TECH-CLAIM-001B - Final execution snapshot for pricing, deadline and execution context
+
+- Status: COMPLETED.
+- Started: 2026-07-29T14:04:46Z.
+- Completed: 2026-07-29T14:41:56Z.
+- Summary:
+  - Added immutable `WorkExecutionSnapshot` records that lock execution legal entity, technician context, pricing and deadline data when a work is first claimed or manager-assigned.
+  - Reused the canonical pricing resolver and deadline service inside claim/reassign transactions, with deterministic 409 rejection when pricing cannot be resolved or a later claim attempts a different legal entity.
+  - Preserved locked snapshots across release, reclaim and reassign, while assignment events record snapshot status/version.
+  - Added server-side RBAC permissions for execution snapshot read/create/history and pricing/deadline visibility.
+  - Exposed execution snapshot summaries and detail data through work list/detail/history views with pricing masked for roles without pricing access.
+  - Added UI indicators in `/workbench` and `/works`, fixed-company claim/reassign selectors, execution context detail card and Romanian copy.
+  - Updated demo seed with deterministic NC/NG execution snapshots and claim pricing catalog entries for legacy demo work types.
+- Main files modified:
+  - `apps/api/prisma/schema.prisma`
+  - `apps/api/prisma/migrations/20260729141612_work_execution_snapshots/migration.sql`
+  - `apps/api/prisma/demo/demo-seed.ts`
+  - `apps/api/src/modules/works/*`
+  - `apps/api/src/modules/pricing/pricing-resolver.service.ts`
+  - `apps/api/src/modules/rbac/permission-registry.ts`
+  - `apps/api/src/modules/qr/qr.service.ts`
+  - `apps/web/src/features/technician-workbench/*`
+  - `apps/web/src/features/works/*`
+  - `packages/shared/src/works.ts`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `REAL-LAB-WORKFLOW.md`
+  - `DEMO.md`
+  - `DEMO-SCRIPT.md`
+  - `IMPLEMENTATION_STATUS.md`
+- Tests executed:
+  - `pnpm --filter @dental-lab/api prisma:validate` passed.
+  - `pnpm --filter @dental-lab/api prisma:generate` passed.
+  - `pnpm --filter @dental-lab/api prisma:migrate:dev --name work_execution_snapshots` passed.
+  - `pnpm --filter @dental-lab/api run seed:demo` passed.
+  - Demo seed idempotency check passed by running `pnpm --filter @dental-lab/api run seed:demo` twice.
+  - DB verification passed: 4 locked demo snapshots, 6 assignment events with snapshot version/status, 6 claim catalog entries for NC/NG.
+  - `pnpm typecheck` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed with the existing Vite chunk-size warning.
+- Manual verification:
+  - API started on `http://localhost:3024`.
+  - Frontend started on `http://localhost:3004`.
+  - Demo manager and technician login worked with CSRF and cookies.
+  - Technician claim created a locked NC execution snapshot with pricing and deadline.
+  - Manager detail showed pricing and deadline snapshot.
+  - Technician claimed list masked pricing and showed deadline snapshot.
+  - Release preserved snapshot version and execution legal entity.
+  - Reclaim/reassign with the original legal entity reused the existing snapshot.
+  - Reclaim/reassign with a different legal entity returned 409.
+  - Assignment history and `/works` registry exposed snapshot summary/version.
+  - `/workbench` responded 200.
+- Architecture decisions:
+  - Execution context is append-stable through a dedicated one-to-one snapshot table instead of recalculating from mutable work fields.
+  - Snapshot creation happens in the same transaction as claim/reassign to keep ownership, deadline and pricing consistent.
+  - Pricing uses the existing resolver; deadline uses the existing deadline service with claim time as execution start.
+  - Manual deadlines are preserved; unresolved automatic deadlines remain explicit instead of inventing dates.
+  - Financial snapshot data is included only for users with pricing access.
+- Technical debt introduced: none.
+- Remaining risks:
+  - Existing Vite chunk-size warning remains.
+  - Existing `pg` deprecation warning appears during API shutdown.
+  - Lint is not configured.
 
 ### TECH-CLAIM-001A - Technician claim, company selection and work ownership
 

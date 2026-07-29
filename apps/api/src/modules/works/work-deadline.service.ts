@@ -73,6 +73,8 @@ export interface WorkDeadlinePreviewView {
   readonly timezone: string;
 }
 
+type WorkDeadlineClient = Pick<PrismaService, "legalEntitySettings" | "priceCatalogItem" | "pricingAgreement">;
+
 @Injectable()
 export class WorkDeadlineService {
   public constructor(
@@ -126,6 +128,7 @@ export class WorkDeadlineService {
   }
 
   public async resolveForWork(input: {
+    readonly client?: WorkDeadlineClient;
     readonly clinicId: string;
     readonly doctorId: string;
     readonly includeStartDay?: boolean;
@@ -148,10 +151,12 @@ export class WorkDeadlineService {
       source: input.source,
       startAt: input.startAt,
       workTypeId: input.workTypeId,
+      ...(input.client ? { client: input.client } : {}),
     });
   }
 
   private async resolveDeadline(input: {
+    readonly client?: WorkDeadlineClient;
     readonly clinicId: string;
     readonly doctorId: string;
     readonly includeStartDay: boolean;
@@ -163,12 +168,13 @@ export class WorkDeadlineService {
     readonly startAt: Date;
     readonly workTypeId: string;
   }): Promise<WorkDeadlineData> {
-    const timezone = await this.getTimezone(input.legalEntity.id);
+    const client = input.client ?? this.prisma;
+    const timezone = await this.getTimezone(client, input.legalEntity.id);
     if (input.manualDueAt) {
       return this.createManualDeadline(input, timezone);
     }
 
-    const resolution = await this.resolvePricingForDeadline({
+    const resolution = await this.resolvePricingForDeadline(client, {
       clinicId: input.clinicId,
       doctorId: input.doctorId,
       evaluationDate: input.now,
@@ -268,7 +274,7 @@ export class WorkDeadlineService {
     };
   }
 
-  private async resolvePricingForDeadline(input: {
+  private async resolvePricingForDeadline(client: WorkDeadlineClient, input: {
     readonly clinicId: string;
     readonly doctorId: string;
     readonly evaluationDate: Date;
@@ -278,7 +284,7 @@ export class WorkDeadlineService {
     readonly workTypeId: string;
   }): Promise<PricingResolution | null> {
     try {
-      return await this.pricingResolver.resolve(input);
+      return await this.pricingResolver.resolve(input, client);
     } catch (error) {
       if (error instanceof NotFoundException) {
         return null;
@@ -288,8 +294,8 @@ export class WorkDeadlineService {
     }
   }
 
-  private async getTimezone(legalEntityId: string): Promise<string> {
-    const settings = await this.prisma.legalEntitySettings.findUnique({
+  private async getTimezone(client: WorkDeadlineClient, legalEntityId: string): Promise<string> {
+    const settings = await client.legalEntitySettings.findUnique({
       select: { timezone: true },
       where: { legalEntityId },
     });

@@ -1778,6 +1778,20 @@ Aceste taskuri inlocuiesc ordinea veche dupa `SIGNATURES-001`. Detaliile complet
 - Audit: claim, conflict claim, release, assign si reassign pe work order, plus istoric append-only.
 - Testare: service conflict tests, RBAC registry tests, UI regression, seed idempotency, typecheck/test/build.
 
+### TECH-CLAIM-001B - Final execution snapshot for pricing, deadline and execution context
+
+- Status: COMPLETED.
+- Obiectiv: blocarea contextului final de executie la prima preluare valida a lucrarii.
+- Scope: `WorkExecutionSnapshot` versionat si locked, firma `NC`/`NG`, tehnician initial, pricing snapshot in minor units, source pricing, deadline snapshot, context JSON versionat, audit, RBAC, masking financiar, UI read-only si seed demo.
+- Non-goals: workflow tehnologic, work cycles, materiale, stocuri, NIR, bon consum, billing, plati, documente fiscale, notificari, OCR, offline sau repair administrativ de snapshot.
+- Dependente: PRICING-002, WORK-DEADLINES-001A, WORK-DEADLINES-001B, WORK-DEADLINES-001C, TECH-CLAIM-001A.
+- Acceptance criteria: primul claim creeaza snapshot locked; release/reclaim/reassign pastreaza snapshotul; firm mismatch este refuzat; pricing si deadline sunt rezolvate server-side in tranzactie; pricing este mascat server-side; seedul demo este idempotent.
+- Backend: model `WorkExecutionSnapshot`, enum-uri `ExecutionSnapshotStatus` si `ExecutionSnapshotSource`, extensii pe `WorkAssignmentEvent`, resolver pricing/deadline compatibil cu transaction client, integrare atomica in `/works/:id/claim` si `/works/:id/reassign`.
+- Frontend: `/workbench` explica fixarea contextului si blocheaza firma la reclaim; `/works` afiseaza indicator `Fixat/Nefixat`, card read-only `Context de executie` si reassign cu firma read-only cand snapshotul exista.
+- Securitate: body-ul de claim/reassign nu accepta pret, total, deadline sau source; API-ul mascheaza preturile fara `pricing.read`; nu se expun ID-uri interne suplimentare fata de contractele existente.
+- Audit: `work.execution_snapshot.created`, `work.execution_snapshot.locked`, `work.execution_snapshot.reused`, `work.execution_snapshot.entity_mismatch_rejected`, `work.execution_snapshot.pricing_unresolved`, `work.execution_snapshot.deadline_unresolved`.
+- Testare: mappere pure, claim snapshot, RBAC registry, fixtures UI, seed demo idempotent, typecheck/test/build.
+
 ### TECH-CLAIM-001 - Technician self-claim
 
 - Status: NOT STARTED.

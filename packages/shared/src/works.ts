@@ -13,6 +13,7 @@ export const WORK_DEADLINE_SOURCES = ["CREATION", "WORK_UPDATE", "MANUAL_OVERRID
 export const WORK_CLAIM_STATUSES = ["UNCLAIMED", "CLAIMED"] as const;
 export const WORK_CLAIM_SOURCES = ["TECHNICIAN_CLAIM", "MANAGER_ASSIGNMENT", "MANAGER_REASSIGNMENT", "TECHNICIAN_RELEASE", "MANAGER_RELEASE", "LEGACY_BACKFILL"] as const;
 export const WORK_ASSIGNMENT_EVENT_TYPES = ["CLAIMED", "RELEASED", "ASSIGNED", "REASSIGNED"] as const;
+export const EXECUTION_SNAPSHOT_STATUSES = ["NOT_CREATED", "LOCKED", "INVALID"] as const;
 
 export type WorkStatus = (typeof WORK_STATUSES)[number];
 export type WorkPriority = (typeof WORK_PRIORITIES)[number];
@@ -23,6 +24,7 @@ export type WorkDeadlineSource = (typeof WORK_DEADLINE_SOURCES)[number];
 export type WorkClaimStatus = (typeof WORK_CLAIM_STATUSES)[number];
 export type WorkClaimSource = (typeof WORK_CLAIM_SOURCES)[number];
 export type WorkAssignmentEventType = (typeof WORK_ASSIGNMENT_EVENT_TYPES)[number];
+export type ExecutionSnapshotStatus = (typeof EXECUTION_SNAPSHOT_STATUSES)[number];
 
 export interface WorkClinicSummary {
   readonly code: string;
@@ -109,7 +111,52 @@ export interface WorkAssignmentEventSummary {
   readonly previousTechnician: WorkClaimUserSummary | null;
   readonly reason: string | null;
   readonly revision: number;
+  readonly executionSnapshot: {
+    readonly status: ExecutionSnapshotStatus | null;
+    readonly version: number | null;
+  };
 }
+
+export type ExecutionSnapshotSummary = {
+  readonly exists: boolean;
+  readonly status: ExecutionSnapshotStatus;
+  readonly version: number | null;
+  readonly legalEntity: {
+    readonly publicId: string;
+    readonly code: LegalEntityCode;
+    readonly displayName: string;
+  } | null;
+  readonly createdAt: string | null;
+  readonly lockedAt: string | null;
+};
+
+export type ExecutionPricingSnapshotView = {
+  readonly currency: string;
+  readonly quantity: number | string | null;
+  readonly unit: string | null;
+  readonly unitPriceMinor: number | null;
+  readonly totalMinor: number | null;
+  readonly sourceType: string | null;
+  readonly sourceLabel: string | null;
+  readonly explanation: string | null;
+};
+
+export type ExecutionDeadlineSnapshotView = {
+  readonly mode: string;
+  readonly startAt: string | null;
+  readonly effectiveDueAt: string | null;
+  readonly executionDays: number | null;
+  readonly timezone: string | null;
+  readonly explanation: string | null;
+};
+
+export type ExecutionSnapshotView = {
+  readonly summary: ExecutionSnapshotSummary;
+  readonly originalTechnician: WorkClaimUserSummary | null;
+  readonly currentTechnician: WorkClaimUserSummary | null;
+  readonly pricing: ExecutionPricingSnapshotView | null;
+  readonly deadline: ExecutionDeadlineSnapshotView | null;
+};
 
 export interface WorkSummary {
   readonly clinic: WorkClinicSummary;
@@ -121,6 +168,7 @@ export interface WorkSummary {
   readonly id: string;
   readonly invoicedDocumentId: string | null;
   readonly deadline: WorkDeadlineSummary;
+  readonly executionSnapshot: ExecutionSnapshotView;
   readonly patientName: string;
   readonly patientReference: string | null;
   readonly patient: {

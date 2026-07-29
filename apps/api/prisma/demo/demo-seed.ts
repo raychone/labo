@@ -8,6 +8,7 @@ import {
   WorkLogisticsStatus,
   type PricingAgreementSubjectType,
   type PricingRuleScope,
+  type WorkTypeUnit,
 } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
 import { Prisma, type WorkFormFieldType } from "@prisma/client";
@@ -144,6 +145,46 @@ interface DemoWorkflowTemplateSeed {
   readonly workTypeId: string;
   readonly stages: readonly DemoWorkflowStageSeed[];
 }
+
+interface DemoClaimPricingCatalogItem {
+  readonly category: string;
+  readonly displayName: string;
+  readonly executionDays: number;
+  readonly key: string;
+  readonly priceMinor: number;
+  readonly unit: WorkTypeUnit;
+  readonly workTypeId: string;
+}
+
+const demoClaimPricingCatalog: readonly DemoClaimPricingCatalogItem[] = [
+  {
+    category: "Zirconiu",
+    displayName: "Coroană zirconiu demo",
+    executionDays: 4,
+    key: "claim-zirconiu",
+    priceMinor: 24_000,
+    unit: "UNIT",
+    workTypeId: "demo_wt_zirconiu",
+  },
+  {
+    category: "Protetica mobilă",
+    displayName: "Proteză totală demo",
+    executionDays: 6,
+    key: "claim-proteza-totala",
+    priceMinor: 120_000,
+    unit: "UNIT",
+    workTypeId: "demo_wt_proteza_totala",
+  },
+  {
+    category: "Implanturi",
+    displayName: "Bont implant demo",
+    executionDays: 3,
+    key: "claim-bont-implant",
+    priceMinor: 35_000,
+    unit: "UNIT",
+    workTypeId: "demo_wt_bont",
+  },
+];
 
 const demoWorkflowTemplates: readonly DemoWorkflowTemplateSeed[] = [
   {
@@ -566,6 +607,42 @@ async function seedDemoPricing(prisma: PrismaClient): Promise<void> {
 
       await seedDemoExecutionTimeRules(prisma, legalEntity.code, item, priceCatalogItemId, manager.id);
     }
+
+    for (const [index, item] of demoClaimPricingCatalog.entries()) {
+      const priceCatalogItemId = toDemoClaimPriceCatalogItemId(legalEntity.code, item.key);
+
+      await prisma.priceCatalogItem.create({
+        data: {
+          category: item.category,
+          createdByUserId: manager.id,
+          displayName: item.displayName,
+          id: priceCatalogItemId,
+          isActive: true,
+          legalEntityId: legalEntity.id,
+          notes: "Preț demo determinist pentru lucrări istorice revendicabile.",
+          sortOrder: REAL_PRICING_CATALOG.length + index + 1,
+          standardPriceMinor: item.priceMinor,
+          unit: item.unit,
+          updatedByUserId: manager.id,
+          workTypeId: item.workTypeId,
+        },
+      });
+
+      await prisma.executionTimeRule.create({
+        data: {
+          createdByUserId: manager.id,
+          executionDays: item.executionDays,
+          id: `demo_execution_time_claim_${legalEntity.code.toLowerCase()}_${item.key}`,
+          isActive: true,
+          maxQuantity: null,
+          minQuantity: 1,
+          priceCatalogItemId,
+          priority: 1,
+          requiresManualDueDate: false,
+          updatedByUserId: manager.id,
+        },
+      });
+    }
   }
 
   await seedDemoPricingAgreements(prisma, manager.id);
@@ -824,6 +901,10 @@ function toDemoPriceCatalogItemId(legalEntityCode: string, key: string): string 
   return `demo_price_catalog_${legalEntityCode.toLowerCase()}_${key}`;
 }
 
+function toDemoClaimPriceCatalogItemId(legalEntityCode: string, key: string): string {
+  return `demo_price_catalog_claim_${legalEntityCode.toLowerCase()}_${key}`;
+}
+
 function toDemoPricingDescription(item: RealPricingCatalogEntry): string {
   const validationNote = item.requiresClientValidation ? " Necesită validare client pentru valoarea finală." : "";
   const sourceNote = item.sourceNote ? ` ${item.sourceNote}` : "";
@@ -899,7 +980,7 @@ async function seedDemoWorkClaims(prisma: PrismaClient, dataset: DemoDataset): P
     claimScenario(dataset, 1, "demo_user_tehnician_1", nc.id, "CLAIMED", "TECHNICIAN_CLAIM", 1),
     claimScenario(dataset, 2, "demo_user_tehnician_2", ng.id, "CLAIMED", "MANAGER_ASSIGNMENT", 1),
     claimScenario(dataset, 3, "demo_user_tehnician_2", nc.id, "CLAIMED", "MANAGER_REASSIGNMENT", 2),
-    claimScenario(dataset, 4, null, null, "UNCLAIMED", "TECHNICIAN_RELEASE", 2),
+    claimScenario(dataset, 4, null, ng.id, "UNCLAIMED", "TECHNICIAN_RELEASE", 2),
   ] as const;
 
   for (const scenario of scenarios) {
@@ -915,18 +996,23 @@ async function seedDemoWorkClaims(prisma: PrismaClient, dataset: DemoDataset): P
         claimRevision: scenario.revision,
         claimSource: scenario.source,
         claimStatus: scenario.status,
-        executionLegalEntityId: scenario.legalEntityId,
+        executionLegalEntityId: scenario.status === "CLAIMED" ? scenario.legalEntityId : null,
         releasedAt: scenario.status === "UNCLAIMED" ? scenario.updatedAt : null,
         releasedByUserId: scenario.status === "UNCLAIMED" ? scenario.claimedByUserId : null,
         releaseReason: scenario.status === "UNCLAIMED" ? "Demo: lucrare eliberată pentru a arăta revenirea în lista disponibilă." : null,
       },
       where: { id: scenario.workId },
     });
+    if (scenario.legalEntityId) {
+      await createDemoExecutionSnapshot(prisma, scenario);
+    }
   }
 
   await createDemoAssignmentEvent(prisma, dataset, 1, {
     actorUserId: "demo_user_tehnician_1",
     eventType: "CLAIMED",
+    executionSnapshotStatus: "LOCKED",
+    executionSnapshotVersion: 1,
     newLegalEntityId: nc.id,
     newTechnicianId: "demo_user_tehnician_1",
     revision: 1,
@@ -934,6 +1020,8 @@ async function seedDemoWorkClaims(prisma: PrismaClient, dataset: DemoDataset): P
   await createDemoAssignmentEvent(prisma, dataset, 2, {
     actorUserId: "demo_user_manager",
     eventType: "ASSIGNED",
+    executionSnapshotStatus: "LOCKED",
+    executionSnapshotVersion: 1,
     newLegalEntityId: ng.id,
     newTechnicianId: "demo_user_tehnician_2",
     reason: "Demo: asignare directă de manager.",
@@ -942,6 +1030,8 @@ async function seedDemoWorkClaims(prisma: PrismaClient, dataset: DemoDataset): P
   await createDemoAssignmentEvent(prisma, dataset, 3, {
     actorUserId: "demo_user_manager",
     eventType: "ASSIGNED",
+    executionSnapshotStatus: "LOCKED",
+    executionSnapshotVersion: 1,
     newLegalEntityId: nc.id,
     newTechnicianId: "demo_user_tehnician_1",
     reason: "Demo: asignare inițială.",
@@ -950,6 +1040,8 @@ async function seedDemoWorkClaims(prisma: PrismaClient, dataset: DemoDataset): P
   await createDemoAssignmentEvent(prisma, dataset, 3, {
     actorUserId: "demo_user_manager",
     eventType: "REASSIGNED",
+    executionSnapshotStatus: "LOCKED",
+    executionSnapshotVersion: 1,
     newLegalEntityId: nc.id,
     newTechnicianId: "demo_user_tehnician_2",
     previousLegalEntityId: nc.id,
@@ -960,6 +1052,8 @@ async function seedDemoWorkClaims(prisma: PrismaClient, dataset: DemoDataset): P
   await createDemoAssignmentEvent(prisma, dataset, 4, {
     actorUserId: "demo_user_tehnician_1",
     eventType: "CLAIMED",
+    executionSnapshotStatus: "LOCKED",
+    executionSnapshotVersion: 1,
     newLegalEntityId: ng.id,
     newTechnicianId: "demo_user_tehnician_1",
     revision: 1,
@@ -967,6 +1061,8 @@ async function seedDemoWorkClaims(prisma: PrismaClient, dataset: DemoDataset): P
   await createDemoAssignmentEvent(prisma, dataset, 4, {
     actorUserId: "demo_user_tehnician_1",
     eventType: "RELEASED",
+    executionSnapshotStatus: "LOCKED",
+    executionSnapshotVersion: 1,
     previousLegalEntityId: ng.id,
     previousTechnicianId: "demo_user_tehnician_1",
     reason: "Demo: lucrare eliberată pentru a arăta revenirea în lista disponibilă.",
@@ -989,6 +1085,8 @@ interface DemoClaimScenario {
 interface DemoAssignmentEventInput {
   readonly actorUserId: string;
   readonly eventType: "ASSIGNED" | "CLAIMED" | "REASSIGNED" | "RELEASED";
+  readonly executionSnapshotStatus?: "INVALID" | "LOCKED" | "NOT_CREATED";
+  readonly executionSnapshotVersion?: number;
   readonly newLegalEntityId?: string;
   readonly newTechnicianId?: string;
   readonly previousLegalEntityId?: string;
@@ -1024,6 +1122,124 @@ function claimScenario(
   };
 }
 
+async function createDemoExecutionSnapshot(prisma: PrismaClient, scenario: DemoClaimScenario): Promise<void> {
+  const work = await prisma.workOrder.findUniqueOrThrow({
+    include: {
+      clinic: true,
+      doctor: true,
+      workType: true,
+    },
+    where: { id: scenario.workId },
+  });
+  const [legalEntity, technician] = await Promise.all([
+    prisma.legalEntity.findUniqueOrThrow({
+      select: { code: true, displayName: true, id: true },
+      where: { id: scenario.legalEntityId ?? "" },
+    }),
+    prisma.user.findUniqueOrThrow({
+      select: { displayName: true, id: true },
+      where: { id: scenario.technicianId ?? scenario.claimedByUserId },
+    }),
+  ]);
+  const catalogItem = await prisma.priceCatalogItem.findFirst({
+    where: {
+      archivedAt: null,
+      isActive: true,
+      legalEntityId: legalEntity.id,
+      workTypeId: work.workTypeId,
+    },
+  });
+  const unitPriceMinor = catalogItem?.standardPriceMinor ?? work.baseUnitPriceMinor;
+  const totalMinor = unitPriceMinor * work.quantity;
+  const pricingSourceType = catalogItem ? "STANDARD_CATALOG" : "LEGACY_WORK_TYPE";
+  const pricingSourceLabel = catalogItem ? "Catalog standard firmă" : "Preț legacy demo";
+  const deadlineMode = work.deadlineMode ?? "UNRESOLVED";
+  const createdAt = scenario.claimedAt;
+
+  await prisma.workExecutionSnapshot.create({
+    data: {
+      claimRevision: Math.max(1, scenario.revision),
+      claimedAt: createdAt,
+      contextSnapshotJson: {
+        claim: { claimedAt: createdAt.toISOString(), revision: Math.max(1, scenario.revision), source: scenario.source.startsWith("MANAGER") ? "MANAGER_ASSIGNMENT" : "TECHNICIAN_FIRST_CLAIM" },
+        executionLegalEntity: { code: legalEntity.code, displayName: legalEntity.displayName, publicId: legalEntity.id },
+        technician: { displayName: technician.displayName, publicId: technician.id },
+        version: 1,
+        work: {
+          clinicName: work.clinic.name,
+          clinicPublicId: work.clinic.id,
+          doctorName: work.doctor.displayName,
+          doctorPublicId: work.doctor.id,
+          quantity: work.quantity,
+          workCode: work.code,
+          workTypeCode: work.workType.code,
+          workTypeName: work.workType.name,
+          workTypePublicId: work.workType.id,
+        },
+      },
+      createdByUserId: scenario.claimedByUserId,
+      deadlineEffectiveDueAt: work.effectiveDueAt,
+      deadlineExecutionDays: work.deadlineExecutionDays,
+      deadlineExplanation: work.deadlineExplanation,
+      deadlineDueHour: work.deadlineDueHour,
+      deadlineIncludeStartDay: work.deadlineIncludeStartDay,
+      deadlineMode,
+      deadlineReasonCode: work.deadlineReasonCode,
+      deadlineRuleVersion: 1,
+      deadlineSnapshotJson: {
+        calculatedDueAt: work.calculatedDueAt?.toISOString() ?? null,
+        effectiveDueAt: work.effectiveDueAt?.toISOString() ?? null,
+        executionDays: work.deadlineExecutionDays,
+        explanation: work.deadlineExplanation,
+        mode: deadlineMode,
+        reasonCode: work.deadlineReasonCode,
+        resolvedAt: createdAt.toISOString(),
+        ruleSnapshot: work.deadlineRuleSnapshot ?? { version: 1 },
+        source: work.deadlineSource,
+        startAt: (work.deadlineStartAt ?? createdAt).toISOString(),
+        timezone: work.deadlineTimezone ?? "Europe/Bucharest",
+        version: 1,
+      },
+      deadlineStartAt: work.deadlineStartAt ?? createdAt,
+      deadlineTimezone: work.deadlineTimezone,
+      executionLegalEntityCode: legalEntity.code,
+      executionLegalEntityId: legalEntity.id,
+      pricingAgreementId: null,
+      pricingCatalogItemId: catalogItem?.id ?? null,
+      pricingCurrency: work.currency,
+      pricingQuantity: work.quantity.toString(),
+      pricingRuleVersion: 1,
+      pricingSnapshotJson: {
+        catalogItemPublicId: catalogItem?.id ?? null,
+        currency: work.currency,
+        explanation: catalogItem ? "Se folosește prețul standard al firmei active." : "Demo fallback la prețul legacy al lucrării.",
+        legalEntityCode: legalEntity.code,
+        priceSource: { agreementPublicId: null, ruleScope: null, sourceLabel: pricingSourceLabel, sourceType: pricingSourceType },
+        quantity: work.quantity,
+        resolvedAt: createdAt.toISOString(),
+        totalPriceMinor: totalMinor,
+        unit: work.workType.unit,
+        unitPriceMinor,
+        version: 1,
+        workTypePublicId: work.workType.id,
+      },
+      pricingSourceLabel,
+      pricingSourceType,
+      pricingTotalMinor: totalMinor,
+      pricingUnit: work.workType.unit,
+      pricingUnitPriceMinor: unitPriceMinor,
+      snapshotCreatedAt: createdAt,
+      snapshotLockedAt: createdAt,
+      source: scenario.source.startsWith("MANAGER") ? "MANAGER_ASSIGNMENT" : "TECHNICIAN_FIRST_CLAIM",
+      status: "LOCKED",
+      technicianDisplayName: technician.displayName,
+      technicianId: technician.id,
+      version: 1,
+      workOrderId: work.id,
+    },
+  });
+}
+
 async function createDemoAssignmentEvent(
   prisma: PrismaClient,
   dataset: DemoDataset,
@@ -1040,6 +1256,8 @@ async function createDemoAssignmentEvent(
       actorUserId: input.actorUserId,
       createdAt: new Date(work.createdAt.getTime() + input.revision * 900_000),
       eventType: input.eventType,
+      executionSnapshotStatus: input.executionSnapshotStatus ?? null,
+      executionSnapshotVersion: input.executionSnapshotVersion ?? null,
       id: `demo_assignment_event_${work.id.replace("demo_work_", "")}_${String(input.revision).padStart(2, "0")}_${input.eventType.toLowerCase()}`,
       newLegalEntityId: input.newLegalEntityId ?? null,
       newTechnicianId: input.newTechnicianId ?? null,

@@ -1,6 +1,6 @@
 # Demo script
 
-Current note: this script demonstrates the implemented modules, including `NC`/`NG` shell context, company-aware settings, patient registry, pricing, persisted deadlines, technician work claim, workflow, logistics, delivery proof and billing. It is still not the final validated real-lab cycle demo; `DEMO-REAL-DATA-001` will replace the fictive dataset with real validated flows.
+Current note: this script demonstrates the implemented modules, including `NC`/`NG` shell context, company-aware settings, patient registry, pricing, persisted deadlines, technician work claim, locked execution snapshots, workflow, logistics, delivery proof and billing. It is still not the final validated real-lab cycle demo; `DEMO-REAL-DATA-001` will replace the fictive dataset with real validated flows.
 
 1. Open `/login` and use “Acces rapid pentru demonstrație” → “Intră ca manager” when demo mode is enabled.
 2. Show “Firmă activă” in the authenticated shell.
@@ -28,9 +28,12 @@ Current note: this script demonstrates the implemented modules, including `NC`/`
 24. Use demo quick access to enter as Tehnician and open `Lucrările mele`.
 25. Show `Lucrări disponibile`, choose a work, click `Revendică`, select `NC` or `NG`, then confirm.
 26. Show `Lucrările mele`, the claimed work, the selected execution company and the release action with reason.
+27. Open a claimed work detail and show `Context de execuție`: fixed company, original technician, current technician, execution start, final due date and `Fixat` status.
+28. As manager, point out the fixed price and source. As technician, show that financial snapshot fields are not sent and the UI displays the masked message.
+29. Release and reassign a work. Explain that release/reassign does not recalculate company, pricing or deadline; the fixed company remains read-only.
 27. Show the personal stage queue, filters, assigned stage and start/complete controls.
 28. Return as manager and show workload counts in `Lucrările mele`.
-29. Open `Lucrări`, show `Responsabil`, `Companie execuție`, claim filters and the `Responsabilitate` card with history/reassign.
+32. Open `Lucrări`, show `Responsabil`, `Companie execuție`, claim filters, the `Context de execuție` card and the `Responsabilitate` card with history/reassign.
 30. Open Billing.
 31. Select the current month.
 32. Show uninvoiced works.

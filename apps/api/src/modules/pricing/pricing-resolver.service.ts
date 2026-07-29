@@ -21,6 +21,8 @@ type CatalogItemWithRules = PriceCatalogItem & {
   readonly executionTimeRules: readonly ExecutionTimeRule[];
 };
 
+type PricingResolverClient = Pick<PrismaService, "legalEntitySettings" | "priceCatalogItem" | "pricingAgreement">;
+
 interface AppliedRule {
   readonly agreement: AgreementWithRules;
   readonly rule: PricingAgreementRule;
@@ -54,10 +56,10 @@ export interface PricingResolution {
 export class PricingResolverService {
   public constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
-  public async resolve(input: ResolvePricingInput): Promise<PricingResolution> {
+  public async resolve(input: ResolvePricingInput, client: PricingResolverClient = this.prisma): Promise<PricingResolution> {
     const [catalogItem, settings] = await Promise.all([
-      this.findCatalogItem(input.legalEntityId, input.workTypeId),
-      this.prisma.legalEntitySettings.findUnique({
+      this.findCatalogItem(client, input.legalEntityId, input.workTypeId),
+      client.legalEntitySettings.findUnique({
         select: { currency: true },
         where: { legalEntityId: input.legalEntityId },
       }),
@@ -65,13 +67,13 @@ export class PricingResolverService {
 
     const trace: string[] = [`Catalog ${input.legalEntityCode} găsit pentru tipul de lucrare.`];
     const [doctorAgreements, clinicAgreements] = await Promise.all([
-      this.findActiveAgreements({
+      this.findActiveAgreements(client, {
         evaluationDate: input.evaluationDate,
         legalEntityId: input.legalEntityId,
         subjectId: input.doctorId,
         subjectType: "DOCTOR",
       }),
-      this.findActiveAgreements({
+      this.findActiveAgreements(client, {
         evaluationDate: input.evaluationDate,
         legalEntityId: input.legalEntityId,
         subjectId: input.clinicId,
@@ -134,8 +136,8 @@ export class PricingResolverService {
     };
   }
 
-  private async findCatalogItem(legalEntityId: string, workTypeId: string): Promise<CatalogItemWithRules> {
-    const catalogItem = await this.prisma.priceCatalogItem.findFirst({
+  private async findCatalogItem(client: PricingResolverClient, legalEntityId: string, workTypeId: string): Promise<CatalogItemWithRules> {
+    const catalogItem = await client.priceCatalogItem.findFirst({
       include: {
         executionTimeRules: {
           orderBy: [
@@ -160,13 +162,13 @@ export class PricingResolverService {
     return catalogItem;
   }
 
-  private async findActiveAgreements(input: {
+  private async findActiveAgreements(client: PricingResolverClient, input: {
     readonly evaluationDate: Date;
     readonly legalEntityId: string;
     readonly subjectId: string;
     readonly subjectType: "CLINIC" | "DOCTOR";
   }): Promise<readonly AgreementWithRules[]> {
-    return this.prisma.pricingAgreement.findMany({
+    return client.pricingAgreement.findMany({
       include: {
         rules: true,
       },

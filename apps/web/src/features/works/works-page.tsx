@@ -360,7 +360,9 @@ export function WorksPage(): ReactNode {
       renderCell: (work) => (
         <div>
           <strong>{work.claim.technician?.displayName ?? "Nerevendicată"}</strong>
-          <div className="works-page__muted">{work.claim.executionLegalEntity?.code ?? "Fără companie execuție"}</div>
+          <div className="works-page__muted">
+            {work.executionSnapshot.summary.exists ? `Fixat · ${work.executionSnapshot.summary.legalEntity?.code ?? "-"}` : work.claim.executionLegalEntity?.code ?? "Nefixat"}
+          </div>
         </div>
       ),
     },
@@ -850,6 +852,7 @@ function WorkDetailsDrawer({
               <Button onClick={() => onShowQr(work.id)} variant="outline">Vezi QR</Button>
             </div>
             <DeadlineDetailCard work={work} />
+            <ExecutionSnapshotCard work={work} />
             <WorkResponsibilityCard
               onReassign={() => setReassignOpen(true)}
               work={work}
@@ -974,6 +977,80 @@ function WorkDetailsDrawer({
   );
 }
 
+function ExecutionSnapshotCard({ work }: { readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
+  const snapshot = work.executionSnapshot;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Context de execuție</CardTitle>
+        <CardDescription>Firma, termenul și condițiile fixate la prima preluare.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {snapshot.summary.exists ? (
+          <div className="works-page__responsibility">
+            <div>
+              <span className="works-page__muted">Status snapshot</span>
+              <strong>{snapshot.summary.status === "LOCKED" ? "Fixat" : snapshot.summary.status}</strong>
+            </div>
+            <div>
+              <span className="works-page__muted">Versiune</span>
+              <strong>{snapshot.summary.version ?? "-"}</strong>
+            </div>
+            <div>
+              <span className="works-page__muted">Firmă</span>
+              <strong>{snapshot.summary.legalEntity ? `${snapshot.summary.legalEntity.code} · ${snapshot.summary.legalEntity.displayName}` : "-"}</strong>
+            </div>
+            <div>
+              <span className="works-page__muted">Tehnician inițial</span>
+              <strong>{snapshot.originalTechnician?.displayName ?? "-"}</strong>
+            </div>
+            <div>
+              <span className="works-page__muted">Tehnician curent</span>
+              <strong>{snapshot.currentTechnician?.displayName ?? "Nerevendicată"}</strong>
+            </div>
+            <div>
+              <span className="works-page__muted">Fixat la</span>
+              <strong>{snapshot.summary.lockedAt ? formatDateTime(snapshot.summary.lockedAt) : "-"}</strong>
+            </div>
+            <div>
+              <span className="works-page__muted">Start execuție</span>
+              <strong>{snapshot.deadline?.startAt ? formatDateTime(snapshot.deadline.startAt) : "-"}</strong>
+            </div>
+            <div>
+              <span className="works-page__muted">Termen final</span>
+              <strong>{snapshot.deadline?.effectiveDueAt ? formatDateTime(snapshot.deadline.effectiveDueAt) : "Fără termen"}</strong>
+            </div>
+            <div>
+              <span className="works-page__muted">Regulă termen</span>
+              <strong>{snapshot.deadline ? `${snapshot.deadline.mode}${snapshot.deadline.executionDays ? ` · ${snapshot.deadline.executionDays} zile` : ""}` : "-"}</strong>
+            </div>
+            {snapshot.pricing ? (
+              <>
+                <div>
+                  <span className="works-page__muted">Preț fixat</span>
+                  <strong>{formatPrice(snapshot.pricing.totalMinor, snapshot.pricing.currency, "ro-RO")}</strong>
+                </div>
+                <div>
+                  <span className="works-page__muted">Sursă preț</span>
+                  <strong>{snapshot.pricing.sourceLabel ?? snapshot.pricing.sourceType ?? "-"}</strong>
+                </div>
+              </>
+            ) : (
+              <div>
+                <span className="works-page__muted">Financiar</span>
+                <strong>Informațiile financiare nu sunt disponibile pentru rolul curent.</strong>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="works-page__muted">Contextul de execuție va fi stabilit la prima preluare.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function WorkResponsibilityCard({
   onReassign,
   work,
@@ -1013,7 +1090,11 @@ function WorkResponsibilityCard({
               <div key={event.id}>
                 <strong>{getAssignmentEventLabel(event.eventType)}</strong>
                 <span>{formatDateTime(event.createdAt)} · {event.actor.displayName}</span>
-                <p>{event.newTechnician?.displayName ?? "Fără responsabil"} · {event.newLegalEntity?.code ?? "Fără companie"}{event.reason ? ` · ${event.reason}` : ""}</p>
+                <p>
+                  {event.newTechnician?.displayName ?? "Fără responsabil"} · {event.newLegalEntity?.code ?? "Fără companie"}
+                  {event.executionSnapshot.version ? ` · Snapshot v${event.executionSnapshot.version} ${event.executionSnapshot.status === "LOCKED" ? "fixat" : event.executionSnapshot.status}` : ""}
+                  {event.reason ? ` · ${event.reason}` : ""}
+                </p>
               </div>
             ))}
           </div>
@@ -1041,14 +1122,15 @@ function ReassignWorkModal({
   const [technicianId, setTechnicianId] = useState("");
   const [executionLegalEntityCode, setExecutionLegalEntityCode] = useState<LegalEntityCode>("NC");
   const [reason, setReason] = useState("");
+  const fixedCode = work?.executionSnapshot.summary.legalEntity?.code ?? null;
 
   useEffect(() => {
     if (isOpen) {
       setTechnicianId(work?.claim.technician?.publicId ?? "");
-      setExecutionLegalEntityCode(work?.claim.executionLegalEntity?.code ?? "NC");
+      setExecutionLegalEntityCode(fixedCode ?? work?.claim.executionLegalEntity?.code ?? "NC");
       setReason("");
     }
-  }, [isOpen, work]);
+  }, [fixedCode, isOpen, work]);
 
   return (
     <Modal
@@ -1077,6 +1159,7 @@ function ReassignWorkModal({
         />
         <Select
           label="Companie execuție"
+          disabled={fixedCode !== null}
           onChange={(event) => {
             if (event.target.value === "NC" || event.target.value === "NG") {
               setExecutionLegalEntityCode(event.target.value);
@@ -1086,6 +1169,11 @@ function ReassignWorkModal({
           required
           value={executionLegalEntityCode}
         />
+        <p className="works-page__muted">
+          {fixedCode
+            ? "Reasignarea schimbă tehnicianul curent, dar păstrează contextul de execuție existent."
+            : "Prima asignare va fixa firma, prețul și termenul pentru această lucrare."}
+        </p>
         <Textarea label="Motiv" onChange={(event) => setReason(event.target.value)} required rows={4} value={reason} />
       </FormLayout>
     </Modal>

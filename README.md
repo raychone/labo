@@ -740,7 +740,19 @@ Releasing a work removes the active technician and execution company for this ta
 
 The `/works` registry shows responsibility, technician, execution company and filters for claim status, company and technician. The work drawer includes a `Responsabilitate` card and timeline.
 
-TECH-CLAIM-001A does not implement final pricing snapshots at execution time, deadline recalculation at claim, material cycles, time tracking, billing changes, files, notifications or reports.
+TECH-CLAIM-001B adds the final execution snapshot.
+
+At the first valid claim or manager assignment, the API creates one locked `WorkExecutionSnapshot` in the same transaction as the claim update, assignment event and audit entries. The snapshot stores version `1`, execution company, original technician, pricing resolution, deadline resolution and a small versioned context JSON. The frontend never sends price, total, deadline or source fields in the claim payload.
+
+Pricing is resolved server-side through the canonical pricing resolver with the existing precedence: doctor agreement, clinic agreement, then company catalog. Money is stored only as integer minor units. If no price is available for the selected company and work type, the claim is rejected with `409` and no snapshot/assignment is committed.
+
+For automatic deadlines, execution start is the successful claim timestamp and the deadline snapshot is recalculated once with source `FUTURE_TECH_CLAIM`. Manual deadlines are preserved and captured as manual in the execution snapshot. Unresolved deadlines are allowed and represented explicitly as `UNRESOLVED`; managers see the warning and technicians see that there is no final due date.
+
+Release clears the active technician and execution company on the work order, but never deletes or mutates the execution snapshot. Reclaim must use the same fixed company. Reassign changes only the current technician; company, pricing, original technician and deadline snapshot remain unchanged. Changing the fixed company requires a future controlled administrative repair task.
+
+Financial fields from the execution snapshot are masked server-side unless the user has pricing access. The `/works` registry returns only summary fields; detail view returns the read-only `Context de execuție` card. Assignment history includes snapshot version/status references without duplicating the full snapshot JSON.
+
+TECH-CLAIM-001A/001B do not implement material cycles, time tracking, billing changes, files, notifications, reports, offline or administrative snapshot repair.
 
 ## Laboratory Operations
 
