@@ -1656,7 +1656,7 @@ Aceste taskuri inlocuiesc ordinea veche dupa `SIGNATURES-001`. Detaliile complet
 
 ### ORG-CONTEXT-001 - Global NC/NG company context
 
-- Status: APPROVED.
+- Status: COMPLETED.
 - Obiectiv: context global vizibil `NC`/`NG` pentru ecrane si actiuni sensibile la firma.
 - Scope: registru firme, selector in shell, persistenta context, validare backend a contextului.
 - Non-goals: pricing, billing rewrite, pacienti, self-claim, migrare date existente.
@@ -1667,6 +1667,9 @@ Aceste taskuri inlocuiesc ordinea veche dupa `SIGNATURES-001`. Detaliile complet
 - Securitate: contextul este verificat server-side, nu doar in browser.
 - Audit: include contextul in actiunile critice sensibile la firma.
 - Testare: unit, integration unde se valideaza contextul, frontend tests, typecheck, test, build.
+- Implementare: model `LegalEntity`, camp nullable `Session.activeLegalEntityId`, seed idempotent `NC`/`NG`, `OrganizationContextModule`, endpointuri `GET /organization-context` si `PUT /organization-context`, permisiuni `organization_context.read` si `organization_context.switch`, helper/guard/decorator pentru taskurile viitoare si selector global in shell.
+- Decizie audit: schimbarea manuala scrie `organization_context.switched`; initializarea determinista la `NC` la prima citire nu este auditata ca sa evite zgomot operational.
+- Compatibilitate: `LaboratorySettings` ramane singleton, `BillingDocument`/`BillingSeries`/`Payment` raman fara firma, iar `WorkOrder` nu primeste inca firma.
 
 ### ORG-DATA-MIGRATION-001 - Company-aware local data migration
 

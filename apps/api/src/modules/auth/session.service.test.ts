@@ -18,6 +18,7 @@ const activeUser: User = {
 };
 
 const activeSession: Session = {
+  activeLegalEntityId: null,
   createdAt: new Date("2026-01-01T00:00:00.000Z"),
   expiresAt: new Date(Date.now() + 60_000),
   id: "session_1",

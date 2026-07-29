@@ -22,6 +22,8 @@ export type PermissionKey =
   | "users.assign_roles"
   | "roles.read"
   | "permissions.read"
+  | "organization_context.read"
+  | "organization_context.switch"
   | "clinics.create"
   | "clinics.read"
   | "clinics.update"
@@ -136,6 +138,8 @@ export const PERMISSION_REGISTRY = [
   definePermission("users.assign_roles", "Assign roles to users."),
   definePermission("roles.read", "Read roles."),
   definePermission("permissions.read", "Read permissions."),
+  definePermission("organization_context.read", "Read active organization context."),
+  definePermission("organization_context.switch", "Switch active organization context."),
   definePermission("clinics.create", "Create dental clinics."),
   definePermission("clinics.read", "Read dental clinics."),
   definePermission("clinics.update", "Update dental clinics."),

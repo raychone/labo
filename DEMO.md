@@ -8,6 +8,15 @@ Demo-ul curent prezintă funcționalitățile deja implementate în fluxul anter
 
 Nu prezenta demo-ul curent ca implementare finală a fluxului `NC`/`NG`. Pentru întâlniri comerciale, formulează-l ca demonstrație a modulelor existente până la realinierea completă prin `ORG-CONTEXT-001`, `TECH-CLAIM-001`, `STATUS-001`, `BILLING-REALIGN-001` și `DEMO-REAL-DATA-001`.
 
+`ORG-CONTEXT-001` adaugă selectorul global „Firmă activă”. Pentru demo:
+
+1. Intră ca Manager.
+2. Observă „Firmă activă” în shell.
+3. Schimbă `NC` → `NG`.
+4. Arată că utilizatorul rămâne același și nu apare logout.
+5. Arată că fluxurile operaționale, precum `/works`, rămân accesibile.
+6. Spune explicit că separarea facturilor, seriilor, prețurilor și setărilor pe firmă vine în taskurile următoare.
+
 ## 1. Pregătire înainte de prezentare
 
 Pornește baza de date, API-ul și frontend-ul:

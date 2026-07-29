@@ -1,5 +1,18 @@
 export { APPLICATION_NAME, WORKSPACE_SCOPE } from "./workspace.constants.js";
 export {
+  LEGAL_ENTITY_CODES,
+  LEGAL_ENTITY_DISPLAY_NAMES,
+  formatLegalEntityOption,
+  getLegalEntityDisplayName,
+  isLegalEntityCode,
+} from "./organization-context.js";
+export type {
+  LegalEntityCode,
+  LegalEntityOption,
+  OrganizationContextView,
+  SelectOrganizationContextInput,
+} from "./organization-context.js";
+export {
   SUPPORTED_CURRENCIES,
   SUPPORTED_COUNTRY_CODES,
   SUPPORTED_LOCALES,

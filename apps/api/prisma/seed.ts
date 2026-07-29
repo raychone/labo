@@ -29,6 +29,28 @@ async function main(): Promise<void> {
 
   const passwordHash = await hashPassword(password);
 
+  for (const legalEntity of [
+    { code: "NC", displayName: "Nicolaie Cristina", sortOrder: 1 },
+    { code: "NG", displayName: "Nicolaie Gabriel", sortOrder: 2 },
+  ]) {
+    await prisma.legalEntity.upsert({
+      create: {
+        code: legalEntity.code,
+        displayName: legalEntity.displayName,
+        isActive: true,
+        sortOrder: legalEntity.sortOrder,
+      },
+      update: {
+        displayName: legalEntity.displayName,
+        isActive: true,
+        sortOrder: legalEntity.sortOrder,
+      },
+      where: {
+        code: legalEntity.code,
+      },
+    });
+  }
+
   const managerUser = await prisma.user.upsert({
     create: {
       displayName,

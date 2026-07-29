@@ -582,7 +582,7 @@ Architecture direction:
 
 ### ORG-CONTEXT-001 - Global NC/NG company context
 
-- Status: APPROVED.
+- Status: COMPLETED.
 - Objective: introduce explicit global company context for `NC` and `NG` in shell and backend request context.
 - Scope: company registry/config, context switch UX, context persistence, request header/cookie strategy, permission-aware access, and documentation.
 - Non-goals: pricing implementation, billing rewrite, patient model, work claim flow, data migration of existing records.
@@ -593,6 +593,9 @@ Architecture direction:
 - Security: no context spoofing; server validates every context-sensitive mutation/read.
 - Audit: audit context-sensitive critical mutations with selected company.
 - Testing: typecheck, unit tests for context validation, frontend tests for switch visibility and persistence, build.
+- Implementation: `LegalEntity` registry with public codes `NC`/`NG`, `Session.activeLegalEntityId`, `OrganizationContextModule`, `GET /organization-context`, `PUT /organization-context`, `LegalEntityContextGuard`, `RequireLegalEntityContext`, `CurrentLegalEntity` and shell selector.
+- Audit decision: manual switch writes `organization_context.switched`; deterministic first-read initialization to NC is not audited to avoid noisy login/read audit events.
+- Compatibility: `LaboratorySettings`, billing documents, series, payments, work orders, pricing and demo works remain unmodified until their dedicated roadmap tasks.
 
 ### ORG-DATA-MIGRATION-001 - Company-aware local data migration
 

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 
 import { fetchCsrfToken, logout } from "../features/auth/auth-api.js";
+import { OrganizationContextSwitch } from "../features/organization-context/organization-context-switch.js";
 import { useSettings } from "../features/settings/settings-api.js";
 import { addUnauthorizedListener, isUnauthorizedError } from "../lib/api-client.js";
 import { useAuthState } from "./auth-state.js";
@@ -38,6 +39,7 @@ export function AuthenticatedAppShell(): ReactNode {
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const canReadSettings = auth.permissionKeys.includes("settings.read");
+  const canReadOrganizationContext = auth.permissionKeys.includes("organization_context.read");
   const settingsQuery = useSettings(canReadSettings);
   const laboratoryName = settingsQuery.data?.laboratoryName ?? fallbackLaboratoryName;
   const brandColor = getSafeBrandColor(settingsQuery.data?.primaryColor);
@@ -99,6 +101,7 @@ export function AuthenticatedAppShell(): ReactNode {
         currentPath={location.pathname}
         isLoggingOut={logoutMutation.isPending}
         laboratoryName={laboratoryName}
+        canReadOrganizationContext={canReadOrganizationContext}
         onLogout={() => logoutMutation.mutate()}
         routes={routes}
         userEmail={auth.user?.email ?? ""}
@@ -143,6 +146,7 @@ export function AuthenticatedAppShell(): ReactNode {
       >
         <div className="app-shell__mobile-drawer">
           <BrandBlock laboratoryName={laboratoryName} />
+          <OrganizationContextSwitch canRead={canReadOrganizationContext} compact />
           <NavigationList currentPath={location.pathname} routes={routes} />
           <div className="app-shell__drawer-user">
             <UserSummary email={auth.user?.email ?? ""} name={auth.user?.displayName ?? ""} />
@@ -156,6 +160,7 @@ export function AuthenticatedAppShell(): ReactNode {
 
 function AppSidebar({
   currentPath,
+  canReadOrganizationContext,
   isLoggingOut,
   laboratoryName,
   onLogout,
@@ -164,6 +169,7 @@ function AppSidebar({
   userName,
 }: {
   readonly currentPath: string;
+  readonly canReadOrganizationContext: boolean;
   readonly isLoggingOut: boolean;
   readonly laboratoryName: string;
   readonly onLogout: () => void;
@@ -174,6 +180,7 @@ function AppSidebar({
   return (
     <aside className="app-shell__sidebar">
       <BrandBlock laboratoryName={laboratoryName} />
+      <OrganizationContextSwitch canRead={canReadOrganizationContext} />
       <NavigationList currentPath={currentPath} routes={routes} />
       <div className="app-shell__sidebar-footer">
         <UserSummary email={userEmail} name={userName} />

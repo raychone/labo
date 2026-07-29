@@ -222,6 +222,81 @@
   place-items: center;
 }
 
+.organization-context {
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  display: grid;
+  gap: var(--dl-space-2);
+  padding: var(--dl-space-3);
+}
+
+.organization-context__header {
+  display: grid;
+  gap: var(--dl-space-1);
+}
+
+.organization-context__header span {
+  font-size: var(--dl-font-size-label);
+  font-weight: var(--dl-font-weight-bold);
+}
+
+.organization-context__header small,
+.organization-context__readonly span {
+  color: var(--dl-color-text-muted);
+}
+
+.organization-context__segments {
+  display: grid;
+  gap: var(--dl-space-2);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.organization-context__segment {
+  background: var(--dl-color-surface);
+  border: var(--dl-border-width) solid var(--dl-color-border-strong);
+  border-radius: var(--dl-radius-md);
+  color: var(--dl-color-text);
+  cursor: pointer;
+  font: inherit;
+  font-weight: var(--dl-font-weight-bold);
+  min-height: 2.5rem;
+}
+
+.organization-context__segment:hover:not(:disabled),
+.organization-context__segment--active {
+  background: color-mix(in srgb, var(--app-brand-primary) 12%, var(--dl-color-surface));
+  border-color: var(--app-brand-primary);
+  color: var(--app-brand-primary);
+}
+
+.organization-context__segment:disabled {
+  cursor: default;
+  opacity: 0.82;
+}
+
+.organization-context__readonly {
+  align-items: center;
+  display: grid;
+  gap: var(--dl-space-2);
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.organization-context__readonly strong {
+  background: color-mix(in srgb, var(--app-brand-primary) 12%, var(--dl-color-surface));
+  border: var(--dl-border-width) solid var(--app-brand-primary);
+  border-radius: var(--dl-radius-sm);
+  color: var(--app-brand-primary);
+  display: inline-grid;
+  min-height: 2rem;
+  min-width: 2.5rem;
+  place-items: center;
+}
+
+.organization-context--loading,
+.organization-context--error {
+  padding: var(--dl-space-2);
+}
+
 .app-shell__user {
   align-items: center;
   display: grid;

@@ -35,7 +35,9 @@ function createJsonResponse(body: unknown, status = 200): Response {
 }
 
 function createFetchMock(permissions: readonly string[]) {
-  return vi.fn((input: RequestInfo | URL) => {
+  let activeCode = "NC";
+
+  return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.endsWith("/auth/me")) {
       return Promise.resolve(createJsonResponse({
@@ -55,6 +57,38 @@ function createFetchMock(permissions: readonly string[]) {
       return Promise.resolve(createJsonResponse({
         laboratoryName: "Laborator Test",
         primaryColor: "#14532d",
+      }));
+    }
+    if (url.endsWith("/auth/csrf")) {
+      return Promise.resolve(createJsonResponse({ csrfToken: "csrf-token" }));
+    }
+    if (url.endsWith("/organization-context") && init?.method === "PUT") {
+      const body = JSON.parse(String(init.body)) as { readonly code: string };
+      activeCode = body.code;
+
+      return Promise.resolve(createJsonResponse({
+        active: {
+          code: activeCode,
+          displayName: activeCode === "NG" ? "Nicolaie Gabriel" : "Nicolaie Cristina",
+        },
+        available: [
+          { code: "NC", displayName: "Nicolaie Cristina" },
+          { code: "NG", displayName: "Nicolaie Gabriel" },
+        ],
+        canSwitch: true,
+      }));
+    }
+    if (url.endsWith("/organization-context")) {
+      return Promise.resolve(createJsonResponse({
+        active: {
+          code: activeCode,
+          displayName: activeCode === "NG" ? "Nicolaie Gabriel" : "Nicolaie Cristina",
+        },
+        available: [
+          { code: "NC", displayName: "Nicolaie Cristina" },
+          { code: "NG", displayName: "Nicolaie Gabriel" },
+        ],
+        canSwitch: true,
       }));
     }
 
@@ -100,6 +134,44 @@ describe("AuthenticatedAppShell", () => {
     expect(await screen.findByRole("dialog", { name: "Navigație" })).toBeDefined();
     fireEvent.keyDown(screen.getByRole("dialog", { name: "Navigație" }), { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Navigație" })).toBeNull());
+  });
+
+  it("renders and switches the organization context for managers", async () => {
+    const fetchMock = createFetchMock(["works.read_all", "settings.read", "organization_context.read", "organization_context.switch"]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(
+      <Routes>
+        <Route element={<AuthenticatedAppShell />} path="/">
+          <Route element={<div>Works content</div>} path="works" />
+        </Route>
+      </Routes>,
+    );
+
+    expect(await screen.findByText("Firmă activă")).toBeDefined();
+    expect((await screen.findByRole("radio", { name: "NC" })).getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(screen.getByRole("radio", { name: "NG" }));
+
+    await waitFor(() => expect(screen.getByRole("radio", { name: "NG" }).getAttribute("aria-checked")).toBe("true"));
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/organization-context$/), expect.objectContaining({
+      method: "PUT",
+    }));
+    expect(screen.getByText("Works content")).toBeDefined();
+  });
+
+  it("does not render organization context without read permission", async () => {
+    vi.stubGlobal("fetch", createFetchMock(["works.read_all"]));
+
+    renderWithProviders(
+      <Routes>
+        <Route element={<AuthenticatedAppShell />} path="/">
+          <Route element={<div>Works content</div>} path="works" />
+        </Route>
+      </Routes>,
+    );
+
+    await screen.findByText("Works content");
+    expect(screen.queryByText("Firmă activă")).toBeNull();
   });
 });
 

@@ -24,6 +24,17 @@ Reception registers work operationally without choosing the company. The technic
 
 The current demo data still shows the already implemented prior flow: single-company settings and assignment-driven technician work. It remains useful for presenting completed modules, but the validated NC/NG self-claim workflow will be represented by `ORG-CONTEXT-001` and later roadmap tasks.
 
+`ORG-CONTEXT-001` adds the first implementation slice for this model:
+
+- `LegalEntity` registry entries for `NC` and `NG`.
+- `Session.activeLegalEntityId` as the server-side source of truth for the active context.
+- `GET /organization-context` for the current context and available active options.
+- `PUT /organization-context` for CSRF-protected context switching.
+- RBAC permissions `organization_context.read` and `organization_context.switch`.
+- A shell selector labelled “Firmă activă”.
+
+Temporary compatibility limits remain intentional: `LaboratorySettings` is still singleton, billing documents and series are not yet separated by company, and work orders do not yet store a company. Those changes belong to later approved roadmap tasks.
+
 ## Workspace
 
 ```text

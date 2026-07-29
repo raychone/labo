@@ -109,6 +109,20 @@ model LaboratorySettings {
   @@map("laboratory_settings")
 }
 
+model LegalEntity {
+  id          String    @id @default(cuid())
+  code        String    @unique @db.VarChar(8)
+  displayName String    @map("display_name") @db.VarChar(120)
+  isActive    Boolean   @default(true) @map("is_active")
+  sortOrder   Int       @default(0) @map("sort_order")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  sessions    Session[] @relation("SessionActiveLegalEntity")
+
+  @@index([isActive, sortOrder, code])
+  @@map("legal_entities")
+}
+
 model Clinic {
   id String @id @default(cuid())
   code String @unique @db.VarChar(20)
@@ -1114,18 +1128,21 @@ enum PermissionEffect {
 }
 
 model Session {
-  id         String    @id @default(cuid())
-  userId     String    @map("user_id")
-  tokenHash  String    @unique @map("token_hash")
-  expiresAt  DateTime  @map("expires_at")
-  createdAt  DateTime  @default(now()) @map("created_at")
-  lastSeenAt DateTime  @default(now()) @map("last_seen_at")
-  revokedAt  DateTime? @map("revoked_at")
-  ipAddress  String?   @map("ip_address")
-  userAgent  String?   @map("user_agent")
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                  String       @id @default(cuid())
+  userId              String       @map("user_id")
+  tokenHash           String       @unique @map("token_hash")
+  activeLegalEntityId String?      @map("active_legal_entity_id")
+  expiresAt           DateTime     @map("expires_at")
+  createdAt           DateTime     @default(now()) @map("created_at")
+  lastSeenAt          DateTime     @default(now()) @map("last_seen_at")
+  revokedAt           DateTime?    @map("revoked_at")
+  ipAddress           String?      @map("ip_address")
+  userAgent           String?      @map("user_agent")
+  user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeLegalEntity   LegalEntity? @relation("SessionActiveLegalEntity", fields: [activeLegalEntityId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([activeLegalEntityId])
   @@index([expiresAt])
   @@index([revokedAt])
   @@map("sessions")

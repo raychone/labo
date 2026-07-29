@@ -2,7 +2,7 @@
 
 ## Overall Progress
 
-74%
+76%
 
 ## ROADMAP
 
@@ -10,7 +10,7 @@
 
 ## ORGANIZATION
 
-- [ ] ORG-CONTEXT-001 - Global NC/NG company context (APPROVED)
+- [x] ORG-CONTEXT-001 - Global NC/NG company context (COMPLETED)
 - [ ] ORG-DATA-MIGRATION-001 - Company-aware local data migration (NOT STARTED)
 
 ## FOUNDATION
@@ -183,23 +183,92 @@
 
 ## Current Task
 
-ROADMAP-REALIGN-002 - COMPLETED
+NONE / AWAITING APPROVAL
 
 Status: COMPLETED
 
-Started: 2026-07-29T02:30:00Z
+Started: 2026-07-29T02:59:02Z
 
-Completed: 2026-07-29T02:48:05Z
+Completed: 2026-07-29T03:21:41Z
 
-Last completed task: ROADMAP-REALIGN-002 - Realign product roadmap to validated laboratory workflow
+Last completed task: ORG-CONTEXT-001 - Global NC/NG company context
 
-Completed: 2026-07-29T02:48:05Z
+Completed: 2026-07-29T03:21:41Z
 
 ## Next Recommended Task
 
-ORG-CONTEXT-001 - APPROVED
+ORG-DATA-MIGRATION-001 - Company-aware local data migration
 
 ## Latest Completion Summary
+
+### ORG-CONTEXT-001 - Global NC/NG company context
+
+- Added the minimal `LegalEntity` registry for `NC` - Nicolaie Cristina and `NG` - Nicolaie Gabriel, plus nullable `Session.activeLegalEntityId` for per-session server-side context.
+- Added deterministic migration `20260729025902_legal_entity_context` without destructive changes and without adding company fields to works, billing, payments, work types or settings.
+- Added idempotent base seed entries for `NC` and `NG`; demo seed remains idempotent and unchanged in scope.
+- Added RBAC permissions `organization_context.read` and `organization_context.switch`; managers receive both, operational roles do not receive switch access.
+- Added `OrganizationContextModule` with `GET /organization-context` and CSRF-protected `PUT /organization-context`.
+- Context switching updates only the current session, does not change identity, roles, logout state or permissions, and writes audit action `organization_context.switched`.
+- Added reusable shared contracts for legal entity codes and organization context display data.
+- Added an authenticated shell selector: desktop segmented control and mobile drawer select, Romanian wording, permission-aware visibility, no full reload and no global query invalidation.
+- Added guard/decorator utilities for future endpoints that will require an active legal entity context.
+- Updated `REAL-LAB-WORKFLOW.md`, `MVP-IMPLEMENTATION-PLAN.md`, `README.md`, `DEMO.md` and `DEMO-SCRIPT.md` to keep implementation and architecture aligned.
+
+Main files modified:
+
+- `apps/api/prisma/schema.prisma`
+- `apps/api/prisma/migrations/20260729025902_legal_entity_context/migration.sql`
+- `apps/api/prisma/seed.ts`
+- `apps/api/src/modules/organization-context/*`
+- `apps/api/src/modules/rbac/permission-registry.ts`
+- `apps/web/src/features/organization-context/*`
+- `apps/web/src/app/authenticated-app-shell.tsx`
+- `apps/web/src/app/app-shell.css`
+- `packages/shared/src/organization-context.ts`
+- `REAL-LAB-WORKFLOW.md`
+- `MVP-IMPLEMENTATION-PLAN.md`
+- `README.md`
+- `DEMO.md`
+- `DEMO-SCRIPT.md`
+
+Verification:
+
+- `pnpm --filter @dental-lab/api prisma:validate` passed.
+- `pnpm --filter @dental-lab/api prisma:generate` passed.
+- `pnpm --filter @dental-lab/api prisma:migrate:dev` passed against local `localhost:55439/dental_lab_dev`.
+- `pnpm --filter @dental-lab/api prisma:db:seed` passed.
+- `ALLOW_DEMO_SEED=true pnpm --filter @dental-lab/api prisma:db:seed:demo` passed twice; idempotency confirmed.
+- `pnpm typecheck` passed.
+- `pnpm test` passed: API 39 files / 144 tests, web 15 files / 37 tests, shared 11 files / 36 tests, UI 3 files / 27 tests.
+- `pnpm build` passed.
+
+Manual verification:
+
+- API smoke ran on `http://localhost:3011` because `3010` was already occupied.
+- Web smoke ran on `http://localhost:3002` with `VITE_API_BASE_URL=http://localhost:3011`.
+- Manager demo login returned context `NC`, switched to `NG` with CSRF, preserved the session and kept `/works`, `/technician/workbench`, `/logistics/center`, `/deliveries`, `/billing/overview` and `/settings` reachable.
+- A second manager session defaulted independently to `NC`.
+- Missing CSRF returned `403`, unauthenticated read returned `401`, operational role access returned `403`, invalid code returned `400`.
+- Audit table contained the `organization_context.switched` event.
+
+Architecture decisions:
+
+- This is a global legal/financial context, not tenant isolation.
+- The active company context is stored server-side on the session.
+- `NC` is the default context for managers when no active session context exists.
+- Existing business data remains compatible and unsegmented until `ORG-DATA-MIGRATION-001` and later pricing/billing/document tasks.
+- Initial context selection is not audited; explicit context switches are audited.
+
+Technical debt introduced:
+
+- None.
+
+Remaining risks:
+
+- Settings, billing, work orders and pricing are not yet company-separated by design; that belongs to future roadmap tasks.
+- Automated Playwright visual verification was not run because Playwright is not installed in the workspace.
+- API shutdown still shows the existing PostgreSQL client warning in development, without request failures.
+- Local `assets/` files are unrelated and intentionally excluded from this task.
 
 ### ROADMAP-REALIGN-002 - Realign product roadmap to validated laboratory workflow
 
