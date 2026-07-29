@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 
 import { useAuthState } from "./auth-state.js";
+import { useWorks } from "../features/works/works-api.js";
 import { useSettings } from "../features/settings/settings-api.js";
 import { getNavigationRoutes } from "./route-registry.js";
 import { usePageTitle } from "./use-page-title.js";
@@ -13,7 +14,24 @@ export function DashboardPage(): ReactNode {
   const laboratoryName = settingsQuery.data?.laboratoryName ?? "Dental Lab Management";
   const routes = getNavigationRoutes(auth.permissionKeys).filter((route) => route.path !== "/dashboard");
   const canCreateWork = auth.permissionKeys.includes("works.create");
+  const canReadWorks = auth.permissionKeys.includes("works.read_all");
   const canScanWork = auth.permissionKeys.includes("scan.use");
+  const deadlineDashboardQuery = useWorks({
+    clinicId: undefined,
+    dateFrom: undefined,
+    dateTo: undefined,
+    deadlineFilter: undefined,
+    doctorId: undefined,
+    page: 1,
+    pageSize: 1,
+    priority: undefined,
+    search: undefined,
+    sortBy: "effectiveDueAt",
+    sortDirection: "asc",
+    status: undefined,
+    workTypeId: undefined,
+  }, canReadWorks);
+  const deadlineDashboard = deadlineDashboardQuery.data?.deadlineDashboard;
   usePageTitle("Panou principal", laboratoryName);
 
   return (
@@ -30,6 +48,24 @@ export function DashboardPage(): ReactNode {
         </div>
       </div>
 
+      {canReadWorks ? (
+        <section className="dashboard-page__deadline" aria-labelledby="deadline-dashboard-title">
+          <div>
+            <h2 id="deadline-dashboard-title">Termene operaționale</h2>
+            <p>Agregări read-only după termenul efectiv al lucrărilor.</p>
+          </div>
+          <div className="dashboard-page__metrics">
+            <DashboardMetric label="Astăzi" value={deadlineDashboard?.dueToday} />
+            <DashboardMetric label="Mâine" value={deadlineDashboard?.dueTomorrow} />
+            <DashboardMetric label="Întârziate" value={deadlineDashboard?.late} />
+            <DashboardMetric label="Manual" value={deadlineDashboard?.manual} />
+            <DashboardMetric label="Fără termen" value={deadlineDashboard?.unresolved} />
+            <DashboardMetric label="Următoarele 7 zile" value={deadlineDashboard?.next7Days} />
+            <DashboardMetric label="Ultimele 7 zile finalizate la timp" value={deadlineDashboard?.completedOnTimeLast7Days} />
+          </div>
+        </section>
+      ) : null}
+
       <div className="dashboard-page__grid">
         {routes.map((route) => (
           <Card key={route.path}>
@@ -44,5 +80,14 @@ export function DashboardPage(): ReactNode {
         ))}
       </div>
     </section>
+  );
+}
+
+function DashboardMetric({ label, value }: { readonly label: string; readonly value: number | undefined }): ReactNode {
+  return (
+    <div className="dashboard-page__metric">
+      <span>{label}</span>
+      <strong>{value ?? "..."}</strong>
+    </div>
   );
 }

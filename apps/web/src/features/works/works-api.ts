@@ -47,6 +47,7 @@ function toWorksQueryString(params: WorksListParams): string {
   appendOptional(query, "clinicId", params.clinicId);
   appendOptional(query, "dateFrom", params.dateFrom);
   appendOptional(query, "dateTo", params.dateTo);
+  appendOptional(query, "deadlineFilter", params.deadlineFilter);
   appendOptional(query, "doctorId", params.doctorId);
   appendOptional(query, "priority", params.priority);
   appendOptional(query, "search", params.search);

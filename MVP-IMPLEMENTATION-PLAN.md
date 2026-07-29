@@ -1750,14 +1750,28 @@ Aceste taskuri inlocuiesc ordinea veche dupa `SIGNATURES-001`. Detaliile complet
 - Audit: creare snapshot, recalculare, setare manuala si deadline nerezolvat.
 - Testare: Prisma validate/generate/migrate, seed baza, demo seed idempotent, typecheck, unit/controller/UI tests, build si smoke API/UI.
 
-### WORK-DEADLINES-001C - Workflow claim deadline start integration
+### WORK-DEADLINES-001C - Operational deadline UI, urgency indicators and work registry integration
+
+- Status: COMPLETED.
+- Obiectiv: afisarea operationala clara a termenelor persistate fara modificarea algoritmului 001A sau a snapshotului 001B.
+- Scope: badge-uri deadline, culori de urgenta, countdown, detectare intarziere, coloane/filtre/sortare in registrul lucrarilor, sumar dashboard read-only, card de termen in detaliul lucrarii si etichete timeline.
+- Non-goals: notificari, cron, SMS/email/push, claim tehnician, billing, documente, plati, rapoarte, OCR, assets, modificari de migrari Prisma.
+- Dependente: WORK-DEADLINES-001A, WORK-DEADLINES-001B, SHELL-001.
+- Acceptance criteria: UI foloseste doar `effectiveDueAt` ca termen oficial, starile `UNKNOWN`, `UNRESOLVED`, `ON_TIME`, `DUE_TODAY`, `DUE_TOMORROW`, `WARNING`, `LATE`, `MANUAL` sunt rezolvate unitar in `Europe/Bucharest`, registrul poate sorta/filtra/cauta cu deadline read model, dashboardul afiseaza totaluri, detaliul lucrarii explica termenul fara date financiare interne.
+- Backend: read model pentru deadline vizual si sumar dashboard in `GET /works`, sortare safe dupa `effectiveDueAt`, filtrare operationala read-only fara migrari.
+- Frontend: registru lucrari cu badge-uri, countdown, filtre deadline, tooltips, dashboard termene operationale si card termen in drawer.
+- Securitate: RBAC existent pe `works.read_all`; non-financial roles vad doar date operationale, nu preturi/acorduri/ID-uri interne de reguli.
+- Audit: fara audit nou deoarece taskul este read-only.
+- Testare: resolver unit tests, service/controller work list tests, UI registry/detail/dashboard tests, regression typecheck/test/build.
+
+### TECH-CLAIM-001A - Technician self-claim deadline start integration
 
 - Status: APPROVED.
 - Obiectiv: integrarea termenelor persistate cu primul claim/start tehnic real, dupa ce fluxul de self-claim devine disponibil.
-- Scope: stabilirea `executionStartedAt`, recalc optional pornind de la startul tehnic, blocarea companiei la primul claim si reguli de corectie manager.
+- Scope: stabilirea momentului operational de start tehnic, recalc optional pornind de la startul tehnic, blocarea companiei la primul claim si reguli de corectie manager.
 - Non-goals: refacerea engine-ului 001A, schimbarea snapshotului 001B, notificari, dashboard sau rapoarte.
-- Dependente: WORK-DEADLINES-001B, TECH-CLAIM-001.
-- Acceptance criteria: primul claim/start tehnic seteaza explicit momentul operational de executie si pastreaza auditul; conflictele de versiune sunt refuzate.
+- Dependente: WORK-DEADLINES-001B, WORK-DEADLINES-001C, TECH-CLAIM-001.
+- Acceptance criteria: primul claim/start tehnic seteaza explicit momentul operational de executie si pastreaza auditul; conflictele de versiune sunt refuzate; deadline-ul afisat ramane derivat din `effectiveDueAt`.
 - Backend: integrare claim/workflow cu deadline service si optimistic locking.
 - Frontend: workbench self-claim afiseaza si confirma efectul asupra termenului.
 - Securitate: tehnicianul poate actiona doar pe etapa permisa; managerul poate corecta explicit.

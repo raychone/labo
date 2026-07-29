@@ -253,7 +253,7 @@ Each work must keep a financial snapshot:
 
 ## Deadlines
 
-`WORK-DEADLINES-001A` adds the reusable calculation layer for execution deadlines. `WORK-DEADLINES-001B` persists a controlled deadline snapshot on each work order without changing the operational claim flow.
+`WORK-DEADLINES-001A` adds the reusable calculation layer for execution deadlines. `WORK-DEADLINES-001B` persists a controlled deadline snapshot on each work order without changing the operational claim flow. `WORK-DEADLINES-001C` makes the persisted effective deadline visible in the operational UI.
 
 Managers configure execution time in the pricing page.
 
@@ -294,11 +294,17 @@ Implemented in `WORK-DEADLINES-001B`:
 - Optimistic locking with `deadlineRevision`.
 - Deadline correction audit.
 
-Deferred to `WORK-DEADLINES-001C` and later tasks:
+Implemented in `WORK-DEADLINES-001C`:
+
+- Work registry deadline badges, countdowns, overdue detection, sorting and filters based only on `effectiveDueAt`.
+- Dashboard read-only aggregates for due today, due tomorrow, late, manual, unresolved and next 7 days.
+- Work detail deadline card with snapshot metadata and timeline-oriented labels.
+- Visual states resolved in `Europe/Bucharest`: `UNKNOWN`, `UNRESOLVED`, `ON_TIME`, `DUE_TODAY`, `DUE_TOMORROW`, `WARNING`, `LATE`, `MANUAL`.
+
+Deferred to `TECH-CLAIM-001A` and later tasks:
 
 - First technical claim integration and `executionStartedAt`.
-- Deadline alerts and work registry filters.
-- Notifications, dashboard and overdue reporting.
+- Notifications, cron jobs and overdue reporting.
 
 Required deadline colors:
 

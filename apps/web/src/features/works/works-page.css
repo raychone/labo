@@ -86,6 +86,76 @@
   padding: var(--dl-space-3);
 }
 
+.works-page__deadline-badge {
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-sm);
+  display: inline-flex;
+  font-size: var(--dl-font-size-sm);
+  font-weight: var(--dl-font-weight-semibold);
+  line-height: 1;
+  padding: var(--dl-space-2) var(--dl-space-3);
+  width: max-content;
+}
+
+.works-page__deadline-badge--gray {
+  background: var(--dl-color-surface-muted);
+  color: var(--dl-color-text-muted);
+}
+
+.works-page__deadline-badge--dark-gray {
+  background: var(--dl-color-text-muted);
+  color: var(--dl-color-surface);
+}
+
+.works-page__deadline-badge--blue {
+  background: var(--dl-color-info-background);
+  border-color: var(--dl-color-info-border);
+  color: var(--dl-color-info-foreground);
+}
+
+.works-page__deadline-badge--green {
+  background: var(--dl-color-success-background);
+  border-color: var(--dl-color-success-border);
+  color: var(--dl-color-success-foreground);
+}
+
+.works-page__deadline-badge--yellow {
+  background: var(--dl-color-warning-background);
+  border-color: var(--dl-color-warning-border);
+  color: var(--dl-color-warning-foreground);
+}
+
+.works-page__deadline-badge--strong-orange {
+  background: var(--dl-color-warning-background);
+  border-color: var(--dl-color-warning);
+  color: var(--dl-color-warning-strong);
+}
+
+.works-page__deadline-badge--red {
+  background: var(--dl-color-danger-background);
+  border-color: var(--dl-color-danger-border);
+  color: var(--dl-color-danger-foreground);
+}
+
+.works-page__deadline-card {
+  display: grid;
+  gap: var(--dl-space-3);
+  grid-template-columns: 1fr;
+}
+
+.works-page__deadline-card > div {
+  display: grid;
+  gap: var(--dl-space-1);
+}
+
+.works-page__deadline-card-note {
+  grid-column: 1 / -1;
+}
+
+.works-page__deadline-card-note p {
+  margin: 0;
+}
+
 .works-page__deadline-preview strong {
   color: var(--dl-color-text);
 }
@@ -271,5 +341,9 @@
   .works-page__filters,
   .works-page__form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .works-page__deadline-card {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

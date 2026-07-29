@@ -12,6 +12,7 @@ import { WorkflowExecutionService } from "../workflow-execution/workflow-executi
 import { WORK_ORDER_AUDIT_ACTIONS, WORK_ORDER_RESOURCE_TYPE } from "./works.constants.js";
 import type { CreateWorkDto, ListWorksQueryDto, RecalculateWorkDeadlineDto, SetManualWorkDeadlineDto, UpdateWorkDto, WorkDeadlinePreviewDto } from "./dto/works.dto.js";
 import { deadlineDataToPrisma, WorkDeadlineService } from "./work-deadline.service.js";
+import { accumulateDeadlineDashboardSummary, createEmptyDeadlineDashboardSummary, isDeadlineInFilter } from "./work-deadline-visual.js";
 import { WorkOrderCodeService } from "./work-order-code.service.js";
 import {
   type PaginatedWorksView,
@@ -121,6 +122,7 @@ export class WorksService {
     const pageSize = Math.min(query.pageSize, 100);
     const page = Math.max(query.page, 1);
     const search = query.search?.trim();
+    const now = new Date();
     const where: Prisma.WorkOrderWhereInput = {
       ...(query.clinicId ? { clinicId: query.clinicId } : {}),
       ...(query.doctorId ? { doctorId: query.doctorId } : {}),
@@ -147,26 +149,40 @@ export class WorksService {
         : {}),
     };
 
-    const [total, workOrders] = await this.prisma.$transaction([
-      this.prisma.workOrder.count({ where }),
-      this.prisma.workOrder.findMany({
+    const allMatchingWorkOrders = await this.prisma.workOrder.findMany({
         include: WORK_ORDER_INCLUDE,
         orderBy: {
           [query.sortBy]: query.sortDirection,
         },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
         where,
-      }),
-    ]);
+      });
+    const filteredWorkOrders = query.deadlineFilter
+      ? allMatchingWorkOrders.filter((workOrder) => isDeadlineInFilter({
+          effectiveDueAt: workOrder.effectiveDueAt?.toISOString() ?? null,
+          mode: workOrder.deadlineMode,
+          now: now.toISOString(),
+        }, query.deadlineFilter ?? "ALL"))
+      : allMatchingWorkOrders;
+    const total = filteredWorkOrders.length;
+    const workOrders = filteredWorkOrders.slice((page - 1) * pageSize, page * pageSize);
 
     return {
+      deadlineDashboard: this.createDeadlineDashboardSummary(allMatchingWorkOrders, now),
       items: workOrders.map((workOrder) => toWorkSummaryView(workOrder, includePricing)),
       page,
       pageCount: Math.max(1, Math.ceil(total / pageSize)),
       pageSize,
       total,
     };
+  }
+
+  private createDeadlineDashboardSummary(workOrders: readonly WorkOrderRecord[], now: Date) {
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
+    return workOrders.reduce((summary, workOrder) => accumulateDeadlineDashboardSummary(summary, {
+      effectiveDueAt: workOrder.effectiveDueAt?.toISOString() ?? null,
+      mode: workOrder.deadlineMode,
+      now: now.toISOString(),
+    }, isCompletedOnTimeInWindow(workOrder, sevenDaysAgo)), createEmptyDeadlineDashboardSummary());
   }
 
   public async listWorkTypeFormOptions(): Promise<readonly WorkTypeFormOptionView[]> {
@@ -896,4 +912,13 @@ function isDtoFieldChanged(before: WorkOrderRecord, dto: UpdateWorkDto, field: (
   }
 
   return before[field] !== value;
+}
+
+function isCompletedOnTimeInWindow(workOrder: WorkOrderRecord, windowStart: Date): boolean {
+  const completedAt = workOrder.workflowExecution?.completedAt;
+  if (!completedAt || !workOrder.effectiveDueAt) {
+    return false;
+  }
+
+  return completedAt.getTime() >= windowStart.getTime() && completedAt.getTime() <= workOrder.effectiveDueAt.getTime();
 }

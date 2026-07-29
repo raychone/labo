@@ -54,14 +54,25 @@ const workSummary = {
   createdAt: "2026-07-22T12:00:00.000Z",
   currency: null,
   deadline: {
+    badge: "În termen",
+    calculatedAt: "2026-07-22T12:00:00.000Z",
     calculatedDueAt: "2026-08-01T10:00:00.000Z",
+    color: "green",
+    countdown: "4 zile",
     effectiveDueAt: "2026-08-01T10:00:00.000Z",
-    lockedAt: null,
+    executionDays: 4,
+    explanation: "Termen calculat automat.",
+    includeStartDay: false,
+    isLocked: false,
     manualDueAt: null,
     mode: "CALCULATED",
     reasonCode: null,
     revision: 1,
     source: "CREATION",
+    startAt: "2026-07-22T12:00:00.000Z",
+    status: "ON_TIME",
+    timezone: "Europe/Bucharest",
+    tooltip: "Lucrarea este în termen.",
   },
   doctor: { displayName: "Dr. Ana Popescu", id: "doctor_1" },
   id: "work_order_1",
@@ -81,6 +92,25 @@ const workSummary = {
     status: "ACTIVE",
   },
   workType: { code: "WT-0001", id: "work_type_1", name: "Coroana zirconiu" },
+};
+
+const deadlineDashboard = {
+  completedOnTimeLast7Days: 0,
+  dueToday: 0,
+  dueTomorrow: 0,
+  late: 0,
+  manual: 0,
+  next7Days: 1,
+  unresolved: 0,
+};
+
+const worksListResponse = {
+  deadlineDashboard,
+  items: [workSummary],
+  page: 1,
+  pageCount: 1,
+  pageSize: 20,
+  total: 1,
 };
 
 const workDetail = {
@@ -231,7 +261,7 @@ describe("WorksPage", () => {
         return Promise.resolve(createJsonResponse(clinicOptionsResponse));
       }
       if (url.includes("/works?")) {
-        return Promise.resolve(createJsonResponse({ items: [workSummary], page: 1, pageCount: 1, pageSize: 20, total: 1 }));
+        return Promise.resolve(createJsonResponse(worksListResponse));
       }
 
       return Promise.resolve(createJsonResponse({}, 404));
@@ -242,6 +272,8 @@ describe("WorksPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Lucrări" })).toBeDefined();
     expect(await screen.findByText("WO-2026-000001")).toBeDefined();
+    expect(await screen.findByText("4 zile")).toBeDefined();
+    expect(await screen.findByText("În termen")).toBeDefined();
     expect(await screen.findByText("Restricționat")).toBeDefined();
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/work-types/options"), expect.anything());
   });
@@ -269,7 +301,7 @@ describe("WorksPage", () => {
         return Promise.resolve(createJsonResponse(doctorOptionsResponse));
       }
       if (url.includes("/works?")) {
-        return Promise.resolve(createJsonResponse({ items: [workSummary], page: 1, pageCount: 1, pageSize: 20, total: 1 }));
+        return Promise.resolve(createJsonResponse(worksListResponse));
       }
 
       return Promise.resolve(createJsonResponse({}, 404));
@@ -336,7 +368,7 @@ describe("WorksPage", () => {
         return Promise.resolve(createJsonResponse(clinicOptionsResponse));
       }
       if (url.includes("/works?")) {
-        return Promise.resolve(createJsonResponse({ items: [workSummary], page: 1, pageCount: 1, pageSize: 20, total: 1 }));
+        return Promise.resolve(createJsonResponse(worksListResponse));
       }
 
       return Promise.resolve(createJsonResponse({}, 404));
@@ -396,7 +428,7 @@ describe("WorksPage", () => {
         return Promise.resolve(createJsonResponse(clinicOptionsResponse));
       }
       if (url.includes("/works?")) {
-        return Promise.resolve(createJsonResponse({ items: [workSummary], page: 1, pageCount: 1, pageSize: 20, total: 1 }));
+        return Promise.resolve(createJsonResponse(worksListResponse));
       }
 
       return Promise.resolve(createJsonResponse({}, 404));

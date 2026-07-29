@@ -399,7 +399,14 @@ Money is stored as integer minor units. Percentage adjustments are stored as bas
 - Updates that change cabinet, doctor, work type or quantity require `expectedDeadlineRevision` and recalculate only when the existing deadline is not manually locked.
 - Managers can recalculate or set a manual deadline explicitly; manual deadlines are locked and audited.
 - `POST /works/deadline-preview` is side-effect free and does not expose prices, agreement IDs or internal rule IDs to non-financial roles.
-- Deadline alert colors, overdue filters, notifications and technical-claim start integration are deferred to later tasks.
+
+`WORK-DEADLINES-001C` adds operational deadline visibility:
+
+- The work registry uses only `effectiveDueAt` for operational deadline sorting, filtering, badges, countdowns and overdue detection.
+- Deadline visual states are resolved with `Europe/Bucharest` local calendar semantics: unknown, unresolved, on time, due today, due tomorrow, warning, late and manual.
+- Registry filters include today, tomorrow, late, manual, without deadline and next 7 days. The dashboard shows read-only deadline totals for the current registry scope.
+- Work detail shows the effective deadline card, snapshot revision and timeline-oriented labels without exposing pricing internals.
+- Notifications, cron jobs, reports and technical-claim start integration are deferred to later tasks.
 
 The frontend route is:
 

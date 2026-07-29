@@ -1,9 +1,10 @@
 import type { CreateWorkFormSubmissionInput, WorkFormSubmissionView, WorkFormValues } from "./work-forms.js";
+import type { DeadlineDashboardSummary, DeadlineFilter } from "./work-deadline-visual-state.js";
 import type { WorkWorkflowExecutionView, WorkflowExecutionStatus } from "./workflow-execution.js";
 
 export const WORK_STATUSES = ["REGISTERED"] as const;
 export const WORK_PRIORITIES = ["NORMAL", "URGENT"] as const;
-export const WORK_SORT_FIELDS = ["code", "createdAt", "priority", "requestedDeliveryDate", "status", "totalPriceMinor", "updatedAt"] as const;
+export const WORK_SORT_FIELDS = ["code", "createdAt", "effectiveDueAt", "priority", "requestedDeliveryDate", "status", "totalPriceMinor", "updatedAt"] as const;
 export const WORK_QR_PAYLOAD_PREFIX = "dl-work:" as const;
 export const SCAN_SOURCES = ["camera", "manual"] as const;
 export const WORK_DEADLINE_MODES = ["CALCULATED", "MANUAL", "UNRESOLVED"] as const;
@@ -45,8 +46,11 @@ export interface WorkWorkflowSummary {
 }
 
 export interface WorkDeadlineSummary {
+  readonly badge: string;
   readonly calculatedAt: string | null;
   readonly calculatedDueAt: string | null;
+  readonly color: string;
+  readonly countdown: string;
   readonly effectiveDueAt: string | null;
   readonly executionDays: number | null;
   readonly explanation: string | null;
@@ -57,7 +61,9 @@ export interface WorkDeadlineSummary {
   readonly reasonCode: string | null;
   readonly revision: number;
   readonly source: WorkDeadlineSource | null;
+  readonly status: string;
   readonly startAt: string | null;
+  readonly tooltip: string;
   readonly timezone: string | null;
 }
 
@@ -129,6 +135,7 @@ export interface WorksListParams {
   readonly clinicId: string | undefined;
   readonly dateFrom: string | undefined;
   readonly dateTo: string | undefined;
+  readonly deadlineFilter: DeadlineFilter | undefined;
   readonly doctorId: string | undefined;
   readonly page: number;
   readonly pageSize: number;
@@ -141,6 +148,7 @@ export interface WorksListParams {
 }
 
 export interface PaginatedWorksResponse {
+  readonly deadlineDashboard: DeadlineDashboardSummary;
   readonly items: readonly WorkSummary[];
   readonly page: number;
   readonly pageCount: number;

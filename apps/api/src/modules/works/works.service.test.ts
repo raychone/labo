@@ -342,6 +342,53 @@ describe("WorksService", () => {
     expect(result.items[0]?.totalPriceMinor).toBeNull();
   });
 
+  it("filters by operational deadline state and returns dashboard totals", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-29T09:00:00.000Z"));
+    const findMany = vi.fn().mockResolvedValue([
+      workOrder({
+        code: "WO-2026-000001",
+        effectiveDueAt: new Date("2026-07-29T14:00:00.000Z"),
+        id: "work_order_due_today",
+      }),
+      workOrder({
+        code: "WO-2026-000002",
+        effectiveDueAt: new Date("2026-07-26T14:00:00.000Z"),
+        id: "work_order_late",
+      }),
+      workOrder({
+        code: "WO-2026-000003",
+        deadlineMode: "MANUAL",
+        effectiveDueAt: new Date("2026-08-01T14:00:00.000Z"),
+        id: "work_order_manual",
+      }),
+    ]);
+    const service = createService({
+      workOrder: {
+        findMany,
+      },
+    });
+
+    try {
+      const result = await service.listWorks({ deadlineFilter: "LATE", page: 1, pageSize: 20, sortBy: "effectiveDueAt", sortDirection: "asc" }, false);
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0]?.code).toBe("WO-2026-000002");
+      expect(result.items[0]?.deadline.status).toBe("LATE");
+      expect(result.total).toBe(1);
+      expect(result.deadlineDashboard).toMatchObject({
+        dueToday: 1,
+        late: 1,
+        manual: 1,
+      });
+      expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+        orderBy: { effectiveDueAt: "asc" },
+      }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps existing pricing snapshot when catalog price changes later", async () => {
     const before = workOrder({ baseUnitPriceMinor: 35000, quantity: 2, totalPriceMinor: 70000 });
     const after = workOrder({ baseUnitPriceMinor: 35000, quantity: 3, totalPriceMinor: 105000, version: 2 });

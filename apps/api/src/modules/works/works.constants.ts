@@ -1,5 +1,5 @@
 export const WORK_ORDER_RESOURCE_TYPE = "work_order";
-export const WORK_ORDER_SORT_FIELDS = ["code", "createdAt", "priority", "requestedDeliveryDate", "status", "totalPriceMinor", "updatedAt"] as const;
+export const WORK_ORDER_SORT_FIELDS = ["code", "createdAt", "effectiveDueAt", "priority", "requestedDeliveryDate", "status", "totalPriceMinor", "updatedAt"] as const;
 export const WORK_PRIORITIES = ["NORMAL", "URGENT"] as const;
 export const WORK_STATUSES = ["REGISTERED"] as const;
 export const SORT_DIRECTIONS = ["asc", "desc"] as const;

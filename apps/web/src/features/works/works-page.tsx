@@ -55,6 +55,7 @@ const defaultListParams: WorksListParams = {
   clinicId: undefined,
   dateFrom: undefined,
   dateTo: undefined,
+  deadlineFilter: undefined,
   doctorId: undefined,
   page: 1,
   pageSize,
@@ -70,6 +71,16 @@ const priorityFilterOptions = [
   { label: "Toate", value: "" },
   { label: "Normal", value: "NORMAL" },
   { label: "Urgent", value: "URGENT" },
+] as const;
+
+const deadlineFilterOptions = [
+  { label: "Toate", value: "" },
+  { label: "Astăzi", value: "TODAY" },
+  { label: "Mâine", value: "TOMORROW" },
+  { label: "În întârziere", value: "LATE" },
+  { label: "Manual", value: "MANUAL" },
+  { label: "Fără termen", value: "WITHOUT_DEADLINE" },
+  { label: "Următoarele 7 zile", value: "NEXT_7_DAYS" },
 ] as const;
 
 function toApiSort(direction: DataTableSort["direction"]): "asc" | "desc" {
@@ -116,6 +127,10 @@ function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
+function formatTime(value: string): string {
+  return new Intl.DateTimeFormat("ro-RO", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Bucharest" }).format(new Date(value));
+}
+
 function formatPrice(value: number | null, currency: string, locale: string): string {
   return value === null ? "Restricționat" : formatMoneyMinor(value, currency, locale);
 }
@@ -135,6 +150,97 @@ function toDeadlinePreviewInput(values: Pick<WorkFormValues, "clinicId" | "docto
     quantity: values.quantity,
     workTypeId: values.workTypeId,
   };
+}
+
+function DeadlineBadge({ deadline }: { readonly deadline: WorkSummary["deadline"] }): ReactNode {
+  return (
+    <span
+      className={`works-page__deadline-badge works-page__deadline-badge--${deadline.color}`}
+      title={deadline.tooltip}
+    >
+      {deadline.badge}
+    </span>
+  );
+}
+
+function DeadlineDetailCard({ work }: { readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
+  const appliedRule = work.deadline.executionDays === null
+    ? "Regulă manuală sau nerezolvată"
+    : `${work.deadline.executionDays} zile lucrătoare`;
+  const sourceLabel = work.deadline.mode === "MANUAL" ? "Manual" : work.deadline.mode === "CALCULATED" ? "Calculat" : "Nerezolvat";
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Termen</CardTitle>
+        <CardDescription>{work.deadline.tooltip}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="works-page__deadline-card">
+          <DeadlineBadge deadline={work.deadline} />
+          <div>
+            <span className="works-page__muted">Data</span>
+            <strong>{work.deadline.effectiveDueAt ? formatDate(work.deadline.effectiveDueAt) : "Fără termen"}</strong>
+          </div>
+          <div>
+            <span className="works-page__muted">Ora</span>
+            <strong>{work.deadline.effectiveDueAt ? formatTime(work.deadline.effectiveDueAt) : "Nedisponibilă"}</strong>
+          </div>
+          <div>
+            <span className="works-page__muted">Status</span>
+            <strong>{work.deadline.badge}</strong>
+          </div>
+          <div>
+            <span className="works-page__muted">Countdown</span>
+            <strong>{work.deadline.countdown}</strong>
+          </div>
+          <div>
+            <span className="works-page__muted">Regulă aplicată</span>
+            <strong>{appliedRule}</strong>
+          </div>
+          <div>
+            <span className="works-page__muted">Manual/Calculat</span>
+            <strong>{sourceLabel}</strong>
+          </div>
+          <div>
+            <span className="works-page__muted">Ultima recalculare</span>
+            <strong>{work.deadline.calculatedAt ? formatDateTime(work.deadline.calculatedAt) : "Nedisponibilă"}</strong>
+          </div>
+          <div className="works-page__deadline-card-note">
+            <span className="works-page__muted">Explicație</span>
+            <p>{work.deadline.explanation ?? "Nu există explicație disponibilă."}</p>
+          </div>
+          <div className="works-page__deadline-card-note">
+            <span className="works-page__muted">Istoric termen</span>
+            <p>{getDeadlineTimelineLabel(work.deadline.source, work.deadline.status)}</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function getDeadlineTimelineLabel(source: import("@dental-lab/shared").WorkDeadlineSource | null, status: string): string {
+  if (status === "UNRESOLVED") {
+    return "Deadline modificat: termen nerezolvat.";
+  }
+
+  switch (source) {
+    case "CREATION":
+      return "Deadline calculat la înregistrarea lucrării.";
+    case "WORK_UPDATE":
+      return "Deadline recalculat după modificarea lucrării.";
+    case "MANUAL_OVERRIDE":
+      return "Deadline manual setat de utilizator autorizat.";
+    case "MANUAL_RECALCULATION":
+      return "Deadline recalculat manual.";
+    case "LEGACY_BACKFILL":
+      return "Deadline rezolvat din termenul istoric.";
+    case "FUTURE_TECH_CLAIM":
+      return "Deadline rezolvat prin flux tehnic viitor.";
+    default:
+      return "Deadline modificat.";
+  }
 }
 
 function validateDynamicWorkForm(form: import("react-hook-form").UseFormReturn<WorkFormValues>, template: WorkFormTemplateDetail | null | undefined): boolean {
@@ -261,14 +367,19 @@ export function WorksPage(): ReactNode {
     },
     {
       header: "Termen",
-      id: "requestedDeliveryDate",
+      id: "effectiveDueAt",
       isSortable: true,
-      renderCell: (work) => formatDate(work.requestedDeliveryDate),
+      renderCell: (work) => work.deadline.effectiveDueAt ? formatDateTime(work.deadline.effectiveDueAt) : "Fără termen",
     },
     {
-      header: "Termen efectiv",
-      id: "effectiveDueAt",
-      renderCell: (work) => work.deadline.effectiveDueAt ? formatDateTime(work.deadline.effectiveDueAt) : "Nerezolvat",
+      header: "Countdown",
+      id: "deadlineCountdown",
+      renderCell: (work) => work.deadline.countdown,
+    },
+    {
+      header: "Status termen",
+      id: "deadlineStatus",
+      renderCell: (work) => <DeadlineBadge deadline={work.deadline} />,
     },
   ], [canDownloadInvoices, currency, locale]);
 
@@ -346,6 +457,12 @@ export function WorksPage(): ReactNode {
                 onChange={(event) => setParams((current) => ({ ...current, page: 1, priority: event.target.value === "URGENT" ? "URGENT" : event.target.value === "NORMAL" ? "NORMAL" : undefined }))}
                 options={priorityFilterOptions}
                 value={params.priority ?? ""}
+              />
+              <Select
+                label="Termen"
+                onChange={(event) => setParams((current) => ({ ...current, deadlineFilter: event.target.value === "" ? undefined : event.target.value as NonNullable<WorksListParams["deadlineFilter"]>, page: 1 }))}
+                options={deadlineFilterOptions}
+                value={params.deadlineFilter ?? ""}
               />
             </div>
             <DataTable
@@ -662,12 +779,13 @@ function WorkDetailsDrawer({
               <PriorityBadge label={work.priority === "URGENT" ? "Urgent" : "Normal"} variant={work.priority === "URGENT" ? "urgent" : "normal"} />
               <span>Termen promis: {formatDate(work.requestedDeliveryDate)}</span>
               <span>Termen efectiv: {work.deadline.effectiveDueAt ? formatDateTime(work.deadline.effectiveDueAt) : "Nerezolvat"}</span>
-              <span>Deadline: {work.deadline.mode ?? "Legacy"} · rev. {work.deadline.revision}</span>
+              <span>Deadline: {work.deadline.status} · rev. {work.deadline.revision}</span>
               {canReadPricing ? <span>Total: {formatPrice(work.totalPriceMinor, work.currency ?? currency, locale)}</span> : null}
             </div>
             <div className="works-page__actions">
               <Button onClick={() => onShowQr(work.id)} variant="outline">Vezi QR</Button>
             </div>
+            <DeadlineDetailCard work={work} />
             <WorkWorkflowSection isOpen={isOpen} workId={work.id} />
             {workTypeOptionsError ? <ErrorState title="Opțiunile nu au fost încărcate" description={getErrorMessage(workTypeOptionsError)} /> : null}
             <WorkForm

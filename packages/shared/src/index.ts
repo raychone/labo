@@ -123,6 +123,23 @@ export type {
   WorkTypesListParams,
 } from "./work-types.js";
 export {
+  DEADLINE_FILTERS,
+  DEADLINE_VISUAL_STATES,
+  DEFAULT_DEADLINE_VISUAL_THRESHOLDS,
+  accumulateDeadlineDashboardSummary,
+  createEmptyDeadlineDashboardSummary,
+  isDeadlineInFilter,
+  resolveDeadlineVisualState,
+} from "./work-deadline-visual-state.js";
+export type {
+  DeadlineColorToken,
+  DeadlineDashboardSummary,
+  DeadlineFilter,
+  DeadlineVisualInput,
+  DeadlineVisualResolution,
+  DeadlineVisualState,
+} from "./work-deadline-visual-state.js";
+export {
   PRICING_ADJUSTMENT_TYPES,
   PRICING_AGREEMENT_SORT_FIELDS,
   PRICING_AGREEMENT_SUBJECT_TYPES,

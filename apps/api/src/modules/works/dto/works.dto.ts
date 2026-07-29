@@ -2,6 +2,7 @@ import { Transform, Type } from "class-transformer";
 import { IsBoolean, IsIn, IsInt, IsISO8601, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
 
 import { MAX_WORK_ORDER_QUANTITY, SORT_DIRECTIONS, WORK_ORDER_SORT_FIELDS, WORK_PRIORITIES, WORK_STATUSES } from "../works.constants.js";
+import { DEADLINE_FILTERS } from "../work-deadline-visual.js";
 
 function trimOptionalString(value: unknown): string | null | undefined {
   if (value === undefined) {
@@ -74,6 +75,10 @@ export class ListWorksQueryDto {
   @IsOptional()
   @IsISO8601({ strict: true })
   public readonly dateTo?: string;
+
+  @IsOptional()
+  @IsIn(DEADLINE_FILTERS)
+  public readonly deadlineFilter?: (typeof DEADLINE_FILTERS)[number];
 
   @IsOptional()
   @IsIn(WORK_ORDER_SORT_FIELDS)

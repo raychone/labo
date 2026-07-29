@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 import { toWorkflowExecutionView, toWorkflowSummaryView } from "../workflow-execution/workflow-execution.view.js";
+import { resolveDeadlineVisualState, type DeadlineDashboardSummary } from "./work-deadline-visual.js";
 
 type WorkFormValue = boolean | number | readonly string[] | string | null;
 type WorkFormValues = Readonly<Record<string, WorkFormValue>>;
@@ -134,8 +135,11 @@ export interface WorkSummaryView {
 }
 
 export interface WorkDeadlineView {
+  readonly badge: string;
   readonly calculatedAt: string | null;
   readonly calculatedDueAt: string | null;
+  readonly color: string;
+  readonly countdown: string;
   readonly effectiveDueAt: string | null;
   readonly executionDays: number | null;
   readonly explanation: string | null;
@@ -146,7 +150,9 @@ export interface WorkDeadlineView {
   readonly reasonCode: string | null;
   readonly revision: number;
   readonly source: string | null;
+  readonly status: string;
   readonly startAt: string | null;
+  readonly tooltip: string;
   readonly timezone: string | null;
 }
 
@@ -163,6 +169,7 @@ export interface WorkDetailView extends Omit<WorkSummaryView, "workflow"> {
 }
 
 export interface PaginatedWorksView {
+  readonly deadlineDashboard: DeadlineDashboardSummary;
   readonly items: readonly WorkSummaryView[];
   readonly page: number;
   readonly pageCount: number;
@@ -222,9 +229,19 @@ export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: bo
 }
 
 function toWorkDeadlineView(workOrder: WorkOrderRecord): WorkDeadlineView {
+  const effectiveDueAt = workOrder.effectiveDueAt?.toISOString() ?? null;
+  const visual = resolveDeadlineVisualState({
+    effectiveDueAt,
+    mode: workOrder.deadlineMode,
+    now: new Date().toISOString(),
+  });
+
   return {
+    badge: visual.badge,
     calculatedAt: workOrder.deadlineCalculatedAt?.toISOString() ?? null,
     calculatedDueAt: workOrder.calculatedDueAt?.toISOString() ?? null,
+    color: visual.color,
+    countdown: visual.countdown,
     effectiveDueAt: workOrder.effectiveDueAt?.toISOString() ?? null,
     executionDays: workOrder.deadlineExecutionDays,
     explanation: workOrder.deadlineExplanation,
@@ -235,7 +252,9 @@ function toWorkDeadlineView(workOrder: WorkOrderRecord): WorkDeadlineView {
     reasonCode: workOrder.deadlineReasonCode,
     revision: workOrder.deadlineRevision,
     source: workOrder.deadlineSource,
+    status: visual.state,
     startAt: workOrder.deadlineStartAt?.toISOString() ?? null,
+    tooltip: visual.tooltip,
     timezone: workOrder.deadlineTimezone,
   };
 }

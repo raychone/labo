@@ -53,6 +53,7 @@
 - [x] WORKS-001 - Work order creation
 - [x] WORK-DEADLINES-001A - Deadline engine and Romanian business-day calendar (COMPLETED)
 - [x] WORK-DEADLINES-001B - Persisted work deadlines and controlled recalculation (COMPLETED)
+- [x] WORK-DEADLINES-001C - Operational deadline UI, urgency indicators and work registry integration (COMPLETED)
 - [ ] WORK-CYCLES-001 - Clinic return cycles and repeated handoffs (NOT STARTED)
 
 ## QR
@@ -98,6 +99,7 @@
 
 - [x] WORKFLOW-001 - Workflow templates (COMPLETED)
 - [x] WORKFLOW-002 - Workflow execution snapshot (COMPLETED)
+- [ ] TECH-CLAIM-001A - Technician self-claim deadline start integration (APPROVED)
 - [ ] TECH-CLAIM-001 - Technician self-claim and first technical company selection (NOT STARTED)
 
 ## PATIENTS
@@ -188,19 +190,77 @@ NONE / AWAITING APPROVAL
 
 Status: AWAITING APPROVAL
 
-Started: 2026-07-29T10:03:26Z
+Started: 2026-07-29T10:39:32Z
 
-Completed: 2026-07-29T10:23:54Z
+Completed: 2026-07-29T11:03:59Z
 
-Last completed task: WORK-DEADLINES-001B - Persisted work deadlines and controlled recalculation
+Last completed task: WORK-DEADLINES-001C - Operational deadline UI, urgency indicators and work registry integration
 
-Completed: 2026-07-29T10:23:54Z
+Completed: 2026-07-29T11:03:59Z
 
 ## Next Recommended Task
 
-WORK-DEADLINES-001C - APPROVED
+TECH-CLAIM-001A - APPROVED
 
 ## Latest Completion Summary
+
+### WORK-DEADLINES-001C - Operational deadline UI, urgency indicators and work registry integration
+
+- Status: COMPLETED.
+- Started: 2026-07-29T10:39:32Z.
+- Completed: 2026-07-29T11:03:59Z.
+- Summary:
+  - Added a reusable deadline visual-state resolver with `Europe/Bucharest` local calendar semantics for unknown, unresolved, on-time, due-today, due-tomorrow, warning, late and manual states.
+  - Extended the work list read model with badge, color token, countdown, status, tooltip and dashboard deadline aggregates.
+  - Added operational deadline sorting and filters to the work registry using only `effectiveDueAt`.
+  - Added registry columns for effective deadline, countdown and deadline status, plus a work detail deadline card with timeline-oriented labels.
+  - Added read-only dashboard metrics for due today, due tomorrow, late, manual, unresolved, next 7 days and recently completed on time.
+  - Stabilized web tests by running test files sequentially because existing UI tests stub global `fetch`.
+- Main files modified:
+  - `packages/shared/src/work-deadline-visual-state.ts`
+  - `packages/shared/src/work-deadline-visual-state.test.ts`
+  - `packages/shared/src/works.ts`
+  - `apps/api/src/modules/works/work-deadline-visual.ts`
+  - `apps/api/src/modules/works/works.service.ts`
+  - `apps/api/src/modules/works/works.view.ts`
+  - `apps/api/src/modules/works/dto/works.dto.ts`
+  - `apps/web/src/features/works/*`
+  - `apps/web/src/app/dashboard-page.tsx`
+  - `apps/web/src/app/app-shell.css`
+  - `apps/web/vitest.config.ts`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `REAL-LAB-WORKFLOW.md`
+  - `IMPLEMENTATION_STATUS.md`
+- Tests executed:
+  - `pnpm --filter @dental-lab/api prisma:validate` passed.
+  - `pnpm --filter @dental-lab/api prisma:generate` passed.
+  - `pnpm --filter @dental-lab/shared test` passed before full regression.
+  - `pnpm --filter @dental-lab/api test -- src/modules/works/works.service.test.ts src/modules/works/works.controller.test.ts` passed.
+  - `pnpm --filter @dental-lab/web test -- src/features/works/works-page.test.tsx src/app/app-shell.test.tsx` passed.
+  - `pnpm typecheck` passed.
+  - First `pnpm test` exposed flaky web tests caused by parallel global `fetch` stubs; fixed via sequential web file execution.
+  - Final `pnpm test` passed: packages/shared 12 files/42 tests, packages/ui 3 files/27 tests, apps/api 46 files/175 tests, apps/web 15 files/39 tests.
+  - `pnpm build` passed.
+- Manual verification:
+  - Temporary API build started on `http://localhost:3020`.
+  - `GET /health` returned `200` with `database: "ok"`.
+  - CSRF + `POST /auth/demo-login` as `MANAGER` succeeded.
+  - `GET /works?page=1&pageSize=3&sortBy=effectiveDueAt&sortDirection=asc` returned `deadlineDashboard` and visual deadline fields.
+  - `GET /works?page=1&pageSize=3&deadlineFilter=LATE&sortBy=effectiveDueAt&sortDirection=asc` returned only `LATE` deadline states.
+  - Temporary Vite started on `http://localhost:3001`; `/dashboard` and `/works` returned `200 text/html`.
+- Architecture decisions:
+  - `effectiveDueAt` remains the only official operational deadline used by the UI for sorting, filtering, badge state and countdowns.
+  - Deadline visual semantics are read-only and do not modify the 001A calculation engine or the 001B persisted snapshot.
+  - API keeps a module-local visual resolver because importing shared runtime code into the API currently violates the API `rootDir`; shared remains the public frontend/contract resolver.
+  - Work registry deadline filters are applied after the base DB query for MVP correctness because visual state depends on Bucharest-local date resolution.
+- Technical debt introduced:
+  - Deadline visual resolver logic is mirrored between `packages/shared` and the API module until the monorepo TypeScript build can consume shared runtime code cleanly from the API.
+  - Web tests now run files sequentially to avoid global `fetch` stub interference.
+- Remaining risks:
+  - Large work registries may need SQL-level deadline buckets or materialized read models later; current in-memory deadline filtering is acceptable for the MVP dataset.
+  - Linting remains unconfigured.
+  - Notifications, cron jobs, reports and technician claim start integration remain out of scope.
 
 ### WORK-DEADLINES-001B - Persisted work deadlines and controlled recalculation
 
