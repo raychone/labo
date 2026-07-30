@@ -1,5 +1,7 @@
 # Demo aplicație Dental Lab Management
 
+> Canonical current roadmap and status: [docs/MASTER_PLAN.md](docs/MASTER_PLAN.md). Demo-specific current notes are also summarized in [docs/modules/demo.md](docs/modules/demo.md). This document remains the presentation guide.
+
 Acest document este ghidul de prezentare cap-coadă pentru stadiul curent al aplicației. Toate datele demo sunt fictive și sunt doar pentru development/prezentare.
 
 ## Notă ROADMAP-REALIGN-002

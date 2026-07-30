@@ -1,5 +1,7 @@
 # Demo script
 
+> Canonical current roadmap and status: [docs/MASTER_PLAN.md](docs/MASTER_PLAN.md). Demo-specific current notes are also summarized in [docs/modules/demo.md](docs/modules/demo.md). This document remains the guided presentation script.
+
 Current note: this script demonstrates the implemented modules, including `NC`/`NG` shell context, company-aware settings, patient registry, pricing, persisted deadlines, technician work claim, locked execution snapshots, workflow, logistics, delivery proof and billing. It is still not the final validated real-lab cycle demo; `DEMO-REAL-DATA-001` will replace the fictive dataset with real validated flows.
 
 1. Open `/login` and use “Acces rapid pentru demonstrație” → “Intră ca manager” when demo mode is enabled.

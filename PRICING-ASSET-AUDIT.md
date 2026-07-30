@@ -1,5 +1,7 @@
 # PRICING-002 Asset Audit
 
+> Canonical current roadmap and status: [docs/MASTER_PLAN.md](docs/MASTER_PLAN.md). Pricing module rules are in [docs/modules/pricing.md](docs/modules/pricing.md). This document is retained as an asset audit.
+
 ## Scope
 
 Reviewed only local `assets/` material relevant to pricing and execution-time rules. Files remain untracked and are not copied, embedded, committed, OCR-processed in bulk, or exposed through the application.

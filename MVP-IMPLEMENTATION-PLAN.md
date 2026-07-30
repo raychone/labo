@@ -1,5 +1,7 @@
 # MVP Implementation Plan
 
+> Canonical current roadmap and status: [docs/MASTER_PLAN.md](docs/MASTER_PLAN.md). This document is retained as historical and extended planning context.
+
 ## 1. Executive Summary
 
 Construim o aplicatie web custom pentru managementul integral al unui laborator de tehnica dentara din Romania. MVP-ul trebuie sa acopere fluxul complet al unei lucrari dentare, de la ridicare/comanda pana la livrare, incasare, facturare si inchidere, cu trasabilitate completa.

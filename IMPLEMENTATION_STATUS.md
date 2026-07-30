@@ -1,12 +1,18 @@
 # Implementation Status
 
+> Canonical current roadmap and status: [docs/MASTER_PLAN.md](docs/MASTER_PLAN.md). This root status file is retained as a historical implementation log.
+
 ## Overall Progress
 
-84%
+85%
 
 ## ROADMAP
 
 - [x] ROADMAP-REALIGN-002 - Realign product roadmap to validated laboratory workflow (COMPLETED)
+
+## DOCUMENTATION
+
+- [x] DOCS-TOKEN-001 - Permanent token-efficient specification system (COMPLETED)
 
 ## ORGANIZATION
 
@@ -195,15 +201,42 @@ Started: 2026-07-29T14:04:46Z
 
 Completed: 2026-07-29T14:41:56Z
 
-Last completed task: TECH-CLAIM-001B - Final execution snapshot for pricing, deadline and execution context
+Last completed task: DOCS-TOKEN-001 - Permanent token-efficient specification system
 
-Completed: 2026-07-29T14:41:56Z
+Completed: 2026-07-30T10:54:47Z
 
 ## Next Recommended Task
 
 TECH-CLAIM-001C - Awaiting approval
 
 ## Latest Completion Summary
+
+### DOCS-TOKEN-001 - Permanent token-efficient specification system
+
+- Status: COMPLETED.
+- Completed: 2026-07-30T10:54:47Z.
+- Summary:
+  - Created the canonical `docs/` documentation system for compact future Codex prompts.
+  - Added permanent context, roadmap, implementation rules, architecture, domain model, security, testing, UI, Git, documentation policy and glossary documents.
+  - Added module documents for implemented, partial and planned modules.
+  - Added compact task documents and Codex prompt templates.
+  - Marked root documents as historical/reference where applicable and linked them to canonical docs.
+  - Verified relative Markdown links and absence of absolute local paths.
+- Main files modified:
+  - `docs/*`
+  - `docs/modules/*`
+  - `docs/tasks/*`
+  - `docs/prompts/*`
+  - `README.md`
+  - `MVP-IMPLEMENTATION-PLAN.md`
+  - `IMPLEMENTATION_STATUS.md`
+  - `REAL-LAB-WORKFLOW.md`
+  - `DEMO.md`
+  - `DEMO-SCRIPT.md`
+  - `PRICING-ASSET-AUDIT.md`
+- Technical debt introduced: none.
+- Remaining risks:
+  - Some historical root content remains verbose by design, but canonical status is now in `docs/MASTER_PLAN.md`.
 
 ### TECH-CLAIM-001B - Final execution snapshot for pricing, deadline and execution context
 

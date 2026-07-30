@@ -1,5 +1,7 @@
 # Real Lab Workflow
 
+> Canonical current roadmap and status: [docs/MASTER_PLAN.md](docs/MASTER_PLAN.md). Current module rules are under [docs/modules/](docs/modules/). This document is retained as approved product realignment context.
+
 Status: approved product realignment for future tasks.
 
 This document is the source of truth introduced by `ROADMAP-REALIGN-002`. It realigns the existing MVP with the validated laboratory workflow. It is documentation-only and does not introduce schema, API, frontend, seed, or migration changes.

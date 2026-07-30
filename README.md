@@ -1,6 +1,12 @@
 # Dental Lab Management
 
+> Canonical current documentation: [docs/README.md](docs/README.md). Current roadmap and status: [docs/MASTER_PLAN.md](docs/MASTER_PLAN.md). This root README is retained as a setup guide and historical implementation log.
+
 Custom management application for a Romanian dental laboratory.
+
+## Canonical Documentation
+
+Use [docs/README.md](docs/README.md) as the entry point for current architecture, permanent rules, module specs, task scope, and Codex prompt templates. Future implementation prompts should read [docs/AI_CONTEXT.md](docs/AI_CONTEXT.md), [docs/MASTER_PLAN.md](docs/MASTER_PLAN.md), and the relevant task/module documents instead of copying long historical prompts.
 
 ## Stack
 
