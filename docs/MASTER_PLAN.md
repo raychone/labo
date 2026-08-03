@@ -13,7 +13,7 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | Last completed task | DOCS-TOKEN-001 |
 | Last completed functional task | TECH-CLAIM-001B |
 | Last completed functional commit | `ccba29a TECH-CLAIM-001B: lock execution pricing and deadline snapshot` |
-| Next functional task | TECH-CLAIM-001C |
+| Next approved task | STATUS-001A |
 
 ## Roadmap
 
@@ -45,7 +45,7 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | technician claim | TECH-CLAIM-001A | COMPLETED | WORKFLOW-002, TECH-001 | claim/release/reassign ownership | [tasks/TECH-CLAIM-001A.md](tasks/TECH-CLAIM-001A.md) |
 | technician claim | TECH-CLAIM-001B | COMPLETED | TECH-CLAIM-001A, PRICING-002, WORK-DEADLINES-001C | locked execution snapshot | [tasks/TECH-CLAIM-001B.md](tasks/TECH-CLAIM-001B.md) |
 | documentation | DOCS-TOKEN-001 | COMPLETED | TECH-CLAIM-001B | token-efficient permanent docs | [tasks/DOCS-TOKEN-001.md](tasks/DOCS-TOKEN-001.md) |
-| technician claim | TECH-CLAIM-001C | AWAITING APPROVAL | TECH-CLAIM-001B | lifecycle finalization and edge cases | [tasks/TECH-CLAIM-001C.md](tasks/TECH-CLAIM-001C.md) |
+| technician claim | TECH-CLAIM-001C | DEFERRED | TECH-CLAIM-001B | lifecycle recovery hardening, not required for current MVP | [tasks/TECH-CLAIM-001C.md](tasks/TECH-CLAIM-001C.md) |
 | workflow | WORKFLOW-001 | COMPLETED | WORKTYPES-001 | workflow templates | [modules/workflow.md](modules/workflow.md) |
 | workflow | WORKFLOW-002 | COMPLETED | WORKFLOW-001, WORKS-001 | workflow execution | [modules/workflow.md](modules/workflow.md) |
 | technician execution | TECH-001 | COMPLETED | WORKFLOW-002 | assignment/workbench base | [modules/technician-execution.md](modules/technician-execution.md) |
@@ -55,7 +55,8 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | signatures | SIGNATURES-001 | COMPLETED | DELIVERY-001 | internal delivery proof | [modules/signatures.md](modules/signatures.md) |
 | billing | BILLING-001 | COMPLETED | WORKS-001, PRICING-002 | billing workspace/payments | [modules/billing.md](modules/billing.md) |
 | billing | BILLING-002 | COMPLETED | BILLING-001 | printable docs/statements | [modules/billing.md](modules/billing.md) |
-| materials | MATERIALS-001 | PLANNED | TECH-CLAIM-001C | material catalog/selection | [modules/materials.md](modules/materials.md) |
+| status | STATUS-001A | APPROVED | TECH-CLAIM-001B, WORKFLOW-002, LOGISTICS-001, DELIVERY-001 | operational status read model and API | [tasks/STATUS-001A.md](tasks/STATUS-001A.md) |
+| materials | MATERIALS-001 | PLANNED | STATUS-001A | material catalog/selection | [modules/materials.md](modules/materials.md) |
 | inventory | INVENTORY-001 | PLANNED | MATERIALS-001 | stock, NIR, consumption | [modules/inventory.md](modules/inventory.md) |
 | dashboard | DASHBOARD-001 | DEFERRED | SHELL-001 | legacy operational dashboard | [modules/dashboard.md](modules/dashboard.md) |
 | dashboard | DASHBOARD-002 | PLANNED | STATUS-001 | real workflow dashboard | [modules/dashboard.md](modules/dashboard.md) |
@@ -75,4 +76,5 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 - `QC-001`: quality control is deferred.
 - `NOTIFICATIONS-001`: operational notifications are deferred.
 - `PAYMENTS-002`: manual payment evidence realignment is planned but not started.
+- `TECH-CLAIM-001C`: deferred because TECH-CLAIM-001A/B cover current MVP claim needs and stale-claim recovery lacks validated business rules.
 - `DOCUMENTS-001`, `COLLABORATION-TERMS-001`, `OFFLINE-001`, `STATUS-001`, `WORK-CYCLES-001`, `WORKFORM-REAL-001`: planned future work; details require task-specific confirmation.

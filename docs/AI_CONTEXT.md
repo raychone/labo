@@ -60,7 +60,9 @@ Last completed functional task: `TECH-CLAIM-001B`, commit `ccba29a`, which added
 
 Last completed documentation task: `DOCS-TOKEN-001`, which created the permanent token-efficient documentation system under `docs/`.
 
-Next planned functional task: `TECH-CLAIM-001C`, not started.
+`TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable.
+
+Next approved task: `STATUS-001A`, the backend/read-model foundation for the operational status page.
 
 ## Source Of Truth
 

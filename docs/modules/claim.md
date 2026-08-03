@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented through TECH-CLAIM-001A and TECH-CLAIM-001B; TECH-CLAIM-001C is not started.
+Implemented through TECH-CLAIM-001A and TECH-CLAIM-001B; TECH-CLAIM-001C is deferred and does not block the current MVP.
 
 ## Purpose
 
@@ -29,9 +29,13 @@ Current implemented behavior:
 - Wrong firm after snapshot is rejected with 409.
 - Claim/reassign use optimistic `expectedClaimRevision`.
 
-Planned behavior:
+Deferred behavior:
 
-- TECH-CLAIM-001C should address lifecycle finalization, stale claims, abandoned assignments, recovery, and advanced concurrency.
+- TECH-CLAIM-001C may later address lifecycle finalization, stale claims, abandoned assignments, recovery, and advanced concurrency after business validation.
+- No automatic claim expiration exists.
+- No automatic reassignment exists.
+- Existing manual manager release/reassign remains the current recovery mechanism.
+- Execution snapshots always remain immutable and are not recalculated by release, reclaim, reassign, or future recovery flows unless a future approved repair task explicitly defines a controlled versioning rule.
 
 ## Data Model
 
@@ -63,15 +67,15 @@ TECH-CLAIM-001A, TECH-CLAIM-001B.
 
 ## Planned Tasks
 
-TECH-CLAIM-001C.
+TECH-CLAIM-001C is deferred. STATUS-001A is the next approved task and will read claim ownership for operational status.
 
 ## Deferred
 
-Manager repair of invalid snapshots; final business rules TBD.
+Manager repair of invalid snapshots, stale claim timeout, abandoned-claim recovery, automatic expiry, and advanced recovery UX.
 
 ## Open Decisions
 
-Recovery/repair authority and blocking rules after issued financial documents.
+Recovery/repair authority, stale timeout duration, abandoned-claim recovery flow, and blocking rules after issued financial documents.
 
 ## Related Documents
 
