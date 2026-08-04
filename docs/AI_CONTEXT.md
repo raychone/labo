@@ -65,7 +65,7 @@ Last completed documentation task: `WORKFORM-REAL-DISCOVERY-001`, which audited 
 
 `TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable.
 
-Next approved task: `WORKFORM-REAL-001A`, a real laboratory work-sheet schema and template foundation task. It remains approved but blocked by explicit business confirmation of the discovery questions before implementation. It must define cycle-owned, immutable, versioned work-sheet submissions using the existing form infrastructure where possible, without exposing financial data. No other task is approved.
+Next approved task: `WORKFORM-REAL-001A`, a real laboratory work-sheet schema and template foundation task. Laboratory validation confirmed the MVP decisions, so the task is no longer blocked by business confirmation. It must define one common cycle-owned, immutable, versioned laboratory sheet using the existing form infrastructure where possible, without exposing financial data. No other task is approved.
 
 ## Source Of Truth
 

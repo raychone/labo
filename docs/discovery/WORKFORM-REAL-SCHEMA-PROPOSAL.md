@@ -2,74 +2,84 @@
 
 ## Status
 
-WORKFORM-REAL-DISCOVERY-001: COMPLETED.
+Laboratory validation completed. `WORKFORM-REAL-001A` is ready for implementation.
 
 This is a proposal only. It does not implement schema, API, Prisma, migrations, seed, or frontend behavior.
 
-## Design Principles
+## Confirmed Design Principles
 
 - Build on the existing `WorkFormTemplate`, `WorkFormFieldDefinition`, and `WorkFormSubmission` infrastructure.
 - Store real work-sheet submissions per `WorkCycle`, not per whole `WorkOrder`.
+- Use one common laboratory sheet for all work types in MVP.
+- Use the visible real paper sheet as the MVP baseline.
+- Do not invent additional operational fields in `WORKFORM-REAL-001A`.
 - Keep historical cycle submissions immutable.
+- Finalization locks the sheet for that cycle.
+- Corrections require a new cycle.
 - Reference registries for patient, clinic, doctor, and work type, while preserving cycle snapshots for historical display.
 - Keep financial fields outside the operational work sheet.
-- Use existing field types unless client confirmation proves they cannot represent the paper sheet.
+- Keep signatures and printing outside `WORKFORM-REAL-001A`.
 
 ## Proposed Canonical Fields
 
-| Stable key | Romanian label | Type | Section | Required | Role ownership | Editable lifecycle | Common or specific | Scope | Options | Validation | Conditional visibility | Copied to new cycle | Immutable after claim/stage |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `work_code` | Fișa laborator nr | TEXT | Identificare lucrare | required | reception | read-only derived | common | work-scoped | none | existing work code | always visible | always, as same WorkOrder code | immutable immediately |
-| `cycle_number` | Ciclu | NUMBER | Date ciclu | required | system | read-only derived | common | cycle-scoped | none | positive integer | visible when cycles exist | never copied, system creates | immutable immediately |
-| `clinic_id` | Clinică | SELECT | Clinică și medic | required | reception | editable until confirmed claim rule | common | cycle-scoped | existing active clinics | must reference active clinic | always visible | default from previous cycle, user confirms | lock timing requires confirmation |
-| `doctor_id` | Doctor | SELECT | Clinică și medic | required | reception | editable until confirmed claim rule | common | cycle-scoped | doctors filtered by clinic | active doctor in selected clinic | always visible | default from previous cycle, user confirms | lock timing requires confirmation |
-| `patient_display_name` | Pacient | TEXT | Pacient | required | reception | read-only derived after patient selection | common | work-scoped with cycle snapshot | none | first and last name required | always visible | always as same patient | immutable after intake except patient correction flow |
-| `patient_age` | Vârsta | NUMBER | Pacient | optional until confirmed | reception | editable until confirmed claim rule | common | cycle-scoped snapshot | none | integer, sensible range TBD | visible if client wants age | field-specific | lock timing requires confirmation |
-| `patient_sex` | Sex | SELECT | Pacient | optional until confirmed | reception | editable until confirmed claim rule | common | patient/work snapshot | values TBD | allowed option | visible if client wants sex | field-specific | lock timing requires confirmation |
-| `work_type_id` | Tip lucrare | SELECT | Tip lucrare | required | reception | editable before claim only unless manager repair | common | work-scoped with cycle snapshot | existing active work types | active work type | always visible | default from work | immutable after claim |
-| `teeth` | Dinți | TOOTH | Elemente dentare | optional until confirmed | reception / technician | editable until confirmed lock point | common | cycle-scoped | FDI tooth codes | valid FDI list | always visible | field-specific | lock timing requires confirmation |
-| `shade` | Culoare | SHADE | Culoare | optional until confirmed | reception / technician | editable until confirmed lock point | common | cycle-scoped | shade system TBD | allowed option or extension if free text needed | visible when relevant to work type | field-specific | lock timing requires confirmation |
-| `shade_notes` | Detalii culoare | TEXTAREA | Culoare | optional | reception / technician | editable until confirmed lock point | work-type-specific likely | cycle-scoped | none | max length | visible when shade detail needed | field-specific | lock timing requires confirmation |
-| `phase_1_name` | Faza 1 | TEXT | Etape / faze | optional until confirmed | reception | editable until confirmed lock point | common or work-type-specific TBD | cycle-scoped | none | max length | visible if phases are retained | field-specific | lock timing requires confirmation |
-| `phase_1_due_date` | Termen faza 1 | DATE | Etape / faze | optional | reception | editable until deadline lock | common or work-type-specific TBD | cycle-scoped | none | date-only | visible with Faza 1 | field-specific | immutable after deadline snapshot if used |
-| `phase_2_name` | Faza 2 | TEXT | Etape / faze | optional | reception | editable until confirmed lock point | common or work-type-specific TBD | cycle-scoped | none | max length | visible if phases are retained | field-specific | lock timing requires confirmation |
-| `phase_2_due_date` | Termen faza 2 | DATE | Etape / faze | optional | reception | editable until deadline lock | common or work-type-specific TBD | cycle-scoped | none | date-only | visible with Faza 2 | field-specific | immutable after deadline snapshot if used |
-| `phase_3_name` | Faza 3 | TEXT | Etape / faze | optional | reception | editable until confirmed lock point | common or work-type-specific TBD | cycle-scoped | none | max length | visible if phases are retained | field-specific | lock timing requires confirmation |
-| `phase_3_due_date` | Termen faza 3 | DATE | Etape / faze | optional | reception | editable until deadline lock | common or work-type-specific TBD | cycle-scoped | none | date-only | visible with Faza 3 | field-specific | immutable after deadline snapshot if used |
-| `phase_4_name` | Faza 4 | TEXT | Etape / faze | optional | reception | editable until confirmed lock point | common or work-type-specific TBD | cycle-scoped | none | max length | visible if phases are retained | field-specific | lock timing requires confirmation |
-| `phase_4_due_date` | Termen faza 4 | DATE | Etape / faze | optional | reception | editable until deadline lock | common or work-type-specific TBD | cycle-scoped | none | date-only | visible with Faza 4 | field-specific | immutable after deadline snapshot if used |
-| `doctor_instructions` | Observații medic | TEXTAREA | Observații | optional | reception records doctor outside app | editable until confirmed lock point | common | cycle-scoped snapshot | none | max length | visible if notes are split | field-specific | lock timing requires confirmation |
-| `reception_observations` | Observații recepție | TEXTAREA | Observații | optional | reception | editable until confirmed lock point | common | cycle-scoped | none | max length | visible if notes are split | field-specific | lock timing requires confirmation |
-| `technician_observations` | Observații tehnician | TEXTAREA | Observații | optional | technician | editable during assigned stage only | common | cycle-scoped | none | max length | visible to technician/manager/reception unless restricted | never by default | immutable after stage completion |
-| `shared_observations` | Observații | TEXTAREA | Observații | optional | reception / technician | editable until confirmed lock point | common | cycle-scoped | none | max length | fallback if notes are not split | field-specific | lock timing requires confirmation |
+| Stable key | Romanian label | Type | Section | Required | Role ownership | Editable lifecycle | Scope | Validation | Copied to new cycle | Immutable |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `work_code` | Fișa laborator nr | TEXT | Identificare lucrare | required | system / reception | read-only derived | work-scoped | existing work code | same `WorkOrder` code is preserved | immediately |
+| `cycle_number` | Ciclu | NUMBER | Date ciclu | required | system | read-only derived | cycle-scoped | positive integer | system-created | immediately |
+| `clinic_id` | Clinică | SELECT | Clinică și medic | required | reception | editable until cycle finalization | cycle-scoped | active clinic | default from previous cycle for confirmation only | after finalization |
+| `doctor_id` | Doctor | SELECT | Clinică și medic | required | reception | editable until cycle finalization | cycle-scoped | active doctor in selected clinic | default from previous cycle for confirmation only | after finalization |
+| `patient_display_name` | Pacient | TEXT | Pacient | required | system / reception | read-only derived after patient selection | work-scoped with cycle snapshot | patient name | same patient is preserved | immediately except approved patient correction flow |
+| `patient_age` | Vârsta | NUMBER | Pacient | optional | reception | editable until cycle finalization | cycle-scoped snapshot | integer | no automatic technical copy | after finalization |
+| `patient_sex` | Sex | SELECT | Pacient | optional | reception | editable until cycle finalization | cycle-scoped snapshot | configured values | no automatic technical copy | after finalization |
+| `work_type_id` | Tip lucrare | SELECT | Tip lucrare | required | reception | editable until lifecycle rules allow | work-scoped with cycle snapshot | active work type | no automatic technical copy | after finalization/claim rules |
+| `teeth` | Dinți | TOOTH | Elemente dentare | optional | reception / technician | editable until cycle finalization | cycle-scoped | valid FDI list | no automatic technical copy | after finalization |
+| `shade` | Culoare | SHADE | Culoare | optional | reception / technician | editable until cycle finalization | cycle-scoped | configured shade values | no automatic technical copy | after finalization |
+| `material` | Material | SELECT | Material | optional | reception / technician | editable until cycle finalization | cycle-scoped | configured material values | no automatic technical copy | after finalization |
+| `phase_1_name` | Faza 1 | TEXT | Etape / faze | optional | reception / technician | editable until cycle finalization | cycle-scoped | max length | no automatic technical copy | after finalization |
+| `phase_1_due_date` | Termen faza 1 | DATE | Etape / faze | optional | reception / technician | editable until cycle finalization | cycle-scoped | date-only | no automatic technical copy | after finalization |
+| `phase_2_name` | Faza 2 | TEXT | Etape / faze | optional | reception / technician | editable until cycle finalization | cycle-scoped | max length | no automatic technical copy | after finalization |
+| `phase_2_due_date` | Termen faza 2 | DATE | Etape / faze | optional | reception / technician | editable until cycle finalization | cycle-scoped | date-only | no automatic technical copy | after finalization |
+| `phase_3_name` | Faza 3 | TEXT | Etape / faze | optional | reception / technician | editable until cycle finalization | cycle-scoped | max length | no automatic technical copy | after finalization |
+| `phase_3_due_date` | Termen faza 3 | DATE | Etape / faze | optional | reception / technician | editable until cycle finalization | cycle-scoped | date-only | no automatic technical copy | after finalization |
+| `phase_4_name` | Faza 4 | TEXT | Etape / faze | optional | reception / technician | editable until cycle finalization | cycle-scoped | max length | no automatic technical copy | after finalization |
+| `phase_4_due_date` | Termen faza 4 | DATE | Etape / faze | optional | reception / technician | editable until cycle finalization | cycle-scoped | date-only | no automatic technical copy | after finalization |
+| `doctor_instructions` | Observații medic | TEXTAREA | Observații | optional | reception records doctor outside app | editable until cycle finalization | cycle-scoped snapshot | max length | no automatic technical copy | after finalization |
+| `shared_observations` | Observații | TEXTAREA | Observații | optional | reception / technician | editable until cycle finalization | cycle-scoped | max length | no automatic technical copy | after finalization |
+
+## Field Type Decision
+
+Existing field types are enough for MVP:
+
+- `TEXT`
+- `TEXTAREA`
+- `NUMBER`
+- `DATE`
+- `SELECT`
+- `TOOTH`
+- `SHADE`
+
+Do not add a repeating tooth-level field type in `WORKFORM-REAL-001A`. Per-tooth details and shade/material per tooth are future enhancements only.
 
 ## Proposed Metadata Extensions
 
-Existing field types are enough for all confirmed visible fields. No new value field type is required for the current paper sheet.
-
 The implementation likely needs field metadata extensions:
 
-| Metadata key | Purpose | Why existing model is insufficient |
-|---|---|---|
-| `sectionKey` / `sectionLabel` | Group fields into Romanian work-sheet sections. | Current fields have only flat sort order. |
-| `roleOwner` | Define reception, technician, manager, system, or doctor-outside-app ownership. | Current fields do not encode edit authority. |
-| `visibilityPolicy` | Hide manager-only or sensitive fields from unauthorized roles. | Financial isolation must be server-side. |
-| `editableUntil` | Lock fields after intake, claim, active stage completion, cycle close, or manager repair. | Current submissions can be updated as a whole. |
-| `cycleScope` | Distinguish work-scoped derived values from cycle-scoped editable values. | Current submissions are work-owned. |
-| `copyToNextCyclePolicy` | Define never, always, user-selected, or field-specific copy behavior. | Cycle creation must not silently clone answers. |
-| `printable` | Mark fields intended for a future printed work sheet. | Print behavior is not represented. |
-| `sourceKind` | Distinguish registry-derived, system-derived, and user-entered fields. | Prevents duplicated source-of-truth values. |
+| Metadata key | Purpose |
+|---|---|
+| `sectionKey` / `sectionLabel` | Group fields into Romanian work-sheet sections. |
+| `roleOwner` | Define reception, technician, manager, system, or doctor-outside-app ownership. |
+| `editableUntil` | Represent cycle finalization as the normal lock point. |
+| `cycleScope` | Distinguish work-scoped derived values from cycle-scoped editable values. |
+| `copyToNextCyclePolicy` | Ensure editable technical values are not copied automatically. |
+| `printable` | Mark fields for future Documents-module printing without implementing printing now. |
+| `sourceKind` | Distinguish registry-derived, system-derived, and user-entered fields. |
 
-Potential field type extension, only if confirmed:
-
-| Proposed type | Status | Reason |
-|---|---|---|
-| Repeating tooth-level group | Not approved | Required only if client confirms shade/material/technical values can differ by tooth and cannot be represented by flat `TOOTH`, `SHADE`, `SELECT`, and `TEXTAREA` fields. |
+No manager-only field visibility is required for the MVP laboratory sheet because no manager-only/internal fields are part of the validated sheet.
 
 ## Template And Submission Proposal
 
 - Add a real work-sheet classification to templates, for example `templateKind = GENERIC | REAL_WORK_SHEET`.
-- Keep one active real work-sheet template per `WorkType`.
+- Keep one active real work-sheet template behavior for the common MVP sheet.
 - Preserve versioned templates; activating a new version applies only to new works/cycles.
 - Create one real work-sheet submission per `WorkCycle`.
 - Keep existing generic submissions compatible through a non-destructive migration.
@@ -78,13 +88,14 @@ Potential field type extension, only if confirmed:
 
 ## Lifecycle Proposal
 
-| Lifecycle moment | Proposed behavior |
+| Lifecycle moment | Confirmed behavior |
 |---|---|
-| Work intake | Reception selects patient, clinic, doctor, work type, teeth, shade, phase/deadline notes, and observations as confirmed by the client. |
-| Technician claim | System locks execution, pricing, and deadline snapshots as already implemented. Field locks require confirmation before coding. |
-| Stage completion | Technician-owned fields for that stage become immutable unless a future repair flow is approved. |
-| Cycle close | Entire cycle work-sheet submission becomes read-only. |
-| Next cycle | New cycle gets a new submission. No values are silently cloned. Copy behavior must follow confirmed field policy. |
+| Work intake | Reception starts the cycle sheet from the real paper baseline. |
+| During work | Reception and technicians may both complete observations and technical data. |
+| Returned work | Reception registers the physical return and confirms or changes clinic/doctor before creating the new cycle. |
+| New cycle | Same `WorkOrder` and patient are preserved. Editable technical values are not copied automatically. |
+| Finalization | The sheet becomes immutable for that cycle. |
+| Historical cycle | Never edited; corrections require a new cycle. |
 
 ## Permission Proposal
 
@@ -93,12 +104,12 @@ Use permissions, not role-name checks:
 | Permission | Purpose |
 |---|---|
 | `work_forms.real.read` | Read real work-sheet data allowed for the user. |
-| `work_forms.real.update_reception` | Edit reception-owned fields while lifecycle permits. |
-| `work_forms.real.update_technical` | Edit technician-owned fields while lifecycle permits. |
+| `work_forms.real.update` | Edit the active cycle sheet while lifecycle permits. |
+| `work_forms.real.finalize` | Finalize the active cycle sheet. |
 | `work_forms.real.manage_templates` | Configure real work-sheet templates. |
 | `work_forms.real.history.read` | Read historical cycle sheets. |
 
-Financial data must remain outside these permissions and under pricing/billing permissions.
+Financial data remains under pricing/billing permissions and must not be part of the operational sheet.
 
 ## Validation Proposal
 
@@ -111,7 +122,8 @@ Financial data must remain outside these permissions and under pricing/billing p
 - Doctor must belong to selected clinic when registry-derived values are editable.
 - Inactive clinic/doctor/work type cannot be selected for new active cycle sheets.
 - Stale template/version conflicts return a clear reload message.
-- Historical cycle submissions cannot be modified by normal update endpoints.
+- Finalized cycle submissions cannot be modified.
+- Historical cycle submissions cannot be modified.
 
 ## Backfill Proposal
 
@@ -121,26 +133,19 @@ Financial data must remain outside these permissions and under pricing/billing p
 - Do not invent missing fields from assets.
 - Do not migrate pricing, invoice, payment, urgency fee, or totals into operational form values.
 
-## Open Decisions Blocking Implementation
+## Future Enhancements
 
-| Decision | Why it blocks coding |
-|---|---|
-| Meaning of `Faza 1` through `Faza 4` | Determines whether fields are dynamic form values, workflow stages, phase records, or deadline records. |
-| Observation split | Determines whether to store one shared note or actor-owned notes with separate edit locks. |
-| Tooth-level repeating values | Determines whether current field types are enough or a grouped extension is required. |
-| Shade/material per tooth | Determines schema shape and UI complexity. |
-| Field lock rules after claim/stage completion | Determines backend authorization and immutability rules. |
-| Copy behavior into new cycles | Determines lifecycle API behavior and migration tests. |
+Future enhancements do not block `WORKFORM-REAL-001A`:
+
+- Additional configurable operational fields.
+- Different sheet variants per work type.
+- Per-tooth repeating details.
+- Shade/material per tooth.
+- Printable A4/A5 laboratory documents in the Documents module.
+- Attachments/photos for shade details after file storage is approved.
 
 ## Final Recommendation
 
-BLOCKED - BUSINESS CONFIRMATION REQUIRED
+READY FOR IMPLEMENTATION
 
-Ask the laboratory client only these questions before implementing `WORKFORM-REAL-001A`:
-
-1. Is `Fișa laborator nr` the same value as the application work code?
-2. What exactly are `Faza 1`, `Faza 2`, `Faza 3`, and `Faza 4`?
-3. Should `Observații` be one field or separate doctor/reception/technician fields?
-4. Can color or material differ by individual tooth?
-5. Which fields lock after technician claim and after stage completion?
-6. For a returned work/new cycle, which fields should be copied from the previous cycle?
+No MVP business-confirmation questions remain open. Future enhancements are tracked in [WORKFORM-REAL-CLIENT-QUESTIONS.md](WORKFORM-REAL-CLIENT-QUESTIONS.md).

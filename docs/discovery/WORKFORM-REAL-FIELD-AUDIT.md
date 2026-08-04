@@ -123,17 +123,20 @@ UNREADABLE - requires a clearer source image or client confirmation.
 ### 5. Work Type And Restoration
 
 - `Tip lucrare`
-- Restoration subtype is not separately visible; it may be encoded by `Tip lucrare` or open business confirmation.
+- Restoration subtype is not separately visible; it may be encoded by `Tip lucrare` in MVP or added later through configurable fields.
 
 ### 6. Material And Technical Parameters
 
 - No explicit material field is visible on the work sheet.
-- Material may be implied by `Tip lucrare` or by technician fields; this requires confirmation.
+- One material value per cycle is enough for MVP when material is captured digitally.
+- Exceptions go into observations.
 
 ### 7. Shade/Color Information
 
 - `Culoare`
-- Tooth outline drawing, likely shade-zone annotation, requires confirmation.
+- One shade value per cycle is enough for MVP.
+- Exceptions go into observations.
+- Tooth-level shade zones are a future enhancement only.
 
 ### 8. Doctor Instructions
 
@@ -224,33 +227,26 @@ Safe backfill strategy:
 - Do not invent values for clinic, phase deadlines, material, shade zones, or observations.
 - Do not backfill financial/billing fields into real work-sheet submissions.
 
-## Decision Table
+## Confirmed Decision Table
 
-| Decision | Current finding | Required client confirmation |
+| Decision | Confirmed rule | Implementation impact |
 |---|---|---|
-| Exact real fields | Readable fields are listed in this audit. | Confirm that the blank sheet is the final source and provide clearer source if anything is missing. |
-| Common versus work-type-specific fields | Admin, patient, doctor, teeth, color, phases, and observations appear common. | Confirm if material/restoration fields vary by work type. |
-| Fields editable by reception after technician claim | Not specified by assets. | Confirm exact fields reception can correct after claim. |
-| Fields editable by technicians | Not specified by assets. | Confirm whether technicians edit material, shade, observations, or phase data. |
-| Fields locked after stage completion | Not specified by assets. | Confirm field-level locks after claim and after stage completion. |
-| Copy values to next cycle | Existing task says do not silently clone. | Confirm per-field copy rule: never, always, user-selected, or field-specific. |
-| Signature ownership | Not visible on work sheet; invoice signatures exist. | Confirm delivery proof, work sheet, or both for distinct purposes. |
-| Tooth-level repeating groups | Current paper has one tooth selector and one color field. | Confirm if tooth-level repeated fields are required. |
-| Shade/material differ by tooth | Not visible except tooth outline. | Confirm if different teeth can have different shade/material. |
-| Doctor instructions per cycle | Observations likely cycle-scoped. | Confirm doctor instructions are snapshots per cycle. |
-| Reception corrects clinic/doctor after claim | Not specified by assets. | Confirm correction authority and audit requirements. |
-| Printable fields | Paper sheet fields plus branding are printable candidates. | Confirm which digital values must print later. |
-| Manager-only fields | Financial fields must be manager-only and outside operational form. | Confirm if any non-financial notes are manager-only. |
+| Exact real fields | The real paper laboratory sheet is the MVP baseline. Do not invent additional operational fields. | Build only the baseline sheet plus configurable extension capacity. |
+| Common versus work-type-specific fields | One common laboratory sheet for all work types in MVP. | One common real-sheet schema/template behavior. |
+| Reception and technician edit rights | Reception and technicians may both complete observations and technical data required by the work. | Collaborative data-entry UI and permissions. |
+| Locking | The sheet becomes immutable once finalized for that cycle. | Add cycle-level finalization lock; historical cycles remain read-only. |
+| Corrections | Corrections require a new cycle, not editing the previous one. | Do not add historical edit/repair flows in this task. |
+| New cycle values | Same `WorkOrder` and patient are preserved. Clinic/doctor default from previous cycle for confirmation only. Editable technical values are not copied automatically. | Create-next-cycle UI confirms clinic/doctor and starts a fresh editable sheet. |
+| Tooth-level repeating groups | Not in MVP. Existing tooth selector is sufficient. | Existing `TOOTH` field type is enough. |
+| Shade/material per tooth | Not in MVP. One shade/material value per cycle is enough; exceptions go into observations. | Existing flat shade/material fields are enough. |
+| Doctor instructions per cycle | Every cycle keeps its own instructions and observations. | Store instructions in cycle-owned sheet submissions. |
+| Clinic/doctor correction after claim | Reception may correct clinic and doctor only when registering a returned work before the new cycle is created. | Previous cycles remain immutable; new cycle gets confirmed clinic/doctor. |
+| Signatures | Only delivery/invoice documents, not the laboratory sheet in MVP. | No signature fields in the real work-sheet schema. |
+| Printing | Not in `WORKFORM-REAL-001A`; A4/A5 documents belong to future Documents module. | Store data now, do not build printing. |
+| Manager-only fields | None in MVP. | No manager-only work-sheet fields required. |
 
 ## Final Recommendation
 
-BLOCKED - BUSINESS CONFIRMATION REQUIRED
+READY FOR IMPLEMENTATION
 
-Smallest questions before coding:
-
-1. Is `Fișa laborator nr` exactly the application work code?
-2. Are `Faza 1` through `Faza 4` doctor-facing clinical phases, workflow stages, or free-text milestones?
-3. Should `Observații` be one shared note field or split into doctor, reception, and technician notes?
-4. Can shade/material differ by tooth, or is one value per cycle enough?
-5. Which fields may reception edit after technician claim, and which fields lock after stage completion?
-6. When a new cycle is created, which values may be copied: none, all, user-selected, or field-specific?
+No MVP business-confirmation questions remain open. Future enhancements are tracked in [WORKFORM-REAL-CLIENT-QUESTIONS.md](WORKFORM-REAL-CLIENT-QUESTIONS.md).

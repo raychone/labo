@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented foundation, templates, and work submissions. Real laboratory work-sheet discovery is complete. The real laboratory work-sheet foundation remains approved but blocked by explicit business confirmation.
+Implemented foundation, templates, and work submissions. Real laboratory work-sheet discovery and business validation are complete. The real laboratory work-sheet foundation is approved for implementation.
 
 ## Purpose
 
@@ -50,15 +50,15 @@ FORMS-001, WORKFORMS-001, WORKFORMS-002.
 
 ## Planned Tasks
 
-WORKFORM-REAL-DISCOVERY-001 is complete. WORKFORM-REAL-001A is approved for real laboratory work-sheet schema/template foundation after business confirmation. WORKFORM-REAL-001B is planned and must not be started yet.
+WORKFORM-REAL-DISCOVERY-001 is complete. WORKFORM-REAL-001A is approved for real laboratory work-sheet schema/template foundation. WORKFORM-REAL-001B is planned and must not be started yet.
 
 ## Deferred
 
 Attachments depend on file storage.
 
-## Open Decisions
+## Confirmed Decisions
 
-Final real laboratory form fields require client confirmation. Open decisions include `Faza 1` through `Faza 4` semantics, observation ownership, common versus work-type-specific fields, edit authority after technician claim, stage-completion locks, previous-cycle copy behavior, signatures, tooth-level repeating groups, and whether shade/material can differ by tooth. See [../discovery/WORKFORM-REAL-FIELD-AUDIT.md](../discovery/WORKFORM-REAL-FIELD-AUDIT.md) and [../discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](../discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md).
+The MVP uses the real paper laboratory sheet as the baseline, one common sheet for all work types, collaborative reception/technician editing, cycle-level finalization/immutability, per-cycle doctor instructions and observations, no automatic copying of editable technical values to new cycles, no per-tooth repeating details, one shade/material value per cycle, no work-sheet signatures, no printing in `WORKFORM-REAL-001A`, and no manager-only fields. Future enhancements are tracked in [../discovery/WORKFORM-REAL-CLIENT-QUESTIONS.md](../discovery/WORKFORM-REAL-CLIENT-QUESTIONS.md).
 
 ## Related Documents
 

@@ -1,214 +1,111 @@
-# WORKFORM-REAL Client Questions
+# WORKFORM-REAL Confirmed Decisions And Future Questions
 
-## Purpose
+## Status
 
-Minimum business confirmations needed before implementing `WORKFORM-REAL-001A`.
+Laboratory validation completed. `WORKFORM-REAL-001A` is ready for implementation.
 
-## Mandatory Decisions
+This document now keeps only genuinely unresolved future enhancements. The MVP decisions below are confirmed and should not be asked again.
 
-### 1. Exact Fields On The Real Sheet
+## Confirmed MVP Decisions
 
-**Client question:** Fișa digitală trebuie să conțină exact câmpurile de pe hârtie: `Fișa laborator nr`, `Doctor`, `Pacient`, `Vârsta`, `Sex`, `Tip lucrare`, `Culoare`, dinții, `Faza 1-4`, `Termen`, `Observații`?
+- The real paper laboratory sheet is the MVP baseline.
+- Do not invent additional operational fields in `WORKFORM-REAL-001A`.
+- One common laboratory sheet is used for all work types in MVP.
+- The laboratory sheet is primarily exchanged between the laboratory and clinic/doctor.
+- The same sheet is used when a work leaves the laboratory and when it returns.
+- Doctors do not need application accounts.
+- Returns are registered by reception when the physical work arrives back in the laboratory.
+- The paper layout currently contains two identical copies of the same laboratory sheet on one page.
+- `WORKFORM-REAL-001A` builds the data model and data-entry UI only, not the printable document.
+- Reception and technicians may both complete observations and technical data required by the work.
+- The sheet becomes immutable only when finalized for that cycle.
+- Historical cycle sheets are never edited.
+- Corrections require a new cycle, not editing the previous cycle.
+- A new cycle keeps the same `WorkOrder` and patient.
+- A new cycle defaults clinic and doctor from the previous cycle for confirmation only; reception confirms or changes them before creating the cycle.
+- Editable technical values are not copied automatically to a new cycle.
+- Per-tooth repeating details are out of MVP; the existing tooth selector is sufficient.
+- Shade/material per tooth is out of MVP; one shade/material value per cycle is enough and exceptions go into observations.
+- Doctor instructions and observations are stored per cycle.
+- Clinic/doctor corrections after technician claim happen only when reception registers a returned work before the new cycle is created.
+- Signatures belong only to delivery/invoice documents, not the laboratory sheet in MVP.
+- Printing is not part of `WORKFORM-REAL-001A`.
+- Printable A4/A5 documents matching current paper forms will be handled later in the Documents module.
+- No manager-only/internal fields are part of the laboratory sheet MVP.
 
-- Why it matters: The implementation must not invent fields or miss fields from the real sheet.
+## Open Future Enhancements
+
+These do not block `WORKFORM-REAL-001A`.
+
+### 1. Configurable Field Extensions
+
+**Question:** Which additional operational fields should be added after MVP through configurable fields?
+
+- Why it matters: The sheet may grow later without changing the MVP baseline.
 - Options:
-  - [ ] Da, acestea sunt câmpurile corecte pentru MVP.
-  - [ ] Nu, trebuie adăugate/eliminate câmpuri.
-- Recommended default: Da, based on the inspected blank paper sheet.
-- Technical impact: Defines the initial template schema and migration/backfill expectations.
-- Blocks implementation: Yes.
+  - Add fields per work type.
+  - Add optional common fields.
+  - Keep the sheet unchanged.
+- Recommended default: Keep the MVP sheet unchanged until the laboratory validates concrete extra fields.
+- Technical impact: Future template configuration/versioning only.
+- Blocks implementation: No.
 
-### 2. Common Fields Versus Work-Type-Specific Fields
+### 2. Different Sheets Per Work Type
 
-**Client question:** Aceste câmpuri sunt aceleași pentru toate tipurile de lucrări sau unele apar doar la anumite tipuri?
+**Question:** Should some work types get their own sheet variants after MVP?
 
-- Why it matters: Templates are assigned by work type.
+- Why it matters: MVP uses one common sheet, but specialized workflows may need extra fields later.
 - Options:
-  - [ ] Pentru MVP, aceeași fișă pentru toate tipurile de lucrări.
-  - [ ] Fișe diferite pe tip de lucrare.
-- Recommended default: Same MVP sheet for all work types, because the paper source is one generic sheet.
-- Technical impact: One shared real work-sheet template pattern versus multiple work-type variants.
-- Blocks implementation: Yes.
+  - Keep one common sheet.
+  - Add work-type-specific versions later.
+- Recommended default: Keep one common sheet until real use proves a need.
+- Technical impact: Future work-type template variants.
+- Blocks implementation: No.
 
-### 3. Reception Edit Rights
+### 3. Per-Tooth Repeating Details
 
-**Client question:** După ce tehnicianul preia lucrarea, recepția mai poate modifica datele introduse inițial?
+**Question:** Should each tooth have its own detailed sub-form in a future version?
 
-- Why it matters: Edit rights must be clear before locking form values.
+- Why it matters: MVP only needs the tooth selector.
 - Options:
-  - [ ] Nu, după preluare recepția nu mai modifică fișa normal.
-  - [ ] Da, recepția poate corecta doar câmpuri administrative.
-  - [ ] Da, recepția poate corecta orice câmp, cu motiv.
-- Recommended default: Administrative corrections only, with audit.
-- Technical impact: Defines reception permissions and conflict handling after claim.
-- Blocks implementation: Yes.
+  - Keep one tooth selector.
+  - Add per-tooth details later.
+- Recommended default: Keep one tooth selector.
+- Technical impact: Possible future grouped/repeating field model.
+- Blocks implementation: No.
 
-### 4. Technician Edit Rights
+### 4. Shade/Material Per Tooth
 
-**Client question:** Ce completează tehnicianul pe fișa digitală?
+**Question:** Should shade or material be captured separately per tooth in a future version?
 
-- Why it matters: Technician-owned fields need separate permissions and lock rules.
+- Why it matters: MVP uses one shade/material value per cycle and observations for exceptions.
 - Options:
-  - [ ] Doar observații tehnice.
-  - [ ] Observații tehnice plus culoare/material/dinți când este nevoie.
-  - [ ] Tehnicianul nu completează fișa în MVP.
-- Recommended default: Observații tehnice plus culoare/material/dinți when needed, matching current task scope.
-- Technical impact: Defines technician edit endpoints/UI and field ownership.
-- Blocks implementation: Yes.
+  - Keep one value per cycle.
+  - Add per-tooth shade/material later.
+- Recommended default: Keep one value per cycle.
+- Technical impact: Possible future tooth-level data model and UI.
+- Blocks implementation: No.
 
-### 5. Locking After Claim Or Stage Completion
+### 5. Printable Documents
 
-**Client question:** Când se blochează câmpurile ca să rămână istoric corect?
+**Question:** When should the Documents module generate A4/A5 printable laboratory sheets matching the paper forms?
 
-- Why it matters: Historical cycle data must remain immutable.
+- Why it matters: Printing is explicitly outside `WORKFORM-REAL-001A`.
 - Options:
-  - [ ] Datele recepției se blochează la preluarea de către tehnician; datele tehnicianului se blochează la finalizarea etapei.
-  - [ ] Toată fișa se poate modifica până la închiderea ciclului.
-  - [ ] Doar managerul poate debloca/corecta, cu motiv.
-- Recommended default: Reception fields lock at claim; technician fields lock at stage completion; manager correction requires audit.
-- Technical impact: Defines lifecycle guards and tests.
-- Blocks implementation: Yes.
+  - Implement later in Documents.
+  - Keep digital-only.
+- Recommended default: Implement later in Documents after data-entry workflow is stable.
+- Technical impact: Future document generation, layout, and company/brand handling.
+- Blocks implementation: No.
 
-### 6. Copying Values Into A New Cycle
+### 6. Attachments For Shade Details
 
-**Client question:** Când lucrarea revine și se deschide un ciclu nou, ce date se copiază din ciclul anterior?
+**Question:** Should photos/files be attached later for color and clinical details?
 
-- Why it matters: The system must not silently clone previous answers.
+- Why it matters: Collaboration terms mention color photos, but file storage is outside this task.
 - Options:
-  - [ ] Nu se copiază nimic automat; recepția completează/confirmă din nou.
-  - [ ] Se copiază automat pacientul, clinica, medicul, tipul lucrării și dinții.
-  - [ ] Utilizatorul alege ce copiază.
-- Recommended default: Copy no editable form values automatically; keep work code and patient from the same WorkOrder, default clinic/doctor for confirmation.
-- Technical impact: Defines create-next-cycle form behavior and backfill rules.
-- Blocks implementation: Yes.
-
-### 7. Tooth-Level Repeating Information
-
-**Client question:** Pentru fiecare dinte trebuie completate detalii separate?
-
-- Why it matters: A repeating tooth-level form is more complex than a simple tooth selector.
-- Options:
-  - [ ] Nu, este suficientă selectarea dinților pe lucrare/ciclu.
-  - [ ] Da, fiecare dinte poate avea detalii proprii.
-- Recommended default: No per-tooth repeating details for MVP, because the paper sheet shows one tooth selector.
-- Technical impact: Determines whether existing `TOOTH` field is sufficient or a new grouped model is needed.
-- Blocks implementation: Yes.
-
-### 8. Material And Shade Per Tooth
-
-**Client question:** Culoarea sau materialul pot fi diferite pe fiecare dinte?
-
-- Why it matters: Per-tooth shade/material changes schema and UI.
-- Options:
-  - [ ] Nu, o culoare/material pentru lucrare este suficient în MVP.
-  - [ ] Da, culoarea poate diferi pe dinte.
-  - [ ] Da, materialul poate diferi pe dinte.
-- Recommended default: One shade/material value per cycle for MVP; add notes for exceptions.
-- Technical impact: Defines whether existing `SHADE`/`SELECT` fields are enough.
-- Blocks implementation: Yes.
-
-### 9. Doctor Instructions Per Cycle
-
-**Client question:** Instrucțiunile medicului trebuie păstrate separat pentru fiecare ciclu?
-
-- Why it matters: Returned works must preserve old instructions and new instructions.
-- Options:
-  - [ ] Da, fiecare ciclu are propriile instrucțiuni/observații.
-  - [ ] Nu, se păstrează o singură observație pe lucrare.
-- Recommended default: Yes, per cycle, because every cycle remains visible forever.
-- Technical impact: Stores instructions in cycle-owned immutable submissions.
-- Blocks implementation: Yes.
-
-### 10. Clinic/Doctor Correction After Claim
-
-**Client question:** După preluarea lucrării de către tehnician, cine poate corecta clinica sau medicul?
-
-- Why it matters: Clinic/doctor are registry references and cycle history.
-- Options:
-  - [ ] Doar managerul, cu motiv.
-  - [ ] Recepția, cu motiv.
-  - [ ] Nu se mai corectează după preluare; se deschide un ciclu nou dacă este cazul.
-- Recommended default: Reception or manager correction with reason before cycle closure; prior cycle history remains audited.
-- Technical impact: Defines correction permissions and audit events.
-- Blocks implementation: Yes.
-
-### 11. Signatures
-
-**Client question:** Semnăturile trebuie să apară pe fișa de lucru sau doar pe livrare/factură?
-
-- Why it matters: The inspected work sheet has no signature area; invoices have signatures.
-- Options:
-  - [ ] Doar pe livrare/factură, nu pe fișa de lucru.
-  - [ ] Și pe fișa de lucru.
-  - [ ] Nu în MVP.
-- Recommended default: Only delivery/invoice signatures, not work-sheet signatures.
-- Technical impact: Avoids adding signature fields to the real work-sheet schema.
-- Blocks implementation: No, can be deferred if default is accepted.
-
-### 12. Printable Fields
-
-**Client question:** Pentru MVP trebuie să tipărim fișa digitală ca pe hârtie?
-
-- Why it matters: Printing is out of scope for `WORKFORM-REAL-001A`, but fields should be marked if needed later.
-- Options:
-  - [ ] Nu, doar salvăm fișa digitală acum.
-  - [ ] Da, dar tipărirea poate fi implementată mai târziu.
-  - [ ] Da, tipărirea este obligatorie acum.
-- Recommended default: Save digital data now; mark printable fields for later.
-- Technical impact: Adds printability metadata only, without building document printing.
-- Blocks implementation: No, unless printing is required now.
-
-### 13. Manager-Only/Internal Fields
-
-**Client question:** Există observații interne care trebuie văzute doar de manageri?
-
-- Why it matters: Financial/private data must not be visible to all operational roles.
-- Options:
-  - [ ] Nu în fișa de lucru MVP.
-  - [ ] Da, există observații interne manager-only.
-- Recommended default: No manager-only/internal fields in the operational work sheet MVP.
-- Technical impact: If yes, server-side field visibility rules are required.
-- Blocks implementation: No, can be deferred if default is accepted.
-
-## Recommended MVP Decisions
-
-- Use the visible paper-sheet fields for MVP.
-- Use one common sheet across work types first.
-- Store one sheet per cycle.
-- Keep doctor instructions and observations cycle-scoped.
-- Lock reception fields after technician claim.
-- Lock technician fields after stage completion.
-- Do not auto-copy editable values into a new cycle.
-- Use one tooth selector and one shade/material value per cycle, with notes for exceptions.
-- Keep signatures, printing, and manager-only internal notes out of MVP unless explicitly required.
-
-## Can Be Deferred After MVP
-
-- Different sheets per work type.
-- Tooth-level repeating details.
-- Shade/material per tooth.
-- Printed work-sheet layout.
-- Work-sheet signatures.
-- Manager-only internal notes inside the work sheet.
-- Photo/file attachments for shade details.
-
-## Final Confirmation Block
-
-Client can reply with:
-
-```text
-Confirm pentru MVP:
-1. Câmpurile de pe fișa analizată sunt corecte: Da/Nu + modificări.
-2. Fișa este comună pentru toate tipurile de lucrări: Da/Nu.
-3. Recepția poate corecta după preluare: Nu / doar administrativ / orice cu motiv.
-4. Tehnicianul completează: doar observații / observații plus date tehnice / nimic.
-5. Blocare: la preluare și finalizare etapă / la închidere ciclu / doar manager.
-6. Ciclu nou: nu copiază automat / copiază câmpuri de bază / utilizatorul alege.
-7. Detalii pe fiecare dinte: Nu/Da.
-8. Culoare/material diferit pe dinte: Nu/Da.
-9. Instrucțiuni medic pe fiecare ciclu: Da/Nu.
-10. Corectare clinică/medic după preluare: manager / recepție / nu.
-11. Semnături pe fișa de lucru: Nu/Da/nu în MVP.
-12. Tipărire fișă în MVP: Nu/Da mai târziu/Da acum.
-13. Câmpuri interne doar manager: Nu/Da.
-```
+  - Add attachments later.
+  - Keep observations only.
+- Recommended default: Defer until file storage/documents are approved.
+- Technical impact: Future file storage and permissions.
+- Blocks implementation: No.

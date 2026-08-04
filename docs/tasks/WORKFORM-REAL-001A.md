@@ -4,7 +4,7 @@
 
 APPROVED
 
-Blocked by explicit business confirmation of the `WORKFORM-REAL-DISCOVERY-001` findings before implementation.
+Business confirmation completed after the real laboratory visit. The task is ready for implementation.
 
 ## Objective
 
@@ -126,8 +126,10 @@ Only add new field types if the real sheet cannot be represented safely with exi
 - Cycle 1 has its own submission.
 - Cycle 2 creates a new submission/snapshot.
 - Previous cycle submissions remain read-only.
-- Values may be copied selectively from the previous cycle only through an explicit future action.
-- Do not silently clone previous answers.
+- Do not copy editable technical values automatically to a new cycle.
+- Keep the same `WorkOrder` and patient across cycles.
+- Default clinic and doctor from the previous cycle for reception confirmation only.
+- Reception confirms or changes clinic and doctor before creating the new cycle.
 
 ### Role ownership
 
@@ -142,7 +144,8 @@ Reception may complete:
 - priority;
 - promised/requested date;
 - doctor instructions;
-- initial observations.
+- initial observations;
+- technical sheet values when needed.
 
 Technician may complete:
 
@@ -152,6 +155,8 @@ Technician may complete:
 - shade;
 - execution observations;
 - stage-specific technical information.
+
+Reception and technicians collaborate on the same operational sheet. The sheet becomes immutable once finalized for that cycle. Historical cycles are never edited; corrections require a new cycle.
 
 Manager may:
 
@@ -267,6 +272,7 @@ Include coverage for:
 - Generic file uploads.
 - STL/PDF/images.
 - Document printing.
+- Printable A4/A5 laboratory documents matching current paper forms; these belong to a future Documents task.
 - Billing.
 - Payments.
 - Inventory.
@@ -277,20 +283,41 @@ Include coverage for:
 - `WORKFORM-REAL-001B`.
 - Next task.
 
-## Open Decisions
+## Confirmed Laboratory Decisions
 
-These must be resolved with the laboratory client before implementation and not silently invented:
+Validated after the real laboratory visit:
 
-- Confirmed exact fields from the paper laboratory sheet, including whether `Fișa laborator nr` is exactly the application work code.
-- Meaning of `Faza 1` through `Faza 4`.
-- Whether `Observații` is one field or split into doctor, reception, and technician notes.
-- Which fields are common versus work-type-specific.
-- Which fields reception can edit after technician claim.
-- Which fields technicians can edit and which fields lock after stage completion.
-- Whether previous-cycle values may be copied, and whether copy behavior is never, always, user-selected, or field-specific.
-- Whether signatures belong in the work sheet or delivery proof.
-- Whether tooth-level values need repeating groups.
-- Whether shade/material can differ by tooth.
+- The real paper laboratory sheet is the MVP baseline.
+- Do not invent additional operational fields in this task.
+- One common laboratory sheet is used for all work types in MVP.
+- The laboratory sheet is primarily exchanged between the laboratory and clinic/doctor.
+- Doctors do not need application accounts.
+- Reception registers returns when the physical work arrives back in the laboratory.
+- Reception and technician may both complete the laboratory sheet.
+- The sheet becomes immutable once finalized for that cycle.
+- Historical cycles are never edited.
+- Corrections require a new cycle, not editing the previous cycle.
+- A new cycle keeps the same `WorkOrder` and patient.
+- A new cycle defaults clinic and doctor from the previous cycle for reception confirmation only.
+- Editable technical values are not copied automatically into a new cycle.
+- Existing tooth selector is sufficient for MVP; no per-tooth repeating details.
+- One shade/material value per cycle is enough; exceptions go into observations.
+- Every cycle keeps its own doctor instructions and observations.
+- Clinic/doctor correction after technician claim happens when reception registers a returned work before the new cycle is created.
+- Signatures belong only to delivery/invoice documents, not the laboratory sheet in MVP.
+- Printing is not part of `WORKFORM-REAL-001A`; printable A4/A5 documents belong to the future Documents module.
+- No manager-only/internal fields are part of the laboratory sheet MVP.
+
+## Future Enhancements
+
+These do not block `WORKFORM-REAL-001A`:
+
+- additional configurable operational fields;
+- different sheet variants per work type;
+- per-tooth repeating details;
+- shade/material per tooth;
+- printable A4/A5 laboratory documents in the Documents module;
+- attachments/photos for shade details after file storage is approved.
 
 Discovery output:
 
@@ -311,7 +338,7 @@ Discovery output:
 9. Backend scope is defined.
 10. Frontend scope is defined.
 11. Migration/backfill strategy is defined.
-12. Open business decisions remain marked.
+12. Confirmed laboratory decisions are implemented without inventing additional MVP fields.
 13. `WORKFORM-REAL-001B` remains unstarted.
 14. No application code changes outside this documentation-only definition task.
 15. Required checks pass.
