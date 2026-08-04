@@ -63,7 +63,7 @@ Last completed documentation task: `DOCS-TOKEN-001`, which created the permanent
 
 `TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable.
 
-No next task is currently approved. `STATUS-001B` is the likely follow-up if the frontend operational status page is approved.
+Next approved task: `STATUS-001B`, the frontend `/status` workspace on top of the existing STATUS-001A read model and API. Do not start later tasks until STATUS-001B is completed.
 
 ## Source Of Truth
 

@@ -8,12 +8,12 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 
 | Field | Value |
 |---|---|
-| Current task | NONE / AWAITING APPROVAL |
-| Status | AWAITING APPROVAL |
+| Current task | STATUS-001B |
+| Status | APPROVED |
 | Last completed task | STATUS-001A |
 | Last completed functional task | STATUS-001A |
-| Last completed functional commit | pending commit |
-| Next approved task | NONE |
+| Last completed functional commit | 5b61859a430c6554f251d6ae4685656ca20f36e1 |
+| Next approved task | STATUS-001B |
 
 ## Roadmap
 
@@ -56,7 +56,8 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | billing | BILLING-001 | COMPLETED | WORKS-001, PRICING-002 | billing workspace/payments | [modules/billing.md](modules/billing.md) |
 | billing | BILLING-002 | COMPLETED | BILLING-001 | printable docs/statements | [modules/billing.md](modules/billing.md) |
 | status | STATUS-001A | COMPLETED | TECH-CLAIM-001B, WORKFLOW-002, LOGISTICS-001, DELIVERY-001 | operational status read model and API | [tasks/STATUS-001A.md](tasks/STATUS-001A.md) |
-| materials | MATERIALS-001 | PLANNED | STATUS-001A | material catalog/selection | [modules/materials.md](modules/materials.md) |
+| status | STATUS-001B | APPROVED | STATUS-001A, SHELL-001 | operational status page and internal role visibility | [tasks/STATUS-001B.md](tasks/STATUS-001B.md) |
+| materials | MATERIALS-001 | PLANNED | STATUS-001B | material catalog/selection | [modules/materials.md](modules/materials.md) |
 | inventory | INVENTORY-001 | PLANNED | MATERIALS-001 | stock, NIR, consumption | [modules/inventory.md](modules/inventory.md) |
 | dashboard | DASHBOARD-001 | DEFERRED | SHELL-001 | legacy operational dashboard | [modules/dashboard.md](modules/dashboard.md) |
 | dashboard | DASHBOARD-002 | PLANNED | STATUS-001A | real workflow dashboard | [modules/dashboard.md](modules/dashboard.md) |
