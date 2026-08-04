@@ -296,6 +296,7 @@ Discovery output:
 
 - [../discovery/WORKFORM-REAL-FIELD-AUDIT.md](../discovery/WORKFORM-REAL-FIELD-AUDIT.md)
 - [../discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](../discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md)
+- [../discovery/WORKFORM-REAL-CLIENT-QUESTIONS.md](../discovery/WORKFORM-REAL-CLIENT-QUESTIONS.md)
 
 ## Acceptance Criteria
 
