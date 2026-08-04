@@ -105,9 +105,6 @@ WHERE "work_cycle_id" IS NULL;
 ALTER TABLE "work_workflow_executions" DROP CONSTRAINT IF EXISTS "work_workflow_executions_work_order_id_key";
 ALTER TABLE "work_logistics_states" DROP CONSTRAINT IF EXISTS "work_logistics_states_work_order_id_key";
 ALTER TABLE "work_execution_snapshots" DROP CONSTRAINT IF EXISTS "work_execution_snapshots_work_order_id_key";
-DROP INDEX IF EXISTS "work_workflow_executions_work_order_id_key";
-DROP INDEX IF EXISTS "work_logistics_states_work_order_id_key";
-DROP INDEX IF EXISTS "work_execution_snapshots_work_order_id_key";
 
 CREATE UNIQUE INDEX "work_cycles_work_order_id_cycle_number_key" ON "work_cycles"("work_order_id", "cycle_number");
 CREATE INDEX "work_cycles_work_order_id_status_idx" ON "work_cycles"("work_order_id", "status");

@@ -22,6 +22,13 @@ Work on `main` unless the user explicitly approves another branch. The tracked w
 - Do not delete untracked files.
 - Do not add or modify `assets/` unless a task explicitly approves it. Treat untracked `assets/` files as intentional user resources.
 
+## Prisma Migrations
+
+- Applied migration files are immutable.
+- If an applied migration needs compatibility SQL or a correction, add a new forward-only migration.
+- Do not amend, reorder, rename, or edit an already-applied migration file.
+- Do not reset or recreate a populated development database to hide migration-history drift.
+
 ## Commit
 
 One completed task equals one logical commit.
