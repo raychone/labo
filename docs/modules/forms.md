@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented foundation, templates, and work submissions. Real laboratory work-sheet foundation is the next approved task.
+Implemented foundation, templates, and work submissions. Real laboratory work-sheet discovery is complete. The real laboratory work-sheet foundation remains approved but blocked by explicit business confirmation.
 
 ## Purpose
 
@@ -14,7 +14,7 @@ Collect structured work-specific data without hardcoding every work type.
 
 ## Domain Concepts
 
-Template, version, field definition, runtime submission, immutable response snapshot, planned real work-sheet schema.
+Template, version, field definition, runtime submission, immutable response snapshot, planned real work-sheet schema, real paper-sheet field audit.
 
 ## Business Rules
 
@@ -50,7 +50,7 @@ FORMS-001, WORKFORMS-001, WORKFORMS-002.
 
 ## Planned Tasks
 
-WORKFORM-REAL-001A approved for real laboratory work-sheet schema/template foundation. WORKFORM-REAL-001B is planned and must not be started yet.
+WORKFORM-REAL-DISCOVERY-001 is complete. WORKFORM-REAL-001A is approved for real laboratory work-sheet schema/template foundation after business confirmation. WORKFORM-REAL-001B is planned and must not be started yet.
 
 ## Deferred
 
@@ -58,7 +58,7 @@ Attachments depend on file storage.
 
 ## Open Decisions
 
-Final real laboratory form fields require client confirmation. Open decisions include exact paper-sheet fields, common versus work-type-specific fields, edit authority after technician claim, previous-cycle copy behavior, signatures, and tooth-level repeating groups.
+Final real laboratory form fields require client confirmation. Open decisions include `Faza 1` through `Faza 4` semantics, observation ownership, common versus work-type-specific fields, edit authority after technician claim, stage-completion locks, previous-cycle copy behavior, signatures, tooth-level repeating groups, and whether shade/material can differ by tooth. See [../discovery/WORKFORM-REAL-FIELD-AUDIT.md](../discovery/WORKFORM-REAL-FIELD-AUDIT.md) and [../discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](../discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md).
 
 ## Related Documents
 

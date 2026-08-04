@@ -61,11 +61,11 @@ Planned or partial:
 
 Last completed functional task: `WORK-CYCLES-001B`, which added returned-work registration at reception, cycle history in work detail, cycle-aware `/status` indicators, granular cycle permissions, distinct return reasons, and a safe migration/backfill for per-cycle clinic history.
 
-Last completed documentation task: `DOCS-TOKEN-001`, which created the permanent token-efficient documentation system under `docs/`.
+Last completed documentation task: `WORKFORM-REAL-DISCOVERY-001`, which audited the real paper work sheet and produced [discovery/WORKFORM-REAL-FIELD-AUDIT.md](discovery/WORKFORM-REAL-FIELD-AUDIT.md) and [discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md). `DOCS-TOKEN-001` created the permanent token-efficient documentation system under `docs/`.
 
 `TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable.
 
-Next approved task: `WORKFORM-REAL-001A`, a real laboratory work-sheet schema and template foundation task. It must define cycle-owned, immutable, versioned work-sheet submissions using the existing form infrastructure where possible, without exposing financial data. No other task is approved.
+Next approved task: `WORKFORM-REAL-001A`, a real laboratory work-sheet schema and template foundation task. It remains approved but blocked by explicit business confirmation of the discovery questions before implementation. It must define cycle-owned, immutable, versioned work-sheet submissions using the existing form infrastructure where possible, without exposing financial data. No other task is approved.
 
 ## Source Of Truth
 

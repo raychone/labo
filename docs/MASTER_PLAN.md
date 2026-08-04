@@ -10,10 +10,11 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 |---|---|
 | Current task | WORKFORM-REAL-001A |
 | Status | APPROVED |
-| Last completed task | WORK-CYCLES-001B |
+| Blocker | Business confirmation required from WORKFORM-REAL-DISCOVERY-001 |
+| Last completed task | WORKFORM-REAL-DISCOVERY-001 |
 | Last completed functional task | WORK-CYCLES-001B |
 | Last completed functional commit | WORK-CYCLES-001B commit |
-| Next approved task | WORKFORM-REAL-001A |
+| Next approved task | WORKFORM-REAL-001A, after business confirmation |
 
 ## Roadmap
 
@@ -38,7 +39,8 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | forms | FORMS-001 | COMPLETED | UI-002 | form UX patterns | [modules/forms.md](modules/forms.md) |
 | forms | WORKFORMS-001 | COMPLETED | FORMS-001, WORKTYPES-001 | work form template builder | [modules/forms.md](modules/forms.md) |
 | forms | WORKFORMS-002 | COMPLETED | WORKFORMS-001, WORKS-001 | work form submissions/snapshots | [modules/forms.md](modules/forms.md) |
-| forms | WORKFORM-REAL-001A | APPROVED | WORKFORMS-002, WORK-CYCLES-001B | real laboratory work sheet schema and template foundation | [tasks/WORKFORM-REAL-001A.md](tasks/WORKFORM-REAL-001A.md) |
+| forms | WORKFORM-REAL-DISCOVERY-001 | COMPLETED | WORKFORM-REAL-001A definition | real paper work-sheet field audit and schema proposal | [discovery/WORKFORM-REAL-FIELD-AUDIT.md](discovery/WORKFORM-REAL-FIELD-AUDIT.md), [discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md) |
+| forms | WORKFORM-REAL-001A | APPROVED | WORKFORMS-002, WORK-CYCLES-001B, WORKFORM-REAL-DISCOVERY-001 business confirmation | real laboratory work sheet schema and template foundation | [tasks/WORKFORM-REAL-001A.md](tasks/WORKFORM-REAL-001A.md) |
 | forms | WORKFORM-REAL-001B | PLANNED | WORKFORM-REAL-001A | runtime real work sheet completion and cycle UI | [modules/forms.md](modules/forms.md) |
 | pricing | PRICING-002 | COMPLETED | ORG-DATA-MIGRATION-001, WORKTYPES-001 | company pricing and agreements | [modules/pricing.md](modules/pricing.md) |
 | deadlines | WORK-DEADLINES-001A | COMPLETED | PRICING-002 | deadline engine/calendar | [modules/deadlines.md](modules/deadlines.md) |

@@ -4,6 +4,8 @@
 
 APPROVED
 
+Blocked by explicit business confirmation of the `WORKFORM-REAL-DISCOVERY-001` findings before implementation.
+
 ## Objective
 
 Define and implement in this task the real laboratory work-sheet foundation used from reception through technician execution, based on validated laboratory requirements.
@@ -277,14 +279,23 @@ Include coverage for:
 
 ## Open Decisions
 
-These must be recorded during implementation and not silently invented:
+These must be resolved with the laboratory client before implementation and not silently invented:
 
-- Exact fields from the paper laboratory sheet.
+- Confirmed exact fields from the paper laboratory sheet, including whether `Fișa laborator nr` is exactly the application work code.
+- Meaning of `Faza 1` through `Faza 4`.
+- Whether `Observații` is one field or split into doctor, reception, and technician notes.
 - Which fields are common versus work-type-specific.
 - Which fields reception can edit after technician claim.
-- Whether previous-cycle values may be copied.
+- Which fields technicians can edit and which fields lock after stage completion.
+- Whether previous-cycle values may be copied, and whether copy behavior is never, always, user-selected, or field-specific.
 - Whether signatures belong in the work sheet or delivery proof.
 - Whether tooth-level values need repeating groups.
+- Whether shade/material can differ by tooth.
+
+Discovery output:
+
+- [../discovery/WORKFORM-REAL-FIELD-AUDIT.md](../discovery/WORKFORM-REAL-FIELD-AUDIT.md)
+- [../discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](../discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md)
 
 ## Acceptance Criteria
 

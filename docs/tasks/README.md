@@ -21,3 +21,8 @@ For normal implementation, read:
 - [WORK-CYCLES-001A.md](WORK-CYCLES-001A.md)
 - [WORK-CYCLES-001B.md](WORK-CYCLES-001B.md)
 - [WORKFORM-REAL-001A.md](WORKFORM-REAL-001A.md)
+
+## Discovery Documents
+
+- [../discovery/WORKFORM-REAL-FIELD-AUDIT.md](../discovery/WORKFORM-REAL-FIELD-AUDIT.md)
+- [../discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](../discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md)
