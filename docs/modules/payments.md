@@ -30,7 +30,7 @@ Payment statuses are derived: `UNPAID`, `PARTIALLY_PAID`, `PAID`. Zero/negative 
 
 ## UI
 
-Payment evidence appears in billing workspace.
+Payment evidence appears in billing workspace. BILLING-REALIGN-001B is approved to improve manual receipt recording UX without adding payment processing.
 
 ## Audit
 
@@ -50,7 +50,7 @@ BILLING-001.
 
 ## Planned Tasks
 
-PAYMENTS-002.
+BILLING-REALIGN-001B integration, PAYMENTS-002.
 
 ## Deferred
 

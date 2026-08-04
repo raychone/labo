@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented, including company-aware `NC`/`NG` realignment in BILLING-REALIGN-001A.
+Implemented, including company-aware `NC`/`NG` realignment in BILLING-REALIGN-001A. BILLING-REALIGN-001B is approved to finish the manager-facing billing workspace UX.
 
 ## Purpose
 
@@ -23,6 +23,8 @@ Application records manual payments only. It does not process money, connect to 
 Billable works, documents, series, payments, and print views are scoped by the `NC`/`NG` company fixed in the relevant cycle execution snapshot. The active UI company context filters the billing workspace, but it must not override a document or work cycle company.
 
 A work cycle without an unambiguous locked execution snapshot cannot be invoiced. One document cannot mix `NC` and `NG` cycles. Ambiguous legacy documents are flagged for review instead of being silently assigned.
+
+BILLING-REALIGN-001B must keep `/billing` company-scoped through the global `NC`/`NG` context, expose receivables, statements, month-end registry, manual receipt recording, and read-only ambiguous legacy review, and leave ambiguous correction workflow to BILLING-REALIGN-001C.
 
 ## Data Model
 
@@ -54,7 +56,7 @@ BILLING-001, BILLING-002, BILLING-REALIGN-001A.
 
 ## Planned Tasks
 
-BILLING-REALIGN-001B, PAYMENTS-002, DOCUMENTS-001, REPORTS-001.
+BILLING-REALIGN-001B is approved. BILLING-REALIGN-001C, PAYMENTS-002, DOCUMENTS-001, and REPORTS-001 are planned.
 
 ## Deferred
 

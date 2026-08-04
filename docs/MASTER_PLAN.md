@@ -8,13 +8,13 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 
 | Field | Value |
 |---|---|
-| Current task | BILLING-REALIGN-001A |
-| Status | COMPLETED |
+| Current task | BILLING-REALIGN-001B |
+| Status | APPROVED |
 | Blocker | none |
 | Last completed task | BILLING-REALIGN-001A |
 | Last completed functional task | BILLING-REALIGN-001A |
 | Last completed functional commit | BILLING-REALIGN-001A commit |
-| Next approved task | none |
+| Next approved task | BILLING-REALIGN-001B |
 
 ## Roadmap
 
@@ -60,7 +60,8 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | billing | BILLING-001 | COMPLETED | WORKS-001, PRICING-002 | billing workspace/payments | [modules/billing.md](modules/billing.md) |
 | billing | BILLING-002 | COMPLETED | BILLING-001 | printable docs/statements | [modules/billing.md](modules/billing.md) |
 | billing | BILLING-REALIGN-001A | COMPLETED | BILLING-001, BILLING-002, ORG-DATA-MIGRATION-001, TECH-CLAIM-001B, WORK-CYCLES-001A | company-aware billing foundation for NC and NG | [tasks/BILLING-REALIGN-001A.md](tasks/BILLING-REALIGN-001A.md) |
-| billing | BILLING-REALIGN-001B | PLANNED | BILLING-REALIGN-001A | follow-up billing realignment refinements | [modules/billing.md](modules/billing.md) |
+| billing | BILLING-REALIGN-001B | APPROVED | BILLING-REALIGN-001A | financial workspace, receivables and month-end UX | [tasks/BILLING-REALIGN-001B.md](tasks/BILLING-REALIGN-001B.md) |
+| billing | BILLING-REALIGN-001C | PLANNED | BILLING-REALIGN-001B | ambiguous legacy billing correction workflow | [modules/billing.md](modules/billing.md) |
 | status | STATUS-001A | COMPLETED | TECH-CLAIM-001B, WORKFLOW-002, LOGISTICS-001, DELIVERY-001 | operational status read model and API | [tasks/STATUS-001A.md](tasks/STATUS-001A.md) |
 | status | STATUS-001B | COMPLETED | STATUS-001A, SHELL-001 | operational status page and internal role visibility | [tasks/STATUS-001B.md](tasks/STATUS-001B.md) |
 | work cycles | WORK-CYCLES-001A | COMPLETED | STATUS-001B, WORKFLOW-002, LOGISTICS-001, DELIVERY-001 | work cycle model and lifecycle foundation | [tasks/WORK-CYCLES-001A.md](tasks/WORK-CYCLES-001A.md) |
