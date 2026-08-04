@@ -50,7 +50,7 @@ WORKTYPES-001.
 
 ## Planned Tasks
 
-Real work form refinement.
+WORKFORM-REAL-001A real work-sheet template foundation; WORKFORM-REAL-001B remains planned.
 
 ## Deferred
 

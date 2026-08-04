@@ -49,6 +49,7 @@ Implemented or substantially implemented:
 
 Planned or partial:
 
+- real laboratory work-sheet schema/template foundation;
 - materials and inventory;
 - dashboard/status evolution beyond the implemented `/status` workspace;
 - search;
@@ -64,7 +65,7 @@ Last completed documentation task: `DOCS-TOKEN-001`, which created the permanent
 
 `TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable.
 
-No next task is approved.
+Next approved task: `WORKFORM-REAL-001A`, a real laboratory work-sheet schema and template foundation task. It must define cycle-owned, immutable, versioned work-sheet submissions using the existing form infrastructure where possible, without exposing financial data. No other task is approved.
 
 ## Source Of Truth
 

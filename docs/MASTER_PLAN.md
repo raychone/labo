@@ -8,12 +8,12 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 
 | Field | Value |
 |---|---|
-| Current task | none |
-| Status | AWAITING APPROVAL |
+| Current task | WORKFORM-REAL-001A |
+| Status | APPROVED |
 | Last completed task | WORK-CYCLES-001B |
 | Last completed functional task | WORK-CYCLES-001B |
 | Last completed functional commit | WORK-CYCLES-001B commit |
-| Next approved task | none |
+| Next approved task | WORKFORM-REAL-001A |
 
 ## Roadmap
 
@@ -38,6 +38,8 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | forms | FORMS-001 | COMPLETED | UI-002 | form UX patterns | [modules/forms.md](modules/forms.md) |
 | forms | WORKFORMS-001 | COMPLETED | FORMS-001, WORKTYPES-001 | work form template builder | [modules/forms.md](modules/forms.md) |
 | forms | WORKFORMS-002 | COMPLETED | WORKFORMS-001, WORKS-001 | work form submissions/snapshots | [modules/forms.md](modules/forms.md) |
+| forms | WORKFORM-REAL-001A | APPROVED | WORKFORMS-002, WORK-CYCLES-001B | real laboratory work sheet schema and template foundation | [tasks/WORKFORM-REAL-001A.md](tasks/WORKFORM-REAL-001A.md) |
+| forms | WORKFORM-REAL-001B | PLANNED | WORKFORM-REAL-001A | runtime real work sheet completion and cycle UI | [modules/forms.md](modules/forms.md) |
 | pricing | PRICING-002 | COMPLETED | ORG-DATA-MIGRATION-001, WORKTYPES-001 | company pricing and agreements | [modules/pricing.md](modules/pricing.md) |
 | deadlines | WORK-DEADLINES-001A | COMPLETED | PRICING-002 | deadline engine/calendar | [modules/deadlines.md](modules/deadlines.md) |
 | deadlines | WORK-DEADLINES-001B | COMPLETED | WORK-DEADLINES-001A | persisted deadlines | [modules/deadlines.md](modules/deadlines.md) |
@@ -80,4 +82,4 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 - `NOTIFICATIONS-001`: operational notifications are deferred.
 - `PAYMENTS-002`: manual payment evidence realignment is planned but not started.
 - `TECH-CLAIM-001C`: deferred because TECH-CLAIM-001A/B cover current MVP claim needs and stale-claim recovery lacks validated business rules.
-- `DOCUMENTS-001`, `COLLABORATION-TERMS-001`, `OFFLINE-001`, `STATUS-001`, `WORKFORM-REAL-001`: planned future work; details require task-specific confirmation.
+- `DOCUMENTS-001`, `COLLABORATION-TERMS-001`, `OFFLINE-001`, `STATUS-001`: planned future work; details require task-specific confirmation.
