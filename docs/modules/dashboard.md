@@ -2,7 +2,7 @@
 
 ## Status
 
-Partially implemented as a basic shell dashboard; real workflow dashboard is planned.
+Partially implemented as a basic shell dashboard. Operational `/status` is implemented separately; real workflow dashboard remains planned.
 
 ## Purpose
 
@@ -10,7 +10,7 @@ Provide operational overview.
 
 ## Roles And Permissions
 
-Current `/dashboard` route has no specific required permission beyond authentication. The operational status read model uses `works.read_all` and `works.read_assigned` with server-side resource visibility.
+Current `/dashboard` route has no specific required permission beyond authentication. The `/status` workspace and operational status read model use `works.read_all` and `works.read_assigned` with server-side resource visibility.
 
 ## Domain Concepts
 
@@ -32,7 +32,7 @@ Existing module endpoints plus `GET /status/operational` from STATUS-001A.
 
 ## UI
 
-`/dashboard`.
+`/dashboard`. `/status` is the implemented operational status workspace with tabs, counters, filters, sorting, bounded pagination UX, desktop table, and mobile cards.
 
 ## Audit
 
@@ -48,11 +48,11 @@ Large lists, mixed company context, non-financial users.
 
 ## Implemented Tasks
 
-SHELL-001, module summaries, STATUS-001A.
+SHELL-001, module summaries, STATUS-001A, STATUS-001B.
 
 ## Planned Tasks
 
-DASHBOARD-002, STATUS-001B.
+DASHBOARD-002.
 
 ## Deferred
 

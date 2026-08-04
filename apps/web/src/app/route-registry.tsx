@@ -13,6 +13,7 @@ export interface AppRouteConfig {
 }
 
 export const workReadPermissions = ["works.read_all", "works.read_assigned"] as const;
+export const operationalStatusReadPermissions = workReadPermissions;
 export const scanPermissions = ["scan.use"] as const;
 export const deliveryReadPermissions = ["delivery.read", "delivery.read_own"] as const;
 
@@ -41,6 +42,15 @@ export const appRoutes = [
     path: "/works",
     permissionMode: "any",
     requiredPermissions: workReadPermissions,
+    showInNavigation: true,
+  },
+  {
+    icon: "OS",
+    label: "Status",
+    navigationGroup: "Operare",
+    path: "/status",
+    permissionMode: "any",
+    requiredPermissions: operationalStatusReadPermissions,
     showInNavigation: true,
   },
   {

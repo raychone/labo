@@ -2,7 +2,7 @@
 
 ## Status
 
-APPROVED.
+COMPLETED on 2026-08-04.
 
 ## Objective
 
@@ -133,13 +133,13 @@ Only fix proven integration bugs in existing frontend/API wiring if they block t
 
 ## UI changes
 
-Implement `/status` as an operational workspace in the authenticated app shell.
+Implemented `/status` as an operational workspace in the authenticated app shell.
 
-The page must use Romanian labels, existing shared UI components where applicable, dense operational layouts, and route/query-state handling consistent with existing frontend modules.
+The page uses Romanian labels, existing shared UI components where applicable, dense operational layouts, and route/query-state handling consistent with existing frontend modules.
 
-Desktop should prioritize a scan-friendly table. Mobile should provide cards that expose the same operational facts without horizontal overflow.
+Desktop prioritizes a scan-friendly table. Mobile provides cards that expose the same operational facts without horizontal overflow.
 
-Opening a work should reuse the existing work detail flow rather than duplicating the works page.
+Opening a work reuses the existing `/works?workId=...` detail flow rather than duplicating the works page.
 
 ## Security and RBAC
 
@@ -165,6 +165,11 @@ No new audit events are expected because this task is read-only.
 - Opening existing work detail flow from a status row.
 - No polling/WebSocket behavior.
 
+Implemented tests:
+
+- `apps/web/src/features/status/status-page.test.tsx`
+- `apps/web/src/app/route-registry.test.ts`
+
 ## Acceptance criteria
 
 1. `/status` route exists and is protected.
@@ -187,6 +192,15 @@ No new audit events are expected because this task is read-only.
 18. Working tree is clean.
 19. Next task is not started.
 
+Acceptance status:
+
+- Completed. `/status` is an authenticated, permission-aware, read-only frontend workspace backed by `GET /status/operational`.
+- Desktop table and mobile cards expose operational fields without financial data.
+- URL-backed query state is preserved for server-supported filters, sorting, pagination, and the page-level current-stage filter.
+- Current-stage filtering is page-level because STATUS-001A does not define a server query parameter for current stage key/name.
+- Work detail opening reuses `/works?workId=...`.
+- No polling, WebSockets, work-cycle implementation, backend business-rule changes, or work mutations were added.
+
 ## Documentation updates
 
 - [../MASTER_PLAN.md](../MASTER_PLAN.md)
@@ -201,4 +215,4 @@ No new audit events are expected because this task is read-only.
 
 ## Next task
 
-The task after STATUS-001B remains planned and must not be started.
+MATERIALS-001 remains planned and was not started.

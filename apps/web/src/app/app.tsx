@@ -8,7 +8,7 @@ import { DashboardPage } from "./dashboard-page.js";
 import { ForbiddenPage, NotFoundPage } from "./error-pages.js";
 import { PublicOnlyRoute, AuthenticatedRoute, PermissionRoute } from "./route-guards.js";
 import { RouteLoading } from "./route-loading.js";
-import { deliveryReadPermissions, scanPermissions, workReadPermissions } from "./route-registry.js";
+import { deliveryReadPermissions, operationalStatusReadPermissions, scanPermissions, workReadPermissions } from "./route-registry.js";
 import { LoginPage } from "../features/auth/login-page.js";
 import { StylePreviewPage } from "../features/style-preview/style-preview-page.js";
 
@@ -40,6 +40,10 @@ const WorkflowBuilderPage = lazy(async () => {
 const WorksPage = lazy(async () => {
   const module = await import("../features/works/works-page.js");
   return { default: module.WorksPage };
+});
+const StatusPage = lazy(async () => {
+  const module = await import("../features/status/status-page.js");
+  return { default: module.StatusPage };
 });
 const WorkScanPage = lazy(async () => {
   const module = await import("../features/works/work-scan-page.js");
@@ -106,6 +110,10 @@ const router = createBrowserRouter([
       {
         element: <PermissionRoute requiredPermissions={workReadPermissions}><LazyRoute><WorksPage /></LazyRoute></PermissionRoute>,
         path: "works",
+      },
+      {
+        element: <PermissionRoute requiredPermissions={operationalStatusReadPermissions}><LazyRoute><StatusPage /></LazyRoute></PermissionRoute>,
+        path: "status",
       },
       {
         element: <PermissionRoute requiredPermissions={scanPermissions}><LazyRoute><WorkScanPage /></LazyRoute></PermissionRoute>,

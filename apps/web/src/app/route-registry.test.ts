@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getNavigationRoutes, getSafeReturnTo, hasRouteAccess, scanPermissions, workReadPermissions } from "./route-registry.js";
+import { getNavigationRoutes, getSafeReturnTo, hasRouteAccess, operationalStatusReadPermissions, scanPermissions, workReadPermissions } from "./route-registry.js";
 
 describe("route registry", () => {
   it("filters navigation by permission snapshot", () => {
@@ -8,6 +8,7 @@ describe("route registry", () => {
 
     expect(labels).toContain("Panou principal");
     expect(labels).toContain("Lucrări");
+    expect(labels).toContain("Status");
     expect(labels).toContain("Scanare");
     expect(labels).toContain("Centru operațional");
     expect(labels).toContain("Facturare");
@@ -20,6 +21,10 @@ describe("route registry", () => {
     expect(hasRouteAccess(["works.read_assigned"], {
       permissionMode: "any",
       requiredPermissions: workReadPermissions,
+    })).toBe(true);
+    expect(hasRouteAccess(["works.read_assigned"], {
+      permissionMode: "any",
+      requiredPermissions: operationalStatusReadPermissions,
     })).toBe(true);
     expect(hasRouteAccess(["scan.use"], {
       permissionMode: "any",

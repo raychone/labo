@@ -43,13 +43,13 @@ Implemented or substantially implemented:
 - logistics center and delivery preparation groups;
 - deliveries and internal proof/signature rendering;
 - billing documents, payments, statements, exports;
-- operational status read-model API;
+- operational status read-model API and frontend `/status` workspace;
 - demo seed.
 
 Planned or partial:
 
 - materials and inventory;
-- dashboard/status evolution;
+- dashboard/status evolution beyond the implemented `/status` workspace;
 - search;
 - reports;
 - audit UI;
@@ -57,13 +57,13 @@ Planned or partial:
 
 ## Current Status
 
-Last completed functional task: `STATUS-001A`, which added the backend/read-model API foundation for operational status.
+Last completed functional task: `STATUS-001B`, which added the frontend `/status` operational status workspace on top of the STATUS-001A read model/API.
 
 Last completed documentation task: `DOCS-TOKEN-001`, which created the permanent token-efficient documentation system under `docs/`.
 
 `TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable.
 
-Next approved task: `STATUS-001B`, the frontend `/status` workspace on top of the existing STATUS-001A read model and API. Do not start later tasks until STATUS-001B is completed.
+No next task is currently approved. `MATERIALS-001` remains planned and must not be started without approval.
 
 ## Source Of Truth
 

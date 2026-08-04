@@ -32,7 +32,7 @@ STATUS-001A adds `GET /status/operational` as a separate read-only aggregate ove
 
 ## UI
 
-`/works` registry, create modal, detail/edit drawer, QR modal, workflow section, deadline and execution context cards.
+`/works` registry, create modal, detail/edit drawer, QR modal, workflow section, deadline and execution context cards. `/status` links into the existing `/works?workId=...` detail flow instead of duplicating work detail UI.
 
 ## Audit
 
@@ -48,11 +48,11 @@ Inactive clinic/doctor/work type, promised date constraints, pricing unresolved 
 
 ## Implemented Tasks
 
-WORKS-001, QR-001, WORK-DEADLINES-001A/B/C, TECH-CLAIM-001A/B, WORKFORMS-002, WORKFLOW-002, STATUS-001A.
+WORKS-001, QR-001, WORK-DEADLINES-001A/B/C, TECH-CLAIM-001A/B, WORKFORMS-002, WORKFLOW-002, STATUS-001A, STATUS-001B.
 
 ## Planned Tasks
 
-Work cycles, materials/inventory integration, STATUS-001B frontend status page if approved.
+Work cycles and materials/inventory integration.
 
 ## Deferred
 
