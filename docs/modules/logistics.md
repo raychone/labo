@@ -50,7 +50,7 @@ LOGISTICS-001, STATUS-001A read-model integration, WORK-CYCLES-001A cycle scopin
 
 ## Planned Tasks
 
-Cycle-aware frontend status/dashboard integration.
+WORK-CYCLES-001B cycle-aware return/status integration and future dashboard integration.
 
 ## Deferred
 

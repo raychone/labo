@@ -50,7 +50,7 @@ DELIVERY-001, STATUS-001A read-model integration, WORK-CYCLES-001A cycle scoping
 
 ## Planned Tasks
 
-Cycle-aware status/dashboard and reports integration.
+WORK-CYCLES-001B cycle-aware status integration, plus future dashboard and reports integration.
 
 ## Deferred
 

@@ -19,3 +19,4 @@ For normal implementation, read:
 - [TECH-CLAIM-001B.md](TECH-CLAIM-001B.md)
 - [TECH-CLAIM-001C.md](TECH-CLAIM-001C.md)
 - [WORK-CYCLES-001A.md](WORK-CYCLES-001A.md)
+- [WORK-CYCLES-001B.md](WORK-CYCLES-001B.md)

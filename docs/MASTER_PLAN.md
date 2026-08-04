@@ -8,12 +8,12 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 
 | Field | Value |
 |---|---|
-| Current task | none |
-| Status | AWAITING APPROVAL |
+| Current task | WORK-CYCLES-001B |
+| Status | APPROVED |
 | Last completed task | WORK-CYCLES-001A |
 | Last completed functional task | WORK-CYCLES-001A |
 | Last completed functional commit | WORK-CYCLES-001A commit |
-| Next approved task | none |
+| Next approved task | WORK-CYCLES-001B |
 
 ## Roadmap
 
@@ -58,7 +58,7 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | status | STATUS-001A | COMPLETED | TECH-CLAIM-001B, WORKFLOW-002, LOGISTICS-001, DELIVERY-001 | operational status read model and API | [tasks/STATUS-001A.md](tasks/STATUS-001A.md) |
 | status | STATUS-001B | COMPLETED | STATUS-001A, SHELL-001 | operational status page and internal role visibility | [tasks/STATUS-001B.md](tasks/STATUS-001B.md) |
 | work cycles | WORK-CYCLES-001A | COMPLETED | STATUS-001B, WORKFLOW-002, LOGISTICS-001, DELIVERY-001 | work cycle model and lifecycle foundation | [tasks/WORK-CYCLES-001A.md](tasks/WORK-CYCLES-001A.md) |
-| work cycles | WORK-CYCLES-001B | PLANNED | WORK-CYCLES-001A | cycle-aware operational UI and status integration | planned |
+| work cycles | WORK-CYCLES-001B | APPROVED | WORK-CYCLES-001A | cycle returns, frontend lifecycle and operational integration | [tasks/WORK-CYCLES-001B.md](tasks/WORK-CYCLES-001B.md) |
 | materials | MATERIALS-001 | PLANNED | STATUS-001B | material catalog/selection | [modules/materials.md](modules/materials.md) |
 | inventory | INVENTORY-001 | PLANNED | MATERIALS-001 | stock, NIR, consumption | [modules/inventory.md](modules/inventory.md) |
 | dashboard | DASHBOARD-001 | DEFERRED | SHELL-001 | legacy operational dashboard | [modules/dashboard.md](modules/dashboard.md) |

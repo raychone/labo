@@ -52,7 +52,7 @@ WORKS-001, QR-001, WORK-DEADLINES-001A/B/C, TECH-CLAIM-001A/B, WORKFORMS-002, WO
 
 ## Planned Tasks
 
-Cycle-aware UI refinements and materials/inventory integration.
+WORK-CYCLES-001B cycle return UI/integration and materials/inventory integration.
 
 ## Deferred
 

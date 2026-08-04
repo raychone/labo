@@ -65,7 +65,7 @@ Last completed documentation task: `DOCS-TOKEN-001`, which created the permanent
 
 `TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable.
 
-No task is currently approved. `WORK-CYCLES-001B` remains planned and must not be started. No other task is approved.
+Next approved task: `WORK-CYCLES-001B`, a frontend lifecycle and operational integration task for work-cycle history, returned-work registration, status cycle indicators, and permission-aware cycle UI. No other task is approved.
 
 ## Source Of Truth
 
