@@ -13,6 +13,7 @@ export interface BillingClinicSnapshot {
 }
 
 export interface BillingDocumentLineView {
+  readonly cycleNumber: number | null;
   readonly description: string;
   readonly doctorNameSnapshot: string;
   readonly id: string;
@@ -23,6 +24,7 @@ export interface BillingDocumentLineView {
   readonly toothPositionSnapshot: string | null;
   readonly unitPriceMinor: number;
   readonly workCode: string;
+  readonly workCycleId: string | null;
   readonly workCreatedAtSnapshot: string;
   readonly workOrderId: string;
   readonly workTypeNameSnapshot: string;
@@ -49,6 +51,8 @@ export interface BillingDocumentSummary {
   readonly currency: string;
   readonly formattedNumber: string | null;
   readonly id: string;
+  readonly legalEntityCode: string | null;
+  readonly legalEntityName: string | null;
   readonly issueDate: string;
   readonly paidMinor: number;
   readonly paymentStatus: PaymentStatus;
@@ -83,6 +87,8 @@ export interface BillableWork {
   readonly id: string;
   readonly invoicedDocumentId: string | null;
   readonly isBillable: boolean;
+  readonly legalEntityCode: string | null;
+  readonly legalEntityName: string | null;
   readonly patientName: string;
   readonly patientReference: string | null;
   readonly quantity: number;
@@ -90,6 +96,8 @@ export interface BillableWork {
   readonly status: string;
   readonly totalPriceMinor: number | null;
   readonly unavailableReason: string | null;
+  readonly workCycleId: string | null;
+  readonly workCycleNumber: number | null;
   readonly workTypeName: string;
 }
 
@@ -98,6 +106,7 @@ export interface BillingSeriesView {
   readonly documentType: BillingDocumentType;
   readonly id: string;
   readonly isActive: boolean;
+  readonly legalEntityCode: string | null;
   readonly prefix: string;
   readonly year: number;
 }
@@ -132,13 +141,30 @@ export interface BillingOverview {
 export type BillingDocumentRecord = Prisma.BillingDocumentGetPayload<{
   include: {
     clinic: true;
-    lines: true;
+    legalEntity: true;
+    lines: {
+      include: {
+        legalEntity: true;
+        workCycle: true;
+      };
+    };
     payments: true;
   };
 }>;
 
 export type BillableWorkRecord = Prisma.WorkOrderGetPayload<{
   include: {
+    activeCycle: {
+      include: {
+        billingLines: {
+          include: {
+            billingDocument: true;
+          };
+        };
+        executionLegalEntity: true;
+        executionSnapshot: true;
+      };
+    };
     clinic: true;
     doctor: true;
     workType: true;
@@ -176,6 +202,8 @@ export function toBillingDocumentSummary(document: BillingDocumentRecord): Billi
     formattedNumber: document.formattedNumber,
     id: document.id,
     issueDate: document.issueDate.toISOString(),
+    legalEntityCode: document.legalEntityCodeSnapshot,
+    legalEntityName: document.legalEntityNameSnapshot,
     paidMinor: amounts.paidMinor,
     paymentStatus: amounts.paymentStatus,
     status: document.status as BillingDocumentStatus,
@@ -222,6 +250,7 @@ export function toBillingClinicSnapshot(document: BillingDocumentRecord): Billin
 export function toBillingDocumentLineView(line: BillingDocumentRecord["lines"][number]): BillingDocumentLineView {
   return {
     description: line.description,
+    cycleNumber: line.cycleNumberSnapshot,
     doctorNameSnapshot: line.doctorNameSnapshot,
     id: line.id,
     lineTotalMinor: line.lineTotalMinor,
@@ -231,6 +260,7 @@ export function toBillingDocumentLineView(line: BillingDocumentRecord["lines"][n
     toothPositionSnapshot: line.toothPositionSnapshot,
     unitPriceMinor: line.unitPriceMinor,
     workCode: line.workCode,
+    workCycleId: line.workCycleId,
     workCreatedAtSnapshot: line.workCreatedAtSnapshot.toISOString(),
     workOrderId: line.workOrderId,
     workTypeNameSnapshot: line.workTypeNameSnapshot,
@@ -254,8 +284,13 @@ export function toPaymentView(payment: BillingDocumentRecord["payments"][number]
 }
 
 export function toBillableWorkView(workOrder: BillableWorkRecord, includeMoney: boolean): BillableWork {
+  const activeCycle = workOrder.activeCycle;
+  const snapshot = activeCycle?.executionSnapshot ?? null;
+  const activeInvoiceLine = activeCycle?.billingLines.find((line) => line.billingDocument.type === "INVOICE" && line.billingDocument.status !== "CANCELLED") ?? null;
+  const isBillable = Boolean(activeCycle?.executionLegalEntityId && snapshot?.status === "LOCKED" && snapshot.pricingTotalMinor !== null && activeInvoiceLine === null);
+
   return {
-    baseUnitPriceMinor: includeMoney ? workOrder.baseUnitPriceMinor : null,
+    baseUnitPriceMinor: includeMoney ? snapshot?.pricingUnitPriceMinor ?? null : null,
     clinicId: workOrder.clinicId,
     clinicName: workOrder.clinic.name,
     code: workOrder.code,
@@ -264,25 +299,34 @@ export function toBillableWorkView(workOrder: BillableWorkRecord, includeMoney: 
     doctorId: workOrder.doctorId,
     doctorName: workOrder.doctor.displayName,
     id: workOrder.id,
-    invoicedDocumentId: workOrder.invoicedDocumentId,
-    isBillable: workOrder.invoicedDocumentId === null,
+    invoicedDocumentId: activeInvoiceLine?.billingDocumentId ?? workOrder.invoicedDocumentId,
+    isBillable,
+    legalEntityCode: activeCycle?.executionLegalEntityCodeSnapshot ?? null,
+    legalEntityName: activeCycle?.executionLegalEntityNameSnapshot ?? null,
     patientName: workOrder.patientName,
     patientReference: workOrder.patientReference,
     quantity: workOrder.quantity,
     requestedDeliveryDate: workOrder.requestedDeliveryDate.toISOString(),
     status: workOrder.status,
-    totalPriceMinor: includeMoney ? workOrder.totalPriceMinor : null,
-    unavailableReason: workOrder.invoicedDocumentId ? "Lucrarea este deja asociata unei facturi active." : null,
+    totalPriceMinor: includeMoney ? snapshot?.pricingTotalMinor ?? null : null,
+    unavailableReason: activeInvoiceLine
+      ? "Ciclul activ este deja asociat unei facturi active."
+      : !activeCycle?.executionLegalEntityId || snapshot?.status !== "LOCKED" || snapshot.pricingTotalMinor === null
+        ? "Lipsește snapshot-ul de execuție pentru firma activă."
+        : null,
+    workCycleId: activeCycle?.id ?? null,
+    workCycleNumber: activeCycle?.cycleNumber ?? null,
     workTypeName: workOrder.workType.name,
   };
 }
 
-export function toBillingSeriesView(series: { readonly currentNumber: number; readonly documentType: BillingDocumentType; readonly id: string; readonly isActive: boolean; readonly prefix: string; readonly year: number }): BillingSeriesView {
+export function toBillingSeriesView(series: { readonly currentNumber: number; readonly documentType: BillingDocumentType; readonly id: string; readonly isActive: boolean; readonly legalEntity?: { readonly code: string } | null; readonly prefix: string; readonly year: number }): BillingSeriesView {
   return {
     currentNumber: series.currentNumber,
     documentType: series.documentType,
     id: series.id,
     isActive: series.isActive,
+    legalEntityCode: series.legalEntity?.code ?? null,
     prefix: series.prefix,
     year: series.year,
   };

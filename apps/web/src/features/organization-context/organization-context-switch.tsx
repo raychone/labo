@@ -36,6 +36,7 @@ export function OrganizationContextSwitch({ canRead, compact = false }: Organiza
     },
     onSuccess: (context) => {
       queryClient.setQueryData(organizationContextQueryKeys.all, context);
+      void queryClient.invalidateQueries({ queryKey: ["billing"] });
       void queryClient.invalidateQueries({ queryKey: settingsQueryKey });
       void queryClient.invalidateQueries({ queryKey: pricingQueryKeys.all });
       toast.showToast({

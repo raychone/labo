@@ -18,7 +18,7 @@ Legacy singleton settings, company-aware legal entity settings, active legal ent
 
 ## Business Rules
 
-`GET /settings` and `PATCH /settings` use the active server-side legal entity context. Request bodies cannot select another company.
+`GET /settings` and `PATCH /settings` use the active server-side legal entity context. Request bodies cannot select another company. Billing print views use the issuing document company's `LegalEntitySettings` as supplier legal data.
 
 ## Data Model
 

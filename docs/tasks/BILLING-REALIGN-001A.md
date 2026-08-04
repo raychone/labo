@@ -2,9 +2,9 @@
 
 ## Status
 
-APPROVED
+COMPLETED
 
-Documentation-only definition created. Do not start implementation until explicitly requested.
+Implemented in one logical task commit. `BILLING-REALIGN-001B` remains planned only and must not be started.
 
 ## Objective
 
@@ -46,6 +46,14 @@ Realign the existing billing implementation so every financial document, billabl
 ## Scope
 
 Backend, frontend, migration, seed, tests, and documentation required to make billing company-aware.
+
+Implemented:
+
+- billing documents, lines, payments, and series are company-scoped by `LegalEntity`;
+- billing lines reference `WorkCycle`;
+- billable works derive company and price from active-cycle execution snapshots;
+- print views use `LegalEntitySettings` for supplier data;
+- legacy rows are backfilled only when unambiguous and otherwise flagged for review.
 
 ### Source Company
 
@@ -245,17 +253,22 @@ Include coverage for:
 
 ## Verification
 
-For this documentation-only definition:
+Required implementation verification:
 
-- inspect documentation diff;
-- run `git diff --check`;
-- verify tracked working tree is clean after commit.
-
-For implementation, run the standard checks from [../TESTING.md](../TESTING.md), plus migrations and demo seed twice because schema and seed behavior are expected to change.
+- `pnpm --filter @dental-lab/api prisma:validate`;
+- `pnpm --filter @dental-lab/api prisma:generate`;
+- `pnpm --filter @dental-lab/api prisma:migrate:dev -- --name billing_company_realign`;
+- `pnpm --filter @dental-lab/api prisma migrate status`;
+- base seed;
+- demo seed twice;
+- `pnpm typecheck`;
+- `pnpm test`;
+- `pnpm build`;
+- `git diff --check`.
 
 ## Commit
 
-`DOCS: define BILLING-REALIGN-001A company billing foundation`
+`BILLING-REALIGN-001A: realign billing by execution company`
 
 ## Next Task
 

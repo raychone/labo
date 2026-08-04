@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { AuditService } from "../auth/audit.service.js";
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
+import type { LegalEntityContext } from "../organization-context/organization-context.view.js";
 import { BILLING_AUDIT_ACTIONS, BILLING_RESOURCE_TYPES } from "./billing.constants.js";
 import { endOfDateOnly, getDefaultBillingRange, parseDateOnly, toDateOnly } from "./billing.helpers.js";
 import { calculateBillingAmounts } from "./billing.view.js";
@@ -30,6 +31,16 @@ type UninvoicedWorkRecord = Prisma.WorkOrderGetPayload<{
   include: {
     clinic: true;
     doctor: true;
+    activeCycle: {
+      include: {
+        billingLines: {
+          include: {
+            billingDocument: true;
+          };
+        };
+        executionSnapshot: true;
+      };
+    };
     workType: true;
   };
 }>;
@@ -40,6 +51,16 @@ const STATEMENT_DOCUMENT_INCLUDE = {
 } as const satisfies Prisma.BillingDocumentInclude;
 
 const UNINVOICED_WORK_INCLUDE = {
+  activeCycle: {
+    include: {
+      billingLines: {
+        include: {
+          billingDocument: true,
+        },
+      },
+      executionSnapshot: true,
+    },
+  },
   clinic: true,
   doctor: true,
   workType: true,
@@ -52,7 +73,7 @@ export class BillingStatementService {
     @Inject(AuditService) private readonly auditService: AuditService,
   ) {}
 
-  public async getClinicStatement(context: ActorContext, query: ClinicStatementQueryDto) {
+  public async getClinicStatement(context: ActorContext, legalEntity: LegalEntityContext, query: ClinicStatementQueryDto) {
     const range = resolveDateRange(query);
     const clinic = await this.prisma.clinic.findUnique({ where: { id: query.clinicId } });
     if (!clinic) {
@@ -66,6 +87,7 @@ export class BillingStatementService {
         where: {
           clinicId: query.clinicId,
           issueDate: { gte: range.from, lte: range.to },
+          legalEntityId: legalEntity.id,
           status: { not: "CANCELLED" },
         },
       }),
@@ -75,7 +97,10 @@ export class BillingStatementService {
         where: {
           clinicId: query.clinicId,
           createdAt: { gte: range.from, lte: range.to },
-          invoicedDocumentId: null,
+          activeCycle: {
+            billingLines: { none: { billingDocument: { status: { not: "CANCELLED" }, type: "INVOICE" } } },
+            executionLegalEntityId: legalEntity.id,
+          },
         },
       }),
     ]);
@@ -84,6 +109,7 @@ export class BillingStatementService {
       clinicId: query.clinicId,
       dateFrom: toDateOnly(range.from),
       dateTo: toDateOnly(range.to),
+      legalEntityCode: legalEntity.code,
     });
 
     return {
@@ -96,12 +122,12 @@ export class BillingStatementService {
       generatedAt: new Date().toISOString(),
       paidMinor: documents.reduce((total, document) => total + calculateBillingAmounts(document).paidMinor, 0),
       totalMinor: documents.reduce((total, document) => total + document.totalMinor, 0),
-      uninvoicedMinor: works.reduce((total, work) => total + work.totalPriceMinor, 0),
+      uninvoicedMinor: works.reduce((total, work) => total + getWorkSnapshotTotal(work), 0),
       uninvoicedWorks: works.map(toUninvoicedWorkRow),
     };
   }
 
-  public async getDoctorStatement(context: ActorContext, query: DoctorStatementQueryDto) {
+  public async getDoctorStatement(context: ActorContext, legalEntity: LegalEntityContext, query: DoctorStatementQueryDto) {
     const range = resolveDateRange(query);
     const doctor = await this.prisma.doctor.findUnique({ where: { id: query.doctorId } });
     if (!doctor) {
@@ -115,6 +141,7 @@ export class BillingStatementService {
         where: {
           doctorId: query.doctorId,
           issueDate: { gte: range.from, lte: range.to },
+          legalEntityId: legalEntity.id,
           status: { not: "CANCELLED" },
         },
       }),
@@ -124,7 +151,10 @@ export class BillingStatementService {
         where: {
           createdAt: { gte: range.from, lte: range.to },
           doctorId: query.doctorId,
-          invoicedDocumentId: null,
+          activeCycle: {
+            billingLines: { none: { billingDocument: { status: { not: "CANCELLED" }, type: "INVOICE" } } },
+            executionLegalEntityId: legalEntity.id,
+          },
         },
       }),
     ]);
@@ -133,6 +163,7 @@ export class BillingStatementService {
       dateFrom: toDateOnly(range.from),
       dateTo: toDateOnly(range.to),
       doctorId: query.doctorId,
+      legalEntityCode: legalEntity.code,
     });
 
     return {
@@ -145,18 +176,19 @@ export class BillingStatementService {
       generatedAt: new Date().toISOString(),
       paidMinor: documents.reduce((total, document) => total + calculateBillingAmounts(document).paidMinor, 0),
       totalMinor: documents.reduce((total, document) => total + document.totalMinor, 0),
-      uninvoicedMinor: works.reduce((total, work) => total + work.totalPriceMinor, 0),
+      uninvoicedMinor: works.reduce((total, work) => total + getWorkSnapshotTotal(work), 0),
       uninvoicedWorks: works.map(toUninvoicedWorkRow),
     };
   }
 
-  public async getMonthRegistry(context: ActorContext, query: BillingRangeQueryDto) {
+  public async getMonthRegistry(context: ActorContext, legalEntity: LegalEntityContext, query: BillingRangeQueryDto) {
     const range = resolveDateRange(query);
     const documents = await this.prisma.billingDocument.findMany({
       include: STATEMENT_DOCUMENT_INCLUDE,
       orderBy: [{ issueDate: "asc" }, { formattedNumber: "asc" }],
       where: {
         issueDate: { gte: range.from, lte: range.to },
+        legalEntityId: legalEntity.id,
         status: { not: "CANCELLED" },
       },
     });
@@ -165,6 +197,7 @@ export class BillingStatementService {
     await this.recordStatementAudit(context, BILLING_AUDIT_ACTIONS.monthRegistryViewed, {
       dateFrom: toDateOnly(range.from),
       dateTo: toDateOnly(range.to),
+      legalEntityCode: legalEntity.code,
     });
 
     return {
@@ -232,11 +265,15 @@ function toUninvoicedWorkRow(work: UninvoicedWorkRecord) {
     createdAt: work.createdAt.toISOString(),
     doctorName: work.doctor.displayName,
     patientName: work.patientName,
-    totalPriceMinor: work.totalPriceMinor,
+    totalPriceMinor: getWorkSnapshotTotal(work),
     workTypeName: work.workType.name,
   };
 }
 
 function resolveCurrency(documents: readonly StatementDocumentRecord[], works: readonly UninvoicedWorkRecord[]): string {
-  return documents[0]?.currency ?? works[0]?.currency ?? "RON";
+  return documents[0]?.currency ?? works[0]?.activeCycle?.executionSnapshot?.pricingCurrency ?? "RON";
+}
+
+function getWorkSnapshotTotal(work: UninvoicedWorkRecord): number {
+  return work.activeCycle?.executionSnapshot?.pricingTotalMinor ?? 0;
 }

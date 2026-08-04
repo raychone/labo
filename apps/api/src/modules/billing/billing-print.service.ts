@@ -4,7 +4,8 @@ import type { Prisma } from "@prisma/client";
 import { AuditService } from "../auth/audit.service.js";
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
-import { DEFAULT_LABORATORY_SETTINGS, SETTINGS_SINGLETON_KEY } from "../settings/settings.constants.js";
+import type { LegalEntityContext } from "../organization-context/organization-context.view.js";
+import { DEFAULT_LABORATORY_SETTINGS } from "../settings/settings.constants.js";
 import { BILLING_AUDIT_ACTIONS, BILLING_RESOURCE_TYPES } from "./billing.constants.js";
 import { toBillingDocumentDetail, toBillingClinicSnapshot } from "./billing.view.js";
 
@@ -27,14 +28,26 @@ export interface BillingPrintParty {
 type PrintableDocumentRecord = Prisma.BillingDocumentGetPayload<{
   include: {
     clinic: true;
-    lines: true;
+    legalEntity: true;
+    lines: {
+      include: {
+        legalEntity: true;
+        workCycle: true;
+      };
+    };
     payments: true;
   };
 }>;
 
 const PRINT_DOCUMENT_INCLUDE = {
   clinic: true,
-  lines: true,
+  legalEntity: true,
+  lines: {
+    include: {
+      legalEntity: true,
+      workCycle: true,
+    },
+  },
   payments: true,
 } as const satisfies Prisma.BillingDocumentInclude;
 
@@ -47,9 +60,9 @@ export class BillingPrintService {
     @Inject(AuditService) private readonly auditService: AuditService,
   ) {}
 
-  public async getDocumentPrintView(context: ActorContext, documentId: string) {
-    const document = await this.findPrintableDocument(documentId);
-    const supplier = await this.getSupplier();
+  public async getDocumentPrintView(context: ActorContext, legalEntity: LegalEntityContext, documentId: string) {
+    const document = await this.findPrintableDocument(legalEntity, documentId);
+    const supplier = await this.getSupplier(document);
     await this.recordPrintAudit(context, BILLING_AUDIT_ACTIONS.documentPrintViewed, document);
 
     return {
@@ -62,9 +75,9 @@ export class BillingPrintService {
     };
   }
 
-  public async getAttachmentPrintView(context: ActorContext, documentId: string) {
-    const document = await this.findPrintableDocument(documentId);
-    const supplier = await this.getSupplier();
+  public async getAttachmentPrintView(context: ActorContext, legalEntity: LegalEntityContext, documentId: string) {
+    const document = await this.findPrintableDocument(legalEntity, documentId);
+    const supplier = await this.getSupplier(document);
     await this.recordPrintAudit(context, BILLING_AUDIT_ACTIONS.attachmentPrintViewed, document);
     const detail = toBillingDocumentDetail(document);
 
@@ -82,10 +95,10 @@ export class BillingPrintService {
     };
   }
 
-  private async findPrintableDocument(documentId: string): Promise<PrintableDocumentRecord> {
+  private async findPrintableDocument(legalEntity: LegalEntityContext, documentId: string): Promise<PrintableDocumentRecord> {
     const document = await this.prisma.billingDocument.findUnique({
       include: PRINT_DOCUMENT_INCLUDE,
-      where: { id: documentId },
+      where: { id: documentId, legalEntityId: legalEntity.id },
     });
 
     if (!document) {
@@ -95,10 +108,12 @@ export class BillingPrintService {
     return document;
   }
 
-  private async getSupplier(): Promise<BillingPrintParty> {
-    const settings = await this.prisma.laboratorySettings.findUnique({
-      where: { id: SETTINGS_SINGLETON_KEY },
-    });
+  private async getSupplier(document: PrintableDocumentRecord): Promise<BillingPrintParty> {
+    const settings = document.legalEntityId
+      ? await this.prisma.legalEntitySettings.findUnique({
+        where: { legalEntityId: document.legalEntityId },
+      })
+      : null;
     const addressParts = [
       settings?.addressLine1,
       settings?.addressLine2,
@@ -112,7 +127,7 @@ export class BillingPrintService {
       address: addressParts.length > 0 ? addressParts.join(", ") : null,
       email: settings?.email ?? null,
       legalName: settings?.legalName ?? null,
-      name: settings?.laboratoryName ?? DEFAULT_LABORATORY_SETTINGS.laboratoryName,
+      name: document.legalEntityNameSnapshot ?? settings?.legalName ?? DEFAULT_LABORATORY_SETTINGS.laboratoryName,
       phone: settings?.phone ?? null,
       registrationNumber: settings?.companyRegistrationNumber ?? null,
       taxId: settings?.taxId ?? null,

@@ -1113,6 +1113,7 @@ async function seedDemoWorkClaims(prisma: PrismaClient, dataset: DemoDataset): P
     claimScenario(dataset, 2, "demo_user_tehnician_2", ng.id, "CLAIMED", "MANAGER_ASSIGNMENT", 1),
     claimScenario(dataset, 3, "demo_user_tehnician_2", nc.id, "CLAIMED", "MANAGER_REASSIGNMENT", 2),
     claimScenario(dataset, 4, null, ng.id, "UNCLAIMED", "TECHNICIAN_RELEASE", 2),
+    ...createDemoBillingClaimScenarios(dataset, nc.id, ng.id),
   ] as const;
 
   for (const scenario of scenarios) {
@@ -1252,6 +1253,37 @@ function claimScenario(
     updatedAt: new Date(work.createdAt.getTime() + (revision + 1) * 900_000),
     workId: work.id,
   };
+}
+
+function createDemoBillingClaimScenarios(dataset: DemoDataset, ncId: string, ngId: string): readonly DemoClaimScenario[] {
+  const scenarios: DemoClaimScenario[] = [];
+  const assignedWorkIds = new Set<string>();
+
+  dataset.billingDocuments.forEach((document, documentIndex) => {
+    const legalEntityId = documentIndex % 2 === 0 ? ncId : ngId;
+    for (const workId of document.workIds) {
+      if (assignedWorkIds.has(workId)) {
+        continue;
+      }
+      const workIndex = dataset.works.findIndex((work) => work.id === workId);
+      const scenario = claimScenario(
+        dataset,
+        workIndex,
+        workIndex % 2 === 0 ? "demo_user_tehnician_1" : "demo_user_tehnician_2",
+        legalEntityId,
+        "CLAIMED",
+        workIndex % 2 === 0 ? "TECHNICIAN_CLAIM" : "MANAGER_ASSIGNMENT",
+        1,
+      );
+
+      if (scenario) {
+        scenarios.push(scenario);
+        assignedWorkIds.add(workId);
+      }
+    }
+  });
+
+  return scenarios;
 }
 
 async function createDemoExecutionSnapshot(prisma: PrismaClient, scenario: DemoClaimScenario): Promise<void> {
@@ -1953,6 +1985,7 @@ async function seedDemoBilling(prisma: PrismaClient, dataset: DemoDataset): Prom
         clinicId: document.clinicId,
         currency: document.currency,
         id: payment.id,
+        legalEntityId: document.legalEntityId,
         method: payment.method,
         paymentDate: payment.paymentDate,
         receiptDate: payment.receiptDate,
@@ -2199,19 +2232,26 @@ function createDemoSignature(seed: string): Prisma.InputJsonObject {
 }
 
 async function seedDemoSeries(prisma: PrismaClient, year: number): Promise<void> {
-  for (const series of [
-    { documentType: "PROFORMA" as const, prefix: DEMO_PROFORMA_SERIES },
-    { documentType: "INVOICE" as const, prefix: DEMO_INVOICE_SERIES },
-  ]) {
-    await prisma.billingSeries.create({
-      data: {
-        currentNumber: series.documentType === "PROFORMA" ? 2 : 8,
-        documentType: series.documentType,
-        isActive: true,
-        prefix: series.prefix,
-        year,
-      },
-    });
+  const legalEntities = await prisma.legalEntity.findMany({
+    where: { code: { in: ["NC", "NG"] } },
+  });
+
+  for (const legalEntity of legalEntities) {
+    for (const series of [
+      { documentType: "PROFORMA" as const, prefix: DEMO_PROFORMA_SERIES },
+      { documentType: "INVOICE" as const, prefix: DEMO_INVOICE_SERIES },
+    ]) {
+      await prisma.billingSeries.create({
+        data: {
+          currentNumber: series.documentType === "PROFORMA" ? 2 : 8,
+          documentType: series.documentType,
+          isActive: true,
+          legalEntityId: legalEntity.id,
+          prefix: series.prefix,
+          year,
+        },
+      });
+    }
   }
 }
 
@@ -2223,7 +2263,23 @@ async function createBillingDocument(prisma: PrismaClient, dataset: DemoDataset,
   }
   const clinic = dataset.clinics.find((item) => item.id === firstWork.clinicId);
   const doctorIds = new Set(documentWorks.map((work) => work.doctorId));
-  const subtotalMinor = documentWorks.reduce((sum, work) => sum + work.totalPriceMinor, 0);
+  const cycles = await prisma.workCycle.findMany({
+    include: {
+      executionSnapshot: true,
+      executionLegalEntity: true,
+    },
+    where: { workOrderId: { in: [...documentSeed.workIds] } },
+  });
+  const cycleByWorkId = new Map(cycles.map((cycle) => [cycle.workOrderId, cycle]));
+  const legalEntityIds = new Set(documentWorks.map((work) => cycleByWorkId.get(work.id)?.executionLegalEntityId ?? null));
+  if (legalEntityIds.size !== 1 || legalEntityIds.has(null)) {
+    throw new Error(`Document ${documentSeed.id} must contain work cycles from exactly one company.`);
+  }
+  const legalEntity = cycles.find((cycle) => cycle.executionLegalEntityId === [...legalEntityIds][0])?.executionLegalEntity;
+  if (!legalEntity) {
+    throw new Error(`Document ${documentSeed.id} company was not found.`);
+  }
+  const subtotalMinor = documentWorks.reduce((sum, work) => sum + (cycleByWorkId.get(work.id)?.executionSnapshot?.pricingTotalMinor ?? 0), 0);
 
   if (!clinic) {
     throw new Error(`Clinic ${firstWork.clinicId} was not found.`);
@@ -2239,6 +2295,8 @@ async function createBillingDocument(prisma: PrismaClient, dataset: DemoDataset,
       clinicPhoneSnapshot: "+40000000000",
       clinicRegistrationNumberSnapshot: clinic.registrationNumber,
       clinicTaxIdSnapshot: clinic.taxId,
+      companyAssignmentNotes: "Demo seed: derived from work cycle execution snapshots.",
+      companyAssignmentStatus: "RESOLVED",
       currency: "RON",
       discountMinor: 0,
       doctorId: doctorIds.size === 1 ? firstWork.doctorId : null,
@@ -2247,6 +2305,9 @@ async function createBillingDocument(prisma: PrismaClient, dataset: DemoDataset,
       id: documentSeed.id,
       issueDate: documentSeed.issueDate,
       issuedAt: documentSeed.status === "DRAFT" ? null : documentSeed.issueDate,
+      legalEntityCodeSnapshot: legalEntity.code,
+      legalEntityId: legalEntity.id,
+      legalEntityNameSnapshot: legalEntity.displayName,
       notes: documentSeed.notes,
       number: documentSeed.number,
       series: getDocumentSeries(documentSeed),
@@ -2256,31 +2317,49 @@ async function createBillingDocument(prisma: PrismaClient, dataset: DemoDataset,
       totalMinor: subtotalMinor,
       type: documentSeed.type,
       lines: {
-        create: documentWorks.map((work, index) => toLineCreateInput(dataset, work, index)),
+        create: documentWorks.map((work, index) => toLineCreateInput(dataset, cycleByWorkId, work, index)),
       },
       ...(documentSeed.status === "CANCELLED" ? { cancelledAt: documentSeed.issueDate } : {}),
     },
   });
 }
 
-function toLineCreateInput(dataset: DemoDataset, work: DemoWorkSeed, index: number) {
+type DemoBillingCycleRecord = Prisma.WorkCycleGetPayload<{
+  include: {
+    executionLegalEntity: true;
+    executionSnapshot: true;
+  };
+}>;
+
+function toLineCreateInput(
+  dataset: DemoDataset,
+  cycleByWorkId: ReadonlyMap<string, DemoBillingCycleRecord>,
+  work: DemoWorkSeed,
+  index: number,
+) {
   const doctor = dataset.doctors.find((item) => item.id === work.doctorId);
   const workType = dataset.workTypes.find((item) => item.id === work.workTypeId);
+  const cycle = cycleByWorkId.get(work.id);
+  const snapshot = cycle?.executionSnapshot ?? null;
 
-  if (!doctor || !workType) {
+  if (!doctor || !workType || !cycle || !snapshot || !cycle.executionLegalEntityId || !cycle.executionLegalEntityCodeSnapshot) {
     throw new Error(`Billing line references missing demo data for ${work.id}.`);
   }
 
   return {
+    cycleNumberSnapshot: cycle.cycleNumber,
     description: `${workType.name} - ${work.patientName}`,
     doctorNameSnapshot: `Dr. ${doctor.firstName} ${doctor.lastName}`,
-    lineTotalMinor: work.totalPriceMinor,
+    legalEntityCodeSnapshot: cycle.executionLegalEntityCodeSnapshot,
+    legalEntityId: cycle.executionLegalEntityId,
+    lineTotalMinor: snapshot.pricingTotalMinor ?? 0,
     patientNameSnapshot: work.patientName,
-    quantity: work.quantity,
+    quantity: Number(snapshot.pricingQuantity ?? work.quantity),
     sortOrder: index + 1,
     toothPositionSnapshot: work.patientReference,
-    unitPriceMinor: work.baseUnitPriceMinor,
+    unitPriceMinor: snapshot.pricingUnitPriceMinor ?? 0,
     workCode: work.code,
+    workCycleId: cycle.id,
     workCreatedAtSnapshot: work.createdAt,
     workOrderId: work.id,
     workTypeNameSnapshot: workType.name,

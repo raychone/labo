@@ -18,7 +18,7 @@ Price catalog, execution time rules, clinic agreement, doctor agreement, adjustm
 
 ## Business Rules
 
-Confirmed precedence from code: doctor-specific agreement, then clinic-specific agreement, then company standard catalog. Money uses minor units and currency. Reception, technicians, logistics, and couriers must not receive pricing fields unless explicitly permitted. Pricing snapshots are immutable inside each work cycle.
+Confirmed precedence from code: doctor-specific agreement, then clinic-specific agreement, then company standard catalog. Money uses minor units and currency. Reception, technicians, logistics, and couriers must not receive pricing fields unless explicitly permitted. Pricing snapshots are immutable inside each work cycle and are the billing source for cycle price and execution company.
 
 ## Data Model
 

@@ -25,6 +25,7 @@ export interface BillingClinicSnapshot {
 }
 
 export interface BillingDocumentLineView {
+  readonly cycleNumber: number | null;
   readonly description: string;
   readonly doctorNameSnapshot: string;
   readonly id: string;
@@ -35,6 +36,7 @@ export interface BillingDocumentLineView {
   readonly toothPositionSnapshot: string | null;
   readonly unitPriceMinor: number;
   readonly workCode: string;
+  readonly workCycleId: string | null;
   readonly workCreatedAtSnapshot: string;
   readonly workOrderId: string;
   readonly workTypeNameSnapshot: string;
@@ -61,6 +63,8 @@ export interface BillingDocumentSummary {
   readonly currency: string;
   readonly formattedNumber: string | null;
   readonly id: string;
+  readonly legalEntityCode: string | null;
+  readonly legalEntityName: string | null;
   readonly issueDate: string;
   readonly paidMinor: number;
   readonly paymentStatus: PaymentStatus;
@@ -122,6 +126,8 @@ export interface BillableWork {
   readonly id: string;
   readonly invoicedDocumentId: string | null;
   readonly isBillable: boolean;
+  readonly legalEntityCode: string | null;
+  readonly legalEntityName: string | null;
   readonly patientName: string;
   readonly patientReference: string | null;
   readonly quantity: number;
@@ -129,6 +135,8 @@ export interface BillableWork {
   readonly status: string;
   readonly totalPriceMinor: number | null;
   readonly unavailableReason: string | null;
+  readonly workCycleId: string | null;
+  readonly workCycleNumber: number | null;
   readonly workTypeName: string;
 }
 
@@ -137,6 +145,7 @@ export interface BillingSeriesView {
   readonly documentType: BillingDocumentType;
   readonly id: string;
   readonly isActive: boolean;
+  readonly legalEntityCode: string | null;
   readonly prefix: string;
   readonly year: number;
 }

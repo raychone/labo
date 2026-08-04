@@ -185,6 +185,7 @@ export function BillingPage(): ReactNode {
   const settingsQuery = useSettings(canUseBilling);
   const currency = settingsQuery.data?.currency ?? "RON";
   const locale = settingsQuery.data?.locale ?? "ro-RO";
+  const activeCompanyLabel = settingsQuery.data ? `${settingsQuery.data.legalEntityCode} - ${settingsQuery.data.legalEntityDisplayName}` : "Firma activă";
   const [range, setRange] = useState(currentMonthRange);
   const [groupBy, setGroupBy] = useState("clinic");
   const [paymentFilter, setPaymentFilter] = useState<DocumentPaymentFilter>("ALL");
@@ -305,7 +306,7 @@ export function BillingPage(): ReactNode {
         <div>
           <p className="billing-page__eyebrow">Workspace financiar</p>
           <h1>Facturare</h1>
-          <p>Registru lunar pentru lucrări, proforme, facturi, încasări și solduri.</p>
+          <p>{activeCompanyLabel} · Registru lunar pentru lucrări, proforme, facturi, încasări și solduri.</p>
         </div>
         <div className="billing-page__quick-actions">
           <Button onClick={() => setRange(currentMonthRange())} variant="secondary">Luna curentă</Button>
@@ -507,6 +508,8 @@ function BillableWorksTab({
     { id: "code", header: "Cod", renderCell: (work) => work.code },
     { id: "createdAt", header: "Intrare", renderCell: (work) => formatDate(work.createdAt) },
     { id: "clinic", header: "Clinică", renderCell: (work) => work.clinicName },
+    { id: "company", header: "Firmă", renderCell: (work) => work.legalEntityCode ?? "-" },
+    { id: "cycle", header: "Ciclu", renderCell: (work) => work.workCycleNumber ? `Ciclul ${work.workCycleNumber}` : "-" },
     { id: "doctor", header: "Medic", renderCell: (work) => work.doctorName },
     { id: "patient", header: "Pacient", renderCell: (work) => work.patientName },
     { id: "type", header: "Tip", renderCell: (work) => work.workTypeName },
@@ -567,6 +570,7 @@ function DocumentsTab({
     { id: "number", header: "Număr", renderCell: (document) => document.formattedNumber ?? "Draft" },
     { id: "type", header: "Tip", renderCell: (document) => toDocumentTypeLabel(document.type) },
     { id: "status", header: "Status", renderCell: (document) => toDocumentStatusLabel(document.status) },
+    { id: "company", header: "Firmă", renderCell: (document) => document.legalEntityCode ?? "-" },
     { id: "clinic", header: "Clinică", renderCell: (document) => document.clinicName },
     { id: "total", header: "Total", align: "right", renderCell: (document) => formatMoneyMinor(document.totalMinor, document.currency, locale) },
     { id: "payment", header: "Încasare", renderCell: (document) => toPaymentStatusLabel(document.paymentStatus) },
@@ -587,7 +591,7 @@ function DocumentsTab({
       {selectedDocument ? (
         <section className="billing-page__print-preview" aria-label="Anexa facturare">
           <h2>{selectedDocument.type === "PROFORMA" ? "PROFORMĂ" : "FACTURĂ INTERNĂ / PREVIEW"} {selectedDocument.formattedNumber ?? "Draft"}</h2>
-          <p>{selectedDocument.clinicName} · Total factură {formatMoneyMinor(selectedDocument.totalMinor, currency, locale)} · Încasat manual {formatMoneyMinor(selectedDocument.paidMinor, currency, locale)} · Sold restant {formatMoneyMinor(selectedDocument.balanceMinor, currency, locale)}</p>
+          <p>{selectedDocument.legalEntityCode ?? "-"} · {selectedDocument.clinicName} · Total factură {formatMoneyMinor(selectedDocument.totalMinor, currency, locale)} · Încasat manual {formatMoneyMinor(selectedDocument.paidMinor, currency, locale)} · Sold restant {formatMoneyMinor(selectedDocument.balanceMinor, currency, locale)}</p>
         </section>
       ) : null}
       {canRecordPayment ? (
@@ -679,9 +683,10 @@ function MonthCloseTab({ currency, locale, onExportRegistry, overview }: { reado
   );
 }
 
-function SeriesTab({ canConfigure, isLoading, series }: { readonly canConfigure: boolean; readonly isLoading: boolean; readonly series: readonly { readonly currentNumber: number; readonly documentType: string; readonly id: string; readonly isActive: boolean; readonly prefix: string; readonly year: number }[] }): ReactNode {
+function SeriesTab({ canConfigure, isLoading, series }: { readonly canConfigure: boolean; readonly isLoading: boolean; readonly series: readonly { readonly currentNumber: number; readonly documentType: string; readonly id: string; readonly isActive: boolean; readonly legalEntityCode: string | null; readonly prefix: string; readonly year: number }[] }): ReactNode {
   const columns = useMemo<readonly DataTableColumn<(typeof series)[number]>[]>(() => [
     { id: "type", header: "Tip", renderCell: (row) => row.documentType },
+    { id: "company", header: "Firmă", renderCell: (row) => row.legalEntityCode ?? "-" },
     { id: "prefix", header: "Serie", renderCell: (row) => row.prefix },
     { id: "year", header: "An", renderCell: (row) => row.year },
     { id: "current", header: "Ultimul număr", align: "right", renderCell: (row) => row.currentNumber },

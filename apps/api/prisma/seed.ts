@@ -293,29 +293,37 @@ async function main(): Promise<void> {
     },
   });
 
-  for (const series of [
-    { documentType: "PROFORMA" as const, prefix: "PF", year: 2026 },
-    { documentType: "INVOICE" as const, prefix: "FACT", year: 2026 },
-  ]) {
-    await prisma.billingSeries.upsert({
-      create: {
-        currentNumber: 0,
-        documentType: series.documentType,
-        isActive: true,
-        prefix: series.prefix,
-        year: series.year,
-      },
-      update: {
-        isActive: true,
-      },
-      where: {
-        documentType_prefix_year: {
+  const legalEntities = await prisma.legalEntity.findMany({
+    where: { code: { in: ["NC", "NG"] } },
+  });
+
+  for (const legalEntity of legalEntities) {
+    for (const series of [
+      { documentType: "PROFORMA" as const, prefix: "PF", year: 2026 },
+      { documentType: "INVOICE" as const, prefix: "FACT", year: 2026 },
+    ]) {
+      await prisma.billingSeries.upsert({
+        create: {
+          currentNumber: 0,
           documentType: series.documentType,
+          isActive: true,
+          legalEntityId: legalEntity.id,
           prefix: series.prefix,
           year: series.year,
         },
-      },
-    });
+        update: {
+          isActive: true,
+        },
+        where: {
+          legalEntityId_documentType_prefix_year: {
+            documentType: series.documentType,
+            legalEntityId: legalEntity.id,
+            prefix: series.prefix,
+            year: series.year,
+          },
+        },
+      });
+    }
   }
 }
 

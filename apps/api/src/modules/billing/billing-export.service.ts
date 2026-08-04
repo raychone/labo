@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { AuditService } from "../auth/audit.service.js";
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
+import type { LegalEntityContext } from "../organization-context/organization-context.view.js";
 import { BILLING_AUDIT_ACTIONS, BILLING_RESOURCE_TYPES } from "./billing.constants.js";
 import { toDateOnly } from "./billing.helpers.js";
 import { calculateBillingAmounts } from "./billing.view.js";
@@ -47,13 +48,14 @@ export class BillingExportService {
     @Inject(AuditService) private readonly auditService: AuditService,
   ) {}
 
-  public async getMonthRegistryCsv(context: ActorContext, query: BillingRangeQueryDto): Promise<string> {
+  public async getMonthRegistryCsv(context: ActorContext, legalEntity: LegalEntityContext, query: BillingRangeQueryDto): Promise<string> {
     const range = resolveDateRange(query);
     const documents = await this.prisma.billingDocument.findMany({
       include: EXPORT_DOCUMENT_INCLUDE,
       orderBy: [{ issueDate: "asc" }, { formattedNumber: "asc" }],
       where: {
         issueDate: { gte: range.from, lte: range.to },
+        legalEntityId: legalEntity.id,
         status: { not: "CANCELLED" },
       },
     });
@@ -65,6 +67,7 @@ export class BillingExportService {
         dateFrom: toDateOnly(range.from),
         dateTo: toDateOnly(range.to),
         exportType: "month_registry",
+        legalEntityCode: legalEntity.code,
         rowCount: documents.length,
       },
       requestMetadata: context.requestMetadata,

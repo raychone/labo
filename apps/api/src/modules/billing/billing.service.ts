@@ -4,7 +4,8 @@ import type { BillingDocumentType, Prisma } from "@prisma/client";
 import { AuditService } from "../auth/audit.service.js";
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
-import { DEFAULT_LABORATORY_SETTINGS, SETTINGS_SINGLETON_KEY } from "../settings/settings.constants.js";
+import type { LegalEntityContext } from "../organization-context/organization-context.view.js";
+import { DEFAULT_LABORATORY_SETTINGS } from "../settings/settings.constants.js";
 import {
   BILLING_AUDIT_ACTIONS,
   BILLING_RESOURCE_TYPES,
@@ -56,11 +57,28 @@ interface BillingDateRange {
 
 const BILLING_DOCUMENT_INCLUDE = {
   clinic: true,
-  lines: true,
+  legalEntity: true,
+  lines: {
+    include: {
+      legalEntity: true,
+      workCycle: true,
+    },
+  },
   payments: true,
 } as const satisfies Prisma.BillingDocumentInclude;
 
 const BILLABLE_WORK_INCLUDE = {
+  activeCycle: {
+    include: {
+      billingLines: {
+        include: {
+          billingDocument: true,
+        },
+      },
+      executionLegalEntity: true,
+      executionSnapshot: true,
+    },
+  },
   clinic: true,
   doctor: true,
   workType: true,
@@ -73,11 +91,11 @@ export class BillingService {
     @Inject(AuditService) private readonly auditService: AuditService,
   ) {}
 
-  public async getOverview(query: BillingRangeQueryDto): Promise<BillingOverview> {
+  public async getOverview(legalEntity: LegalEntityContext, query: BillingRangeQueryDto): Promise<BillingOverview> {
     const range = this.resolveDateRange(query);
-    const currency = await this.getCurrency();
-    const workWhere = this.createWorkWhere(query, range);
-    const documentWhere = this.createDocumentWhere(query, range);
+    const currency = await this.getCurrency(legalEntity);
+    const workWhere = this.createWorkWhere(legalEntity, query, range);
+    const documentWhere = this.createDocumentWhere(legalEntity, query, range);
 
     const [works, documents] = await this.prisma.$transaction([
       this.prisma.workOrder.findMany({
@@ -90,13 +108,15 @@ export class BillingService {
       }),
     ]);
 
-    if (works.length === 0 && documents.length === 0) {
+    const billableWorks = works.filter((work) => this.isWorkCycleBillable(work));
+
+    if (billableWorks.length === 0 && documents.length === 0) {
       return createEmptyBillingOverview(toDateOnly(range.from), toDateOnly(range.to), currency);
     }
 
-    const workValueMinor = works.reduce((total, work) => total + work.totalPriceMinor, 0);
-    const uninvoicedWorks = works.filter((work) => work.invoicedDocumentId === null);
-    const uninvoicedMinor = uninvoicedWorks.reduce((total, work) => total + work.totalPriceMinor, 0);
+    const workValueMinor = billableWorks.reduce((total, work) => total + (this.getRequiredBillableSnapshot(work).pricingTotalMinor ?? 0), 0);
+    const uninvoicedWorks = billableWorks.filter((work) => !this.hasActiveInvoiceLine(work));
+    const uninvoicedMinor = uninvoicedWorks.reduce((total, work) => total + (this.getRequiredBillableSnapshot(work).pricingTotalMinor ?? 0), 0);
     const activeDocuments = documents.filter((document) => document.status !== "CANCELLED");
     const invoices = activeDocuments.filter((document) => document.type === "INVOICE");
     const proformas = activeDocuments.filter((document) => document.type === "PROFORMA");
@@ -108,7 +128,7 @@ export class BillingService {
       currency,
       documentCount: activeDocuments.length,
       from: toDateOnly(range.from),
-      groups: this.createOverviewGroups(query.groupBy, works, invoices),
+      groups: this.createOverviewGroups(query.groupBy, billableWorks, invoices),
       invoiceCount: invoices.length,
       openProformaCount: proformas.filter((document) => document.status !== "CANCELLED").length,
       outstandingMinor,
@@ -122,7 +142,7 @@ export class BillingService {
     };
   }
 
-  public async listBillableWorks(query: BillableWorksQueryDto, includeMoney: boolean) {
+  public async listBillableWorks(legalEntity: LegalEntityContext, query: BillableWorksQueryDto, includeMoney: boolean) {
     const range = this.resolveDateRange(query);
     const search = query.search?.trim();
     const workOrders = await this.prisma.workOrder.findMany({
@@ -132,9 +152,9 @@ export class BillingService {
       },
       take: 200,
       where: {
-        ...this.createWorkWhere(query, range),
+        ...this.createWorkWhere(legalEntity, query, range),
         ...(query.workTypeId ? { workTypeId: query.workTypeId } : {}),
-        ...(query.uninvoicedOnly ? { invoicedDocumentId: null } : {}),
+        ...(query.uninvoicedOnly ? { activeCycle: { billingLines: { none: { billingDocument: { status: { not: "CANCELLED" }, type: "INVOICE" } } } } } : {}),
         ...(search
           ? {
               OR: [
@@ -154,10 +174,10 @@ export class BillingService {
     };
   }
 
-  public async listDocuments(query: ListBillingDocumentsQueryDto): Promise<PaginatedBillingDocumentsResponse> {
+  public async listDocuments(legalEntity: LegalEntityContext, query: ListBillingDocumentsQueryDto): Promise<PaginatedBillingDocumentsResponse> {
     const pageSize = Math.min(query.pageSize, 100);
     const page = Math.max(query.page, 1);
-    const where = this.createDocumentsListWhere(query);
+    const where = this.createDocumentsListWhere(legalEntity, query);
     const documents = await this.prisma.billingDocument.findMany({
       include: BILLING_DOCUMENT_INCLUDE,
       orderBy: {
@@ -177,24 +197,24 @@ export class BillingService {
     };
   }
 
-  public async getDocument(documentId: string) {
-    return toBillingDocumentDetail(await this.findDocumentOrThrow(documentId));
+  public async getDocument(legalEntity: LegalEntityContext, documentId: string) {
+    return toBillingDocumentDetail(await this.findDocumentOrThrow(legalEntity, documentId));
   }
 
-  public async createProforma(context: ActorContext, dto: CreateBillingDocumentDto) {
-    const document = await this.createDraftDocument(context, "PROFORMA", dto);
+  public async createProforma(context: ActorContext, legalEntity: LegalEntityContext, dto: CreateBillingDocumentDto) {
+    const document = await this.createDraftDocument(context, legalEntity, "PROFORMA", dto);
     await this.recordDocumentAudit(context, BILLING_AUDIT_ACTIONS.proformaCreated, document);
     return toBillingDocumentDetail(document);
   }
 
-  public async createInvoice(context: ActorContext, dto: CreateBillingDocumentDto) {
-    const document = await this.createDraftDocument(context, "INVOICE", dto);
+  public async createInvoice(context: ActorContext, legalEntity: LegalEntityContext, dto: CreateBillingDocumentDto) {
+    const document = await this.createDraftDocument(context, legalEntity, "INVOICE", dto);
     await this.recordDocumentAudit(context, BILLING_AUDIT_ACTIONS.invoiceCreated, document);
     return toBillingDocumentDetail(document);
   }
 
-  public async updateDraft(context: ActorContext, documentId: string, dto: UpdateBillingDocumentDto) {
-    const before = await this.findDocumentOrThrow(documentId);
+  public async updateDraft(legalEntity: LegalEntityContext, context: ActorContext, documentId: string, dto: UpdateBillingDocumentDto) {
+    const before = await this.findDocumentOrThrow(legalEntity, documentId);
     this.assertDraft(before);
 
     const updated = await this.prisma.billingDocument.update({
@@ -212,10 +232,10 @@ export class BillingService {
     return toBillingDocumentDetail(updated);
   }
 
-  public async replaceLines(context: ActorContext, documentId: string, dto: ReplaceBillingLinesDto) {
-    const before = await this.findDocumentOrThrow(documentId);
+  public async replaceLines(legalEntity: LegalEntityContext, context: ActorContext, documentId: string, dto: ReplaceBillingLinesDto) {
+    const before = await this.findDocumentOrThrow(legalEntity, documentId);
     this.assertDraft(before);
-    const works = await this.findCompatibleWorks(dto.workOrderIds, before.type, before.clinicId);
+    const works = await this.findCompatibleWorks(legalEntity, dto.workOrderIds, before.type, before.clinicId);
     const lines = this.createLineInputs(works);
     const totalMinor = lines.reduce((total, line) => total + line.lineTotalMinor, 0);
 
@@ -240,11 +260,11 @@ export class BillingService {
     return toBillingDocumentDetail(updated);
   }
 
-  public async issueDocument(context: ActorContext, documentId: string) {
+  public async issueDocument(legalEntity: LegalEntityContext, context: ActorContext, documentId: string) {
     const document = await this.prisma.$transaction(async (tx) => {
       const draft = await tx.billingDocument.findUnique({
         include: BILLING_DOCUMENT_INCLUDE,
-        where: { id: documentId },
+        where: { id: documentId, legalEntityId: legalEntity.id },
       });
       if (!draft) {
         throw new NotFoundException("Billing document was not found.");
@@ -256,6 +276,7 @@ export class BillingService {
 
       const numbered = await this.assignDocumentNumber(tx, draft, context.actorUserId);
       if (numbered.type === "INVOICE") {
+        await this.assertCyclesNotInvoiced(tx, numbered.lines.map((line) => line.workCycleId).filter((id): id is string => id !== null), numbered.id);
         await this.attachInvoiceToWorks(tx, numbered.id, numbered.lines.map((line) => line.workOrderId));
       }
 
@@ -270,11 +291,11 @@ export class BillingService {
     return toBillingDocumentDetail(document);
   }
 
-  public async convertProformaToInvoice(context: ActorContext, documentId: string) {
+  public async convertProformaToInvoice(legalEntity: LegalEntityContext, context: ActorContext, documentId: string) {
     const invoice = await this.prisma.$transaction(async (tx) => {
       const proforma = await tx.billingDocument.findUnique({
         include: BILLING_DOCUMENT_INCLUDE,
-        where: { id: documentId },
+        where: { id: documentId, legalEntityId: legalEntity.id },
       });
       if (!proforma) {
         throw new NotFoundException("Proforma was not found.");
@@ -283,7 +304,7 @@ export class BillingService {
         throw new BadRequestException("Doar o proforma emisa poate fi transformata in factura.");
       }
 
-      await this.assertWorksNotInvoiced(tx, proforma.lines.map((line) => line.workOrderId));
+      await this.assertCyclesNotInvoiced(tx, proforma.lines.map((line) => line.workCycleId).filter((id): id is string => id !== null));
       const created = await tx.billingDocument.create({
         data: {
           clinicAddressSnapshot: proforma.clinicAddressSnapshot,
@@ -294,12 +315,17 @@ export class BillingService {
           clinicPhoneSnapshot: proforma.clinicPhoneSnapshot,
           clinicRegistrationNumberSnapshot: proforma.clinicRegistrationNumberSnapshot,
           clinicTaxIdSnapshot: proforma.clinicTaxIdSnapshot,
+          companyAssignmentNotes: "Created from issued proforma with resolved company.",
+          companyAssignmentStatus: "RESOLVED",
           createdByUserId: context.actorUserId,
           currency: proforma.currency,
           discountMinor: proforma.discountMinor,
           doctorId: proforma.doctorId,
           dueDate: proforma.dueDate,
           issueDate: proforma.issueDate,
+          legalEntityCodeSnapshot: proforma.legalEntityCodeSnapshot,
+          legalEntityId: proforma.legalEntityId,
+          legalEntityNameSnapshot: proforma.legalEntityNameSnapshot,
           notes: proforma.notes,
           status: "DRAFT",
           subtotalMinor: proforma.subtotalMinor,
@@ -309,14 +335,18 @@ export class BillingService {
           updatedByUserId: context.actorUserId,
           lines: {
             create: proforma.lines.map((line) => ({
+              cycleNumberSnapshot: line.cycleNumberSnapshot,
               description: line.description,
               doctorNameSnapshot: line.doctorNameSnapshot,
+              legalEntityCodeSnapshot: line.legalEntityCodeSnapshot,
+              legalEntityId: line.legalEntityId,
               lineTotalMinor: line.lineTotalMinor,
               patientNameSnapshot: line.patientNameSnapshot,
               quantity: line.quantity,
               sortOrder: line.sortOrder,
               toothPositionSnapshot: line.toothPositionSnapshot,
               unitPriceMinor: line.unitPriceMinor,
+              workCycleId: line.workCycleId,
               workCode: line.workCode,
               workCreatedAtSnapshot: line.workCreatedAtSnapshot,
               workOrderId: line.workOrderId,
@@ -335,11 +365,11 @@ export class BillingService {
     return toBillingDocumentDetail(invoice);
   }
 
-  public async cancelDocument(context: ActorContext, documentId: string) {
+  public async cancelDocument(legalEntity: LegalEntityContext, context: ActorContext, documentId: string) {
     const cancelled = await this.prisma.$transaction(async (tx) => {
       const document = await tx.billingDocument.findUnique({
         include: BILLING_DOCUMENT_INCLUDE,
-        where: { id: documentId },
+        where: { id: documentId, legalEntityId: legalEntity.id },
       });
       if (!document) {
         throw new NotFoundException("Billing document was not found.");
@@ -372,11 +402,11 @@ export class BillingService {
     return toBillingDocumentDetail(cancelled);
   }
 
-  public async recordPayment(context: ActorContext, documentId: string, dto: RecordPaymentDto) {
+  public async recordPayment(legalEntity: LegalEntityContext, context: ActorContext, documentId: string, dto: RecordPaymentDto) {
     const document = await this.prisma.$transaction(async (tx) => {
       const invoice = await tx.billingDocument.findUnique({
         include: BILLING_DOCUMENT_INCLUDE,
-        where: { id: documentId },
+        where: { id: documentId, legalEntityId: legalEntity.id },
       });
       if (!invoice) {
         throw new NotFoundException("Invoice was not found.");
@@ -397,6 +427,7 @@ export class BillingService {
           clinicId: invoice.clinicId,
           createdByUserId: context.actorUserId,
           currency: invoice.currency,
+          legalEntityId: invoice.legalEntityId,
           method: dto.method,
           notes: dto.notes ?? null,
           paymentDate: parseDateOnly(dto.paymentDate, "paymentDate"),
@@ -413,9 +444,9 @@ export class BillingService {
     return toBillingDocumentDetail(document);
   }
 
-  public async cancelPayment(context: ActorContext, paymentId: string) {
+  public async cancelPayment(legalEntity: LegalEntityContext, context: ActorContext, paymentId: string) {
     const document = await this.prisma.$transaction(async (tx) => {
-      const payment = await tx.payment.findUnique({ where: { id: paymentId } });
+      const payment = await tx.payment.findFirst({ where: { id: paymentId, legalEntityId: legalEntity.id } });
       if (!payment) {
         throw new NotFoundException("Payment was not found.");
       }
@@ -438,11 +469,12 @@ export class BillingService {
     return toBillingDocumentDetail(document);
   }
 
-  public async listPayments() {
+  public async listPayments(legalEntity: LegalEntityContext) {
     const payments = await this.prisma.payment.findMany({
       include: { billingDocument: true },
       orderBy: { paymentDate: "desc" },
       take: 200,
+      where: { legalEntityId: legalEntity.id },
     });
 
     return {
@@ -463,13 +495,16 @@ export class BillingService {
     };
   }
 
-  public async search(query: SearchBillingQueryDto) {
+  public async search(legalEntity: LegalEntityContext, query: SearchBillingQueryDto) {
     const search = query.q.trim();
     const [works, documents, payments] = await this.prisma.$transaction([
       this.prisma.workOrder.findMany({
         include: BILLABLE_WORK_INCLUDE,
         take: 8,
         where: {
+          activeCycle: {
+            executionLegalEntityId: legalEntity.id,
+          },
           OR: [
             { code: { contains: search, mode: "insensitive" } },
             { patientName: { contains: search, mode: "insensitive" } },
@@ -482,6 +517,7 @@ export class BillingService {
         include: BILLING_DOCUMENT_INCLUDE,
         take: 8,
         where: {
+          legalEntityId: legalEntity.id,
           OR: [
             { formattedNumber: { contains: search, mode: "insensitive" } },
             { clinicNameSnapshot: { contains: search, mode: "insensitive" } },
@@ -494,6 +530,7 @@ export class BillingService {
         include: { billingDocument: true },
         take: 8,
         where: {
+          legalEntityId: legalEntity.id,
           OR: [
             { receiptNumber: { contains: search, mode: "insensitive" } },
             { reference: { contains: search, mode: "insensitive" } },
@@ -516,17 +553,20 @@ export class BillingService {
     };
   }
 
-  public async listSeries() {
+  public async listSeries(legalEntity: LegalEntityContext) {
     const series = await this.prisma.billingSeries.findMany({
+      include: { legalEntity: true },
       orderBy: [{ year: "desc" }, { documentType: "asc" }, { prefix: "asc" }],
+      where: { legalEntityId: legalEntity.id },
     });
 
     return { items: series.map(toBillingSeriesView) };
   }
 
-  public async createSeries(context: ActorContext, dto: UpsertBillingSeriesDto) {
+  public async createSeries(context: ActorContext, legalEntity: LegalEntityContext, dto: UpsertBillingSeriesDto) {
     const series = await this.prisma.billingSeries.create({
-      data: dto,
+      include: { legalEntity: true },
+      data: { ...dto, legalEntityId: legalEntity.id },
     });
     await this.auditService.record({
       action: BILLING_AUDIT_ACTIONS.seriesCreated,
@@ -539,10 +579,11 @@ export class BillingService {
     return toBillingSeriesView(series);
   }
 
-  public async updateSeries(context: ActorContext, seriesId: string, dto: UpsertBillingSeriesDto) {
+  public async updateSeries(context: ActorContext, legalEntity: LegalEntityContext, seriesId: string, dto: UpsertBillingSeriesDto) {
     const series = await this.prisma.billingSeries.update({
+      include: { legalEntity: true },
       data: dto,
-      where: { id: seriesId },
+      where: { id: seriesId, legalEntityId: legalEntity.id },
     });
     await this.auditService.record({
       action: BILLING_AUDIT_ACTIONS.seriesUpdated,
@@ -555,13 +596,13 @@ export class BillingService {
     return toBillingSeriesView(series);
   }
 
-  private async createDraftDocument(context: ActorContext, type: BillingDocumentType, dto: CreateBillingDocumentDto): Promise<BillingDocumentRecord> {
-    const works = await this.findCompatibleWorks(dto.workOrderIds, type);
+  private async createDraftDocument(context: ActorContext, legalEntity: LegalEntityContext, type: BillingDocumentType, dto: CreateBillingDocumentDto): Promise<BillingDocumentRecord> {
+    const works = await this.findCompatibleWorks(legalEntity, dto.workOrderIds, type);
     const clinic = works[0]?.clinic;
     if (!clinic) {
       throw new BadRequestException("Selecteaza cel putin o lucrare.");
     }
-    const currency = await this.getCurrency();
+    const currency = await this.getCurrency(legalEntity);
     const lines = this.createLineInputs(works);
     const totalMinor = lines.reduce((total, line) => total + line.lineTotalMinor, 0);
 
@@ -569,11 +610,16 @@ export class BillingService {
       data: {
         ...this.createClinicSnapshot(clinic),
         clinicId: clinic.id,
+        companyAssignmentNotes: "Created from selected work cycle execution snapshots.",
+        companyAssignmentStatus: "RESOLVED",
         createdByUserId: context.actorUserId,
         currency,
         doctorId: this.resolveDocumentDoctorId(works),
         dueDate: dto.dueDate ? parseDateOnly(dto.dueDate, "dueDate") : null,
         issueDate: parseDateOnly(dto.issueDate, "issueDate"),
+        legalEntityCodeSnapshot: legalEntity.code,
+        legalEntityId: legalEntity.id,
+        legalEntityNameSnapshot: legalEntity.displayName,
         notes: dto.notes ?? null,
         status: "DRAFT",
         subtotalMinor: totalMinor,
@@ -588,7 +634,7 @@ export class BillingService {
     });
   }
 
-  private async findCompatibleWorks(workOrderIds: readonly string[], documentType: BillingDocumentType, expectedClinicId?: string): Promise<readonly BillableWorkRecord[]> {
+  private async findCompatibleWorks(legalEntity: LegalEntityContext, workOrderIds: readonly string[], documentType: BillingDocumentType, expectedClinicId?: string): Promise<readonly BillableWorkRecord[]> {
     const uniqueIds = [...new Set(workOrderIds)];
     if (uniqueIds.length !== workOrderIds.length) {
       throw new BadRequestException("Aceeasi lucrare nu poate fi adaugata de doua ori.");
@@ -607,28 +653,90 @@ export class BillingService {
       throw new BadRequestException("Toate lucrarile trebuie sa apartina aceleiasi clinici.");
     }
 
-    if (documentType === "INVOICE" && works.some((work) => work.invoicedDocumentId !== null)) {
-      throw new ConflictException("Una sau mai multe lucrari sunt deja facturate.");
+    const invalidCompany = works.find((work) => this.getBillableCycle(work)?.executionLegalEntityId !== legalEntity.id);
+    if (invalidCompany) {
+      throw new BadRequestException("Lucrarea selectata apartine altei firme. Schimba firma activa.");
+    }
+
+    const unbillable = works.find((work) => !this.isWorkCycleBillable(work));
+    if (unbillable) {
+      throw new BadRequestException("Una sau mai multe lucrari nu au companie de executie si pret blocate pe ciclul activ.");
+    }
+
+    if (documentType === "INVOICE") {
+      await this.assertCyclesNotInvoiced(
+        this.prisma,
+        works.map((work) => this.getRequiredBillableCycle(work).id),
+      );
     }
 
     return uniqueIds.map((id) => works.find((work) => work.id === id)).filter((work): work is BillableWorkRecord => work !== undefined);
   }
 
   private createLineInputs(works: readonly BillableWorkRecord[]): readonly Prisma.BillingDocumentLineUncheckedCreateWithoutBillingDocumentInput[] {
-    return works.map((work, index) => ({
-      description: `${work.workType.name} - ${work.patientName}`,
-      doctorNameSnapshot: work.doctor.displayName,
-      lineTotalMinor: work.totalPriceMinor,
-      patientNameSnapshot: work.patientName,
-      quantity: work.quantity,
-      sortOrder: index + 1,
-      toothPositionSnapshot: work.patientReference,
-      unitPriceMinor: work.baseUnitPriceMinor,
-      workCode: work.code,
-      workCreatedAtSnapshot: work.createdAt,
-      workOrderId: work.id,
-      workTypeNameSnapshot: work.workType.name,
-    }));
+    return works.map((work, index) => {
+      const cycle = this.getRequiredBillableCycle(work);
+      const snapshot = this.getRequiredBillableSnapshot(work);
+      const quantity = Number(snapshot.pricingQuantity ?? work.quantity);
+
+      return {
+        cycleNumberSnapshot: cycle.cycleNumber,
+        description: `${work.workType.name} - ${work.patientName}`,
+        doctorNameSnapshot: work.doctor.displayName,
+        legalEntityCodeSnapshot: cycle.executionLegalEntityCodeSnapshot,
+        legalEntityId: cycle.executionLegalEntityId,
+        lineTotalMinor: snapshot.pricingTotalMinor ?? 0,
+        patientNameSnapshot: work.patientName,
+        quantity,
+        sortOrder: index + 1,
+        toothPositionSnapshot: work.patientReference,
+        unitPriceMinor: snapshot.pricingUnitPriceMinor ?? 0,
+        workCode: work.code,
+        workCreatedAtSnapshot: work.createdAt,
+        workCycleId: cycle.id,
+        workOrderId: work.id,
+        workTypeNameSnapshot: work.workType.name,
+      };
+    });
+  }
+
+  private getBillableCycle(work: BillableWorkRecord): BillableWorkRecord["activeCycle"] {
+    return work.activeCycle;
+  }
+
+  private getRequiredBillableCycle(work: BillableWorkRecord): NonNullable<BillableWorkRecord["activeCycle"]> {
+    const cycle = this.getBillableCycle(work);
+    if (!cycle) {
+      throw new BadRequestException("Lucrarea nu are ciclu activ pentru facturare.");
+    }
+
+    return cycle;
+  }
+
+  private getRequiredBillableSnapshot(work: BillableWorkRecord): NonNullable<NonNullable<BillableWorkRecord["activeCycle"]>["executionSnapshot"]> {
+    const snapshot = this.getRequiredBillableCycle(work).executionSnapshot;
+    if (!snapshot) {
+      throw new BadRequestException("Lucrarea nu are snapshot de executie pentru facturare.");
+    }
+
+    return snapshot;
+  }
+
+  private isWorkCycleBillable(work: BillableWorkRecord): boolean {
+    const cycle = this.getBillableCycle(work);
+    const snapshot = cycle?.executionSnapshot ?? null;
+
+    return Boolean(
+      cycle?.executionLegalEntityId
+      && cycle.executionLegalEntityCodeSnapshot
+      && snapshot?.status === "LOCKED"
+      && snapshot.pricingTotalMinor !== null
+      && snapshot.pricingUnitPriceMinor !== null,
+    );
+  }
+
+  private hasActiveInvoiceLine(work: BillableWorkRecord): boolean {
+    return this.getBillableCycle(work)?.billingLines.some((line) => line.billingDocument.type === "INVOICE" && line.billingDocument.status !== "CANCELLED") ?? false;
   }
 
   private createClinicSnapshot(clinic: BillableWorkRecord["clinic"]): Pick<Prisma.BillingDocumentUncheckedCreateInput, "clinicAddressSnapshot" | "clinicEmailSnapshot" | "clinicLegalNameSnapshot" | "clinicNameSnapshot" | "clinicPhoneSnapshot" | "clinicRegistrationNumberSnapshot" | "clinicTaxIdSnapshot"> {
@@ -664,6 +772,7 @@ export class BillingService {
       where: {
         documentType: document.type,
         isActive: true,
+        legalEntityId: document.legalEntityId,
         year,
       },
     });
@@ -706,15 +815,23 @@ export class BillingService {
     }
   }
 
-  private async assertWorksNotInvoiced(tx: Prisma.TransactionClient, workOrderIds: readonly string[]): Promise<void> {
-    const count = await tx.workOrder.count({
+  private async assertCyclesNotInvoiced(tx: Prisma.TransactionClient | PrismaService, workCycleIds: readonly string[], exceptDocumentId?: string): Promise<void> {
+    if (workCycleIds.length === 0) {
+      throw new BadRequestException("Documentul trebuie sa aiba cicluri de lucrare facturabile.");
+    }
+
+    const count = await tx.billingDocumentLine.count({
       where: {
-        id: { in: [...workOrderIds] },
-        invoicedDocumentId: { not: null },
+        billingDocument: {
+          ...(exceptDocumentId ? { id: { not: exceptDocumentId } } : {}),
+          status: { not: "CANCELLED" },
+          type: "INVOICE",
+        },
+        workCycleId: { in: [...workCycleIds] },
       },
     });
     if (count > 0) {
-      throw new ConflictException("Una sau mai multe lucrari sunt deja facturate.");
+      throw new ConflictException("Unul sau mai multe cicluri sunt deja facturate.");
     }
   }
 
@@ -758,8 +875,11 @@ export class BillingService {
     }
   }
 
-  private createWorkWhere(query: Pick<BillingRangeQueryDto, "clinicId" | "dateFrom" | "dateTo" | "doctorId">, range: BillingDateRange): Prisma.WorkOrderWhereInput {
+  private createWorkWhere(legalEntity: LegalEntityContext, query: Pick<BillingRangeQueryDto, "clinicId" | "dateFrom" | "dateTo" | "doctorId">, range: BillingDateRange): Prisma.WorkOrderWhereInput {
     return {
+      activeCycle: {
+        executionLegalEntityId: legalEntity.id,
+      },
       ...(query.clinicId ? { clinicId: query.clinicId } : {}),
       ...(query.doctorId ? { doctorId: query.doctorId } : {}),
       createdAt: {
@@ -769,8 +889,9 @@ export class BillingService {
     };
   }
 
-  private createDocumentWhere(query: Pick<BillingRangeQueryDto, "clinicId" | "dateFrom" | "dateTo" | "doctorId">, range: BillingDateRange): Prisma.BillingDocumentWhereInput {
+  private createDocumentWhere(legalEntity: LegalEntityContext, query: Pick<BillingRangeQueryDto, "clinicId" | "dateFrom" | "dateTo" | "doctorId">, range: BillingDateRange): Prisma.BillingDocumentWhereInput {
     return {
+      legalEntityId: legalEntity.id,
       ...(query.clinicId ? { clinicId: query.clinicId } : {}),
       ...(query.doctorId ? { doctorId: query.doctorId } : {}),
       issueDate: {
@@ -780,7 +901,7 @@ export class BillingService {
     };
   }
 
-  private createDocumentsListWhere(query: ListBillingDocumentsQueryDto): Prisma.BillingDocumentWhereInput {
+  private createDocumentsListWhere(legalEntity: LegalEntityContext, query: ListBillingDocumentsQueryDto): Prisma.BillingDocumentWhereInput {
     const range = this.resolveDateRange(query);
     const search = query.search?.trim();
     const filters: Prisma.BillingDocumentWhereInput[] = [];
@@ -798,7 +919,7 @@ export class BillingService {
     }
 
     return {
-      ...this.createDocumentWhere(query, range),
+      ...this.createDocumentWhere(legalEntity, query, range),
       ...(query.amountMinMinor !== undefined || query.amountMaxMinor !== undefined
         ? { totalMinor: { ...(query.amountMinMinor !== undefined ? { gte: query.amountMinMinor } : {}), ...(query.amountMaxMinor !== undefined ? { lte: query.amountMaxMinor } : {}) } }
         : {}),
@@ -877,12 +998,14 @@ export class BillingService {
 
     for (const work of works) {
       const { key, label } = this.getWorkGroupKey(groupBy, work);
+      const totalMinor = this.getRequiredBillableSnapshot(work).pricingTotalMinor ?? 0;
+      const isInvoiced = this.hasActiveInvoiceLine(work);
       add(key, label, {
         balanceMinor: 0,
         count: 1,
-        invoicedMinor: work.invoicedDocumentId ? work.totalPriceMinor : 0,
+        invoicedMinor: isInvoiced ? totalMinor : 0,
         paidMinor: 0,
-        uninvoicedMinor: work.invoicedDocumentId ? 0 : work.totalPriceMinor,
+        uninvoicedMinor: isInvoiced ? 0 : totalMinor,
       });
     }
 
@@ -918,7 +1041,7 @@ export class BillingService {
       return { key: toDateOnly(work.createdAt).slice(0, 7), label: toDateOnly(work.createdAt).slice(0, 7) };
     }
     if (groupBy === "billingStatus") {
-      return work.invoicedDocumentId ? { key: "invoiced", label: "Facturate" } : { key: "uninvoiced", label: "Nefacturate" };
+      return this.hasActiveInvoiceLine(work) ? { key: "invoiced", label: "Facturate" } : { key: "uninvoiced", label: "Nefacturate" };
     }
 
     return { key: work.clinicId, label: work.clinic.name };
@@ -938,10 +1061,10 @@ export class BillingService {
     return { key: document.clinicId, label: document.clinicNameSnapshot };
   }
 
-  private async findDocumentOrThrow(documentId: string): Promise<BillingDocumentRecord> {
+  private async findDocumentOrThrow(legalEntity: LegalEntityContext, documentId: string): Promise<BillingDocumentRecord> {
     const document = await this.prisma.billingDocument.findUnique({
       include: BILLING_DOCUMENT_INCLUDE,
-      where: { id: documentId },
+      where: { id: documentId, legalEntityId: legalEntity.id },
     });
     if (!document) {
       throw new NotFoundException("Billing document was not found.");
@@ -950,10 +1073,10 @@ export class BillingService {
     return document;
   }
 
-  private async getCurrency(): Promise<string> {
-    const settings = await this.prisma.laboratorySettings.findUnique({
+  private async getCurrency(legalEntity: LegalEntityContext): Promise<string> {
+    const settings = await this.prisma.legalEntitySettings.findUnique({
       select: { currency: true },
-      where: { key: SETTINGS_SINGLETON_KEY },
+      where: { legalEntityId: legalEntity.id },
     });
 
     return settings?.currency ?? DEFAULT_LABORATORY_SETTINGS.currency;

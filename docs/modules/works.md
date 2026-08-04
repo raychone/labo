@@ -24,7 +24,7 @@ Each cycle can own one real laboratory sheet submission. Reception and permitted
 
 ## Data Model
 
-`WorkOrder`, `WorkCycle` with per-cycle clinic/doctor/reason/status, `WorkAssignmentEvent`, `WorkExecutionSnapshot`, cycle-aware `WorkFormSubmission`, workflow/logistics/billing relations.
+`WorkOrder`, `WorkCycle` with per-cycle clinic/doctor/reason/status, `WorkAssignmentEvent`, `WorkExecutionSnapshot`, cycle-aware `WorkFormSubmission`, workflow/logistics/billing relations. Billing lines reference cycles and use the cycle execution snapshot as the company/price source.
 
 ## API
 

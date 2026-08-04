@@ -24,8 +24,12 @@ erDiagram
   WorkOrder ||--o{ WorkWorkflowExecution : runs
   WorkOrder ||--o{ WorkLogisticsState : tracks
   WorkOrder ||--o{ BillingDocumentLine : bills
+  WorkCycle ||--o{ BillingDocumentLine : bills_cycle
   BillingDocument ||--o{ BillingDocumentLine : contains
   BillingDocument ||--o{ Payment : records
+  LegalEntity ||--o{ BillingDocument : issues
+  LegalEntity ||--o{ BillingSeries : owns
+  LegalEntity ||--o{ Payment : receives
   LegalEntity ||--o{ PriceCatalogItem : owns
   PriceCatalogItem ||--o{ ExecutionTimeRule : defines
   LegalEntity ||--o{ PricingAgreement : owns
@@ -54,7 +58,7 @@ erDiagram
 | WorkflowTemplate, WorkflowStageDefinition, WorkWorkflowExecution, WorkStageExecution, WorkStageEvent | Workflow templates and runtime execution. | Ordered stages and cycle-scoped event timeline. Implemented. |
 | WorkLogisticsState, LogisticsEvent, DeliveryPreparationGroup, DeliveryPreparationItem | Physical logistics flow. | Cycle-scoped location/block/packing/group transitions. Implemented. |
 | Delivery, DeliveryEvent, DeliveryProof | Courier delivery and proof. | Delivery transitions and internal signature proof. Implemented. |
-| BillingDocument, BillingDocumentLine, Payment, BillingSeries | Proformas, invoices, payments, numbering. | Manual payments only; overpayment rejected by billing rules. Implemented. |
+| BillingDocument, BillingDocumentLine, Payment, BillingSeries | Proformas, invoices, payments, numbering. | Company-scoped by cycle execution snapshot; lines reference cycles; manual payments only; overpayment rejected by billing rules. Implemented. |
 
 ## Planned Models
 

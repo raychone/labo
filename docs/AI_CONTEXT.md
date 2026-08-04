@@ -43,7 +43,7 @@ Implemented or substantially implemented:
 - pricing catalog, execution rules, clinic/doctor agreements, preview resolver;
 - logistics center and delivery preparation groups;
 - deliveries and internal proof/signature rendering;
-- billing documents, payments, statements, exports;
+- billing documents, payments, statements, exports, and company-aware billing series/print views;
 - operational status read-model API and frontend `/status` workspace;
 - backend work-cycle model, active-cycle lifecycle APIs, cycle-scoped workflow/logistics/delivery history, and returned-work registration UI;
 - demo seed.
@@ -59,13 +59,13 @@ Planned or partial:
 
 ## Current Status
 
-Last completed functional task: `WORKFORM-REAL-001B`, which added operational real laboratory sheet states, draft saving, completion/finalization UX, revision conflict handling, audit, RBAC-aware work detail/workbench/scan/status integrations, non-destructive migration, and demo seed coverage.
+Last completed functional task: `BILLING-REALIGN-001A`, which realigned billing documents, billable works, lines, payments, series, print views, migration/backfill, and demo seed around the immutable `NC`/`NG` execution company fixed on each work cycle.
 
 Last completed documentation task: `WORKFORM-REAL-DISCOVERY-001`, which audited the real paper work sheet and produced [discovery/WORKFORM-REAL-FIELD-AUDIT.md](discovery/WORKFORM-REAL-FIELD-AUDIT.md) and [discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md). `DOCS-TOKEN-001` created the permanent token-efficient documentation system under `docs/`.
 
 `TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable.
 
-Next approved task: `BILLING-REALIGN-001A`, approved to realign billing so documents, billable works, payments, series, and print views are company-scoped by the `NC`/`NG` execution company fixed on the work cycle. `BILLING-REALIGN-001B` is planned only and must not be started.
+Next approved task: none. `BILLING-REALIGN-001B` is planned only and must not be started without explicit approval.
 
 ## Source Of Truth
 

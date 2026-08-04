@@ -18,7 +18,7 @@ Represent the shared operational lab with two legal/financial contexts.
 
 ## Business Rules
 
-Users are shared. Managers can operate both contexts. Switching context does not change identity or split operational work.
+Users are shared. Managers can operate both contexts. Switching context does not change identity or split operational work. For billing, active context filters the workspace, while document ownership comes from immutable work-cycle execution snapshots.
 
 ## Data Model
 
@@ -46,15 +46,15 @@ Inactive legal entity, user without switch permission, screens where context aff
 
 ## Implemented Tasks
 
-ORG-CONTEXT-001, ORG-DATA-MIGRATION-001.
+ORG-CONTEXT-001, ORG-DATA-MIGRATION-001, BILLING-REALIGN-001A integration.
 
 ## Planned Tasks
 
-Company-aware documents/payments/reporting expansion.
+Company-aware reporting expansion.
 
 ## Deferred
 
-Full separation of all billing documents and series by company where not yet implemented.
+Advanced accounting integrations.
 
 ## Open Decisions
 

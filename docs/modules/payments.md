@@ -18,11 +18,11 @@ Manual payment, amount, received date, method, optional receipt number/date, ban
 
 ## Business Rules
 
-Payment statuses are derived: `UNPAID`, `PARTIALLY_PAID`, `PAID`. Zero/negative payments and overpayments are rejected. Cancelled invoices do not accept new payments. Cancelling a payment recalculates status and balance.
+Payment statuses are derived: `UNPAID`, `PARTIALLY_PAID`, `PAID`. Zero/negative payments and overpayments are rejected. Cancelled invoices do not accept new payments. Cancelling a payment recalculates status and balance. Payment company is inherited from the billing document and cannot be selected independently.
 
 ## Data Model
 
-`Payment`, relations to `BillingDocument`.
+`Payment`, relations to `BillingDocument`, inherited `LegalEntity`.
 
 ## API
 
