@@ -65,7 +65,7 @@ Last completed documentation task: `WORKFORM-REAL-DISCOVERY-001`, which audited 
 
 `TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable.
 
-Next approved task: none. `WORKFORM-REAL-001B` remains planned only and must not be started without approval.
+Next approved task: `WORKFORM-REAL-001B`, which is approved for operational laboratory sheet completion and workflow integration. It must not be implemented until explicitly requested.
 
 ## Source Of Truth
 

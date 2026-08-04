@@ -21,6 +21,7 @@ For normal implementation, read:
 - [WORK-CYCLES-001A.md](WORK-CYCLES-001A.md)
 - [WORK-CYCLES-001B.md](WORK-CYCLES-001B.md)
 - [WORKFORM-REAL-001A.md](WORKFORM-REAL-001A.md)
+- [WORKFORM-REAL-001B.md](WORKFORM-REAL-001B.md)
 
 ## Discovery Documents
 

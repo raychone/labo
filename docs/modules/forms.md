@@ -82,7 +82,7 @@ FORMS-001, WORKFORMS-001, WORKFORMS-002, WORKFORM-REAL-DISCOVERY-001, WORKFORM-R
 
 ## Planned Tasks
 
-WORKFORM-REAL-001B is planned for future refinements and must not be started yet.
+WORKFORM-REAL-001B is approved for operational sheet completion states, draft saving, finalization UX, and workflow integrations. It must not be implemented until explicitly requested.
 
 ## Deferred
 
