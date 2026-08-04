@@ -121,7 +121,7 @@ export function TechnicianWorkbenchPage(): ReactNode {
   }
 
   if (!canReadWorkbench) {
-    return <PageState><ErrorState title="Acces refuzat" description="Contul curent nu are acces la Lucrările mele." /></PageState>;
+    return <PageState><ErrorState title="Acces refuzat" description="Contul curent nu are acces la atelierul tehnicianului." /></PageState>;
   }
 
   return (
@@ -129,8 +129,8 @@ export function TechnicianWorkbenchPage(): ReactNode {
       <section className="dl-container technician-workbench__layout" aria-labelledby="workbench-title">
         <header className="technician-workbench__header">
           <div>
-            <h1 id="workbench-title">Lucrările mele</h1>
-            <p>{new Intl.DateTimeFormat("ro-RO", { dateStyle: "full" }).format(new Date())}</p>
+            <h1 id="workbench-title">Atelier tehnician</h1>
+            <p>Lucrări disponibile, lucrările mele și coada de etape · {new Intl.DateTimeFormat("ro-RO", { dateStyle: "full" }).format(new Date())}</p>
           </div>
         </header>
 
@@ -148,7 +148,7 @@ export function TechnicianWorkbenchPage(): ReactNode {
         <Card>
           <CardHeader>
             <CardTitle>Responsabilitate lucrări</CardTitle>
-            <CardDescription>Alege lucrări disponibile și vezi lucrările revendicate de tine.</CardDescription>
+            <CardDescription>Preia lucrări disponibile, apoi continuă din lista proprie.</CardDescription>
           </CardHeader>
           <CardContent className="technician-workbench__content">
             <div className="technician-workbench__tabs" role="list" aria-label="Filtre rapide">
@@ -182,7 +182,7 @@ export function TechnicianWorkbenchPage(): ReactNode {
                 isLoading={availableQuery.isLoading}
                 error={availableQuery.error}
                 items={availableQuery.data?.items ?? []}
-                actionLabel="Revendică"
+                actionLabel="Preia"
                 onAction={setClaimTarget}
                 onOpen={(work) => navigate(`/works?workId=${work.id}`)}
                 showRelease={false}
@@ -206,7 +206,7 @@ export function TechnicianWorkbenchPage(): ReactNode {
           <Card>
             <CardHeader>
               <CardTitle>Coada de etape</CardTitle>
-              <CardDescription>Etape curente asignate în fluxul de producție.</CardDescription>
+              <CardDescription>Etape curente asignate în fluxul de producție, filtrate pentru lucru rapid.</CardDescription>
             </CardHeader>
             <CardContent className="technician-workbench__content">
               <div className="technician-workbench__tabs" role="list" aria-label="Filtre etape">

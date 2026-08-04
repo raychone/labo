@@ -509,12 +509,27 @@ export function WorksPage(): ReactNode {
           {canCreate ? <Button onClick={() => setIsCreateOpen(true)}>Adaugă lucrare</Button> : null}
         </header>
 
+        {worksQuery.data?.deadlineDashboard ? (
+          <section className="works-page__summary" aria-label="Rezumat lucrări">
+            <WorkMetric label="Astăzi" value={worksQuery.data.deadlineDashboard.dueToday} />
+            <WorkMetric label="Mâine" value={worksQuery.data.deadlineDashboard.dueTomorrow} />
+            <WorkMetric label="Întârziate" value={worksQuery.data.deadlineDashboard.late} />
+            <WorkMetric label="Fără termen" value={worksQuery.data.deadlineDashboard.unresolved} />
+          </section>
+        ) : null}
+
         <Card>
           <CardHeader>
             <CardTitle>Registru lucrări</CardTitle>
-            <CardDescription>Total: {worksQuery.data?.total ?? 0}</CardDescription>
+            <CardDescription>Total: {worksQuery.data?.total ?? 0} · filtre pentru recepție, responsabilitate și companie de execuție.</CardDescription>
           </CardHeader>
           <CardContent className="works-page__table-card">
+            <div className="works-page__quick-filters" aria-label="Filtre rapide lucrări">
+              <Button onClick={() => setParams((current) => ({ ...current, deadlineFilter: "TODAY", page: 1 }))} variant="outline">Astăzi</Button>
+              <Button onClick={() => setParams((current) => ({ ...current, deadlineFilter: "LATE", page: 1 }))} variant="outline">Întârziate</Button>
+              <Button onClick={() => setParams((current) => ({ ...current, claimStatus: "UNCLAIMED", page: 1 }))} variant="outline">Disponibile</Button>
+              <Button onClick={() => setParams(defaultListParams)} variant="ghost">Resetează</Button>
+            </div>
             <div className="works-page__filters">
               <TextInput
                 label="Căutare"
@@ -641,6 +656,15 @@ export function WorksPage(): ReactNode {
         }
       }} workId={qrWorkId} />
     </main>
+  );
+}
+
+function WorkMetric({ label, value }: { readonly label: string; readonly value: number }): ReactNode {
+  return (
+    <div className="works-page__metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
   );
 }
 

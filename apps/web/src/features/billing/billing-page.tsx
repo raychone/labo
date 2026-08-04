@@ -9,6 +9,7 @@ import {
   DateInput,
   ErrorState,
   LoadingState,
+  Modal,
   Select,
   Tabs,
   TextInput,
@@ -698,6 +699,7 @@ function DocumentsTab({
   readonly setPaymentForm: (updater: (current: ManualPaymentFormState) => ManualPaymentFormState) => void;
   readonly selectedDocument: BillingDocumentSummary | null;
 }): ReactNode {
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const columns = useMemo<readonly DataTableColumn<BillingDocumentSummary>[]>(() => [
     { id: "number", header: "Număr", renderCell: (document) => document.formattedNumber ?? "Draft" },
     { id: "type", header: "Tip", renderCell: (document) => toDocumentTypeLabel(document.type) },
@@ -718,7 +720,7 @@ function DocumentsTab({
         <Button onClick={onExport} variant="outline">Export CSV</Button>
         <Button disabled={!selectedDocument || selectedDocument.status !== "DRAFT" || isMutating} onClick={onIssue}>Emite</Button>
         <Button disabled={!selectedDocument || selectedDocument.type !== "PROFORMA" || selectedDocument.status !== "ISSUED" || isMutating} onClick={onConvert} variant="secondary">Transformă în factură</Button>
-        {canRecordPayment ? <Button disabled={!canUsePaymentForm || isMutating} onClick={onRecordPayment} variant="secondary">Înregistrează încasare</Button> : null}
+        {canRecordPayment ? <Button disabled={!canUsePaymentForm || isMutating} onClick={() => setIsPaymentOpen(true)} variant="secondary">Înregistrează încasare</Button> : null}
         <Button disabled={!selectedDocument} onClick={() => selectedDocument ? onPrint(selectedDocument.id) : undefined} variant="outline">Print / PDF</Button>
       </div>
       <DataTable columns={columns} emptyMessage="Nu există proforme sau facturi." error={error ? getErrorMessage(error) : undefined} getRowKey={(document) => document.id} isLoading={isLoading} onRowAction={(document) => onSelect(document.id)} rowActionLabel="Selectează" rows={documents} />
@@ -729,7 +731,14 @@ function DocumentsTab({
         </section>
       ) : null}
       {canRecordPayment ? (
-        <section className="billing-page__payment-form" aria-label="Înregistrare manuală încasare">
+        <Modal
+          description={selectedDocument ? `${selectedDocument.formattedNumber ?? "Draft"} · sold restant ${formatMoneyMinor(selectedDocument.balanceMinor, currency, locale)}` : "Selectează o factură cu sold restant."}
+          footer={<Button disabled={!canUsePaymentForm || isMutating} isLoading={isMutating} onClick={onRecordPayment}>Înregistrează încasarea</Button>}
+          isOpen={isPaymentOpen}
+          onOpenChange={setIsPaymentOpen}
+          title="Înregistrare manuală încasare"
+        >
+          <section className="billing-page__payment-form" aria-label="Înregistrare manuală încasare">
           <div>
             <h3>Evidență încasări</h3>
             <p>Înregistrează manual o plată efectuată în afara aplicației. Aplicația nu procesează bani, nu emite bon fiscal și nu se conectează la POS sau bancă.</p>
@@ -752,7 +761,8 @@ function DocumentsTab({
           <DateInput disabled={!canUsePaymentForm} label="Data chitanței" value={paymentForm.receiptDate} onChange={(event) => setPaymentForm((current) => ({ ...current, receiptDate: event.target.value }))} />
           <TextInput disabled={!canUsePaymentForm} label="Referință bancară" value={paymentForm.reference} onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))} />
           <TextInput disabled={!canUsePaymentForm} label="Observații" value={paymentForm.notes} onChange={(event) => setPaymentForm((current) => ({ ...current, notes: event.target.value }))} />
-        </section>
+          </section>
+        </Modal>
       ) : null}
     </section>
   );

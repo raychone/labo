@@ -59,13 +59,13 @@ Planned or partial:
 
 ## Current Status
 
-Last completed functional task: `BILLING-REALIGN-001B`, which completed the company-scoped manager billing workspace with overview counters, billable works, proformas, invoices, manual payment recording, receivables, statements, month-end registry, safe CSV/print views, read-only ambiguous legacy review, RBAC, audit, tests, and documentation updates.
+Last completed functional task: `CORE-ROLE-UX-001`, which simplified the Manager, Reception and Technician workflows using existing business rules and APIs. It added permission-aware landing panels on `/dashboard`, simplified navigation grouping, reception-oriented `/works` counters and quick filters, clearer `/status` and `/workbench` labels, and a billing manual-payment modal while keeping financial RBAC and company scoping intact.
 
 Last completed documentation task: `WORKFORM-REAL-DISCOVERY-001`, which audited the real paper work sheet and produced [discovery/WORKFORM-REAL-FIELD-AUDIT.md](discovery/WORKFORM-REAL-FIELD-AUDIT.md) and [discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md). `DOCS-TOKEN-001` created the permanent token-efficient documentation system under `docs/`.
 
 `TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable.
 
-Next task: `BILLING-REALIGN-001C` is planned only and must not be started unless explicitly approved. It will cover ambiguous legacy billing correction workflow; `BILLING-REALIGN-001B` intentionally added read-only review only.
+No task is currently in progress. `BILLING-REALIGN-001C` is deferred; ambiguous legacy billing remains read-only until explicitly resumed. `DEMO-POLISH-002` is planned only and must not be started unless explicitly approved.
 
 ## Source Of Truth
 

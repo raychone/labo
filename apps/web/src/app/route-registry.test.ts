@@ -6,7 +6,7 @@ describe("route registry", () => {
   it("filters navigation by permission snapshot", () => {
     const labels = getNavigationRoutes(["works.read_all", "scan.use", "logistics.center.read", "settings.read", "finance.read", "pricing.read"]).map((route) => route.label);
 
-    expect(labels).toContain("Panou principal");
+    expect(labels).toContain("Acasă");
     expect(labels).toContain("Lucrări");
     expect(labels).toContain("Status");
     expect(labels).toContain("Scanare");

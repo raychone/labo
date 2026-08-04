@@ -8,12 +8,12 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 
 | Field | Value |
 |---|---|
-| Current task | BILLING-REALIGN-001C |
-| Status | PLANNED |
+| Current task | none |
+| Status | AWAITING APPROVAL |
 | Blocker | none |
-| Last completed task | BILLING-REALIGN-001B |
-| Last completed functional task | BILLING-REALIGN-001B |
-| Last completed functional commit | BILLING-REALIGN-001B commit |
+| Last completed task | CORE-ROLE-UX-001 |
+| Last completed functional task | CORE-ROLE-UX-001 |
+| Last completed functional commit | CORE-ROLE-UX-001 commit |
 | Next approved task | none |
 
 ## Roadmap
@@ -61,7 +61,9 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | billing | BILLING-002 | COMPLETED | BILLING-001 | printable docs/statements | [modules/billing.md](modules/billing.md) |
 | billing | BILLING-REALIGN-001A | COMPLETED | BILLING-001, BILLING-002, ORG-DATA-MIGRATION-001, TECH-CLAIM-001B, WORK-CYCLES-001A | company-aware billing foundation for NC and NG | [tasks/BILLING-REALIGN-001A.md](tasks/BILLING-REALIGN-001A.md) |
 | billing | BILLING-REALIGN-001B | COMPLETED | BILLING-REALIGN-001A | financial workspace, receivables and month-end UX | [tasks/BILLING-REALIGN-001B.md](tasks/BILLING-REALIGN-001B.md) |
-| billing | BILLING-REALIGN-001C | PLANNED | BILLING-REALIGN-001B | ambiguous legacy billing correction workflow | [modules/billing.md](modules/billing.md) |
+| billing | BILLING-REALIGN-001C | DEFERRED | BILLING-REALIGN-001B | ambiguous legacy billing correction workflow | [modules/billing.md](modules/billing.md) |
+| core UX | CORE-ROLE-UX-001 | COMPLETED | BILLING-REALIGN-001B, STATUS-001B, WORKFORM-REAL-001B, WORK-CYCLES-001B, TECH-CLAIM-001B | simplified Manager, Reception and Technician workflows | [tasks/CORE-ROLE-UX-001.md](tasks/CORE-ROLE-UX-001.md) |
+| demo | DEMO-POLISH-002 | PLANNED | CORE-ROLE-UX-001 | demo polish after core role UX simplification | [modules/demo.md](modules/demo.md) |
 | status | STATUS-001A | COMPLETED | TECH-CLAIM-001B, WORKFLOW-002, LOGISTICS-001, DELIVERY-001 | operational status read model and API | [tasks/STATUS-001A.md](tasks/STATUS-001A.md) |
 | status | STATUS-001B | COMPLETED | STATUS-001A, SHELL-001 | operational status page and internal role visibility | [tasks/STATUS-001B.md](tasks/STATUS-001B.md) |
 | work cycles | WORK-CYCLES-001A | COMPLETED | STATUS-001B, WORKFLOW-002, LOGISTICS-001, DELIVERY-001 | work cycle model and lifecycle foundation | [tasks/WORK-CYCLES-001A.md](tasks/WORK-CYCLES-001A.md) |
@@ -87,4 +89,5 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 - `NOTIFICATIONS-001`: operational notifications are deferred.
 - `PAYMENTS-002`: manual payment evidence realignment is planned but not started.
 - `TECH-CLAIM-001C`: deferred because TECH-CLAIM-001A/B cover current MVP claim needs and stale-claim recovery lacks validated business rules.
+- `BILLING-REALIGN-001C`: deferred while the MVP prioritizes core Manager/Reception/Technician UX; ambiguous legacy records remain read-only until explicitly resumed.
 - `DOCUMENTS-001`, `COLLABORATION-TERMS-001`, `OFFLINE-001`, `STATUS-001`: planned future work; details require task-specific confirmation.

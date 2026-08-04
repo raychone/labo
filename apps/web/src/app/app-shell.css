@@ -372,6 +372,31 @@
   grid-template-columns: 1fr;
 }
 
+.dashboard-page__role-grid {
+  display: grid;
+  gap: var(--dl-space-4);
+  grid-template-columns: 1fr;
+}
+
+.dashboard-page__role-panel {
+  background: var(--dl-color-surface);
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  display: grid;
+  gap: var(--dl-space-4);
+  padding: var(--dl-space-4);
+}
+
+.dashboard-page__role-panel h2 {
+  font-size: var(--dl-font-size-card-title);
+  margin: 0;
+}
+
+.dashboard-page__role-panel p {
+  color: var(--dl-color-text-muted);
+  margin: var(--dl-space-1) 0 0;
+}
+
 .dashboard-page__deadline {
   display: grid;
   gap: var(--dl-space-3);
@@ -412,6 +437,29 @@
   font-size: var(--dl-font-size-page-title);
 }
 
+.dashboard-page__metrics--compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-page__metrics--compact .dashboard-page__metric {
+  min-height: 4.5rem;
+}
+
+.dashboard-page__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-2);
+}
+
+.dashboard-page__links a {
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-sm);
+  color: var(--app-brand-primary);
+  font-weight: var(--dl-font-weight-bold);
+  min-height: 2.25rem;
+  padding: var(--dl-space-2) var(--dl-space-3);
+}
+
 .dashboard-page__card-link {
   color: var(--app-brand-primary);
   font-weight: var(--dl-font-weight-bold);
@@ -422,8 +470,16 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .dashboard-page__role-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .dashboard-page__metrics {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .dashboard-page__metrics--compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -470,7 +526,15 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .dashboard-page__role-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .dashboard-page__metrics {
     grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .dashboard-page__metrics--compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

@@ -34,7 +34,7 @@ STATUS-001A adds `GET /status/operational` as a separate read-only aggregate ove
 
 ## UI
 
-`/works` registry, create modal, detail/edit drawer, QR modal, workflow section, `Cicluri` history section, `Fișă laborator` cycle sheet section with draft/complete/finalize UX, `Înregistrează revenirea` modal, deadline and execution context cards. `/workbench`, `/scan`, and `/status` surface sheet status and link into the existing `/works?workId=...` detail flow instead of duplicating work detail UI.
+`/works` registry with reception-oriented deadline counters, quick filters, compact filters, create modal, detail/edit drawer, QR modal, workflow section, `Cicluri` history section, `Fișă laborator` cycle sheet section with draft/complete/finalize UX, `Înregistrează revenirea` modal, deadline and execution context cards. `/workbench`, `/scan`, and `/status` surface sheet status and link into the existing `/works?workId=...` detail flow instead of duplicating work detail UI.
 
 ## Audit
 
@@ -50,7 +50,7 @@ Inactive clinic/doctor/work type, doctor outside selected clinic, missing `OTHER
 
 ## Implemented Tasks
 
-WORKS-001, QR-001, WORK-DEADLINES-001A/B/C, TECH-CLAIM-001A/B, WORKFORMS-002, WORKFORM-REAL-001A/B, WORKFLOW-002, STATUS-001A, STATUS-001B, WORK-CYCLES-001A, WORK-CYCLES-001B.
+WORKS-001, QR-001, WORK-DEADLINES-001A/B/C, TECH-CLAIM-001A/B, WORKFORMS-002, WORKFORM-REAL-001A/B, WORKFLOW-002, STATUS-001A, STATUS-001B, WORK-CYCLES-001A, WORK-CYCLES-001B, CORE-ROLE-UX-001.
 
 ## Planned Tasks
 

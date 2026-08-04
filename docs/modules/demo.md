@@ -50,7 +50,7 @@ DEMO-SEED-001 and later demo updates.
 
 ## Planned Tasks
 
-DEMO-REAL-DATA-001.
+DEMO-POLISH-002 and DEMO-REAL-DATA-001.
 
 ## Deferred
 

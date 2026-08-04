@@ -36,7 +36,7 @@ A work cycle without an unambiguous locked execution snapshot cannot be invoiced
 
 ## UI
 
-`/billing`, with tabs for overview, billable works, proformas, invoices, payments, receivables/restanțe, month-end, and series. Print views remain under `/billing/documents/:id/print`.
+`/billing`, with tabs for overview, billable works, proformas, invoices, payments, receivables/restanțe, month-end, and series. Manual payment recording is presented in a modal for a selected invoice with outstanding balance and still records only external payment evidence. Print views remain under `/billing/documents/:id/print`.
 
 ## Audit
 
@@ -52,7 +52,7 @@ Cancelled invoices, overpayment, partial payments, multiple payments, receipt/re
 
 ## Implemented Tasks
 
-BILLING-001, BILLING-002, BILLING-REALIGN-001A, BILLING-REALIGN-001B.
+BILLING-001, BILLING-002, BILLING-REALIGN-001A, BILLING-REALIGN-001B, CORE-ROLE-UX-001.
 
 ## Planned Tasks
 

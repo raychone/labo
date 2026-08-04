@@ -21,7 +21,7 @@ export const appRoutes = [
   {
     icon: "LV",
     label: "Livrările mele",
-    navigationGroup: "Operare",
+    navigationGroup: "Logistică",
     path: "/deliveries",
     permissionMode: "any",
     requiredPermissions: deliveryReadPermissions,
@@ -29,7 +29,8 @@ export const appRoutes = [
   },
   {
     icon: "DB",
-    label: "Panou principal",
+    label: "Acasă",
+    navigationGroup: "Operațional",
     path: "/dashboard",
     permissionMode: "any",
     requiredPermissions: [],
@@ -38,7 +39,7 @@ export const appRoutes = [
   {
     icon: "WO",
     label: "Lucrări",
-    navigationGroup: "Operare",
+    navigationGroup: "Operațional",
     path: "/works",
     permissionMode: "any",
     requiredPermissions: workReadPermissions,
@@ -47,7 +48,7 @@ export const appRoutes = [
   {
     icon: "OS",
     label: "Status",
-    navigationGroup: "Operare",
+    navigationGroup: "Operațional",
     path: "/status",
     permissionMode: "any",
     requiredPermissions: operationalStatusReadPermissions,
@@ -56,7 +57,7 @@ export const appRoutes = [
   {
     icon: "QR",
     label: "Scanare",
-    navigationGroup: "Operare",
+    navigationGroup: "Operațional",
     path: "/scan",
     permissionMode: "any",
     requiredPermissions: scanPermissions,
@@ -65,7 +66,7 @@ export const appRoutes = [
   {
     icon: "AT",
     label: "Lucrările mele",
-    navigationGroup: "Operare",
+    navigationGroup: "Tehnician",
     path: "/workbench",
     permissionMode: "any",
     requiredPermissions: ["technician.workbench.read"],
@@ -74,7 +75,7 @@ export const appRoutes = [
   {
     icon: "LO",
     label: "Centru operațional",
-    navigationGroup: "Operare",
+    navigationGroup: "Logistică",
     path: "/logistics",
     permissionMode: "any",
     requiredPermissions: ["logistics.center.read"],
@@ -83,7 +84,7 @@ export const appRoutes = [
   {
     icon: "BI",
     label: "Facturare",
-    navigationGroup: "Financiar",
+    navigationGroup: "Management",
     path: "/billing",
     permissionMode: "any",
     requiredPermissions: ["finance.read", "invoice.read", "invoice.create"],
@@ -92,7 +93,7 @@ export const appRoutes = [
   {
     icon: "PR",
     label: "Prețuri și termene",
-    navigationGroup: "Financiar",
+    navigationGroup: "Management",
     path: "/pricing",
     permissionMode: "any",
     requiredPermissions: ["pricing.read"],
@@ -101,7 +102,7 @@ export const appRoutes = [
   {
     icon: "PA",
     label: "Pacienți",
-    navigationGroup: "Administrare",
+    navigationGroup: "Management",
     path: "/patients",
     permissionMode: "any",
     requiredPermissions: ["patients.read"],
@@ -110,7 +111,7 @@ export const appRoutes = [
   {
     icon: "CL",
     label: "Clinici și medici",
-    navigationGroup: "Administrare",
+    navigationGroup: "Management",
     path: "/clinics",
     permissionMode: "any",
     requiredPermissions: ["clinics.read"],
@@ -119,7 +120,7 @@ export const appRoutes = [
   {
     icon: "WT",
     label: "Tipuri de lucrări",
-    navigationGroup: "Administrare",
+    navigationGroup: "Management",
     path: "/work-types",
     permissionMode: "any",
     requiredPermissions: ["pricing.read"],
@@ -128,7 +129,7 @@ export const appRoutes = [
   {
     icon: "US",
     label: "Utilizatori",
-    navigationGroup: "Administrare",
+    navigationGroup: "Management",
     path: "/users",
     permissionMode: "any",
     requiredPermissions: ["users.read"],
@@ -137,7 +138,7 @@ export const appRoutes = [
   {
     icon: "ST",
     label: "Setări",
-    navigationGroup: "Administrare",
+    navigationGroup: "Management",
     path: "/settings",
     permissionMode: "any",
     requiredPermissions: ["settings.read"],

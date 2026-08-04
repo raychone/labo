@@ -30,7 +30,7 @@ Technicians can claim available works, view own claimed works, release own work 
 
 ## UI
 
-`/workbench` includes sheet status badges and `Completează fișa`/`Continuă fișa` actions that open the existing work detail sheet flow.
+`/workbench` is labelled as the technician workspace and groups available work, owned work, stage queue filters and workload summary. Claim copy uses `Preia` while keeping the existing `NC`/`NG` execution company selector in the claim modal. Sheet status badges and `Completează fișa`/`Continuă fișa` actions open the existing work detail sheet flow.
 
 ## Audit
 
@@ -46,7 +46,7 @@ Stale claims, abandoned assignments, conflicting stage actions. These are planne
 
 ## Implemented Tasks
 
-TECH-001, TECH-CLAIM-001A, TECH-CLAIM-001B, WORKFORM-REAL-001B workbench integration.
+TECH-001, TECH-CLAIM-001A, TECH-CLAIM-001B, WORKFORM-REAL-001B workbench integration, CORE-ROLE-UX-001.
 
 ## Planned Tasks
 

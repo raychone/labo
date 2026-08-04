@@ -476,8 +476,9 @@ export function StatusPage(): ReactNode {
         <header className="status-page__header">
           <div>
             <h1 id="status-title">Status</h1>
-            <p>Workspace operațional pentru lucrările active, fără date financiare.</p>
+            <p>Workspace operațional pentru lucrări active, termene, responsabilitate și fișa laborator.</p>
           </div>
+          <Link className="status-page__open-link" to="/works">Registru lucrări</Link>
         </header>
 
         <div className="status-page__tabs" role="list" aria-label="Status lucrări">
@@ -503,6 +504,7 @@ export function StatusPage(): ReactNode {
             <CardDescription>
               Total: {statusQuery.data?.meta.total ?? 0}
               {statusQuery.data?.meta.hasMore ? ` · rezultate limitate la ${OPERATIONAL_STATUS_MAX_SCANNED_ROWS}` : ""}
+              {" · filtrele nu expun date financiare"}
             </CardDescription>
           </CardHeader>
           <CardContent className="status-page__content">
