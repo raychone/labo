@@ -8,12 +8,12 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 
 | Field | Value |
 |---|---|
-| Current task | NONE / AWAITING APPROVAL |
-| Status | AWAITING APPROVAL |
+| Current task | WORK-CYCLES-001A |
+| Status | APPROVED |
 | Last completed task | STATUS-001B |
 | Last completed functional task | STATUS-001B |
 | Last completed functional commit | STATUS-001B commit |
-| Next approved task | NONE |
+| Next approved task | WORK-CYCLES-001A |
 
 ## Roadmap
 
@@ -57,6 +57,8 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | billing | BILLING-002 | COMPLETED | BILLING-001 | printable docs/statements | [modules/billing.md](modules/billing.md) |
 | status | STATUS-001A | COMPLETED | TECH-CLAIM-001B, WORKFLOW-002, LOGISTICS-001, DELIVERY-001 | operational status read model and API | [tasks/STATUS-001A.md](tasks/STATUS-001A.md) |
 | status | STATUS-001B | COMPLETED | STATUS-001A, SHELL-001 | operational status page and internal role visibility | [tasks/STATUS-001B.md](tasks/STATUS-001B.md) |
+| work cycles | WORK-CYCLES-001A | APPROVED | STATUS-001B, WORKFLOW-002, LOGISTICS-001, DELIVERY-001 | work cycle model and lifecycle foundation | [tasks/WORK-CYCLES-001A.md](tasks/WORK-CYCLES-001A.md) |
+| work cycles | WORK-CYCLES-001B | PLANNED | WORK-CYCLES-001A | cycle-aware operational UI and status integration | planned |
 | materials | MATERIALS-001 | PLANNED | STATUS-001B | material catalog/selection | [modules/materials.md](modules/materials.md) |
 | inventory | INVENTORY-001 | PLANNED | MATERIALS-001 | stock, NIR, consumption | [modules/inventory.md](modules/inventory.md) |
 | dashboard | DASHBOARD-001 | DEFERRED | SHELL-001 | legacy operational dashboard | [modules/dashboard.md](modules/dashboard.md) |
@@ -78,4 +80,4 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 - `NOTIFICATIONS-001`: operational notifications are deferred.
 - `PAYMENTS-002`: manual payment evidence realignment is planned but not started.
 - `TECH-CLAIM-001C`: deferred because TECH-CLAIM-001A/B cover current MVP claim needs and stale-claim recovery lacks validated business rules.
-- `DOCUMENTS-001`, `COLLABORATION-TERMS-001`, `OFFLINE-001`, `STATUS-001`, `WORK-CYCLES-001`, `WORKFORM-REAL-001`: planned future work; details require task-specific confirmation.
+- `DOCUMENTS-001`, `COLLABORATION-TERMS-001`, `OFFLINE-001`, `STATUS-001`, `WORKFORM-REAL-001`: planned future work; details require task-specific confirmation.

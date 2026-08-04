@@ -48,6 +48,7 @@ Implemented or substantially implemented:
 
 Planned or partial:
 
+- work cycles;
 - materials and inventory;
 - dashboard/status evolution beyond the implemented `/status` workspace;
 - search;
@@ -63,7 +64,7 @@ Last completed documentation task: `DOCS-TOKEN-001`, which created the permanent
 
 `TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable.
 
-No next task is currently approved. `MATERIALS-001` remains planned and must not be started without approval.
+Next approved task: `WORK-CYCLES-001A`, a backend-only work cycle model and lifecycle foundation task. `WORK-CYCLES-001B` remains planned and must not be started. No other task is approved.
 
 ## Source Of Truth
 
