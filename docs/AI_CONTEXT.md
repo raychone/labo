@@ -65,7 +65,7 @@ Last completed documentation task: `WORKFORM-REAL-DISCOVERY-001`, which audited 
 
 `TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable.
 
-Next approved task: none. Do not start `WORKFORM-REAL-001C` or any other successor task without explicit approval.
+Next approved task: `BILLING-REALIGN-001A`, approved to realign billing so documents, billable works, payments, series, and print views are company-scoped by the `NC`/`NG` execution company fixed on the work cycle. `BILLING-REALIGN-001B` is planned only and must not be started.
 
 ## Source Of Truth
 
