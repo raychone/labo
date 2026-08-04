@@ -79,14 +79,14 @@ export class WorksController {
   }
 
   @Get(":id/cycles")
-  @RequirePermission("works.read_all", "ALL")
+  @RequirePermission("cycles.history.read", "ASSIGNED")
   public async listCycles(@CurrentUser() actor: AuthenticatedUser, @Param("id") workOrderId: string) {
     return this.worksService.listCycles(actor.id, workOrderId, await this.canReadPricing(actor.id));
   }
 
   @Post(":id/cycles/next")
   @UseGuards(CsrfGuard)
-  @RequirePermission("works.update", "ALL")
+  @RequirePermission("cycles.create_next", "ALL")
   public async createNextCycle(
     @Param("id") workOrderId: string,
     @Body() dto: CreateNextWorkCycleDto,

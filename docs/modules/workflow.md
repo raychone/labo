@@ -18,7 +18,7 @@ Template, ordered stages, optional stage, cycle-scoped runtime execution, stage 
 
 ## Business Rules
 
-Only confirmed behavior should be used: templates have ordered stages and runtime work execution supports stage start/complete and assignment on the active work cycle. Pause/resume/skip/reopen are permission concepts and future/partial behavior unless confirmed by task code.
+Only confirmed behavior should be used: templates have ordered stages and runtime work execution supports stage start/complete and assignment on the active work cycle. Registering a returned work opens a new active cycle with a new runtime workflow execution; previous cycle workflow executions remain historical. Pause/resume/skip/reopen are permission concepts and future/partial behavior unless confirmed by task code.
 
 ## Data Model
 
@@ -46,7 +46,7 @@ Archived template, existing runtime from older template, stage already started/c
 
 ## Implemented Tasks
 
-WORKFLOW-001, WORKFLOW-002, TECH-001, STATUS-001A read-model integration, WORK-CYCLES-001A.
+WORKFLOW-001, WORKFLOW-002, TECH-001, STATUS-001A read-model integration, WORK-CYCLES-001A, WORK-CYCLES-001B.
 
 ## Planned Tasks
 

@@ -131,6 +131,7 @@ export interface OperationalStatusRowView {
     readonly name: string;
   };
   readonly currentCycle: {
+    readonly code: string;
     readonly id: string;
     readonly label: string;
     readonly number: number;
@@ -282,8 +283,9 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
       name: work.clinic.name,
     },
     currentCycle: work.activeCycle ? {
+      code: `CYCLE_${work.activeCycle.cycleNumber}`,
       id: work.activeCycle.id,
-      label: `Cycle ${work.activeCycle.cycleNumber}`,
+      label: `Ciclul ${work.activeCycle.cycleNumber}`,
       number: work.activeCycle.cycleNumber,
       reason: work.activeCycle.reason,
       status: work.activeCycle.status,

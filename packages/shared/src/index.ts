@@ -174,10 +174,11 @@ export type {
   PricingRuleScope,
   PricingSortField,
 } from "./pricing.js";
-export { SCAN_SOURCES, WORK_ASSIGNMENT_EVENT_TYPES, WORK_CLAIM_SOURCES, WORK_CLAIM_STATUSES, WORK_DEADLINE_MODES, WORK_DEADLINE_SOURCES, WORK_PRIORITIES, WORK_QR_PAYLOAD_PREFIX, WORK_SORT_FIELDS, WORK_STATUSES, isWorkQrPayload } from "./works.js";
+export { SCAN_SOURCES, WORK_ASSIGNMENT_EVENT_TYPES, WORK_CLAIM_SOURCES, WORK_CLAIM_STATUSES, WORK_CYCLE_REASONS, WORK_CYCLE_STATUSES, WORK_DEADLINE_MODES, WORK_DEADLINE_SOURCES, WORK_PRIORITIES, WORK_QR_PAYLOAD_PREFIX, WORK_SORT_FIELDS, WORK_STATUSES, isWorkQrPayload } from "./works.js";
 export type {
   ClaimWorkInput,
   CreateWorkInput,
+  CreateNextWorkCycleInput,
   ClaimWorksListParams,
   PaginatedWorksResponse,
   RecalculateWorkDeadlineInput,
@@ -196,6 +197,10 @@ export type {
   WorkClaimStatus,
   WorkClaimSummary,
   WorkClaimUserSummary,
+  WorkCycleReason,
+  WorkCycleStatus,
+  WorkCycleView,
+  WorkCyclesHistory,
   WorkDeadlineMode,
   WorkDeadlinePreview,
   WorkDeadlinePreviewInput,

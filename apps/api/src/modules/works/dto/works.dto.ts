@@ -148,6 +148,14 @@ export class ReassignWorkDto extends ClaimWorkDto {
 }
 
 export class CreateNextWorkCycleDto {
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  public readonly clinicId!: string;
+
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  public readonly doctorId!: string;
+
   @IsIn(WORK_CYCLE_REASONS.filter((reason) => reason !== "INITIAL"))
   public readonly reason!: Exclude<(typeof WORK_CYCLE_REASONS)[number], "INITIAL">;
 
@@ -156,12 +164,14 @@ export class CreateNextWorkCycleDto {
   @IsString()
   @MinLength(3)
   @MaxLength(1000)
-  public readonly reasonNotes?: string | null;
+  public readonly notes?: string | null;
 
   @IsOptional()
-  @Transform(({ value }) => trimRequiredString(value))
+  @Transform(({ value }) => trimOptionalString(value))
   @IsString()
-  public readonly doctorId?: string;
+  @MinLength(3)
+  @MaxLength(1000)
+  public readonly reasonNotes?: string | null;
 
   @IsOptional()
   @Transform(({ value }) => trimRequiredString(value))

@@ -28,9 +28,11 @@ import {
 } from "@dental-lab/ui";
 import {
   LEGAL_ENTITY_CODES,
+  WORK_CYCLE_REASONS,
   formatMoneyMinor,
   getLegalEntityDisplayName,
   getWorkflowExecutionStatusLabel,
+  type CreateNextWorkCycleInput,
   type CreateWorkInput,
   type LegalEntityCode,
   type PatientOption,
@@ -40,6 +42,8 @@ import {
   type WorkFormTemplateDetail,
   type WorkSortField,
   type WorkSummary,
+  type WorkCycleReason,
+  type WorkCyclesHistory,
   type WorksListParams,
 } from "@dental-lab/shared";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -58,7 +62,7 @@ import { useActiveWorkFormTemplate } from "../work-forms/work-form-templates-api
 import { WorkForm, WorkFormActions, defaultWorkFormValues, toWorkFormValues } from "./work-form.js";
 import { WorkFormReadOnlyView } from "./work-dynamic-form.js";
 import { WorkWorkflowSection } from "./work-workflow-section.js";
-import { useCreateWork, useReassignWork, useUpdateWork, useWork, useWorkDeadlinePreview, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
+import { useCreateNextWorkCycle, useCreateWork, useReassignWork, useUpdateWork, useWork, useWorkCycles, useWorkDeadlinePreview, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
 import { workFormSchema, type WorkFormValues } from "./works-page.schema.js";
 import { WorkQrModal } from "./work-qr-modal.js";
 import { applyApiErrorsToForm, getErrorMessage, getFormErrorSummaryItems, UnsavedChangesPrompt, useBeforeUnloadPrompt, useCloseGuard, useErrorSummaryFocus } from "../../lib/form-utils.js";
@@ -109,6 +113,26 @@ const legalEntityFilterOptions = [
   { label: "Toate", value: "" },
   ...LEGAL_ENTITY_CODES.map((code) => ({ label: `${code} · ${getLegalEntityDisplayName(code)}`, value: code })),
 ] as const;
+
+const returnReasonLabels = {
+  ADJUSTMENT: "Ajustare",
+  CLARIFICATION: "Clarificare",
+  FINISHING: "Finisare",
+  OTHER: "Alt motiv",
+  PROBA: "Probă",
+  REMAKE: "Refacere",
+  REPAIR: "Reparație",
+  WARRANTY: "Garanție",
+} as const satisfies Record<Exclude<WorkCycleReason, "INITIAL">, string>;
+
+const cycleReasonLabels = {
+  ...returnReasonLabels,
+  INITIAL: "Inițial",
+} as const satisfies Record<WorkCycleReason, string>;
+
+const returnReasonOptions = WORK_CYCLE_REASONS
+  .filter((reason): reason is Exclude<WorkCycleReason, "INITIAL"> => reason !== "INITIAL")
+  .map((reason) => ({ label: returnReasonLabels[reason], value: reason }));
 
 function toApiSort(direction: DataTableSort["direction"]): "asc" | "desc" {
   return direction === "ascending" ? "asc" : "desc";
@@ -305,6 +329,8 @@ export function WorksPage(): ReactNode {
   const canRead = hasPermission(permissionsQuery.data, "works.read_all");
   const canCreate = hasPermission(permissionsQuery.data, "works.create");
   const canUpdate = hasPermission(permissionsQuery.data, "works.update");
+  const canReadCycles = hasPermission(permissionsQuery.data, "cycles.read") || hasPermission(permissionsQuery.data, "cycles.history.read");
+  const canCreateNextCycle = hasPermission(permissionsQuery.data, "cycles.create_next");
   const canReadPricing = hasPermission(permissionsQuery.data, "pricing.read");
   const canDownloadInvoices = hasPermission(permissionsQuery.data, "invoice.download");
   const canReadTechnicianOptions = hasPermission(permissionsQuery.data, "technician.workload.read");
@@ -567,6 +593,8 @@ export function WorksPage(): ReactNode {
       />
 
       <WorkDetailsDrawer
+        canCreateNextCycle={canCreateNextCycle}
+        canReadCycles={canReadCycles}
         canReadPricing={canReadPricing}
         canUpdate={canUpdate}
         clinicOptions={clinicOptionsQuery.data ?? []}
@@ -723,6 +751,8 @@ function CreateWorkModal({
 }
 
 function WorkDetailsDrawer({
+  canCreateNextCycle,
+  canReadCycles,
   canReadPricing,
   canUpdate,
   clinicOptions,
@@ -740,6 +770,8 @@ function WorkDetailsDrawer({
   workError,
   workTypeOptionsError,
 }: {
+  readonly canCreateNextCycle: boolean;
+  readonly canReadCycles: boolean;
   readonly canReadPricing: boolean;
   readonly canUpdate: boolean;
   readonly clinicOptions: readonly { readonly code: string; readonly id: string; readonly name: string }[];
@@ -792,7 +824,10 @@ function WorkDetailsDrawer({
   const activeTemplateQuery = useActiveWorkFormTemplate(selectedWorkTypeId || undefined, isOpen && isWorkTypeChanging);
   const submitDisabled = activeTemplateQuery.isLoading || activeTemplateQuery.isError;
   const [isReassignOpen, setReassignOpen] = useState(false);
+  const [isReturnOpen, setReturnOpen] = useState(false);
   const reassignMutation = useReassignWork();
+  const createNextCycleMutation = useCreateNextWorkCycle();
+  const cyclesQuery = useWorkCycles(work?.id ?? null, isOpen && canReadCycles && work !== undefined);
   const techniciansQuery = useTechnicianOptions(Boolean(work?.claim.canCurrentUserReassign));
 
   useEffect(() => {
@@ -857,6 +892,16 @@ function WorkDetailsDrawer({
               onReassign={() => setReassignOpen(true)}
               work={work}
             />
+            {canReadCycles ? (
+              <WorkCyclesSection
+                canCreateNextCycle={canCreateNextCycle}
+                error={cyclesQuery.error}
+                history={cyclesQuery.data}
+                isLoading={cyclesQuery.isLoading}
+                onRegisterReturn={() => setReturnOpen(true)}
+                work={work}
+              />
+            ) : null}
             <WorkWorkflowSection isOpen={isOpen} workId={work.id} />
             {workTypeOptionsError ? <ErrorState title="Opțiunile nu au fost încărcate" description={getErrorMessage(workTypeOptionsError)} /> : null}
             <WorkForm
@@ -972,8 +1017,257 @@ function WorkDetailsDrawer({
         technicians={techniciansQuery.data ?? []}
         work={work}
       />
+      <RegisterReturnModal
+        clinicOptions={clinicOptions}
+        history={cyclesQuery.data}
+        isLoading={createNextCycleMutation.isPending}
+        isOpen={isReturnOpen}
+        onOpenChange={setReturnOpen}
+        onSubmit={(input) => {
+          if (!work) {
+            return;
+          }
+          createNextCycleMutation.mutate({ input, workOrderId: work.id }, {
+            onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Revenirea nu a fost înregistrată", variant: "error" }),
+            onSuccess: (history) => {
+              setReturnOpen(false);
+              const activeCycle = history.cycles.find((cycle) => cycle.id === history.activeCycleId);
+              toast.showToast({ message: `${work.code} este acum ${activeCycle ? `Ciclul ${activeCycle.cycleNumber}` : "în ciclu nou"}.`, variant: "success" });
+            },
+          });
+        }}
+        submitError={createNextCycleMutation.error}
+        work={work}
+      />
       {closeGuard.confirmModal}
     </>
+  );
+}
+
+function WorkCyclesSection({
+  canCreateNextCycle,
+  error,
+  history,
+  isLoading,
+  onRegisterReturn,
+  work,
+}: {
+  readonly canCreateNextCycle: boolean;
+  readonly error: unknown;
+  readonly history: WorkCyclesHistory | undefined;
+  readonly isLoading: boolean;
+  readonly onRegisterReturn: () => void;
+  readonly work: import("@dental-lab/shared").WorkDetail;
+}): ReactNode {
+  const cycles = history?.cycles ?? [];
+  const activeCycle = cycles.find((cycle) => cycle.id === history?.activeCycleId) ?? null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Cicluri</CardTitle>
+        <CardDescription>{activeCycle ? `${work.code} · Ciclul ${activeCycle.cycleNumber}` : `${work.code} · istoric cicluri`}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="works-page__cycle-header">
+          <div>
+            <span className="works-page__muted">Lucrare</span>
+            <strong>{work.code}</strong>
+          </div>
+          <div>
+            <span className="works-page__muted">Pacient</span>
+            <strong>{work.patientName}</strong>
+          </div>
+          <div>
+            <span className="works-page__muted">Ciclu curent</span>
+            <strong>{activeCycle ? `Ciclul ${activeCycle.cycleNumber}` : "Nedisponibil"}</strong>
+          </div>
+          {canCreateNextCycle ? <Button onClick={onRegisterReturn}>Înregistrează revenirea</Button> : null}
+        </div>
+        {isLoading ? <LoadingState text="Se încarcă ciclurile" /> : null}
+        {error ? <ErrorState title="Ciclurile nu au fost încărcate" description={getErrorMessage(error)} /> : null}
+        {!isLoading && !error && cycles.length === 0 ? <p className="works-page__muted">Nu există istoric de cicluri.</p> : null}
+        {cycles.length > 0 ? (
+          <div className="works-page__cycle-list">
+            {cycles.map((cycle) => (
+              <article className="works-page__cycle-item" data-active={cycle.id === history?.activeCycleId} key={cycle.id}>
+                <div className="works-page__cycle-title">
+                  <div>
+                    <strong>Ciclul {cycle.cycleNumber}</strong>
+                    <span>{cycleReasonLabels[cycle.reason]}{cycle.reasonNotes ? ` · ${cycle.reasonNotes}` : ""}</span>
+                  </div>
+                  <StatusBadge label={cycle.status === "ACTIVE" ? "Activ" : "Închis"} variant={cycle.status === "ACTIVE" ? "production" : "closed"} />
+                </div>
+                <div className="works-page__cycle-grid">
+                  <MetricCell label="Cabinet" value={`${cycle.clinic.code} · ${cycle.clinic.name}`} />
+                  <MetricCell label="Medic" value={cycle.doctor?.displayName ?? "Fără medic"} />
+                  <MetricCell label="Deschis" value={formatDateTime(cycle.openedAt)} />
+                  <MetricCell label="Închis" value={cycle.closedAt ? formatDateTime(cycle.closedAt) : "Ciclu activ"} />
+                  <MetricCell label="Creat de" value={cycle.createdBy?.displayName ?? "Sistem"} />
+                  <MetricCell label="Flux" value={cycle.workflow.status ?? "Fără flux"} />
+                  <MetricCell label="Logistică" value={cycle.logistics.status ?? "Fără status"} />
+                  <MetricCell label="Livrare" value={`${cycle.delivery.activePreparationItemCount} pregătiri active`} />
+                  <MetricCell label="Termen" value={cycle.deadline.effectiveDueAt ? formatDateTime(cycle.deadline.effectiveDueAt) : "Fără termen"} />
+                  <MetricCell label="Snapshot execuție" value={cycle.executionSnapshot.version ? `v${cycle.executionSnapshot.version} · ${cycle.executionSnapshot.status ?? "-"}` : "Nefixat"} />
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MetricCell({ label, value }: { readonly label: string; readonly value: string }): ReactNode {
+  return (
+    <div>
+      <span className="works-page__muted">{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function RegisterReturnModal({
+  clinicOptions,
+  history,
+  isLoading,
+  isOpen,
+  onOpenChange,
+  onSubmit,
+  submitError,
+  work,
+}: {
+  readonly clinicOptions: readonly { readonly code: string; readonly id: string; readonly name: string }[];
+  readonly history: WorkCyclesHistory | undefined;
+  readonly isLoading: boolean;
+  readonly isOpen: boolean;
+  readonly onOpenChange: (isOpen: boolean) => void;
+  readonly onSubmit: (input: CreateNextWorkCycleInput) => void;
+  readonly submitError: unknown;
+  readonly work: import("@dental-lab/shared").WorkDetail | undefined;
+}): ReactNode {
+  const activeCycle = history?.cycles.find((cycle) => cycle.id === history.activeCycleId) ?? null;
+  const [clinicId, setClinicId] = useState("");
+  const [doctorId, setDoctorId] = useState("");
+  const [reason, setReason] = useState<Exclude<WorkCycleReason, "INITIAL">>("PROBA");
+  const [notes, setNotes] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const doctorsQuery = useQuery({
+    enabled: isOpen && clinicId !== "",
+    queryFn: () => fetchDoctorOptions(clinicId),
+    queryKey: ["doctors", "options", "return-work", clinicId],
+    retry: false,
+  });
+  const isOther = reason === "OTHER";
+  const trimmedNotes = notes.trim();
+  const notesError = submitted && isOther && trimmedNotes.length < 3 ? "Notele sunt obligatorii pentru Alt motiv." : undefined;
+  const clinicError = submitted && clinicId === "" ? "Alege cabinetul." : undefined;
+  const doctorError = submitted && doctorId === "" ? "Alege medicul." : undefined;
+  const canSubmit = clinicId !== "" && doctorId !== "" && (!isOther || trimmedNotes.length >= 3) && Boolean(history?.activeCycleId);
+
+  useEffect(() => {
+    if (isOpen && work) {
+      setClinicId(activeCycle?.clinic.id ?? work.clinic.id);
+      setDoctorId(activeCycle?.doctor?.id ?? work.doctor.id);
+      setReason("PROBA");
+      setNotes("");
+      setSubmitted(false);
+    }
+  }, [activeCycle?.clinic.id, activeCycle?.doctor?.id, isOpen, work]);
+
+  useEffect(() => {
+    if (!doctorsQuery.data || doctorId === "") {
+      return;
+    }
+    if (!doctorsQuery.data.some((doctor) => doctor.id === doctorId)) {
+      setDoctorId("");
+    }
+  }, [doctorId, doctorsQuery.data]);
+
+  return (
+    <Modal
+      description={work ? `${work.code} · se păstrează aceeași lucrare și același cod.` : "Înregistrează revenirea lucrării."}
+      footer={(
+        <Button
+          disabled={!canSubmit}
+          isLoading={isLoading}
+          onClick={() => {
+            setSubmitted(true);
+            if (!canSubmit) {
+              return;
+            }
+            onSubmit({
+              clinicId,
+              doctorId,
+              notes: trimmedNotes.length > 0 ? trimmedNotes : null,
+              reason,
+              ...(history?.activeCycleId ? { expectedActiveCycleId: history.activeCycleId } : {}),
+            });
+          }}
+        >
+          Înregistrează revenirea
+        </Button>
+      )}
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      title="Înregistrează revenirea"
+    >
+      <FormLayout>
+        {submitError ? <ErrorState title="Revenirea nu a fost înregistrată" description={getErrorMessage(submitError)} /> : null}
+        <div className="works-page__return-summary">
+          <MetricCell label="Cod lucrare" value={work?.code ?? "-"} />
+          <MetricCell label="Pacient" value={work?.patientName ?? "-"} />
+          <MetricCell label="Ciclu curent" value={activeCycle ? `Ciclul ${activeCycle.cycleNumber}` : "Nedisponibil"} />
+        </div>
+        <FormGrid>
+          <Select
+            error={clinicError}
+            label="Cabinet"
+            onChange={(event) => {
+              setClinicId(event.target.value);
+              setDoctorId("");
+            }}
+            options={clinicOptions.map((clinic) => ({ label: `${clinic.code} · ${clinic.name}`, value: clinic.id }))}
+            placeholder="Alege cabinet"
+            required
+            value={clinicId}
+          />
+          <Select
+            disabled={clinicId === "" || doctorsQuery.isLoading}
+            error={doctorError}
+            label="Medic"
+            onChange={(event) => setDoctorId(event.target.value)}
+            options={(doctorsQuery.data ?? []).map((doctor) => ({ label: doctor.displayName, value: doctor.id }))}
+            placeholder={clinicId === "" ? "Alege mai întâi cabinetul" : "Alege medic"}
+            required
+            value={doctorId}
+          />
+          <Select
+            label="Motiv revenire"
+            onChange={(event) => {
+              if (returnReasonOptions.some((option) => option.value === event.target.value)) {
+                setReason(event.target.value as Exclude<WorkCycleReason, "INITIAL">);
+              }
+            }}
+            options={returnReasonOptions}
+            required
+            value={reason}
+          />
+        </FormGrid>
+        <Textarea
+          error={notesError}
+          label="Note"
+          onChange={(event) => setNotes(event.target.value)}
+          required={isOther}
+          rows={4}
+          value={notes}
+        />
+        <p className="works-page__muted">
+          Nu se creează o lucrare nouă, nu se preia automat de un tehnician și nu se modifică istoricul ciclurilor închise.
+        </p>
+      </FormLayout>
+    </Modal>
   );
 }
 

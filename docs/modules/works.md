@@ -10,7 +10,7 @@ Manage core dental laboratory work orders from registration through operational 
 
 ## Roles And Permissions
 
-Key permissions include `works.create`, `works.read_all`, `works.read_assigned`, `works.update`, deadline permissions, claim permissions, and execution snapshot permissions.
+Key permissions include `works.create`, `works.read_all`, `works.read_assigned`, `works.update`, deadline permissions, claim permissions, execution snapshot permissions, and cycle permissions (`cycles.read`, `cycles.history.read`, `cycles.create_next`).
 
 ## Domain Concepts
 
@@ -18,11 +18,11 @@ Work code, clinic, doctor, patient, work type, quantity, priority, status, QR to
 
 ## Business Rules
 
-Reception creates works without selecting `NC`/`NG`. Company context is fixed per cycle by first valid technical claim or manager assignment. Work updates use optimistic revision checks where implemented. A work can have multiple cycles while retaining the same work code, patient, and clinic; exactly one cycle is active.
+Reception creates works without selecting `NC`/`NG`. Company context is fixed per cycle by first valid technical claim or manager assignment. Work updates use optimistic revision checks where implemented. A work can have multiple cycles while retaining the same work code and patient; exactly one cycle is active. Returned works are registered at reception through `Înregistrează revenirea`, with required active clinic and doctor selected from registries. The current `WorkOrder` clinic/doctor follow the active cycle, while prior cycle clinic/doctor/snapshots remain immutable history.
 
 ## Data Model
 
-`WorkOrder`, `WorkCycle`, `WorkAssignmentEvent`, `WorkExecutionSnapshot`, `WorkFormSubmission`, workflow/logistics/billing relations.
+`WorkOrder`, `WorkCycle` with per-cycle clinic/doctor/reason/status, `WorkAssignmentEvent`, `WorkExecutionSnapshot`, `WorkFormSubmission`, workflow/logistics/billing relations.
 
 ## API
 
@@ -32,7 +32,7 @@ STATUS-001A adds `GET /status/operational` as a separate read-only aggregate ove
 
 ## UI
 
-`/works` registry, create modal, detail/edit drawer, QR modal, workflow section, deadline and execution context cards. `/status` links into the existing `/works?workId=...` detail flow instead of duplicating work detail UI.
+`/works` registry, create modal, detail/edit drawer, QR modal, workflow section, `Cicluri` history section, `Înregistrează revenirea` modal, deadline and execution context cards. `/status` links into the existing `/works?workId=...` detail flow instead of duplicating work detail UI.
 
 ## Audit
 
@@ -44,15 +44,15 @@ Server-side RBAC, resource visibility, financial masking, CSRF on mutations.
 
 ## Edge Cases
 
-Inactive clinic/doctor/work type, promised date constraints, pricing unresolved at claim, firm mismatch after snapshot, concurrent claim/reassign, active-cycle conflicts, doctor changes between cycles.
+Inactive clinic/doctor/work type, doctor outside selected clinic, missing `OTHER` return notes, promised date constraints, pricing unresolved at claim, firm mismatch after snapshot, concurrent claim/reassign, active-cycle conflicts, clinic/doctor changes between cycles.
 
 ## Implemented Tasks
 
-WORKS-001, QR-001, WORK-DEADLINES-001A/B/C, TECH-CLAIM-001A/B, WORKFORMS-002, WORKFLOW-002, STATUS-001A, STATUS-001B, WORK-CYCLES-001A.
+WORKS-001, QR-001, WORK-DEADLINES-001A/B/C, TECH-CLAIM-001A/B, WORKFORMS-002, WORKFLOW-002, STATUS-001A, STATUS-001B, WORK-CYCLES-001A, WORK-CYCLES-001B.
 
 ## Planned Tasks
 
-WORK-CYCLES-001B cycle return UI/integration and materials/inventory integration.
+Materials/inventory integration.
 
 ## Deferred
 

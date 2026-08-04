@@ -11,7 +11,7 @@ import type { WorkQrTokenService } from "../qr/work-qr-token.service.js";
 import type { AuthorizationService } from "../rbac/authorization.service.js";
 import type { WorkFormSubmissionValidationService } from "../work-forms/work-form-submission-validation.service.js";
 import type { WorkflowExecutionService } from "../workflow-execution/workflow-execution.service.js";
-import { CreateWorkDto } from "./dto/works.dto.js";
+import { CreateNextWorkCycleDto, CreateWorkDto } from "./dto/works.dto.js";
 import type { WorkDeadlineService } from "./work-deadline.service.js";
 import type { WorkOrderCodeService } from "./work-order-code.service.js";
 import { calculateTotalPriceMinor, parseDateOnly, WorksService } from "./works.service.js";
@@ -593,15 +593,18 @@ describe("WorksService", () => {
     });
     const auditCreate = vi.fn().mockResolvedValue({});
     const workflowCreate = vi.fn().mockResolvedValue("workflow_2");
+    const workCycleCreate = vi.fn().mockResolvedValue({ cycleNumber: 2, id: "cycle_2" });
+    const workOrderUpdate = vi.fn().mockResolvedValue({});
     const service = createService({
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
           $queryRaw: vi.fn().mockResolvedValue([]),
           auditLog: { create: auditCreate },
+          clinic: { findUnique: vi.fn().mockResolvedValue({ isActive: true }) },
           doctor: { findUnique: vi.fn().mockResolvedValue({ clinicId: "clinic_1", isActive: true }) },
           logisticsEvent: { create: vi.fn().mockResolvedValue({}) },
           workCycle: {
-            create: vi.fn().mockResolvedValue({ cycleNumber: 2, id: "cycle_2" }),
+            create: workCycleCreate,
             findFirst: vi.fn().mockResolvedValue({ cycleNumber: 1 }),
             update: vi.fn().mockResolvedValue({}),
           },
@@ -619,29 +622,49 @@ describe("WorksService", () => {
               patientId: "patient_1",
               patientName: "Ion Pop",
             }),
-            update: vi.fn().mockResolvedValue({}),
+            update: workOrderUpdate,
           },
         }),
       ),
+      clinic: { findUnique: vi.fn().mockResolvedValue({ isActive: true }) },
       doctor: { findUnique: vi.fn().mockResolvedValue({ clinicId: "clinic_1", isActive: true }) },
       workOrder: { findUnique: vi.fn().mockResolvedValue(before) },
     }, {
       hasPermission: vi.fn().mockResolvedValue({ allowed: false, effectiveScopes: [], permission: "pricing.read" }),
-      requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ALL"], permission: "works.update" }),
+      requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ALL"], permission: "cycles.create_next" }),
     }, undefined, undefined, undefined, undefined, { createSnapshotForWork: workflowCreate });
 
     const result = await service.createNextCycle(
       { actorUserId: "actor_1", requestMetadata: {} },
       legalEntity,
       "work_order_1",
-      { expectedActiveCycleId: "cycle_1", reason: "REPAIR", reasonNotes: "Retur medic" },
+      { clinicId: "clinic_1", doctorId: "doctor_1", expectedActiveCycleId: "cycle_1", notes: "Retur medic", reason: "REPAIR" },
       false,
     );
 
+    expect(workflowCreate).toHaveBeenCalledTimes(1);
     expect(workflowCreate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       workCycleId: "cycle_2",
       workOrderId: "work_order_1",
     }));
+    expect(workCycleCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        clinicId: "clinic_1",
+        doctorId: "doctor_1",
+        reason: "REPAIR",
+        reasonNotes: "Retur medic",
+      }),
+    });
+    expect(workOrderUpdate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        assignedTechnicianId: null,
+        claimStatus: "UNCLAIMED",
+        clinicId: "clinic_1",
+        doctorId: "doctor_1",
+        executionLegalEntityId: null,
+      }),
+      where: { id: "work_order_1" },
+    });
     expect(auditCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({ action: "work_cycles.closed", resourceId: "work_order_1" }),
     });
@@ -649,6 +672,60 @@ describe("WorksService", () => {
       data: expect.objectContaining({ action: "work_cycles.created", resourceId: "work_order_1" }),
     });
     expect(result.activeCycleId).toBe("cycle_2");
+  });
+
+  it("requires notes for OTHER return reason before creating a new cycle", async () => {
+    const service = createService({
+      workOrder: { findUnique: vi.fn().mockResolvedValue(workOrder()) },
+    }, {
+      hasPermission: vi.fn().mockResolvedValue({ allowed: false, effectiveScopes: [], permission: "pricing.read" }),
+      requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ALL"], permission: "cycles.create_next" }),
+    });
+
+    await expect(service.createNextCycle(
+      { actorUserId: "actor_1", requestMetadata: {} },
+      legalEntity,
+      "work_order_1",
+      { clinicId: "clinic_1", doctorId: "doctor_1", expectedActiveCycleId: "cycle_1", reason: "OTHER" },
+      false,
+    )).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("rejects returned cycle doctor outside the selected clinic", async () => {
+    const service = createService({
+      clinic: { findUnique: vi.fn().mockResolvedValue({ isActive: true }) },
+      doctor: { findUnique: vi.fn().mockResolvedValue({ clinicId: "clinic_2", isActive: true }) },
+      workOrder: { findUnique: vi.fn().mockResolvedValue(workOrder()) },
+    }, {
+      hasPermission: vi.fn().mockResolvedValue({ allowed: false, effectiveScopes: [], permission: "pricing.read" }),
+      requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ALL"], permission: "cycles.create_next" }),
+    });
+
+    await expect(service.createNextCycle(
+      { actorUserId: "actor_1", requestMetadata: {} },
+      legalEntity,
+      "work_order_1",
+      { clinicId: "clinic_1", doctorId: "doctor_2", expectedActiveCycleId: "cycle_1", reason: "PROBA" },
+      false,
+    )).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("rejects inactive clinics for returned cycle registration", async () => {
+    const service = createService({
+      clinic: { findUnique: vi.fn().mockResolvedValue({ isActive: false }) },
+      workOrder: { findUnique: vi.fn().mockResolvedValue(workOrder()) },
+    }, {
+      hasPermission: vi.fn().mockResolvedValue({ allowed: false, effectiveScopes: [], permission: "pricing.read" }),
+      requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ALL"], permission: "cycles.create_next" }),
+    });
+
+    await expect(service.createNextCycle(
+      { actorUserId: "actor_1", requestMetadata: {} },
+      legalEntity,
+      "work_order_1",
+      { clinicId: "clinic_1", doctorId: "doctor_1", expectedActiveCycleId: "cycle_1", reason: "FINISHING" },
+      false,
+    )).rejects.toBeInstanceOf(BadRequestException);
   });
 });
 
@@ -674,5 +751,22 @@ describe("CreateWorkDto", () => {
 
     expect(fields).toContain("patientName");
     expect(fields).toContain("quantity");
+  });
+});
+
+describe("CreateNextWorkCycleDto", () => {
+  it("accepts all machine-readable return reasons added for reception returns", async () => {
+    for (const reason of ["PROBA", "FINISHING", "ADJUSTMENT", "REPAIR", "REMAKE", "WARRANTY", "CLARIFICATION", "OTHER"] as const) {
+      const dto = plainToInstance(CreateNextWorkCycleDto, {
+        clinicId: "clinic_1",
+        doctorId: "doctor_1",
+        notes: reason === "OTHER" ? "Motiv detaliat" : undefined,
+        reason,
+      });
+
+      const fields = (await validate(dto)).map((error) => error.property);
+
+      expect(fields).not.toContain("reason");
+    }
   });
 });

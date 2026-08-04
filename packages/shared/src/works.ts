@@ -14,6 +14,8 @@ export const WORK_CLAIM_STATUSES = ["UNCLAIMED", "CLAIMED"] as const;
 export const WORK_CLAIM_SOURCES = ["TECHNICIAN_CLAIM", "MANAGER_ASSIGNMENT", "MANAGER_REASSIGNMENT", "TECHNICIAN_RELEASE", "MANAGER_RELEASE", "LEGACY_BACKFILL"] as const;
 export const WORK_ASSIGNMENT_EVENT_TYPES = ["CLAIMED", "RELEASED", "ASSIGNED", "REASSIGNED"] as const;
 export const EXECUTION_SNAPSHOT_STATUSES = ["NOT_CREATED", "LOCKED", "INVALID"] as const;
+export const WORK_CYCLE_REASONS = ["INITIAL", "PROBA", "FINISHING", "ADJUSTMENT", "REPAIR", "REMAKE", "WARRANTY", "CLARIFICATION", "OTHER"] as const;
+export const WORK_CYCLE_STATUSES = ["ACTIVE", "CLOSED"] as const;
 
 export type WorkStatus = (typeof WORK_STATUSES)[number];
 export type WorkPriority = (typeof WORK_PRIORITIES)[number];
@@ -25,6 +27,8 @@ export type WorkClaimStatus = (typeof WORK_CLAIM_STATUSES)[number];
 export type WorkClaimSource = (typeof WORK_CLAIM_SOURCES)[number];
 export type WorkAssignmentEventType = (typeof WORK_ASSIGNMENT_EVENT_TYPES)[number];
 export type ExecutionSnapshotStatus = (typeof EXECUTION_SNAPSHOT_STATUSES)[number];
+export type WorkCycleReason = (typeof WORK_CYCLE_REASONS)[number];
+export type WorkCycleStatus = (typeof WORK_CYCLE_STATUSES)[number];
 
 export interface WorkClinicSummary {
   readonly code: string;
@@ -198,6 +202,63 @@ export interface WorkDetail extends Omit<WorkSummary, "workflow"> {
   readonly version: number;
   readonly workForm: WorkFormSubmissionView | null;
   readonly workflow: WorkWorkflowExecutionView | null;
+}
+
+export interface WorkCycleView {
+  readonly id: string;
+  readonly cycleNumber: number;
+  readonly reason: WorkCycleReason;
+  readonly reasonNotes: string | null;
+  readonly status: WorkCycleStatus;
+  readonly openedAt: string;
+  readonly closedAt: string | null;
+  readonly createdBy: WorkClaimUserSummary | null;
+  readonly clinic: WorkClinicSummary;
+  readonly doctor: WorkDoctorSummary | null;
+  readonly executionCompany: WorkClaimLegalEntitySummary | null;
+  readonly workflow: {
+    readonly id: string | null;
+    readonly status: string | null;
+  };
+  readonly logistics: {
+    readonly id: string | null;
+    readonly status: string | null;
+  };
+  readonly delivery: {
+    readonly activePreparationItemCount: number;
+  };
+  readonly deadline: {
+    readonly effectiveDueAt: string | null;
+    readonly mode: WorkDeadlineMode | null;
+    readonly snapshot: unknown | null;
+  };
+  readonly executionSnapshot: {
+    readonly snapshot: unknown | null;
+    readonly status: ExecutionSnapshotStatus | null;
+    readonly version: number | null;
+  };
+  readonly pricingSnapshot: unknown | null;
+}
+
+export interface WorkCyclesHistory {
+  readonly activeCycleId: string | null;
+  readonly cycles: readonly WorkCycleView[];
+  readonly work: {
+    readonly clinicId: string;
+    readonly code: string;
+    readonly doctorId: string;
+    readonly id: string;
+    readonly patientId: string | null;
+    readonly patientName: string;
+  };
+}
+
+export interface CreateNextWorkCycleInput {
+  readonly clinicId: string;
+  readonly doctorId: string;
+  readonly reason: Exclude<WorkCycleReason, "INITIAL">;
+  readonly notes?: string | null;
+  readonly expectedActiveCycleId?: string;
 }
 
 export interface CreateWorkInput {

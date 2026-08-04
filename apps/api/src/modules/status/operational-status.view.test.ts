@@ -9,6 +9,7 @@ import {
 
 function createWorkRecord(input: {
   readonly claimStatus?: "CLAIMED" | "UNCLAIMED";
+  readonly cycleNumber?: number;
   readonly deliveryStatus?: "DELIVERED" | "IN_TRANSIT" | null;
   readonly effectiveDueAt?: Date | null;
   readonly logisticsStatus?: "DELIVERED" | "HANDED_TO_DELIVERY" | "IN_PRODUCTION" | null;
@@ -86,7 +87,7 @@ function createWorkRecord(input: {
     internalNotes: null,
     invoicedDocumentId: null,
     activeCycle: {
-      cycleNumber: 1,
+      cycleNumber: input.cycleNumber ?? 1,
       id: "cycle_1",
       reason: "INITIAL",
       status: "ACTIVE",
@@ -163,7 +164,7 @@ describe("operational status view", () => {
     expect(row.deadline.state).toBe("DUE_TODAY");
     expect(JSON.stringify(row)).not.toContain("totalPriceMinor");
     expect(JSON.stringify(row)).not.toContain("baseUnitPriceMinor");
-    expect(row.currentCycle).toMatchObject({ label: "Cycle 1", number: 1, reason: "INITIAL", status: "ACTIVE" });
+    expect(row.currentCycle).toMatchObject({ code: "CYCLE_1", label: "Ciclul 1", number: 1, reason: "INITIAL", status: "ACTIVE" });
   });
 
   it("classifies required tabs from existing operational state", () => {
@@ -182,5 +183,12 @@ describe("operational status view", () => {
     const returned = createOperationalStatusCounters(rows).find((counter) => counter.tab === "RETURNED");
 
     expect(returned?.count).toBe(0);
+  });
+
+  it("classifies active cycle 2 as returned while not delivered", () => {
+    const row = toOperationalStatusRow(createWorkRecord({ cycleNumber: 2 }), new Date("2026-08-04T08:00:00.000Z"));
+
+    expect(row.currentCycle?.label).toBe("Ciclul 2");
+    expect(matchesOperationalStatusTab(row, "RETURNED")).toBe(true);
   });
 });

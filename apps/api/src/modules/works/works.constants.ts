@@ -3,7 +3,7 @@ export const WORK_ORDER_SORT_FIELDS = ["code", "createdAt", "effectiveDueAt", "p
 export const WORK_PRIORITIES = ["NORMAL", "URGENT"] as const;
 export const WORK_STATUSES = ["REGISTERED"] as const;
 export const WORK_CLAIM_STATUSES = ["UNCLAIMED", "CLAIMED"] as const;
-export const WORK_CYCLE_REASONS = ["INITIAL", "ADJUSTMENT", "REPAIR", "REMAKE", "WARRANTY", "OTHER"] as const;
+export const WORK_CYCLE_REASONS = ["INITIAL", "PROBA", "FINISHING", "ADJUSTMENT", "REPAIR", "REMAKE", "WARRANTY", "CLARIFICATION", "OTHER"] as const;
 export const SORT_DIRECTIONS = ["asc", "desc"] as const;
 export const MAX_WORK_ORDER_QUANTITY = 99;
 

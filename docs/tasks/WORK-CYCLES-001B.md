@@ -2,11 +2,11 @@
 
 ## Status
 
-APPROVED
+COMPLETED
 
 ## Objective
 
-Expose the `WorkCycle` lifecycle in the application so authorized users can see previous cycles, register a work returned from the doctor, open the next cycle, and understand the complete work history without creating a duplicate `WorkOrder`.
+Expose the `WorkCycle` lifecycle in the application so authorized users can see previous cycles, register a work physically returned to reception, open the next cycle, and understand the complete work history without creating a duplicate `WorkOrder`.
 
 ## Dependencies
 
@@ -49,27 +49,65 @@ Expose the `WorkCycle` lifecycle in the application so authorized users can see 
 - Preserve and display the same `WorkOrder` code across cycles.
 - Do not duplicate the works page or create a separate work detail implementation.
 
-### Register return from doctor
+### Register return at reception
 
-- Add an authorized action labeled `Lucrarea a revenit`.
+- Add an authorized action labeled `Înregistrează revenirea`.
+- Primary flow:
+  - Reception searches the work by work code or resolves it through QR.
+  - Reception opens the existing work.
+  - Reception selects `Înregistrează revenirea`.
+  - Reception confirms or reselects the source clinic and doctor from the existing registries.
+  - Reception selects the return reason.
+  - Reception adds notes when required.
+  - The system calls the existing create-next-cycle API extended by this task.
+  - The same `WorkOrder` and work code are preserved.
+  - The previous cycle remains immutable.
+  - The newly created cycle becomes active.
 - Open a confirmation form/modal, not `browser confirm()`.
 - Require return reason.
-- Support Romanian labels mapped to existing backend cycle reasons:
-  - `Probă`
-  - `Finisare`
-  - `Ajustare`
-  - `Reparație`
-  - `Refacere`
-  - `Garanție`
-  - `Clarificare`
-  - `Alt motiv`
-- Require notes when `Alt motiv` is selected.
-- Allow selecting the doctor and clinic for the new cycle where permitted.
-- Doctor may differ from the previous cycle.
-- Call the existing create-next-cycle API from WORK-CYCLES-001A.
+- Extend backend cycle reasons with distinct machine-readable values for `PROBA`, `FINISHING`, and `CLARIFICATION`; do not map them to `OTHER`.
+- Support Romanian labels:
+  - `PROBA` — `Probă`
+  - `FINISHING` — `Finisare`
+  - `ADJUSTMENT` — `Ajustare`
+  - `REPAIR` — `Reparație`
+  - `REMAKE` — `Refacere`
+  - `WARRANTY` — `Garanție`
+  - `CLARIFICATION` — `Clarificare`
+  - `OTHER` — `Alt motiv`
+- Require notes when `OTHER` / `Alt motiv` is selected.
+- Notes remain optional for all other reasons.
+- Clinic selector is required.
+- Doctor selector is required and filtered by selected clinic.
+- Clinic and doctor default to the previous cycle/work values and may be reselected.
+- Doctors are selected from the existing Doctor registry, do not need `User` accounts, and never call the mutation endpoint directly.
+- Extend the create-next-cycle API contract with `clinicId`, `doctorId`, `reason`, `notes` and the existing expected revision/version field.
 - Prevent double submit.
 - Handle revision/conflict errors.
 - Refresh work, cycle history, status, and affected logistics queries.
+
+### Backend compatibility changes
+
+- Create one deterministic non-destructive migration.
+- Extend `WorkCycleReason` with `PROBA`, `FINISHING`, and `CLARIFICATION`.
+- Store the selected clinic on every cycle.
+- Backfill existing cycle clinic data from the owning `WorkOrder` only where required and unambiguous.
+- Preserve existing cycle rows.
+- Do not reset or recreate the database.
+- Validate on create-next-cycle:
+  - `clinicId` is required.
+  - `doctorId` is required.
+  - The selected doctor belongs to the selected clinic.
+  - Clinic and doctor are active.
+  - `OTHER` requires notes.
+  - Reception and manager may create the next cycle.
+  - Technician, courier and doctor users cannot create the next cycle unless explicitly granted outside the role defaults.
+- Operational reset for the new cycle:
+  - Return the work to the appropriate reception/available operational state.
+  - Clear active technician ownership.
+  - Create no execution snapshot until the normal claim flow occurs.
+  - Do not reuse the previous cycle pricing, deadline or execution snapshot as the active cycle snapshot.
+  - Preserve previous-cycle snapshots as immutable history.
 
 ### Lifecycle visibility
 
@@ -104,11 +142,11 @@ Expose the `WorkCycle` lifecycle in the application so authorized users can see 
   - `cycles.history.read`
 - Recommended behavior:
   - manager: read/create/history;
-  - logistics: read/create/history if responsible for returned intake;
-  - reception: read/create/history if the real workflow permits returned work registration;
+  - reception: read/create/history for returned work registration;
+  - logistics: read/history only unless an existing approved permission already grants intake mutation;
   - technician: read/history, no create-next by default;
   - courier: limited read only;
-  - doctor: only external-visible status if already supported; no internal history mutation.
+  - doctor users, when they exist: no create-next permission.
 - Do not use role-name checks. Use permissions.
 - Permission checks must be enforced server-side and reflected in the UI.
 
@@ -196,24 +234,47 @@ Expose the `WorkCycle` lifecycle in the application so authorized users can see 
 9. Previous cycle history is preserved.
 10. Previous workflow/logistics/delivery history is preserved.
 11. Execution, pricing, and deadline snapshots are not modified.
-12. Doctor/clinic may be selected for the new cycle according to permissions.
+12. Clinic and doctor are required, active, and validated against each other for the new cycle.
 13. `/status` displays current cycle.
 14. Returned works are visible in the `Revenite` tab.
 15. Financial fields are not exposed.
 16. Permission checks are enforced server-side and reflected in UI.
 17. Loading, empty, error, and conflict states exist.
 18. Double submission is prevented.
-19. Tests pass.
-20. Typecheck passes.
-21. Build passes.
-22. Documentation is updated.
-23. One commit only.
-24. Working tree is clean.
-25. No next task is started.
+19. New machine-readable reasons `PROBA`, `FINISHING`, and `CLARIFICATION` are supported without mapping to `OTHER`.
+20. Reception and manager can create next cycles; technician, courier and doctor defaults cannot.
+21. New cycles clear active technician ownership and do not create execution snapshots.
+22. Tests pass.
+23. Typecheck passes.
+24. Build passes.
+25. Documentation is updated.
+26. One commit only.
+27. Working tree is clean.
+28. No next task is started.
 
 ## Verification
 
 Run the standard checks from [../TESTING.md](../TESTING.md). Add focused component/integration tests for the cycle UI and returned-work flow.
+
+Completed verification:
+
+- Prisma schema validation and generation.
+- Typecheck.
+- Unit/component tests, including return reasons, clinic/doctor validation, permission matrix, status returned-tab integration, work detail cycle history, and returned-work form submission.
+- Build.
+- `git diff --check`.
+
+## Implementation Notes
+
+- Added distinct machine-readable cycle reasons `PROBA`, `FINISHING`, and `CLARIFICATION`.
+- Added deterministic non-destructive migration `20260804153000_work_cycle_return_reasons`.
+- Added per-cycle clinic persistence with backfill from owning `WorkOrder`.
+- Extended create-next-cycle API with required `clinicId`, `doctorId`, `reason`, `notes`, and active-cycle expectation.
+- Enforced active clinic/doctor validation and doctor-within-clinic validation.
+- Enforced `OTHER` notes validation.
+- Added granular cycle permissions and default grants for manager/reception create, logistics/technician history/read, courier limited read, and no doctor create-next grant.
+- Added `Cicluri` history and `Înregistrează revenirea` flow in work detail.
+- Integrated current cycle display into `/status` through existing STATUS-001A data.
 
 ## Commit
 

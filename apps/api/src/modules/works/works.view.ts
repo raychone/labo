@@ -295,6 +295,7 @@ export interface WorkCycleView {
   readonly openedAt: string;
   readonly closedAt: string | null;
   readonly createdBy: { readonly displayName: string; readonly publicId: string } | null;
+  readonly clinic: { readonly code: string; readonly id: string; readonly name: string };
   readonly doctor: { readonly displayName: string; readonly id: string } | null;
   readonly executionCompany: { readonly code: string; readonly displayName: string } | null;
   readonly workflow: { readonly id: string | null; readonly status: string | null };
@@ -330,6 +331,13 @@ export const workCycleHistoryInclude = {
         select: {
           displayName: true,
           id: true,
+        },
+      },
+      clinic: {
+        select: {
+          code: true,
+          id: true,
+          name: true,
         },
       },
       deliveryPreparationItems: {
@@ -665,6 +673,11 @@ export function toWorkCyclesHistoryView(workOrder: WorkCycleHistoryRecord, inclu
       closedAt: cycle.closedAt?.toISOString() ?? null,
       createdBy: cycle.createdBy ? { displayName: cycle.createdBy.displayName, publicId: cycle.createdBy.id } : null,
       cycleNumber: cycle.cycleNumber,
+      clinic: {
+        code: cycle.clinic.code,
+        id: cycle.clinic.id,
+        name: cycle.clinic.name,
+      },
       deadline: {
         effectiveDueAt: cycle.deadlineEffectiveDueAtSnapshot?.toISOString() ?? null,
         mode: cycle.deadlineModeSnapshot,

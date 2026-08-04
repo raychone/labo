@@ -46,7 +46,7 @@ const operationalStatusResponse: OperationalStatusResponse = {
     { count: 1, label: "Disponibile", tab: "AVAILABLE" },
     { count: 1, label: "Întârziate", tab: "LATE" },
     { count: 0, label: "Plecate la medic", tab: "AT_CLINIC" },
-    { count: 0, label: "Revenite", tab: "RETURNED" },
+    { count: 1, label: "Revenite", tab: "RETURNED" },
     { count: 0, label: "Finalizate", tab: "COMPLETED" },
   ],
   items: [
@@ -54,7 +54,7 @@ const operationalStatusResponse: OperationalStatusResponse = {
       claimStatus: "CLAIMED",
       clinic: { id: "clinic_1", name: "Clinica Test" },
       createdAt: "2026-08-04T07:00:00.000Z",
-      currentCycle: null,
+      currentCycle: { code: "CYCLE_2", label: "Ciclul 2" },
       currentStageTechnician: { displayName: "Tehnician Ana", publicId: "tech_1" },
       deadline: {
         badge: "Astăzi",
@@ -139,6 +139,7 @@ describe("StatusPage", () => {
     expect((await screen.findAllByText("WO-2026-000001")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Maria Ionescu").length).toBeGreaterThan(0);
     expect(screen.getAllByText("1/4").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Ciclul 2").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Tehnician Ana").length).toBeGreaterThan(0);
     expect(screen.getByText(/rezultate limitate la 1000/)).toBeDefined();
     expect(screen.queryByText(/120,00|RON|factură|preț/i)).toBeNull();

@@ -62,6 +62,9 @@ export type PermissionKey =
   | "works.execution_snapshot.read_deadline"
   | "works.execution_snapshot.history.read"
   | "works.execution_snapshot.create"
+  | "cycles.read"
+  | "cycles.history.read"
+  | "cycles.create_next"
   | "scan.use"
   | "scan.resolve"
   | "workflow.read"
@@ -205,6 +208,9 @@ export const PERMISSION_REGISTRY = [
   definePermission("works.execution_snapshot.read_deadline", "Read execution snapshot deadline fields."),
   definePermission("works.execution_snapshot.history.read", "Read execution snapshot references in assignment history."),
   definePermission("works.execution_snapshot.create", "Create execution snapshots through claim or manager assignment."),
+  definePermission("cycles.read", "Read current work cycle state."),
+  definePermission("cycles.history.read", "Read work cycle history."),
+  definePermission("cycles.create_next", "Register a returned work and create the next work cycle."),
   definePermission("scan.use", "Use operational QR scanner."),
   definePermission("scan.resolve", "Resolve operational QR scan context."),
   definePermission("workflow.read", "Read workflows."),
@@ -333,6 +339,7 @@ export const ROLE_PERMISSION_MATRIX = {
   CURIER: grants({
     "comments.create": "ALL",
     "comments.read_external": "ALL",
+    "cycles.read": "OWN_DELIVERY",
     "delivery.capture_signature": "OWN_DELIVERY",
     "delivery.complete": "OWN_DELIVERY",
     "delivery.deliver": "OWN_DELIVERY",
@@ -354,6 +361,8 @@ export const ROLE_PERMISSION_MATRIX = {
     "comments.create": "ALL",
     "comments.read_external": "ALL",
     "comments.read_internal": "ALL",
+    "cycles.history.read": "ALL",
+    "cycles.read": "ALL",
     "delivery.assign": "ALL",
     "delivery.cancel": "ALL",
     "delivery.create": "ALL",
@@ -412,6 +421,9 @@ export const ROLE_PERMISSION_MATRIX = {
     "comments.create": "ALL",
     "comments.read_external": "ALL",
     "comments.read_internal": "ALL",
+    "cycles.create_next": "ALL",
+    "cycles.history.read": "ALL",
+    "cycles.read": "ALL",
     "delivery.read": "ALL",
     "delivery.proof.print": "ALL",
     "delivery.signature.read": "ALL",
@@ -453,6 +465,8 @@ export const ROLE_PERMISSION_MATRIX = {
     "comments.create": "ALL",
     "comments.read_external": "ALL",
     "comments.read_internal": "ALL",
+    "cycles.history.read": "ASSIGNED",
+    "cycles.read": "ASSIGNED",
     "files.read": "ASSIGNED",
     "files.upload": "ASSIGNED",
     "forms.read": "ALL",
@@ -508,6 +522,9 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "doctors.create",
   "doctors.read",
   "doctors.update",
+  "cycles.create_next",
+  "cycles.history.read",
+  "cycles.read",
   "files.delete",
   "files.read",
   "forms.archive",

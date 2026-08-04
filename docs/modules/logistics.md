@@ -18,7 +18,7 @@ Location, block reason, packing readiness, preparation group, logistics event.
 
 ## Business Rules
 
-Physical status is operational and shared across `NC`/`NG`; financial fields must remain masked for non-financial roles. Current logistics APIs resolve the active work cycle.
+Physical status is operational and shared across `NC`/`NG`; financial fields must remain masked for non-financial roles. Current logistics APIs resolve the active work cycle. Registering a returned work creates a new active cycle with logistics state reset to reception/received and preserves previous-cycle logistics history.
 
 ## Data Model
 
@@ -42,15 +42,15 @@ RBAC and resource validation.
 
 ## Edge Cases
 
-Blocked work, already grouped work, cancelled groups, packing completion conflicts.
+Blocked work, already grouped work, cancelled groups, packing completion conflicts, returned work opening a new active cycle.
 
 ## Implemented Tasks
 
-LOGISTICS-001, STATUS-001A read-model integration, WORK-CYCLES-001A cycle scoping.
+LOGISTICS-001, STATUS-001A read-model integration, WORK-CYCLES-001A cycle scoping, WORK-CYCLES-001B return/status integration.
 
 ## Planned Tasks
 
-WORK-CYCLES-001B cycle-aware return/status integration and future dashboard integration.
+Future dashboard integration.
 
 ## Deferred
 
@@ -58,7 +58,7 @@ Inventory handoff.
 
 ## Open Decisions
 
-Final physical labels and return cycle language.
+Final physical labels beyond implemented returned-work language.
 
 ## Related Documents
 

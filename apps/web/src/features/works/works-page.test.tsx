@@ -250,6 +250,58 @@ const qrResponse = {
   workId: "work_order_1",
 };
 
+const cycleHistoryResponse = {
+  activeCycleId: "cycle_2",
+  cycles: [
+    {
+      clinic: { code: "CL-0001", id: "clinic_1", name: "Clinica Test" },
+      closedAt: "2026-08-02T10:00:00.000Z",
+      createdBy: { displayName: "Receptie", publicId: "user_1" },
+      cycleNumber: 1,
+      deadline: { effectiveDueAt: "2026-08-01T10:00:00.000Z", mode: "CALCULATED", snapshot: null },
+      delivery: { activePreparationItemCount: 0 },
+      doctor: { displayName: "Dr. Ana Popescu", id: "doctor_1" },
+      executionCompany: { code: "NC", displayName: "Nicolaie Cristina" },
+      executionSnapshot: { snapshot: null, status: "LOCKED", version: 1 },
+      id: "cycle_1",
+      logistics: { id: "logistics_1", status: "DELIVERED" },
+      openedAt: "2026-07-22T12:00:00.000Z",
+      pricingSnapshot: null,
+      reason: "INITIAL",
+      reasonNotes: null,
+      status: "CLOSED",
+      workflow: { id: "workflow_1", status: "COMPLETED" },
+    },
+    {
+      clinic: { code: "CL-0001", id: "clinic_1", name: "Clinica Test" },
+      closedAt: null,
+      createdBy: { displayName: "Receptie", publicId: "user_1" },
+      cycleNumber: 2,
+      deadline: { effectiveDueAt: "2026-08-05T10:00:00.000Z", mode: "CALCULATED", snapshot: null },
+      delivery: { activePreparationItemCount: 0 },
+      doctor: { displayName: "Dr. Ana Popescu", id: "doctor_1" },
+      executionCompany: null,
+      executionSnapshot: { snapshot: null, status: null, version: null },
+      id: "cycle_2",
+      logistics: { id: "logistics_2", status: "RECEIVED" },
+      openedAt: "2026-08-02T10:00:00.000Z",
+      pricingSnapshot: null,
+      reason: "PROBA",
+      reasonNotes: null,
+      status: "ACTIVE",
+      workflow: { id: "workflow_2", status: "ACTIVE" },
+    },
+  ],
+  work: {
+    clinicId: "clinic_1",
+    code: "WO-2026-000001",
+    doctorId: "doctor_1",
+    id: "work_order_1",
+    patientId: "patient_1",
+    patientName: "Ion Pop",
+  },
+};
+
 const clinicOptionsResponse = [
   { code: "CL-0001", id: "clinic_1", name: "Clinica Test" },
   { code: "CL-0002", id: "clinic_2", name: "Clinica Noua" },
@@ -472,5 +524,130 @@ describe("WorksPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Pornește etapa" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/workflow/stages/stage_exec_1/start"), expect.objectContaining({ method: "POST" })));
+  });
+
+  it("shows cycle history in the work detail drawer for authorized users", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/auth/permissions")) {
+        return Promise.resolve(createJsonResponse({
+          permissions: [
+            { key: "cycles.history.read", scopes: ["ALL"] },
+            { key: "cycles.read", scopes: ["ALL"] },
+            { key: "works.read_all", scopes: ["ALL"] },
+          ],
+        }));
+      }
+      if (url.includes("/works/work_order_1/cycles")) {
+        return Promise.resolve(createJsonResponse(cycleHistoryResponse));
+      }
+      if (url.includes("/works/work_order_1/workflow")) {
+        return Promise.resolve(createJsonResponse(workflowResponse));
+      }
+      if (url.includes("/works/work_order_1")) {
+        return Promise.resolve(createJsonResponse(workDetail));
+      }
+      if (url.includes("/works/work-type-options")) {
+        return Promise.resolve(createJsonResponse(workTypeOptionsResponse));
+      }
+      if (url.includes("/clinics/options")) {
+        return Promise.resolve(createJsonResponse(clinicOptionsResponse));
+      }
+      if (url.includes("/works?")) {
+        return Promise.resolve(createJsonResponse(worksListResponse));
+      }
+
+      return Promise.resolve(createJsonResponse({}, 404));
+    }));
+
+    renderWithProviders(<WorksPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
+
+    expect(await screen.findByRole("heading", { name: "Cicluri" })).toBeDefined();
+    expect((await screen.findAllByText("Ciclul 2")).length).toBeGreaterThan(0);
+    expect(await screen.findByText("Probă")).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Înregistrează revenirea" })).toBeNull();
+  });
+
+  it("registers a returned work with clinic, doctor and distinct return reason", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/auth/permissions")) {
+        return Promise.resolve(createJsonResponse({
+          permissions: [
+            { key: "cycles.create_next", scopes: ["ALL"] },
+            { key: "cycles.history.read", scopes: ["ALL"] },
+            { key: "cycles.read", scopes: ["ALL"] },
+            { key: "works.read_all", scopes: ["ALL"] },
+          ],
+        }));
+      }
+      if (url.endsWith("/auth/csrf")) {
+        return Promise.resolve(createJsonResponse({ csrfToken: "csrf-token" }));
+      }
+      if (url.includes("/works/work_order_1/cycles/next")) {
+        expect(init?.method).toBe("POST");
+        expect(init?.body).toBe(JSON.stringify({
+          clinicId: "clinic_1",
+          doctorId: "doctor_1",
+          expectedActiveCycleId: "cycle_2",
+          notes: "Necesită clarificare ocluzie",
+          reason: "CLARIFICATION",
+        }));
+        return Promise.resolve(createJsonResponse({
+          ...cycleHistoryResponse,
+          activeCycleId: "cycle_3",
+          cycles: [
+            ...cycleHistoryResponse.cycles.map((cycle) => cycle.id === "cycle_2" ? { ...cycle, closedAt: "2026-08-03T10:00:00.000Z", status: "CLOSED" } : cycle),
+            {
+              ...cycleHistoryResponse.cycles[1],
+              cycleNumber: 3,
+              id: "cycle_3",
+              openedAt: "2026-08-03T10:00:00.000Z",
+              reason: "CLARIFICATION",
+              reasonNotes: "Necesită clarificare ocluzie",
+              status: "ACTIVE",
+            },
+          ],
+        }));
+      }
+      if (url.includes("/works/work_order_1/cycles")) {
+        return Promise.resolve(createJsonResponse(cycleHistoryResponse));
+      }
+      if (url.includes("/works/work_order_1/workflow")) {
+        return Promise.resolve(createJsonResponse(workflowResponse));
+      }
+      if (url.includes("/works/work_order_1")) {
+        return Promise.resolve(createJsonResponse(workDetail));
+      }
+      if (url.includes("/doctors/options")) {
+        return Promise.resolve(createJsonResponse(doctorOptionsResponse));
+      }
+      if (url.includes("/works/work-type-options")) {
+        return Promise.resolve(createJsonResponse(workTypeOptionsResponse));
+      }
+      if (url.includes("/clinics/options")) {
+        return Promise.resolve(createJsonResponse(clinicOptionsResponse));
+      }
+      if (url.includes("/works?")) {
+        return Promise.resolve(createJsonResponse(worksListResponse));
+      }
+
+      return Promise.resolve(createJsonResponse({}, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(<WorksPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Înregistrează revenirea" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Înregistrează revenirea" });
+    fireEvent.change(within(dialog).getByLabelText("Motiv revenire"), { target: { value: "CLARIFICATION" } });
+    fireEvent.change(within(dialog).getByLabelText("Note"), { target: { value: "Necesită clarificare ocluzie" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Înregistrează revenirea" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/works/work_order_1/cycles/next"), expect.objectContaining({ method: "POST" })));
   });
 });

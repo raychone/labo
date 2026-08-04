@@ -359,8 +359,8 @@ export class WorksService {
 
   public async listCycles(actorUserId: string, workOrderId: string, includePricing: boolean): Promise<WorkCyclesHistoryView> {
     await this.authorizationService.requirePermission({
-      permission: "works.read_all",
-      requiredScope: "ALL",
+      permission: "cycles.history.read",
+      requiredScope: "ASSIGNED",
       userId: actorUserId,
     });
     const workOrder = await this.prisma.workOrder.findUnique({
@@ -375,7 +375,7 @@ export class WorksService {
 
   public async createNextCycle(context: ActorContext, legalEntity: LegalEntityContext, workOrderId: string, dto: CreateNextWorkCycleDto, includePricing: boolean): Promise<WorkCyclesHistoryView> {
     await this.authorizationService.requirePermission({
-      permission: "works.update",
+      permission: "cycles.create_next",
       requiredScope: "ALL",
       userId: context.actorUserId,
     });
@@ -386,8 +386,12 @@ export class WorksService {
     if (dto.expectedActiveCycleId && dto.expectedActiveCycleId !== before.activeCycle.id) {
       throw new ConflictException("Ciclul activ s-a schimbat. Reîncarcă lucrarea.");
     }
-    const nextDoctorId = dto.doctorId ?? before.doctorId;
-    await this.validateDoctor(this.prisma, nextDoctorId, before.clinicId, dto.doctorId !== undefined);
+    const returnNotes = dto.notes ?? dto.reasonNotes ?? null;
+    if (dto.reason === "OTHER" && !returnNotes) {
+      throw new BadRequestException("Notele sunt obligatorii pentru Alt motiv.");
+    }
+    await this.validateClinic(this.prisma, dto.clinicId, true);
+    await this.validateDoctor(this.prisma, dto.doctorId, dto.clinicId, true);
 
     const history = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${workOrderId} FOR UPDATE`;
@@ -404,6 +408,8 @@ export class WorksService {
       if (dto.expectedActiveCycleId && dto.expectedActiveCycleId !== fresh.activeCycle.id) {
         throw new ConflictException("Ciclul activ s-a schimbat. Reîncarcă lucrarea.");
       }
+      await this.validateClinic(tx, dto.clinicId, true);
+      await this.validateDoctor(tx, dto.doctorId, dto.clinicId, true);
       const operationNow = new Date();
       const latestCycle = await tx.workCycle.findFirst({
         orderBy: { cycleNumber: "desc" },
@@ -413,8 +419,8 @@ export class WorksService {
       const nextCycleNumber = (latestCycle?.cycleNumber ?? 0) + 1;
       const deadline = await this.workDeadlineService.resolveForWork({
         client: tx,
-        clinicId: fresh.clinicId,
-        doctorId: nextDoctorId,
+        clinicId: dto.clinicId,
+        doctorId: dto.doctorId,
         includeStartDay: false,
         legalEntity,
         now: operationNow,
@@ -437,13 +443,14 @@ export class WorksService {
         data: {
           createdByUserId: context.actorUserId,
           cycleNumber: nextCycleNumber,
+          clinicId: dto.clinicId,
           deadlineEffectiveDueAtSnapshot: deadline.effectiveDueAt,
           deadlineModeSnapshot: deadline.deadlineMode,
           deadlineSnapshotJson: deadline.deadlineRuleSnapshot,
-          doctorId: nextDoctorId,
+          doctorId: dto.doctorId,
           openedAt: operationNow,
           reason: dto.reason,
-          reasonNotes: dto.reasonNotes ?? null,
+          reasonNotes: returnNotes,
           status: "ACTIVE",
           workOrderId,
         },
@@ -460,7 +467,8 @@ export class WorksService {
           claimRevision: { increment: 1 },
           claimSource: "MANAGER_RELEASE",
           claimStatus: "UNCLAIMED",
-          doctorId: nextDoctorId,
+          clinicId: dto.clinicId,
+          doctorId: dto.doctorId,
           executionLegalEntityId: null,
           releaseReason: `Ciclu nou: ${dto.reason}`,
           releasedAt: operationNow,
@@ -512,7 +520,10 @@ export class WorksService {
         metadata: {
           cycleId: createdCycle.id,
           cycleNumber: createdCycle.cycleNumber,
-          doctorChanged: nextDoctorId !== fresh.doctorId,
+          clinicChanged: dto.clinicId !== fresh.clinicId,
+          doctorChanged: dto.doctorId !== fresh.doctorId,
+          clinicId: dto.clinicId,
+          doctorId: dto.doctorId,
           previousCycleId: fresh.activeCycle.id,
           reason: dto.reason,
           workCode: fresh.code,
@@ -955,6 +966,7 @@ export class WorksService {
         data: {
           createdByUserId: context.actorUserId,
           cycleNumber: 1,
+          clinicId: createdWorkOrder.clinicId,
           deadlineEffectiveDueAtSnapshot: createdWorkOrder.effectiveDueAt,
           deadlineModeSnapshot: createdWorkOrder.deadlineMode,
           ...(createdWorkOrder.deadlineRuleSnapshot !== null ? { deadlineSnapshotJson: createdWorkOrder.deadlineRuleSnapshot } : {}),

@@ -262,6 +262,7 @@ model Clinic {
   version                   Int                        @default(1)
   doctors                   Doctor[]
   workOrders                WorkOrder[]
+  workCycles                WorkCycle[]
   billingDocuments          BillingDocument[]
   payments                  Payment[]
   pricingAgreements         PricingAgreement[]
@@ -647,10 +648,13 @@ enum WorkCycleStatus {
 
 enum WorkCycleReason {
   INITIAL
+  PROBA
+  FINISHING
   ADJUSTMENT
   REPAIR
   REMAKE
   WARRANTY
+  CLARIFICATION
   OTHER
 }
 
@@ -770,6 +774,7 @@ model WorkCycle {
   createdByUserId                   String?                 @map("created_by_user_id")
   createdAt                         DateTime                @default(now()) @map("created_at")
   updatedAt                         DateTime                @updatedAt @map("updated_at")
+  clinicId                          String                  @map("clinic_id")
   doctorId                          String?                 @map("doctor_id")
   executionLegalEntityId            String?                 @map("execution_legal_entity_id")
   executionLegalEntityCodeSnapshot  String?                 @map("execution_legal_entity_code_snapshot") @db.VarChar(8)
@@ -782,6 +787,7 @@ model WorkCycle {
   deadlineSnapshotJson              Json?                   @map("deadline_snapshot_json")
   workOrder                         WorkOrder               @relation("WorkOrderCycles", fields: [workOrderId], references: [id], onDelete: Cascade)
   activeForWorkOrder                WorkOrder?              @relation("ActiveWorkCycle")
+  clinic                            Clinic                  @relation(fields: [clinicId], references: [id], onDelete: Restrict)
   doctor                            Doctor?                 @relation(fields: [doctorId], references: [id], onDelete: SetNull)
   executionLegalEntity              LegalEntity?            @relation(fields: [executionLegalEntityId], references: [id], onDelete: SetNull)
   createdBy                         User?                   @relation("WorkCycleCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
@@ -795,6 +801,7 @@ model WorkCycle {
   @@index([workOrderId, status])
   @@index([status])
   @@index([createdByUserId])
+  @@index([clinicId])
   @@index([doctorId])
   @@index([executionLegalEntityId])
   @@map("work_cycles")

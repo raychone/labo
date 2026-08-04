@@ -254,7 +254,7 @@ describe("WorksController", () => {
         work: { code: "WO-2026-000001", id: "work_order_1" },
       });
 
-    expect(requirePermission).toHaveBeenCalledWith(expect.objectContaining({ permission: "works.read_all" }));
+    expect(requirePermission).toHaveBeenCalledWith(expect.objectContaining({ permission: "cycles.history.read" }));
   });
 
   it("creates the next cycle with CSRF", async () => {
@@ -262,10 +262,10 @@ describe("WorksController", () => {
       .post("/works/work_order_1/cycles/next")
       .set("Cookie", ["dl_session=session-token", "dl_csrf=csrf-token"])
       .set("x-csrf-token", "csrf-token")
-      .send({ expectedActiveCycleId: "cycle_1", reason: "REPAIR", reasonNotes: "Retur medic" })
+      .send({ clinicId: "clinic_1", doctorId: "doctor_1", expectedActiveCycleId: "cycle_1", notes: "Retur medic", reason: "REPAIR" })
       .expect(201)
       .expect({ activeCycleId: "cycle_2", cycles: [], work: { code: "WO-2026-000001", id: "work_order_1" } });
 
-    expect(requirePermission).toHaveBeenCalledWith(expect.objectContaining({ permission: "works.update" }));
+    expect(requirePermission).toHaveBeenCalledWith(expect.objectContaining({ permission: "cycles.create_next" }));
   });
 });

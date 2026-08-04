@@ -976,6 +976,7 @@ async function seedDemoWorks(prisma: PrismaClient, dataset: DemoDataset): Promis
             deadlineEffectiveDueAtSnapshot: deadline.effectiveDueAt,
             deadlineModeSnapshot: deadline.deadlineMode,
             deadlineSnapshotJson: deadline.deadlineRuleSnapshot,
+            clinicId: work.clinicId,
             doctorId: work.doctorId,
             id: toDemoWorkCycleId(work.id),
             openedAt: work.createdAt,
