@@ -34,7 +34,6 @@ This is a proposal only. It does not implement schema, API, Prisma, migrations, 
 | `work_type_id` | Tip lucrare | SELECT | Tip lucrare | required | reception | editable until lifecycle rules allow | work-scoped with cycle snapshot | active work type | no automatic technical copy | after finalization/claim rules |
 | `teeth` | Dinți | TOOTH | Elemente dentare | optional | reception / technician | editable until cycle finalization | cycle-scoped | valid FDI list | no automatic technical copy | after finalization |
 | `shade` | Culoare | SHADE | Culoare | optional | reception / technician | editable until cycle finalization | cycle-scoped | configured shade values | no automatic technical copy | after finalization |
-| `material` | Material | SELECT | Material | optional | reception / technician | editable until cycle finalization | cycle-scoped | configured material values | no automatic technical copy | after finalization |
 | `phase_1_name` | Faza 1 | TEXT | Etape / faze | optional | reception / technician | editable until cycle finalization | cycle-scoped | max length | no automatic technical copy | after finalization |
 | `phase_1_due_date` | Termen faza 1 | DATE | Etape / faze | optional | reception / technician | editable until cycle finalization | cycle-scoped | date-only | no automatic technical copy | after finalization |
 | `phase_2_name` | Faza 2 | TEXT | Etape / faze | optional | reception / technician | editable until cycle finalization | cycle-scoped | max length | no automatic technical copy | after finalization |
@@ -57,6 +56,8 @@ Existing field types are enough for MVP:
 - `SELECT`
 - `TOOTH`
 - `SHADE`
+
+`WORKFORM-REAL-001A` implemented the final approved MVP baseline without a standalone `Material` field. Material-specific capture remains a future configurable-field refinement unless the laboratory approves it as a visible sheet field.
 
 Do not add a repeating tooth-level field type in `WORKFORM-REAL-001A`. Per-tooth details and shade/material per tooth are future enhancements only.
 
@@ -140,7 +141,7 @@ Future enhancements do not block `WORKFORM-REAL-001A`:
 - Additional configurable operational fields.
 - Different sheet variants per work type.
 - Per-tooth repeating details.
-- Shade/material per tooth.
+- Material capture and shade/material per tooth.
 - Printable A4/A5 laboratory documents in the Documents module.
 - Attachments/photos for shade details after file storage is approved.
 

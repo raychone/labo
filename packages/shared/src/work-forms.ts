@@ -1,6 +1,24 @@
 export const WORK_FORM_TEMPLATE_STATUSES = ["DRAFT", "ACTIVE", "ARCHIVED"] as const;
 export type WorkFormTemplateStatus = (typeof WORK_FORM_TEMPLATE_STATUSES)[number];
 
+export const WORK_FORM_TEMPLATE_KINDS = ["GENERIC", "REAL_LAB_SHEET"] as const;
+export type WorkFormTemplateKind = (typeof WORK_FORM_TEMPLATE_KINDS)[number];
+
+export const WORK_FORM_FIELD_ROLE_OWNERS = ["RECEPTION", "TECHNICIAN", "SHARED", "SYSTEM"] as const;
+export type WorkFormFieldRoleOwner = (typeof WORK_FORM_FIELD_ROLE_OWNERS)[number];
+
+export const WORK_FORM_FIELD_EDITABLE_UNTIL = ["CYCLE_FINALIZED", "NEVER"] as const;
+export type WorkFormFieldEditableUntil = (typeof WORK_FORM_FIELD_EDITABLE_UNTIL)[number];
+
+export const WORK_FORM_FIELD_CYCLE_SCOPES = ["WORK", "CYCLE"] as const;
+export type WorkFormFieldCycleScope = (typeof WORK_FORM_FIELD_CYCLE_SCOPES)[number];
+
+export const WORK_FORM_COPY_TO_NEXT_CYCLE_POLICIES = ["NEVER", "SYSTEM_DERIVED", "CONFIRM_ONLY"] as const;
+export type WorkFormCopyToNextCyclePolicy = (typeof WORK_FORM_COPY_TO_NEXT_CYCLE_POLICIES)[number];
+
+export const WORK_FORM_FIELD_SOURCE_KINDS = ["USER_ENTERED", "REGISTRY_DERIVED", "SYSTEM_DERIVED"] as const;
+export type WorkFormFieldSourceKind = (typeof WORK_FORM_FIELD_SOURCE_KINDS)[number];
+
 export const WORK_FORM_FIELD_TYPES = [
   "TEXT",
   "TEXTAREA",
@@ -44,6 +62,14 @@ export interface WorkFormFieldDefinition {
   readonly defaultValue: WorkFormDefaultValue;
   readonly options: readonly WorkFormOption[];
   readonly validation: WorkFormFieldValidation;
+  readonly sectionKey?: string | null;
+  readonly sectionLabel?: string | null;
+  readonly roleOwner?: WorkFormFieldRoleOwner;
+  readonly editableUntil?: WorkFormFieldEditableUntil;
+  readonly cycleScope?: WorkFormFieldCycleScope;
+  readonly copyToNextCyclePolicy?: WorkFormCopyToNextCyclePolicy;
+  readonly printable?: boolean;
+  readonly sourceKind?: WorkFormFieldSourceKind;
   readonly isActive: boolean;
 }
 
@@ -61,6 +87,14 @@ export interface WorkFormSnapshotField {
   readonly defaultValue: WorkFormDefaultValue;
   readonly options: readonly WorkFormOption[];
   readonly validation: WorkFormFieldValidation;
+  readonly sectionKey?: string | null;
+  readonly sectionLabel?: string | null;
+  readonly roleOwner?: WorkFormFieldRoleOwner;
+  readonly editableUntil?: WorkFormFieldEditableUntil;
+  readonly cycleScope?: WorkFormFieldCycleScope;
+  readonly copyToNextCyclePolicy?: WorkFormCopyToNextCyclePolicy;
+  readonly printable?: boolean;
+  readonly sourceKind?: WorkFormFieldSourceKind;
 }
 
 export interface WorkFormSchemaSnapshot {
@@ -73,16 +107,35 @@ export interface CreateWorkFormSubmissionInput {
   readonly values: WorkFormValues;
 }
 
+export interface UpsertRealLabSheetInput {
+  readonly templateId: string;
+  readonly templateVersion: number;
+  readonly values: WorkFormValues;
+}
+
 export type UpdateWorkFormValuesInput = WorkFormValues;
 
 export interface WorkFormSubmissionView {
   readonly fields: readonly WorkFormSnapshotField[];
   readonly submittedAt: string;
   readonly templateId: string | null;
+  readonly templateKind?: WorkFormTemplateKind;
   readonly templateName: string;
   readonly templateVersion: number;
   readonly updatedAt: string;
   readonly values: WorkFormValues;
+}
+
+export interface RealLabSheetView extends WorkFormSubmissionView {
+  readonly canEdit: boolean;
+  readonly canFinalize: boolean;
+  readonly cycleNumber: number;
+  readonly finalizedAt: string | null;
+  readonly finalizedBy: { readonly displayName: string; readonly publicId: string } | null;
+  readonly isFinalized: boolean;
+  readonly status: "DRAFT" | "FINALIZED" | "READ_ONLY";
+  readonly workCycleId: string;
+  readonly workOrderId: string;
 }
 
 export interface WorkFormDisplayValue {
@@ -104,6 +157,7 @@ export interface WorkFormTemplateSummary {
   readonly name: string;
   readonly description: string | null;
   readonly version: number;
+  readonly kind: WorkFormTemplateKind;
   readonly status: WorkFormTemplateStatus;
   readonly fieldCount: number;
   readonly activatedAt: string | null;
@@ -130,6 +184,7 @@ export interface WorkFormTemplateListResponse {
 export interface CreateWorkFormTemplateInput {
   readonly name: string;
   readonly description?: string | null;
+  readonly kind?: WorkFormTemplateKind;
   readonly cloneFromTemplateId?: string;
 }
 

@@ -2,9 +2,9 @@
 
 ## Status
 
-APPROVED
+COMPLETED
 
-Business confirmation completed after the real laboratory visit. The task is ready for implementation.
+Business confirmation completed after the real laboratory visit. Implemented as a cycle-scoped real laboratory sheet foundation.
 
 ## Objective
 
@@ -70,28 +70,23 @@ The task must establish a canonical, versioned work-sheet schema that can later 
 
 ### Real work-sheet structure
 
-Define a canonical schema with logical sections such as:
+Implemented the confirmed MVP paper-sheet baseline only:
 
-- `Identificare lucrare`
+- `Fișa laborator nr.`
+- `Doctor`
 - `Pacient`
-- `Clinică și medic`
+- `Vârsta`
+- `Sex`
 - `Tip lucrare`
-- `Elemente dentare`
-- `Material`
 - `Culoare`
-- `Tip restaurare`
-- `Etape tehnologice`
-- `Observații medic`
-- `Observații recepție`
-- `Observații tehnician`
-- `Termen`
-- `Prioritate`
-- `Probă / ajustare / finisare`
-- `Instrucțiuni speciale`
-- `Date ciclu`
-- `Confirmări operaționale`
+- `dinți`
+- `Faza 1 + termen`
+- `Faza 2 + termen`
+- `Faza 3 + termen`
+- `Faza 4 + termen`
+- `Observații`
 
-Do not assume every section is required for every work type.
+No material field, signatures, printing fields, billing fields, manager-only fields, or unvalidated operational fields were added.
 
 ### Field types
 
@@ -225,14 +220,11 @@ Required backend outcome:
 
 ### Frontend foundation
 
-- Adapt manager template builder for real work sheets.
-- Support logical sections.
-- Use accordion/tabs where useful.
-- Provide preview.
+- Reuse existing dynamic field renderer.
 - Use Romanian labels.
 - Keep mobile-first layout.
 - Render read-only historical cycle sheets.
-- Do not use generic JSON display.
+- Render the active cycle as editable only when permissions and lifecycle allow it.
 - Do not expose financial data.
 
 ### Tests
@@ -301,7 +293,7 @@ Validated after the real laboratory visit:
 - A new cycle defaults clinic and doctor from the previous cycle for reception confirmation only.
 - Editable technical values are not copied automatically into a new cycle.
 - Existing tooth selector is sufficient for MVP; no per-tooth repeating details.
-- One shade/material value per cycle is enough; exceptions go into observations.
+- One `Culoare` value per cycle is enough for this MVP; material capture is not a standalone implemented field in `WORKFORM-REAL-001A`.
 - Every cycle keeps its own doctor instructions and observations.
 - Clinic/doctor correction after technician claim happens when reception registers a returned work before the new cycle is created.
 - Signatures belong only to delivery/invoice documents, not the laboratory sheet in MVP.
@@ -340,20 +332,27 @@ Discovery output:
 11. Migration/backfill strategy is defined.
 12. Confirmed laboratory decisions are implemented without inventing additional MVP fields.
 13. `WORKFORM-REAL-001B` remains unstarted.
-14. No application code changes outside this documentation-only definition task.
+14. Application code changes are limited to the approved implementation scope.
 15. Required checks pass.
 16. One implementation commit.
 17. Working tree clean.
 
+## Implemented
+
+- Added `REAL_LAB_SHEET` template classification while preserving existing `GENERIC` work forms.
+- Added field lifecycle/source metadata for versioned real-sheet snapshots.
+- Added `WorkFormSubmission.workCycleId`, `templateKind`, `finalizedAt`, and `finalizedByUserId`.
+- Added non-destructive migration `20260804170000_real_lab_sheet_foundation`.
+- Backfilled existing generic submissions to the active cycle where unambiguous without deleting data.
+- Added real laboratory sheet read/save/finalize APIs under work cycle routes.
+- Added server-side validation through the existing work-form validator.
+- Added RBAC permissions for real-sheet read/history/update/finalize/manage-template behavior.
+- Added work-detail UI for active-cycle entry, cycle selection, finalization, and historical read-only sheets.
+- Updated demo seed with common real-sheet templates for all work types and initial cycle demo submissions.
+
 ## Verification
 
-For this documentation-only definition task:
-
-- Inspect changed documentation.
-- Run `git diff --check`.
-- Verify no application code changed.
-
-For the implementation task, run the standard checks from [../TESTING.md](../TESTING.md), plus migration and seed checks if schema or seed changes.
+Run the standard checks from [../TESTING.md](../TESTING.md), plus migration and seed checks because schema and demo seed changed.
 
 ## Commit
 

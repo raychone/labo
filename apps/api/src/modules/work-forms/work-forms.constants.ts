@@ -11,6 +11,9 @@ export const WORK_FORMS_AUDIT_ACTIONS = {
   submissionCreated: "work_forms.submission_created",
   submissionUpdated: "work_forms.submission_updated",
   submissionReplaced: "work_forms.submission_replaced",
+  realLabSheetCreated: "work_forms.real_lab_sheet_created",
+  realLabSheetUpdated: "work_forms.real_lab_sheet_updated",
+  realLabSheetFinalized: "work_forms.real_lab_sheet_finalized",
 } as const;
 
 export const WORK_FORM_FIELD_TYPES = [
@@ -25,6 +28,13 @@ export const WORK_FORM_FIELD_TYPES = [
   "TOOTH",
   "SHADE",
 ] as const;
+
+export const WORK_FORM_TEMPLATE_KINDS = ["GENERIC", "REAL_LAB_SHEET"] as const;
+export const WORK_FORM_FIELD_ROLE_OWNERS = ["RECEPTION", "TECHNICIAN", "SHARED", "SYSTEM"] as const;
+export const WORK_FORM_FIELD_EDITABLE_UNTIL = ["CYCLE_FINALIZED", "NEVER"] as const;
+export const WORK_FORM_FIELD_CYCLE_SCOPES = ["WORK", "CYCLE"] as const;
+export const WORK_FORM_COPY_TO_NEXT_CYCLE_POLICIES = ["NEVER", "SYSTEM_DERIVED", "CONFIRM_ONLY"] as const;
+export const WORK_FORM_FIELD_SOURCE_KINDS = ["USER_ENTERED", "REGISTRY_DERIVED", "SYSTEM_DERIVED"] as const;
 
 export const WORK_FORM_FIELD_KEY_PATTERN = /^[a-z][a-z0-9_]{1,63}$/;
 

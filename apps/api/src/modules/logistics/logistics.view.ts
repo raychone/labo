@@ -227,7 +227,15 @@ export const logisticsWorkInclude = {
       },
     },
   },
-  workFormSubmission: true,
+  workFormSubmissions: {
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: 1,
+    where: {
+      templateKind: "GENERIC",
+    },
+  },
   workType: {
     select: {
       name: true,
@@ -311,7 +319,7 @@ export function toWorkLogisticsView(work: LogisticsWorkRecord, actionContext: Ac
   return {
     ...toLogisticsCenterItem(work, actionContext, now),
     events: (work.activeCycle?.logisticsEvents ?? []).map(toLogisticsEventView),
-    formSnapshot: toFormSnapshot(work.workFormSubmission),
+    formSnapshot: toFormSnapshot(work.workFormSubmissions[0] ?? null),
   };
 }
 
@@ -506,7 +514,7 @@ function toLogisticsEventView(event: NonNullable<LogisticsWorkRecord["activeCycl
   };
 }
 
-function toFormSnapshot(submission: LogisticsWorkRecord["workFormSubmission"]): WorkLogisticsView["formSnapshot"] {
+function toFormSnapshot(submission: LogisticsWorkRecord["workFormSubmissions"][number] | null): WorkLogisticsView["formSnapshot"] {
   if (!submission) {
     return null;
   }

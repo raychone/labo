@@ -27,6 +27,7 @@ export interface WorkFormSubmissionView {
   readonly fields: readonly WorkFormSnapshotField[];
   readonly submittedAt: string;
   readonly templateId: string | null;
+  readonly templateKind?: string;
   readonly templateName: string;
   readonly templateVersion: number;
   readonly updatedAt: string;
@@ -160,7 +161,15 @@ export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
       };
     };
     patient: true;
-    workFormSubmission: true;
+    workFormSubmissions: {
+      where: {
+        templateKind: "GENERIC";
+      };
+      take: 1;
+      orderBy: {
+        createdAt: "desc";
+      };
+    };
     workType: true;
   };
 }>;
@@ -662,7 +671,7 @@ export function toWorkDetailView(workOrder: WorkOrderRecord, includePricing: boo
           reason: "Acțiunile se verifică pe endpointul dedicat de workflow.",
         })
       : null,
-    workForm: toWorkFormSubmissionView(workOrder.workFormSubmission),
+    workForm: toWorkFormSubmissionView(workOrder.workFormSubmissions?.[0] ?? null),
   };
 }
 
@@ -721,7 +730,7 @@ export function toWorkCyclesHistoryView(workOrder: WorkCycleHistoryRecord, inclu
   };
 }
 
-function toWorkFormSubmissionView(submission: WorkOrderRecord["workFormSubmission"]): WorkFormSubmissionView | null {
+function toWorkFormSubmissionView(submission: WorkOrderRecord["workFormSubmissions"][number] | null): WorkFormSubmissionView | null {
   if (!submission) {
     return null;
   }
@@ -733,6 +742,7 @@ function toWorkFormSubmissionView(submission: WorkOrderRecord["workFormSubmissio
     fields: [...snapshot.fields].sort((left, right) => left.sortOrder - right.sortOrder),
     submittedAt: submission.submittedAt.toISOString(),
     templateId: submission.templateId,
+    templateKind: submission.templateKind,
     templateName: submission.templateNameSnapshot,
     templateVersion: submission.templateVersion,
     updatedAt: submission.updatedAt.toISOString(),

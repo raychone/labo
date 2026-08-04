@@ -164,7 +164,15 @@ const WORK_DETAIL_INCLUDE = {
     },
   },
   patient: true,
-  workFormSubmission: true,
+  workFormSubmissions: {
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: 1,
+    where: {
+      templateKind: "GENERIC",
+    },
+  },
   workType: true,
 } as const satisfies Prisma.WorkOrderInclude;
 

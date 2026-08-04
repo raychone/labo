@@ -261,6 +261,8 @@ export class WorkFormSubmissionDto {
   public readonly values!: Record<string, unknown>;
 }
 
+export class UpsertRealLabSheetDto extends WorkFormSubmissionDto {}
+
 export class CreateWorkDto extends WorkMutationDto {
   @Transform(({ value }) => trimRequiredString(value))
   @IsString()

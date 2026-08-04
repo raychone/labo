@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
-import type { Prisma } from "@prisma/client";
+import { WorkFormTemplateKind, type Prisma } from "@prisma/client";
 
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { WORK_FORM_SUBMISSIONS_RESOURCE_TYPE, WORK_FORMS_AUDIT_ACTIONS } from "./work-forms.constants.js";
@@ -49,6 +49,7 @@ interface WorkFormClient {
       };
       readonly where: {
         readonly status: "ACTIVE";
+        readonly kind?: WorkFormTemplateKind;
         readonly workTypeId: string;
       };
     }) => Promise<ActiveTemplateRecord | null>;
@@ -99,6 +100,14 @@ interface WorkFormSnapshotField {
   readonly defaultValue: WorkFormDefaultValue;
   readonly options: readonly WorkFormOption[];
   readonly validation: WorkFormFieldValidation;
+  readonly sectionKey?: string | null;
+  readonly sectionLabel?: string | null;
+  readonly roleOwner?: string;
+  readonly editableUntil?: string;
+  readonly cycleScope?: string;
+  readonly copyToNextCyclePolicy?: string;
+  readonly printable?: boolean;
+  readonly sourceKind?: string;
 }
 
 interface WorkFormSchemaSnapshot {
@@ -187,6 +196,7 @@ export class WorkFormSubmissionValidationService {
         schemaSnapshot: snapshot as unknown as Prisma.InputJsonObject,
         submittedByUserId: input.actorUserId,
         templateId: template.id,
+        templateKind: WorkFormTemplateKind.GENERIC,
         templateNameSnapshot: template.name,
         templateVersion: template.version,
         updatedByUserId: input.actorUserId,
@@ -303,6 +313,7 @@ export class WorkFormSubmissionValidationService {
         schemaSnapshot: snapshot as unknown as Prisma.InputJsonObject,
         submittedByUserId: input.actorUserId,
         templateId: template.id,
+        templateKind: WorkFormTemplateKind.GENERIC,
         templateNameSnapshot: template.name,
         templateVersion: template.version,
         updatedByUserId: input.actorUserId,
@@ -338,6 +349,43 @@ export class WorkFormSubmissionValidationService {
     });
   }
 
+  public ensureActiveTemplateMatches(template: ActiveTemplateRecord, templateId: string, templateVersion: number): void {
+    if (template.id !== templateId || template.version !== templateVersion) {
+      throw new ConflictException(STALE_TEMPLATE_MESSAGE);
+    }
+  }
+
+  public createSnapshot(template: ActiveTemplateRecord): WorkFormSchemaSnapshot {
+    return {
+      fields: template.fields
+        .filter((field) => field.isActive)
+        .map((field) => ({
+          copyToNextCyclePolicy: field.copyToNextCyclePolicy,
+          cycleScope: field.cycleScope,
+          defaultValue: this.toDefaultValue(field.defaultValue),
+          editableUntil: field.editableUntil,
+          helpText: field.helpText,
+          key: field.key,
+          label: field.label,
+          options: this.toOptions(field.options),
+          placeholder: field.placeholder,
+          printable: field.printable,
+          required: field.required,
+          roleOwner: field.roleOwner,
+          sectionKey: field.sectionKey,
+          sectionLabel: field.sectionLabel,
+          sortOrder: field.sortOrder,
+          sourceKind: field.sourceKind,
+          type: field.type,
+          validation: this.toValidation(field.validation),
+        })),
+    };
+  }
+
+  public validateValues(snapshot: WorkFormSchemaSnapshot, input: unknown): WorkFormValues {
+    return this.validateValuesInternal(snapshot, input);
+  }
+
   private async getActiveTemplate(client: WorkFormClient, workTypeId: string): Promise<ActiveTemplateRecord | null> {
     return client.workFormTemplate.findFirst({
       include: {
@@ -348,38 +396,14 @@ export class WorkFormSubmissionValidationService {
         },
       },
       where: {
+        kind: WorkFormTemplateKind.GENERIC,
         status: "ACTIVE",
         workTypeId,
       },
     });
   }
 
-  private ensureActiveTemplateMatches(template: ActiveTemplateRecord, templateId: string, templateVersion: number): void {
-    if (template.id !== templateId || template.version !== templateVersion) {
-      throw new ConflictException(STALE_TEMPLATE_MESSAGE);
-    }
-  }
-
-  private createSnapshot(template: ActiveTemplateRecord): WorkFormSchemaSnapshot {
-    return {
-      fields: template.fields
-        .filter((field) => field.isActive)
-        .map((field) => ({
-          defaultValue: this.toDefaultValue(field.defaultValue),
-          helpText: field.helpText,
-          key: field.key,
-          label: field.label,
-          options: this.toOptions(field.options),
-          placeholder: field.placeholder,
-          required: field.required,
-          sortOrder: field.sortOrder,
-          type: field.type,
-          validation: this.toValidation(field.validation),
-        })),
-    };
-  }
-
-  private validateValues(snapshot: WorkFormSchemaSnapshot, input: unknown): WorkFormValues {
+  private validateValuesInternal(snapshot: WorkFormSchemaSnapshot, input: unknown): WorkFormValues {
     this.ensurePayloadSize(input);
     if (!this.isPlainObject(input)) {
       throw new BadRequestException("Valorile formularului trebuie trimise ca obiect simplu.");

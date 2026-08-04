@@ -10,29 +10,31 @@ Manage core dental laboratory work orders from registration through operational 
 
 ## Roles And Permissions
 
-Key permissions include `works.create`, `works.read_all`, `works.read_assigned`, `works.update`, deadline permissions, claim permissions, execution snapshot permissions, and cycle permissions (`cycles.read`, `cycles.history.read`, `cycles.create_next`).
+Key permissions include `works.create`, `works.read_all`, `works.read_assigned`, `works.update`, deadline permissions, claim permissions, execution snapshot permissions, cycle permissions (`cycles.read`, `cycles.history.read`, `cycles.create_next`), and real laboratory sheet permissions under `work_forms.real.*`.
 
 ## Domain Concepts
 
-Work code, clinic, doctor, patient, work type, quantity, priority, status, QR token, deadline, workflow, ownership, execution snapshot, work cycles.
+Work code, clinic, doctor, patient, work type, quantity, priority, status, QR token, deadline, workflow, ownership, execution snapshot, work cycles, cycle-scoped real laboratory sheet.
 
 ## Business Rules
 
 Reception creates works without selecting `NC`/`NG`. Company context is fixed per cycle by first valid technical claim or manager assignment. Work updates use optimistic revision checks where implemented. A work can have multiple cycles while retaining the same work code and patient; exactly one cycle is active. Returned works are registered at reception through `Înregistrează revenirea`, with required active clinic and doctor selected from registries. The current `WorkOrder` clinic/doctor follow the active cycle, while prior cycle clinic/doctor/snapshots remain immutable history.
 
+Each cycle can own one real laboratory sheet submission. Reception and permitted assigned technicians may edit the active cycle sheet until it is finalized. Closed cycles and finalized sheets are read-only; corrections require a new cycle. Editable sheet values are not copied automatically to a new cycle.
+
 ## Data Model
 
-`WorkOrder`, `WorkCycle` with per-cycle clinic/doctor/reason/status, `WorkAssignmentEvent`, `WorkExecutionSnapshot`, `WorkFormSubmission`, workflow/logistics/billing relations.
+`WorkOrder`, `WorkCycle` with per-cycle clinic/doctor/reason/status, `WorkAssignmentEvent`, `WorkExecutionSnapshot`, cycle-aware `WorkFormSubmission`, workflow/logistics/billing relations.
 
 ## API
 
-`GET /works`, `GET /works/:id`, `POST /works`, `PATCH /works/:id`, `GET /works/work-type-options`, deadline, claim, release, reassign, assignment-history endpoints, `GET /works/:id/cycles`, `POST /works/:id/cycles/next`.
+`GET /works`, `GET /works/:id`, `POST /works`, `PATCH /works/:id`, `GET /works/work-type-options`, deadline, claim, release, reassign, assignment-history endpoints, `GET /works/:id/cycles`, `POST /works/:id/cycles/next`, `GET/PATCH /works/:id/cycles/:cycleId/real-lab-sheet`, and `POST /works/:id/cycles/:cycleId/real-lab-sheet/finalize`.
 
 STATUS-001A adds `GET /status/operational` as a separate read-only aggregate over work orders, claim ownership, workflow, deadlines, logistics, and delivery. It returns operational fields only and masks financial data server-side.
 
 ## UI
 
-`/works` registry, create modal, detail/edit drawer, QR modal, workflow section, `Cicluri` history section, `Înregistrează revenirea` modal, deadline and execution context cards. `/status` links into the existing `/works?workId=...` detail flow instead of duplicating work detail UI.
+`/works` registry, create modal, detail/edit drawer, QR modal, workflow section, `Cicluri` history section, `Fișă laborator` cycle sheet section, `Înregistrează revenirea` modal, deadline and execution context cards. `/status` links into the existing `/works?workId=...` detail flow instead of duplicating work detail UI.
 
 ## Audit
 
@@ -48,7 +50,7 @@ Inactive clinic/doctor/work type, doctor outside selected clinic, missing `OTHER
 
 ## Implemented Tasks
 
-WORKS-001, QR-001, WORK-DEADLINES-001A/B/C, TECH-CLAIM-001A/B, WORKFORMS-002, WORKFLOW-002, STATUS-001A, STATUS-001B, WORK-CYCLES-001A, WORK-CYCLES-001B.
+WORKS-001, QR-001, WORK-DEADLINES-001A/B/C, TECH-CLAIM-001A/B, WORKFORMS-002, WORKFORM-REAL-001A, WORKFLOW-002, STATUS-001A, STATUS-001B, WORK-CYCLES-001A, WORK-CYCLES-001B.
 
 ## Planned Tasks
 

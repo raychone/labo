@@ -57,6 +57,7 @@ model User {
   archivedWorkFormTemplates           WorkFormTemplate[]         @relation("WorkFormTemplateArchivedBy")
   submittedWorkFormSubmissions        WorkFormSubmission[]       @relation("WorkFormSubmissionSubmittedBy")
   updatedWorkFormSubmissions          WorkFormSubmission[]       @relation("WorkFormSubmissionUpdatedBy")
+  finalizedWorkFormSubmissions        WorkFormSubmission[]       @relation("WorkFormSubmissionFinalizedBy")
   createdWorkflowTemplates            WorkflowTemplate[]         @relation("WorkflowTemplateCreatedBy")
   updatedWorkflowTemplates            WorkflowTemplate[]         @relation("WorkflowTemplateUpdatedBy")
   activatedWorkflowTemplates          WorkflowTemplate[]         @relation("WorkflowTemplateActivatedBy")
@@ -492,6 +493,7 @@ enum PricingAdjustmentType {
 model WorkFormTemplate {
   id                String                    @id @default(cuid())
   workTypeId        String                    @map("work_type_id")
+  kind              WorkFormTemplateKind      @default(GENERIC)
   name              String                    @db.VarChar(160)
   description       String?                   @db.VarChar(1000)
   version           Int
@@ -512,10 +514,11 @@ model WorkFormTemplate {
   fields            WorkFormFieldDefinition[]
   submissions       WorkFormSubmission[]
 
-  @@unique([workTypeId, version])
+  @@unique([workTypeId, kind, version])
   @@index([workTypeId])
+  @@index([kind])
   @@index([status])
-  @@index([workTypeId, status])
+  @@index([workTypeId, kind, status])
   @@index([createdByUserId])
   @@index([updatedByUserId])
   @@index([activatedByUserId])
@@ -536,6 +539,14 @@ model WorkFormFieldDefinition {
   defaultValue Json?             @map("default_value")
   options      Json?
   validation   Json?
+  sectionKey   String?           @map("section_key") @db.VarChar(64)
+  sectionLabel String?           @map("section_label") @db.VarChar(160)
+  roleOwner    WorkFormFieldRoleOwner @default(SHARED) @map("role_owner")
+  editableUntil WorkFormFieldEditableUntil @default(CYCLE_FINALIZED) @map("editable_until")
+  cycleScope   WorkFormFieldCycleScope @default(CYCLE) @map("cycle_scope")
+  copyToNextCyclePolicy WorkFormCopyToNextCyclePolicy @default(NEVER) @map("copy_to_next_cycle_policy")
+  printable    Boolean           @default(false)
+  sourceKind   WorkFormFieldSourceKind @default(USER_ENTERED) @map("source_kind")
   isActive     Boolean           @default(true) @map("is_active")
   createdAt    DateTime          @default(now()) @map("created_at")
   updatedAt    DateTime          @updatedAt @map("updated_at")
@@ -550,6 +561,40 @@ enum WorkFormTemplateStatus {
   DRAFT
   ACTIVE
   ARCHIVED
+}
+
+enum WorkFormTemplateKind {
+  GENERIC
+  REAL_LAB_SHEET
+}
+
+enum WorkFormFieldRoleOwner {
+  RECEPTION
+  TECHNICIAN
+  SHARED
+  SYSTEM
+}
+
+enum WorkFormFieldEditableUntil {
+  CYCLE_FINALIZED
+  NEVER
+}
+
+enum WorkFormFieldCycleScope {
+  WORK
+  CYCLE
+}
+
+enum WorkFormCopyToNextCyclePolicy {
+  NEVER
+  SYSTEM_DERIVED
+  CONFIRM_ONLY
+}
+
+enum WorkFormFieldSourceKind {
+  USER_ENTERED
+  REGISTRY_DERIVED
+  SYSTEM_DERIVED
 }
 
 enum WorkFormFieldType {
@@ -729,7 +774,7 @@ model WorkOrder {
   billingLines             BillingDocumentLine[]
   invoicedDocument         BillingDocument?          @relation("WorkOrderInvoicedDocument", fields: [invoicedDocumentId], references: [id], onDelete: SetNull)
   cycles                   WorkCycle[]               @relation("WorkOrderCycles")
-  workFormSubmission       WorkFormSubmission?
+  workFormSubmissions      WorkFormSubmission[]
   workflowExecutions       WorkWorkflowExecution[]
   logisticsStates          WorkLogisticsState[]
   logisticsEvents          LogisticsEvent[]
@@ -796,6 +841,7 @@ model WorkCycle {
   logisticsEvents                   LogisticsEvent[]
   deliveryPreparationItems          DeliveryPreparationItem[]
   executionSnapshot                 WorkExecutionSnapshot?
+  workFormSubmissions               WorkFormSubmission[]
 
   @@unique([workOrderId, cycleNumber])
   @@index([workOrderId, status])
@@ -893,26 +939,37 @@ model WorkExecutionSnapshot {
 
 model WorkFormSubmission {
   id                   String            @id @default(cuid())
-  workOrderId          String            @unique @map("work_order_id")
+  workOrderId          String            @map("work_order_id")
+  workCycleId          String?           @map("work_cycle_id")
   templateId           String?           @map("template_id")
+  templateKind         WorkFormTemplateKind @default(GENERIC) @map("template_kind")
   templateVersion      Int               @map("template_version")
   templateNameSnapshot String            @map("template_name_snapshot") @db.VarChar(160)
   schemaSnapshot       Json              @map("schema_snapshot")
   values               Json
   submittedAt          DateTime          @default(now()) @map("submitted_at")
   submittedByUserId    String?           @map("submitted_by_user_id")
+  finalizedAt          DateTime?         @map("finalized_at")
+  finalizedByUserId    String?           @map("finalized_by_user_id")
   updatedAt            DateTime          @updatedAt @map("updated_at")
   updatedByUserId      String?           @map("updated_by_user_id")
   createdAt            DateTime          @default(now()) @map("created_at")
   workOrder            WorkOrder         @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  workCycle            WorkCycle?        @relation(fields: [workCycleId], references: [id], onDelete: SetNull)
   template             WorkFormTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
   submittedBy          User?             @relation("WorkFormSubmissionSubmittedBy", fields: [submittedByUserId], references: [id], onDelete: SetNull)
   updatedBy            User?             @relation("WorkFormSubmissionUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  finalizedBy          User?             @relation("WorkFormSubmissionFinalizedBy", fields: [finalizedByUserId], references: [id], onDelete: SetNull)
 
+  @@index([workOrderId, templateKind])
+  @@index([workCycleId])
   @@index([templateId])
+  @@index([templateKind])
   @@index([templateVersion])
   @@index([submittedByUserId])
   @@index([updatedByUserId])
+  @@index([finalizedByUserId])
+  @@index([finalizedAt])
   @@index([createdAt])
   @@map("work_form_submissions")
 }

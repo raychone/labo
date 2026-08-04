@@ -37,6 +37,7 @@ Implemented or substantially implemented:
 - work types;
 - work orders with QR, forms, deadlines, claim ownership, execution snapshots;
 - work form templates and runtime submissions;
+- real laboratory sheet templates, cycle-scoped sheet submissions, finalization, and work-detail data-entry UI;
 - workflow templates and stage execution;
 - technician workbench and workload;
 - pricing catalog, execution rules, clinic/doctor agreements, preview resolver;
@@ -49,7 +50,6 @@ Implemented or substantially implemented:
 
 Planned or partial:
 
-- real laboratory work-sheet schema/template foundation;
 - materials and inventory;
 - dashboard/status evolution beyond the implemented `/status` workspace;
 - search;
@@ -59,13 +59,13 @@ Planned or partial:
 
 ## Current Status
 
-Last completed functional task: `WORK-CYCLES-001B`, which added returned-work registration at reception, cycle history in work detail, cycle-aware `/status` indicators, granular cycle permissions, distinct return reasons, and a safe migration/backfill for per-cycle clinic history.
+Last completed functional task: `WORKFORM-REAL-001A`, which added the real laboratory sheet template foundation, cycle-scoped sheet submissions, finalization/immutability, RBAC, non-destructive migration/backfill, demo seed coverage, and the work-detail data-entry UI.
 
 Last completed documentation task: `WORKFORM-REAL-DISCOVERY-001`, which audited the real paper work sheet and produced [discovery/WORKFORM-REAL-FIELD-AUDIT.md](discovery/WORKFORM-REAL-FIELD-AUDIT.md) and [discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md). `DOCS-TOKEN-001` created the permanent token-efficient documentation system under `docs/`.
 
 `TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable.
 
-Next approved task: `WORKFORM-REAL-001A`, a real laboratory work-sheet schema and template foundation task. Laboratory validation confirmed the MVP decisions, so the task is no longer blocked by business confirmation. It must define one common cycle-owned, immutable, versioned laboratory sheet using the existing form infrastructure where possible, without exposing financial data. No other task is approved.
+Next approved task: none. `WORKFORM-REAL-001B` remains planned only and must not be started without approval.
 
 ## Source Of Truth
 

@@ -1,5 +1,5 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, WorkFormTemplateStatus } from "@prisma/client";
+import { Prisma, WorkFormTemplateKind, WorkFormTemplateStatus } from "@prisma/client";
 
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
@@ -37,7 +37,7 @@ export class WorkFormTemplatesService {
     @Inject(WorkFormTemplateValidationService) private readonly validationService: WorkFormTemplateValidationService,
   ) {}
 
-  public async listTemplates(workTypeId: string): Promise<WorkFormTemplateListView> {
+  public async listTemplates(workTypeId: string, kind: WorkFormTemplateKind = WorkFormTemplateKind.GENERIC): Promise<WorkFormTemplateListView> {
     const workType = await this.findWorkTypeOrThrow(workTypeId);
     const templates = await this.prisma.workFormTemplate.findMany({
       include: {
@@ -51,6 +51,7 @@ export class WorkFormTemplatesService {
         version: "desc",
       },
       where: {
+        kind,
         workTypeId,
       },
     });
@@ -62,11 +63,12 @@ export class WorkFormTemplatesService {
     };
   }
 
-  public async getActiveTemplate(workTypeId: string): Promise<WorkFormTemplateDetailView | null> {
+  public async getActiveTemplate(workTypeId: string, kind: WorkFormTemplateKind = WorkFormTemplateKind.GENERIC): Promise<WorkFormTemplateDetailView | null> {
     await this.findWorkTypeOrThrow(workTypeId);
     const template = await this.prisma.workFormTemplate.findFirst({
       include: templateDetailInclude,
       where: {
+        kind,
         status: "ACTIVE",
         workTypeId,
       },
@@ -83,13 +85,15 @@ export class WorkFormTemplatesService {
     const template = await this.prisma.$transaction(async (tx) => {
       const workType = await this.findWorkTypeOrThrow(workTypeId, tx);
       this.ensureWorkTypeActive(workType.isActive);
-      await this.lockWorkTypeTemplates(tx, workTypeId);
+      const kind = dto.kind ?? WorkFormTemplateKind.GENERIC;
+      await this.lockWorkTypeTemplates(tx, workTypeId, kind);
 
-      const version = await this.getNextVersion(tx, workTypeId);
+      const version = await this.getNextVersion(tx, workTypeId, kind);
       const created = await tx.workFormTemplate.create({
         data: {
           createdByUserId: context.actorUserId,
           description: dto.description ?? null,
+          kind,
           name: dto.name,
           updatedByUserId: context.actorUserId,
           version,
@@ -99,14 +103,15 @@ export class WorkFormTemplatesService {
 
       if (dto.cloneFromTemplateId) {
         const source = await this.findTemplateOrThrow(dto.cloneFromTemplateId, tx);
-        if (source.workTypeId !== workTypeId) {
-          throw new BadRequestException("Template can only be cloned within the same work type.");
+        if (source.workTypeId !== workTypeId || source.kind !== kind) {
+          throw new BadRequestException("Template can only be cloned within the same work type and kind.");
         }
         await this.copyFields(tx, source.id, created.id);
       }
 
       await this.recordAudit(tx, context, WORK_FORMS_AUDIT_ACTIONS.templateCreated, created.id, {
         clonedFromTemplateId: dto.cloneFromTemplateId,
+        kind: created.kind,
         status: created.status,
         templateId: created.id,
         version: created.version,
@@ -208,7 +213,7 @@ export class WorkFormTemplatesService {
       this.ensureDraft(template.status);
       this.ensureWorkTypeActive(template.workType.isActive);
       this.validationService.ensureTemplateCanActivate(template.fields);
-      await this.lockWorkTypeTemplates(tx, template.workTypeId);
+      await this.lockWorkTypeTemplates(tx, template.workTypeId, template.kind);
 
       const now = new Date();
       await tx.workFormTemplate.updateMany({
@@ -224,6 +229,7 @@ export class WorkFormTemplatesService {
           },
           status: WorkFormTemplateStatus.ACTIVE,
           workTypeId: template.workTypeId,
+          kind: template.kind,
         },
       });
 
@@ -242,6 +248,7 @@ export class WorkFormTemplatesService {
 
       await this.recordAudit(tx, context, WORK_FORMS_AUDIT_ACTIONS.templateActivated, templateId, {
         fieldKeys: next.fields.map((field) => field.key),
+        kind: next.kind,
         status: next.status,
         templateId,
         version: next.version,
@@ -352,16 +359,17 @@ export class WorkFormTemplatesService {
     return template;
   }
 
-  private async lockWorkTypeTemplates(tx: WorkFormTx, workTypeId: string): Promise<void> {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${workTypeId}))`;
+  private async lockWorkTypeTemplates(tx: WorkFormTx, workTypeId: string, kind: WorkFormTemplateKind = WorkFormTemplateKind.GENERIC): Promise<void> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${workTypeId}:${kind}`}))`;
   }
 
-  private async getNextVersion(tx: WorkFormTx, workTypeId: string): Promise<number> {
+  private async getNextVersion(tx: WorkFormTx, workTypeId: string, kind: WorkFormTemplateKind = WorkFormTemplateKind.GENERIC): Promise<number> {
     const result = await tx.workFormTemplate.aggregate({
       _max: {
         version: true,
       },
       where: {
+        kind,
         workTypeId,
       },
     });
@@ -400,7 +408,15 @@ export class WorkFormTemplatesService {
         label: field.label,
         options: field.options ?? undefined,
         placeholder: field.placeholder,
+        sectionKey: field.sectionKey,
+        sectionLabel: field.sectionLabel,
+        roleOwner: field.roleOwner,
+        editableUntil: field.editableUntil,
+        cycleScope: field.cycleScope,
+        copyToNextCyclePolicy: field.copyToNextCyclePolicy,
+        printable: field.printable,
         required: field.required,
+        sourceKind: field.sourceKind,
         sortOrder: field.sortOrder,
         templateId: targetTemplateId,
         type: field.type,
@@ -422,7 +438,15 @@ export class WorkFormTemplatesService {
         label: field.label,
         options: field.options,
         placeholder: field.placeholder,
+        sectionKey: field.sectionKey,
+        sectionLabel: field.sectionLabel,
+        roleOwner: field.roleOwner,
+        editableUntil: field.editableUntil,
+        cycleScope: field.cycleScope,
+        copyToNextCyclePolicy: field.copyToNextCyclePolicy,
+        printable: field.printable,
         required: field.required,
+        sourceKind: field.sourceKind,
         sortOrder: field.sortOrder,
         templateId,
         type: field.type,
@@ -439,7 +463,15 @@ export class WorkFormTemplatesService {
     readonly label: string;
     readonly options: Prisma.InputJsonValue | undefined;
     readonly placeholder: string | null;
+    readonly sectionKey: string | null;
+    readonly sectionLabel: string | null;
+    readonly roleOwner: Prisma.WorkFormFieldDefinitionCreateManyInput["roleOwner"];
+    readonly editableUntil: Prisma.WorkFormFieldDefinitionCreateManyInput["editableUntil"];
+    readonly cycleScope: Prisma.WorkFormFieldDefinitionCreateManyInput["cycleScope"];
+    readonly copyToNextCyclePolicy: Prisma.WorkFormFieldDefinitionCreateManyInput["copyToNextCyclePolicy"];
+    readonly printable: boolean;
     readonly required: boolean;
+    readonly sourceKind: Prisma.WorkFormFieldDefinitionCreateManyInput["sourceKind"];
     readonly sortOrder: number;
     readonly templateId: string;
     readonly type: Prisma.WorkFormFieldDefinitionCreateManyInput["type"];
@@ -450,7 +482,15 @@ export class WorkFormTemplatesService {
       key: input.key,
       label: input.label,
       placeholder: input.placeholder,
+      sectionKey: input.sectionKey,
+      sectionLabel: input.sectionLabel,
+      roleOwner: input.roleOwner ?? "SHARED",
+      editableUntil: input.editableUntil ?? "CYCLE_FINALIZED",
+      cycleScope: input.cycleScope ?? "CYCLE",
+      copyToNextCyclePolicy: input.copyToNextCyclePolicy ?? "NEVER",
+      printable: input.printable,
       required: input.required,
+      sourceKind: input.sourceKind ?? "USER_ENTERED",
       sortOrder: input.sortOrder,
       templateId: input.templateId,
       type: input.type,

@@ -1,5 +1,13 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
-import type { Prisma, WorkFormFieldType } from "@prisma/client";
+import type {
+  Prisma,
+  WorkFormCopyToNextCyclePolicy,
+  WorkFormFieldCycleScope,
+  WorkFormFieldEditableUntil,
+  WorkFormFieldRoleOwner,
+  WorkFormFieldSourceKind,
+  WorkFormFieldType,
+} from "@prisma/client";
 
 import type { WorkFormFieldDefinitionDto, WorkFormOptionDto } from "./dto/work-form-templates.dto.js";
 import {
@@ -20,6 +28,14 @@ export interface NormalizedWorkFormField {
   readonly defaultValue: Prisma.InputJsonValue | undefined;
   readonly options: Prisma.InputJsonValue | undefined;
   readonly validation: Prisma.InputJsonValue | undefined;
+  readonly sectionKey: string | null;
+  readonly sectionLabel: string | null;
+  readonly roleOwner: WorkFormFieldRoleOwner;
+  readonly editableUntil: WorkFormFieldEditableUntil;
+  readonly cycleScope: WorkFormFieldCycleScope;
+  readonly copyToNextCyclePolicy: WorkFormCopyToNextCyclePolicy;
+  readonly printable: boolean;
+  readonly sourceKind: WorkFormFieldSourceKind;
 }
 
 type ValidationMap = Readonly<Record<string, number | string | undefined>>;
@@ -90,7 +106,15 @@ export class WorkFormTemplateValidationService {
         label: field.label,
         options: options.length > 0 ? options : undefined,
         placeholder: field.placeholder ?? null,
+        sectionKey: field.sectionKey ?? null,
+        sectionLabel: field.sectionLabel ?? null,
+        roleOwner: field.roleOwner ?? "SHARED",
+        editableUntil: field.editableUntil ?? "CYCLE_FINALIZED",
+        cycleScope: field.cycleScope ?? "CYCLE",
+        copyToNextCyclePolicy: field.copyToNextCyclePolicy ?? "NEVER",
+        printable: field.printable ?? false,
         required: field.required,
+        sourceKind: field.sourceKind ?? "USER_ENTERED",
         sortOrder: index + 1,
         type: field.type,
         validation: Object.keys(validation).length > 0 ? validation : undefined,

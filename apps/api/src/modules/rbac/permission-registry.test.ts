@@ -129,6 +129,11 @@ const expectedPermissionKeys = [
   "forms.create",
   "forms.update",
   "forms.archive",
+  "work_forms.real.read",
+  "work_forms.real.update",
+  "work_forms.real.finalize",
+  "work_forms.real.history.read",
+  "work_forms.real.manage_templates",
   "reports.operational",
   "reports.financial",
   "reports.productivity",
@@ -202,6 +207,11 @@ describe("PERMISSION_REGISTRY", () => {
     expect(ROLE_PERMISSION_MATRIX.MANAGER["forms.update"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["forms.read"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["forms.update"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["work_forms.real.update"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["work_forms.real.update"]).toBe("ASSIGNED");
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["work_forms.real.read"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["work_forms.real.update"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.MEDIC["work_forms.real.update"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["forms.read"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["forms.archive"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["technician.workbench.read"]).toBe("ASSIGNED");

@@ -251,6 +251,32 @@ async function seedDemoWorkFormTemplates(prisma: PrismaClient): Promise<void> {
         },
       },
     });
+
+  }
+
+  const workTypes = await prisma.workType.findMany({
+    orderBy: {
+      id: "asc",
+    },
+    select: {
+      id: true,
+    },
+  });
+  for (const workType of workTypes) {
+    await prisma.workFormTemplate.create({
+      data: {
+        activatedAt: new Date("2026-07-01T09:05:00.000Z"),
+        id: toDemoRealLabSheetTemplateId(workType.id),
+        kind: "REAL_LAB_SHEET",
+        name: "Fișă laborator reală MVP",
+        status: "ACTIVE",
+        version: 1,
+        workTypeId: workType.id,
+        fields: {
+          create: realLabSheetFields(),
+        },
+      },
+    });
   }
 }
 
@@ -332,6 +358,85 @@ function toDemoFieldCreateInput(item: DemoFormField): Prisma.WorkFormFieldDefini
   }
 
   return data;
+}
+
+function realLabSheetFields(): Prisma.WorkFormFieldDefinitionCreateWithoutTemplateInput[] {
+  return [
+    realSheetField("lab_sheet_number", "Fișa laborator nr.", "TEXT", true, 1, {
+      cycleScope: "WORK",
+      editableUntil: "NEVER",
+      roleOwner: "SYSTEM",
+      sourceKind: "SYSTEM_DERIVED",
+    }),
+    realSheetField("doctor", "Doctor", "TEXT", true, 2, {
+      roleOwner: "RECEPTION",
+      sourceKind: "REGISTRY_DERIVED",
+    }),
+    realSheetField("patient", "Pacient", "TEXT", true, 3, {
+      cycleScope: "WORK",
+      roleOwner: "RECEPTION",
+      sourceKind: "REGISTRY_DERIVED",
+    }),
+    realSheetField("patient_age", "Vârsta", "NUMBER", false, 4, {
+      validation: { min: 0, max: 120, step: 1 },
+    }),
+    realSheetField("patient_sex", "Sex", "SELECT", false, 5, {
+      options: [
+        { label: "Feminin", value: "F" },
+        { label: "Masculin", value: "M" },
+      ],
+    }),
+    realSheetField("work_type", "Tip lucrare", "TEXT", true, 6, {
+      cycleScope: "WORK",
+      roleOwner: "RECEPTION",
+      sourceKind: "REGISTRY_DERIVED",
+    }),
+    realSheetField("shade", "Culoare", "SHADE", false, 7, {
+      options: shadeOptions,
+    }),
+    realSheetField("teeth", "Dinți", "TOOTH", false, 8),
+    realSheetField("phase_1", "Faza 1", "TEXT", false, 9, { validation: { maxLength: 160 } }),
+    realSheetField("phase_1_due_date", "Termen faza 1", "DATE", false, 10),
+    realSheetField("phase_2", "Faza 2", "TEXT", false, 11, { validation: { maxLength: 160 } }),
+    realSheetField("phase_2_due_date", "Termen faza 2", "DATE", false, 12),
+    realSheetField("phase_3", "Faza 3", "TEXT", false, 13, { validation: { maxLength: 160 } }),
+    realSheetField("phase_3_due_date", "Termen faza 3", "DATE", false, 14),
+    realSheetField("phase_4", "Faza 4", "TEXT", false, 15, { validation: { maxLength: 160 } }),
+    realSheetField("phase_4_due_date", "Termen faza 4", "DATE", false, 16),
+    realSheetField("observations", "Observații", "TEXTAREA", false, 17, {
+      validation: { maxLength: 5000 },
+    }),
+  ];
+}
+
+function realSheetField(
+  key: string,
+  label: string,
+  type: WorkFormFieldType,
+  required: boolean,
+  sortOrder: number,
+  overrides: Partial<Prisma.WorkFormFieldDefinitionCreateWithoutTemplateInput> = {},
+): Prisma.WorkFormFieldDefinitionCreateWithoutTemplateInput {
+  return {
+    copyToNextCyclePolicy: "NEVER",
+    cycleScope: "CYCLE",
+    editableUntil: "CYCLE_FINALIZED",
+    helpText: null,
+    key,
+    label,
+    options: [],
+    placeholder: null,
+    printable: true,
+    required,
+    roleOwner: "SHARED",
+    sectionKey: "laboratory_sheet",
+    sectionLabel: "Fișă laborator",
+    sortOrder,
+    sourceKind: "USER_ENTERED",
+    type,
+    validation: {},
+    ...overrides,
+  };
 }
 
 async function seedDemoSettings(prisma: PrismaClient): Promise<void> {
@@ -965,7 +1070,7 @@ async function seedDemoWorks(prisma: PrismaClient, dataset: DemoDataset): Promis
         workTypeId: work.workTypeId,
         ...(submission
           ? {
-              workFormSubmission: {
+              workFormSubmissions: {
                 create: submission,
               },
             }
@@ -989,6 +1094,9 @@ async function seedDemoWorks(prisma: PrismaClient, dataset: DemoDataset): Promis
     await prisma.workOrder.update({
       data: { activeCycleId: toDemoWorkCycleId(work.id) },
       where: { id: work.id },
+    });
+    await prisma.workFormSubmission.create({
+      data: toDemoRealLabSheetSubmission(work, index),
     });
   }
 
@@ -1671,12 +1779,95 @@ function toDemoWorkFormSubmission(work: DemoWorkSeed): Prisma.WorkFormSubmission
     submittedAt: work.createdAt,
     submittedByUserId: "demo_user_receptie",
     templateId: template.id,
+    templateKind: "GENERIC",
     templateNameSnapshot: template.name,
     templateVersion: template.version,
     updatedAt: work.createdAt,
     updatedByUserId: "demo_user_receptie",
     values: toDemoSubmissionValues(work, template),
   };
+}
+
+function toDemoRealLabSheetSubmission(work: DemoWorkSeed, index: number): Prisma.WorkFormSubmissionUncheckedCreateInput {
+  const templateId = toDemoRealLabSheetTemplateId(work.workTypeId);
+  const template = {
+    fields: realLabSheetFields().map((item) => ({
+      copyToNextCyclePolicy: item.copyToNextCyclePolicy ?? "NEVER",
+      cycleScope: item.cycleScope ?? "CYCLE",
+      defaultValue: item.defaultValue ?? null,
+      editableUntil: item.editableUntil ?? "CYCLE_FINALIZED",
+      helpText: item.helpText ?? null,
+      key: item.key,
+      label: item.label,
+      options: Array.isArray(item.options) ? item.options : [],
+      placeholder: item.placeholder ?? null,
+      printable: item.printable ?? false,
+      required: item.required ?? false,
+      roleOwner: item.roleOwner ?? "SHARED",
+      sectionKey: item.sectionKey ?? null,
+      sectionLabel: item.sectionLabel ?? null,
+      sortOrder: item.sortOrder ?? 0,
+      sourceKind: item.sourceKind ?? "USER_ENTERED",
+      type: item.type,
+      validation: item.validation ?? {},
+    })),
+  };
+  const suffix = Number(work.id.slice(-3));
+
+  return {
+    createdAt: work.createdAt,
+    schemaSnapshot: template as Prisma.InputJsonObject,
+    submittedAt: work.createdAt,
+    submittedByUserId: "demo_user_receptie",
+    templateId,
+    templateKind: "REAL_LAB_SHEET",
+    templateNameSnapshot: "Fișă laborator reală MVP",
+    templateVersion: 1,
+    updatedAt: work.createdAt,
+    updatedByUserId: suffix % 2 === 0 ? "demo_user_tehnician_1" : "demo_user_receptie",
+    values: {
+      doctor: toDemoDoctorLabel(work.doctorId),
+      lab_sheet_number: work.code,
+      observations: "Observații demo pentru fișa laborator.",
+      patient: work.patientName,
+      patient_age: 35 + (index % 30),
+      patient_sex: index % 2 === 0 ? "F" : "M",
+      phase_1: "Recepție",
+      phase_1_due_date: work.createdAt.toISOString().slice(0, 10),
+      shade: suffix % 2 === 0 ? "A2" : "A3",
+      teeth: suffix % 3 === 0 ? ["11", "12"] : ["21"],
+      work_type: toDemoWorkTypeLabel(work.workTypeId),
+    },
+    workCycleId: toDemoWorkCycleId(work.id),
+    workOrderId: work.id,
+  };
+}
+
+function toDemoRealLabSheetTemplateId(workTypeId: string): string {
+  return `demo_real_lab_sheet_${workTypeId}_v1`;
+}
+
+function toDemoDoctorLabel(doctorId: string): string {
+  if (doctorId.includes("popescu")) {
+    return "Dr. Andrei Popescu";
+  }
+  if (doctorId.includes("ionescu")) {
+    return "Dr. Maria Ionescu";
+  }
+  return "Medic demo";
+}
+
+function toDemoWorkTypeLabel(workTypeId: string): string {
+  if (workTypeId === "demo_wt_zirconiu") {
+    return "Coroană zirconiu";
+  }
+  if (workTypeId === "demo_wt_proteza_totala") {
+    return "Proteză totală";
+  }
+  if (workTypeId === "demo_wt_bont") {
+    return "Bont implant";
+  }
+  return "Tip lucrare demo";
 }
 
 function toSchemaSnapshot(template: DemoFormTemplate): Prisma.InputJsonObject {

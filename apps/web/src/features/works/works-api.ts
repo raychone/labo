@@ -6,6 +6,7 @@ import type {
   ClaimWorksListParams,
   CompleteStageInput,
   PaginatedWorksResponse,
+  RealLabSheetView,
   ReassignWorkInput,
   ReleaseWorkInput,
   ResolveWorkQrInput,
@@ -14,6 +15,7 @@ import type {
   WorkDeadlinePreview,
   WorkDeadlinePreviewInput,
   UpdateWorkInput,
+  UpsertRealLabSheetInput,
   WorkAssignmentEventSummary,
   WorkDetail,
   WorkCyclesHistory,
@@ -38,6 +40,7 @@ export const worksQueryKeys = {
   qrImage: (workOrderId: string | null) => ["works", "qr-image", workOrderId] as const,
   workflow: (workOrderId: string | null) => ["works", "workflow", workOrderId] as const,
   cycles: (workOrderId: string | null) => ["works", "cycles", workOrderId] as const,
+  realLabSheet: (workOrderId: string | null, cycleId: string | null) => ["works", "real-lab-sheet", workOrderId, cycleId] as const,
   workTypeOptions: ["works", "work-type-options"] as const,
   deadlinePreview: (input: WorkDeadlinePreviewInput | null) => ["works", "deadline-preview", input] as const,
 };
@@ -190,6 +193,20 @@ export async function createNextWorkCycle(workOrderId: string, input: CreateNext
   return sendJson<WorkCyclesHistory>(`/works/${workOrderId}/cycles/next`, "POST", input);
 }
 
+export async function fetchRealLabSheet(workOrderId: string, cycleId: string): Promise<RealLabSheetView> {
+  const response = await apiFetch(`/works/${workOrderId}/cycles/${cycleId}/real-lab-sheet`);
+
+  return parseApiResponse<RealLabSheetView>(response);
+}
+
+export async function upsertRealLabSheet(workOrderId: string, cycleId: string, input: UpsertRealLabSheetInput): Promise<RealLabSheetView> {
+  return sendJson<RealLabSheetView>(`/works/${workOrderId}/cycles/${cycleId}/real-lab-sheet`, "PATCH", input);
+}
+
+export async function finalizeRealLabSheet(workOrderId: string, cycleId: string): Promise<RealLabSheetView> {
+  return sendJson<RealLabSheetView>(`/works/${workOrderId}/cycles/${cycleId}/real-lab-sheet/finalize`, "POST");
+}
+
 export async function startWorkflowStage(workOrderId: string, stageExecutionId: string, input: StartStageInput): Promise<WorkWorkflowExecutionView> {
   return sendJson<WorkWorkflowExecutionView>(`/works/${workOrderId}/workflow/stages/${stageExecutionId}/start`, "POST", input);
 }
@@ -278,6 +295,15 @@ export function useWorkCycles(workOrderId: string | null, enabled: boolean) {
   });
 }
 
+export function useRealLabSheet(workOrderId: string | null, cycleId: string | null, enabled: boolean) {
+  return useQuery({
+    enabled: enabled && workOrderId !== null && cycleId !== null,
+    queryFn: () => fetchRealLabSheet(workOrderId ?? "", cycleId ?? ""),
+    queryKey: worksQueryKeys.realLabSheet(workOrderId, cycleId),
+    retry: false,
+  });
+}
+
 export function useWorkFormWorkTypeOptions(enabled: boolean) {
   return useQuery({
     enabled,
@@ -329,6 +355,34 @@ export function useCreateNextWorkCycle() {
         queryClient.invalidateQueries({ queryKey: statusQueryKeys.all }),
         queryClient.invalidateQueries({ queryKey: ["logistics"] }),
         queryClient.invalidateQueries({ queryKey: ["delivery"] }),
+      ]);
+    },
+  });
+}
+
+export function useUpsertRealLabSheet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ cycleId, input, workOrderId }: { readonly cycleId: string; readonly input: UpsertRealLabSheetInput; readonly workOrderId: string }) => upsertRealLabSheet(workOrderId, cycleId, input),
+    onSuccess: async (_sheet, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.detail(variables.workOrderId) }),
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.cycles(variables.workOrderId) }),
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.realLabSheet(variables.workOrderId, variables.cycleId) }),
+      ]);
+    },
+  });
+}
+
+export function useFinalizeRealLabSheet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ cycleId, workOrderId }: { readonly cycleId: string; readonly workOrderId: string }) => finalizeRealLabSheet(workOrderId, cycleId),
+    onSuccess: async (_sheet, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.detail(variables.workOrderId) }),
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.cycles(variables.workOrderId) }),
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.realLabSheet(variables.workOrderId, variables.cycleId) }),
       ]);
     },
   });

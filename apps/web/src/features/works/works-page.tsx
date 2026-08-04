@@ -60,9 +60,9 @@ import { hasPermission } from "../users/users-api.js";
 import { useWorkTypeOptions } from "../work-types/work-types-api.js";
 import { useActiveWorkFormTemplate } from "../work-forms/work-form-templates-api.js";
 import { WorkForm, WorkFormActions, defaultWorkFormValues, toWorkFormValues } from "./work-form.js";
-import { WorkFormReadOnlyView } from "./work-dynamic-form.js";
+import { WorkFormFieldRenderer, WorkFormReadOnlyView } from "./work-dynamic-form.js";
 import { WorkWorkflowSection } from "./work-workflow-section.js";
-import { useCreateNextWorkCycle, useCreateWork, useReassignWork, useUpdateWork, useWork, useWorkCycles, useWorkDeadlinePreview, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
+import { useCreateNextWorkCycle, useCreateWork, useFinalizeRealLabSheet, useRealLabSheet, useReassignWork, useUpdateWork, useUpsertRealLabSheet, useWork, useWorkCycles, useWorkDeadlinePreview, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
 import { workFormSchema, type WorkFormValues } from "./works-page.schema.js";
 import { WorkQrModal } from "./work-qr-modal.js";
 import { applyApiErrorsToForm, getErrorMessage, getFormErrorSummaryItems, UnsavedChangesPrompt, useBeforeUnloadPrompt, useCloseGuard, useErrorSummaryFocus } from "../../lib/form-utils.js";
@@ -902,6 +902,13 @@ function WorkDetailsDrawer({
                 work={work}
               />
             ) : null}
+            {canReadCycles ? (
+              <RealLabSheetSection
+                history={cyclesQuery.data}
+                isCyclesLoading={cyclesQuery.isLoading}
+                work={work}
+              />
+            ) : null}
             <WorkWorkflowSection isOpen={isOpen} workId={work.id} />
             {workTypeOptionsError ? <ErrorState title="Opțiunile nu au fost încărcate" description={getErrorMessage(workTypeOptionsError)} /> : null}
             <WorkForm
@@ -938,6 +945,7 @@ function WorkDetailsDrawer({
                 fieldCount: work.workForm.fields.length,
                 fields: work.workForm.fields.map((field) => ({ ...field, id: field.key, isActive: true })),
                 id: work.workForm.templateId ?? "snapshot",
+                kind: work.workForm.templateKind ?? "GENERIC",
                 name: work.workForm.templateName,
                 status: "ACTIVE",
                 updatedAt: work.workForm.updatedAt,
@@ -1125,6 +1133,181 @@ function MetricCell({ label, value }: { readonly label: string; readonly value: 
       <span className="works-page__muted">{label}</span>
       <strong>{value}</strong>
     </div>
+  );
+}
+
+function toMutableDynamicValues(values: import("@dental-lab/shared").WorkFormValues | null | undefined): WorkFormValues["workFormValues"] {
+  const next: WorkFormValues["workFormValues"] = {};
+  if (!values) {
+    return next;
+  }
+  for (const [key, value] of Object.entries(values)) {
+    next[key] = Array.isArray(value) ? [...value] : value as WorkFormValues["workFormValues"][string];
+  }
+  return next;
+}
+
+function RealLabSheetSection({
+  history,
+  isCyclesLoading,
+  work,
+}: {
+  readonly history: WorkCyclesHistory | undefined;
+  readonly isCyclesLoading: boolean;
+  readonly work: import("@dental-lab/shared").WorkDetail;
+}): ReactNode {
+  const toast = useToast();
+  const cycles = history?.cycles ?? [];
+  const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
+  const activeCycleId = history?.activeCycleId ?? null;
+  const effectiveCycleId = selectedCycleId ?? activeCycleId ?? cycles[0]?.id ?? null;
+  const sheetQuery = useRealLabSheet(work.id, effectiveCycleId, effectiveCycleId !== null);
+  const saveMutation = useUpsertRealLabSheet();
+  const finalizeMutation = useFinalizeRealLabSheet();
+  const [isFinalizeOpen, setFinalizeOpen] = useState(false);
+  const form = useForm<WorkFormValues>({
+    defaultValues: {
+      ...defaultWorkFormValues,
+      workFormValues: {},
+    },
+  });
+  const sheet = sheetQuery.data ?? null;
+
+  useEffect(() => {
+    if (activeCycleId && selectedCycleId === null) {
+      setSelectedCycleId(activeCycleId);
+    }
+  }, [activeCycleId, selectedCycleId]);
+
+  useEffect(() => {
+    if (sheet) {
+      form.reset({
+        ...defaultWorkFormValues,
+        workFormValues: toMutableDynamicValues(sheet.values),
+      });
+    }
+  }, [form, sheet]);
+
+  function submitSheet(): void {
+    if (!sheet || !effectiveCycleId) {
+      return;
+    }
+    saveMutation.mutate({
+      cycleId: effectiveCycleId,
+      input: {
+        templateId: sheet.templateId ?? "",
+        templateVersion: sheet.templateVersion,
+        values: form.getValues("workFormValues"),
+      },
+      workOrderId: work.id,
+    }, {
+      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Fișa nu a fost salvată", variant: "error" }),
+      onSuccess: () => toast.showToast({ message: "Fișa laborator a fost salvată.", variant: "success" }),
+    });
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Fișă laborator</CardTitle>
+        <CardDescription>{sheet ? `${work.code} · Ciclul ${sheet.cycleNumber}` : "Fișa reală pe ciclu"}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isCyclesLoading ? <LoadingState text="Se încarcă ciclurile" /> : null}
+        {cycles.length > 0 ? (
+          <div className="works-page__tabs" role="tablist" aria-label="Cicluri fișă laborator">
+            {cycles.map((cycle) => (
+              <button
+                aria-selected={cycle.id === effectiveCycleId}
+                className="works-page__tab"
+                key={cycle.id}
+                onClick={() => setSelectedCycleId(cycle.id)}
+                type="button"
+              >
+                Ciclul {cycle.cycleNumber}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {sheetQuery.isLoading ? <LoadingState text="Se încarcă fișa laborator" /> : null}
+        {sheetQuery.error ? <ErrorState title="Fișa laborator nu a fost încărcată" description={getErrorMessage(sheetQuery.error)} /> : null}
+        {sheet ? (
+          <form
+            className="works-page__lab-sheet"
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitSheet();
+            }}
+          >
+            <div className="works-page__meta">
+              <StatusBadge
+                label={sheet.status === "FINALIZED" ? "Finalizată" : sheet.status === "READ_ONLY" ? "Read-only" : "În lucru"}
+                variant={sheet.status === "FINALIZED" || sheet.status === "READ_ONLY" ? "closed" : "production"}
+              />
+              <span>{sheet.templateName} · v{sheet.templateVersion}</span>
+              {sheet.finalizedAt ? <span>Finalizată: {formatDateTime(sheet.finalizedAt)}</span> : null}
+            </div>
+            <FormGrid>
+              {(sheet.fields ?? []).map((field) => {
+                const normalizedField = {
+                  ...field,
+                  id: field.key,
+                  isActive: true,
+                };
+                const isFullWidthField = field.type === "TEXTAREA" || field.type === "TOOTH" || field.type === "MULTISELECT";
+                const content = (
+                  <WorkFormFieldRenderer
+                    field={normalizedField}
+                    form={form}
+                    isDisabled={!sheet.canEdit || field.sourceKind !== "USER_ENTERED"}
+                  />
+                );
+                return isFullWidthField
+                  ? <div className="works-page__form-full" key={field.key}>{content}</div>
+                  : <div key={field.key}>{content}</div>;
+              })}
+            </FormGrid>
+            <div className="works-page__actions">
+              <Button disabled={!sheet.canEdit || saveMutation.isPending || sheet.templateId === null} isLoading={saveMutation.isPending} type="submit">
+                Salvează fișa
+              </Button>
+              <Button
+                disabled={!sheet.canFinalize || finalizeMutation.isPending}
+                isLoading={finalizeMutation.isPending}
+                onClick={() => setFinalizeOpen(true)}
+                type="button"
+                variant="outline"
+              >
+                Finalizează fișa
+              </Button>
+            </div>
+            {!sheet.canEdit ? <p className="works-page__muted">Fișa este read-only pentru acest ciclu sau pentru rolul curent.</p> : null}
+          </form>
+        ) : !sheetQuery.isLoading && !sheetQuery.error ? (
+          <p className="works-page__muted">Nu există fișă laborator disponibilă pentru acest ciclu.</p>
+        ) : null}
+      </CardContent>
+      <ConfirmActionModal
+        confirmLabel="Finalizează"
+        description="După finalizare, fișa acestui ciclu nu mai poate fi modificată. Corecțiile se fac într-un ciclu nou."
+        isLoading={finalizeMutation.isPending}
+        isOpen={isFinalizeOpen}
+        onCancel={() => setFinalizeOpen(false)}
+        onConfirm={() => {
+          if (!effectiveCycleId) {
+            return;
+          }
+          finalizeMutation.mutate({ cycleId: effectiveCycleId, workOrderId: work.id }, {
+            onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Fișa nu a fost finalizată", variant: "error" }),
+            onSuccess: () => {
+              setFinalizeOpen(false);
+              toast.showToast({ message: "Fișa laborator a fost finalizată.", variant: "success" });
+            },
+          });
+        }}
+        title="Finalizezi fișa?"
+      />
+    </Card>
   );
 }
 

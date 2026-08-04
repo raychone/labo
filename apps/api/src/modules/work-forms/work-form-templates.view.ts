@@ -38,6 +38,14 @@ export interface WorkFormFieldView {
   readonly defaultValue: unknown;
   readonly options: unknown;
   readonly validation: unknown;
+  readonly sectionKey: string | null;
+  readonly sectionLabel: string | null;
+  readonly roleOwner: string;
+  readonly editableUntil: string;
+  readonly cycleScope: string;
+  readonly copyToNextCyclePolicy: string;
+  readonly printable: boolean;
+  readonly sourceKind: string;
   readonly isActive: boolean;
 }
 
@@ -47,6 +55,7 @@ export interface WorkFormTemplateSummaryView {
   readonly name: string;
   readonly description: string | null;
   readonly version: number;
+  readonly kind: string;
   readonly status: string;
   readonly fieldCount: number;
   readonly activatedAt: string | null;
@@ -87,6 +96,7 @@ export function toWorkFormTemplateSummaryView(template: TemplateSummaryRecord): 
     description: template.description,
     fieldCount: template._count.fields,
     id: template.id,
+    kind: template.kind,
     name: template.name,
     status: template.status,
     updatedAt: template.updatedAt.toISOString(),
@@ -114,12 +124,21 @@ export function toWorkFormTemplateDetailView(template: TemplateWithWorkType): Wo
       label: field.label,
       options: field.options ?? [],
       placeholder: field.placeholder,
+      sectionKey: field.sectionKey,
+      sectionLabel: field.sectionLabel,
+      roleOwner: field.roleOwner,
+      editableUntil: field.editableUntil,
+      cycleScope: field.cycleScope,
+      copyToNextCyclePolicy: field.copyToNextCyclePolicy,
+      printable: field.printable,
       required: field.required,
+      sourceKind: field.sourceKind,
       sortOrder: field.sortOrder,
       type: field.type,
       validation: field.validation ?? {},
     })),
     id: template.id,
+    kind: template.kind,
     name: template.name,
     status: template.status,
     updatedAt: template.updatedAt.toISOString(),

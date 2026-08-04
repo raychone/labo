@@ -397,6 +397,37 @@
   grid-template-columns: 1fr;
 }
 
+.works-page__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-2);
+  margin-bottom: var(--dl-space-4);
+}
+
+.works-page__tab {
+  background: var(--dl-color-surface);
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-sm);
+  color: var(--dl-color-text);
+  cursor: pointer;
+  min-height: 36px;
+  padding: 0 var(--dl-space-3);
+}
+
+.works-page__tab[aria-selected="true"] {
+  background: var(--dl-color-accent-subtle);
+  border-color: var(--dl-color-accent);
+}
+
+.works-page__lab-sheet {
+  display: grid;
+  gap: var(--dl-space-4);
+}
+
+.works-page__form-full {
+  grid-column: 1 / -1;
+}
+
 .works-page__timeline > div {
   border-left: 3px solid var(--dl-color-border);
   display: grid;

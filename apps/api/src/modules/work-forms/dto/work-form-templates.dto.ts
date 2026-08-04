@@ -15,7 +15,16 @@ import {
   ValidateNested,
 } from "class-validator";
 
-import { MAX_WORK_FORM_FIELDS, WORK_FORM_FIELD_TYPES } from "../work-forms.constants.js";
+import {
+  MAX_WORK_FORM_FIELDS,
+  WORK_FORM_COPY_TO_NEXT_CYCLE_POLICIES,
+  WORK_FORM_FIELD_CYCLE_SCOPES,
+  WORK_FORM_FIELD_EDITABLE_UNTIL,
+  WORK_FORM_FIELD_ROLE_OWNERS,
+  WORK_FORM_FIELD_SOURCE_KINDS,
+  WORK_FORM_FIELD_TYPES,
+  WORK_FORM_TEMPLATE_KINDS,
+} from "../work-forms.constants.js";
 
 function trimRequiredString(value: unknown): string {
   return typeof value === "string" ? value.trim() : value as string;
@@ -143,6 +152,42 @@ export class WorkFormFieldDefinitionDto {
   @ValidateNested()
   @Type(() => WorkFormFieldValidationDto)
   public readonly validation?: WorkFormFieldValidationDto;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(64)
+  public readonly sectionKey?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(160)
+  public readonly sectionLabel?: string | null;
+
+  @IsOptional()
+  @IsIn(WORK_FORM_FIELD_ROLE_OWNERS)
+  public readonly roleOwner?: (typeof WORK_FORM_FIELD_ROLE_OWNERS)[number];
+
+  @IsOptional()
+  @IsIn(WORK_FORM_FIELD_EDITABLE_UNTIL)
+  public readonly editableUntil?: (typeof WORK_FORM_FIELD_EDITABLE_UNTIL)[number];
+
+  @IsOptional()
+  @IsIn(WORK_FORM_FIELD_CYCLE_SCOPES)
+  public readonly cycleScope?: (typeof WORK_FORM_FIELD_CYCLE_SCOPES)[number];
+
+  @IsOptional()
+  @IsIn(WORK_FORM_COPY_TO_NEXT_CYCLE_POLICIES)
+  public readonly copyToNextCyclePolicy?: (typeof WORK_FORM_COPY_TO_NEXT_CYCLE_POLICIES)[number];
+
+  @IsOptional()
+  @IsBoolean()
+  public readonly printable?: boolean;
+
+  @IsOptional()
+  @IsIn(WORK_FORM_FIELD_SOURCE_KINDS)
+  public readonly sourceKind?: (typeof WORK_FORM_FIELD_SOURCE_KINDS)[number];
 }
 
 export class ReplaceWorkFormFieldsDto {
@@ -170,6 +215,10 @@ export class CreateWorkFormTemplateDto {
   @IsString()
   @MaxLength(64)
   public readonly cloneFromTemplateId?: string;
+
+  @IsOptional()
+  @IsIn(WORK_FORM_TEMPLATE_KINDS)
+  public readonly kind?: (typeof WORK_FORM_TEMPLATE_KINDS)[number];
 }
 
 export class UpdateWorkFormTemplateDto {

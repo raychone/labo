@@ -135,6 +135,11 @@ export type PermissionKey =
   | "forms.create"
   | "forms.update"
   | "forms.archive"
+  | "work_forms.real.read"
+  | "work_forms.real.update"
+  | "work_forms.real.finalize"
+  | "work_forms.real.history.read"
+  | "work_forms.real.manage_templates"
   | "reports.operational"
   | "reports.financial"
   | "reports.productivity"
@@ -281,6 +286,11 @@ export const PERMISSION_REGISTRY = [
   definePermission("forms.create", "Create work form templates."),
   definePermission("forms.update", "Update work form templates."),
   definePermission("forms.archive", "Archive work form templates."),
+  definePermission("work_forms.real.read", "Read real laboratory cycle sheets."),
+  definePermission("work_forms.real.update", "Update active real laboratory cycle sheets."),
+  definePermission("work_forms.real.finalize", "Finalize active real laboratory cycle sheets."),
+  definePermission("work_forms.real.history.read", "Read historical real laboratory cycle sheets."),
+  definePermission("work_forms.real.manage_templates", "Manage real laboratory sheet templates."),
   definePermission("reports.operational", "Read operational reports."),
   definePermission("reports.financial", "Read financial reports."),
   definePermission("reports.productivity", "Read productivity reports."),
@@ -373,6 +383,8 @@ export const ROLE_PERMISSION_MATRIX = {
     "delivery.signature.read": "ALL",
     "files.read": "ALL",
     "files.upload": "ALL",
+    "work_forms.real.history.read": "ALL",
+    "work_forms.real.read": "ALL",
     "logistics.assign": "ALL",
     "logistics.block_work": "ALL",
     "logistics.center.read": "ALL",
@@ -429,6 +441,10 @@ export const ROLE_PERMISSION_MATRIX = {
     "delivery.signature.read": "ALL",
     "doctors.read": "ALL",
     "forms.read": "ALL",
+    "work_forms.real.finalize": "ALL",
+    "work_forms.real.history.read": "ALL",
+    "work_forms.real.read": "ALL",
+    "work_forms.real.update": "ALL",
     "files.read": "ALL",
     "files.upload": "ALL",
     "logistics.block_work": "ALL",
@@ -470,6 +486,10 @@ export const ROLE_PERMISSION_MATRIX = {
     "files.read": "ASSIGNED",
     "files.upload": "ASSIGNED",
     "forms.read": "ALL",
+    "work_forms.real.finalize": "ASSIGNED",
+    "work_forms.real.history.read": "ASSIGNED",
+    "work_forms.real.read": "ASSIGNED",
+    "work_forms.real.update": "ASSIGNED",
     "logistics.center.read": "ASSIGNED",
     "patients.read": "ASSIGNED",
     "quality.read": "OWN_STAGE",
@@ -531,6 +551,11 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "forms.create",
   "forms.read",
   "forms.update",
+  "work_forms.real.finalize",
+  "work_forms.real.history.read",
+  "work_forms.real.manage_templates",
+  "work_forms.real.read",
+  "work_forms.real.update",
   "finance.read",
   "logistics.block_work",
   "logistics.center.read",

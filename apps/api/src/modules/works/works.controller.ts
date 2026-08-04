@@ -24,6 +24,7 @@ import {
   ReleaseWorkDto,
   SetManualWorkDeadlineDto,
   UpdateWorkDto,
+  UpsertRealLabSheetDto,
   WorkDeadlinePreviewDto,
 } from "./dto/works.dto.js";
 import { WorksService } from "./works.service.js";
@@ -95,6 +96,41 @@ export class WorksController {
     @Req() request: Request,
   ) {
     return this.worksService.createNextCycle({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, legalEntity, workOrderId, dto, await this.canReadPricing(actor.id));
+  }
+
+  @Get(":id/cycles/:cycleId/real-lab-sheet")
+  @RequirePermission("work_forms.real.read", "ASSIGNED")
+  public getRealLabSheet(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param("id") workOrderId: string,
+    @Param("cycleId") cycleId: string,
+  ) {
+    return this.worksService.getRealLabSheet(actor.id, workOrderId, cycleId);
+  }
+
+  @Patch(":id/cycles/:cycleId/real-lab-sheet")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("work_forms.real.update", "ASSIGNED")
+  public upsertRealLabSheet(
+    @Param("id") workOrderId: string,
+    @Param("cycleId") cycleId: string,
+    @Body() dto: UpsertRealLabSheetDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Req() request: Request,
+  ) {
+    return this.worksService.upsertRealLabSheet({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, workOrderId, cycleId, dto);
+  }
+
+  @Post(":id/cycles/:cycleId/real-lab-sheet/finalize")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("work_forms.real.finalize", "ASSIGNED")
+  public finalizeRealLabSheet(
+    @Param("id") workOrderId: string,
+    @Param("cycleId") cycleId: string,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Req() request: Request,
+  ) {
+    return this.worksService.finalizeRealLabSheet({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, workOrderId, cycleId);
   }
 
   @Get(":id/assignment-history")
