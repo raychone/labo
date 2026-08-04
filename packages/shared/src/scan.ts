@@ -1,6 +1,7 @@
 import type { ScanSource, WorkPriority, WorkStatus } from "./works.js";
 import type { WorkStageExecutionStatus, WorkflowExecutionStatus, WorkflowUserSummary } from "./workflow-execution.js";
 import type { DeliveryPreparationGroupStatus, LogisticsLocationCode, LogisticsStatus } from "./logistics.js";
+import type { RealLabSheetOperationalStatus } from "./work-forms.js";
 
 export const SCAN_ACTION_TYPES = ["OPEN_WORK", "START_STAGE", "COMPLETE_STAGE", "ASSIGN_STAGE", "REASSIGN_STAGE"] as const;
 export const SCAN_DUPLICATE_WINDOW_MS = 2_000;
@@ -72,6 +73,11 @@ export interface ScanContextView {
     readonly statusLabel: string;
   } | null;
   readonly logistics: ScanLogisticsSummary;
+  readonly realLabSheet: {
+    readonly cycleNumber: number | null;
+    readonly label: string;
+    readonly status: RealLabSheetOperationalStatus;
+  };
   readonly resolvedAt: string;
   readonly work: ScanWorkSummary;
   readonly workflow: ScanWorkflowSummary | null;

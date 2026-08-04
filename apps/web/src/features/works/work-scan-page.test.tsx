@@ -47,6 +47,11 @@ const scanContext = {
     locationCode: "PRODUCTIE",
     status: "IN_PRODUCTION",
   },
+  realLabSheet: {
+    cycleNumber: 1,
+    label: "Necompletată",
+    status: "NOT_STARTED",
+  },
   resolvedAt: "2026-07-22T12:00:00.000Z",
   work: {
     clinicName: "Clinica Test",
@@ -112,6 +117,8 @@ describe("WorkScanPage", () => {
     expect(await screen.findByText("WO-2026-000001")).toBeDefined();
     expect(await screen.findByText("Flux standard")).toBeDefined();
     expect(await screen.findByText("Tehnician Demo")).toBeDefined();
+    expect(await screen.findByText("Necompletată")).toBeDefined();
+    expect(await screen.findByRole("button", { name: "Completează fișa" })).toBeDefined();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/scan/resolve"), expect.anything()));
   });
 

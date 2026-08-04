@@ -597,6 +597,12 @@ enum WorkFormFieldSourceKind {
   SYSTEM_DERIVED
 }
 
+enum WorkRealLabSheetStatus {
+  IN_PROGRESS
+  COMPLETE
+  FINALIZED
+}
+
 enum WorkFormFieldType {
   TEXT
   TEXTAREA
@@ -949,6 +955,8 @@ model WorkFormSubmission {
   values               Json
   submittedAt          DateTime          @default(now()) @map("submitted_at")
   submittedByUserId    String?           @map("submitted_by_user_id")
+  realLabSheetStatus   WorkRealLabSheetStatus? @map("real_lab_sheet_status")
+  revision             Int               @default(1)
   finalizedAt          DateTime?         @map("finalized_at")
   finalizedByUserId    String?           @map("finalized_by_user_id")
   updatedAt            DateTime          @updatedAt @map("updated_at")
@@ -966,6 +974,8 @@ model WorkFormSubmission {
   @@index([templateId])
   @@index([templateKind])
   @@index([templateVersion])
+  @@index([realLabSheetStatus])
+  @@index([revision])
   @@index([submittedByUserId])
   @@index([updatedByUserId])
   @@index([finalizedByUserId])

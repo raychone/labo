@@ -110,4 +110,12 @@ describe("WorkFormSubmissionValidationService", () => {
       workTypeId: "work_type_1",
     })).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  it("allows partial draft values and rejects the same values when completion requires all mandatory fields", async () => {
+    const service = new WorkFormSubmissionValidationService();
+    const snapshot = service.createSnapshot(activeTemplate as unknown as Parameters<WorkFormSubmissionValidationService["createSnapshot"]>[0]);
+
+    expect(service.validateValues(snapshot, { shade: "A2" }, { enforceRequired: false })).toEqual({ shade: "A2", teeth: null });
+    expect(() => service.validateValues(snapshot, { shade: "A2" }, { enforceRequired: true })).toThrow(BadRequestException);
+  });
 });

@@ -1,11 +1,12 @@
-import type {
-  DeliveryStatus,
-  Prisma,
-  WorkClaimStatus,
-  WorkLogisticsStatus,
-  WorkPriority,
-  WorkStageExecutionStatus,
-  WorkWorkflowExecutionStatus,
+import {
+  WorkFormTemplateKind,
+  type DeliveryStatus,
+  type Prisma,
+  type WorkClaimStatus,
+  type WorkLogisticsStatus,
+  type WorkPriority,
+  type WorkStageExecutionStatus,
+  type WorkWorkflowExecutionStatus,
 } from "@prisma/client";
 
 import { resolveDeadlineVisualState, type DeadlineVisualState } from "../works/work-deadline-visual.js";
@@ -77,6 +78,20 @@ export const operationalStatusWorkInclude = {
       logisticsState: {
         select: {
           status: true,
+        },
+      },
+      workFormSubmissions: {
+        orderBy: {
+          updatedAt: "desc",
+        },
+        select: {
+          finalizedAt: true,
+          realLabSheetStatus: true,
+          updatedAt: true,
+        },
+        take: 1,
+        where: {
+          templateKind: WorkFormTemplateKind.REAL_LAB_SHEET,
         },
       },
       workflowExecution: {
@@ -168,6 +183,13 @@ export interface OperationalStatusRowView {
     readonly reference: string | null;
   };
   readonly priority: WorkPriority;
+  readonly realLabSheet: {
+    readonly cycleNumber: number | null;
+    readonly finalizedAt: string | null;
+    readonly label: string;
+    readonly lastModifiedAt: string | null;
+    readonly status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETE" | "FINALIZED";
+  };
   readonly updatedAt: string;
   readonly workCode: string;
   readonly workOwner: OperationalStatusPersonView | null;
@@ -271,6 +293,7 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
   });
   const workflowExecution = work.activeCycle?.workflowExecution ?? null;
   const logisticsState = work.activeCycle?.logisticsState ?? null;
+  const realLabSheet = toRealLabSheetSummary(work.activeCycle);
   const currentStage = workflowExecution?.currentStage ?? null;
   const progressCompleted = workflowExecution?.stages.filter((stage) => stage.status === "COMPLETED").length ?? 0;
   const progressTotal = workflowExecution?.stages.length ?? 0;
@@ -320,6 +343,7 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
       reference: work.patientReference,
     },
     priority: work.priority,
+    realLabSheet,
     updatedAt: work.updatedAt.toISOString(),
     workCode: work.code,
     workOwner: work.claimedBy ? toPerson(work.claimedBy) : work.assignedTechnician ? toPerson(work.assignedTechnician) : null,
@@ -338,6 +362,25 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
       id: work.workType.id,
       name: work.workType.name,
     },
+  };
+}
+
+function toRealLabSheetSummary(cycle: OperationalStatusWorkRecord["activeCycle"]): OperationalStatusRowView["realLabSheet"] {
+  const submission = cycle?.workFormSubmissions[0] ?? null;
+  const status = submission?.finalizedAt ? "FINALIZED" : submission?.realLabSheetStatus ?? "NOT_STARTED";
+  const labels = {
+    COMPLETE: "Completă",
+    FINALIZED: "Finalizată",
+    IN_PROGRESS: "În lucru",
+    NOT_STARTED: "Necompletată",
+  } as const;
+
+  return {
+    cycleNumber: cycle?.cycleNumber ?? null,
+    finalizedAt: submission?.finalizedAt?.toISOString() ?? null,
+    label: labels[status],
+    lastModifiedAt: submission?.updatedAt.toISOString() ?? null,
+    status,
   };
 }
 

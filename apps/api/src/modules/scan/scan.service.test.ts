@@ -19,6 +19,10 @@ function createWork() {
         physicalLocationCode: "PRODUCTIE",
         status: "IN_PRODUCTION",
       },
+      workFormSubmissions: [{
+        finalizedAt: null,
+        realLabSheetStatus: "COMPLETE",
+      }],
       workflowExecution: {
         currentStageExecutionId: "stage_1",
         id: "workflow_1",
@@ -85,6 +89,7 @@ describe("ScanService", () => {
 
     expect(result.work.code).toBe("WO-2026-000001");
     expect(result.workflow?.currentStage?.name).toBe("Modelare");
+    expect(result.realLabSheet).toEqual({ cycleNumber: null, label: "Completă", status: "COMPLETE" });
     expect(result.actions.find((action) => action.type === "START_STAGE")?.enabled).toBe(true);
     expect(JSON.stringify(result)).not.toContain("secure_token_12345678901234567890");
     expect(auditCreate).toHaveBeenCalledWith({

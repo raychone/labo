@@ -17,6 +17,7 @@ import {
   ClaimWorkDto,
   CreateNextWorkCycleDto,
   CreateWorkDto,
+  FinalizeRealLabSheetDto,
   ListClaimWorksQueryDto,
   ListWorksQueryDto,
   ReassignWorkDto,
@@ -127,10 +128,11 @@ export class WorksController {
   public finalizeRealLabSheet(
     @Param("id") workOrderId: string,
     @Param("cycleId") cycleId: string,
+    @Body() dto: FinalizeRealLabSheetDto,
     @CurrentUser() actor: AuthenticatedUser,
     @Req() request: Request,
   ) {
-    return this.worksService.finalizeRealLabSheet({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, workOrderId, cycleId);
+    return this.worksService.finalizeRealLabSheet({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, workOrderId, cycleId, dto);
   }
 
   @Get(":id/assignment-history")

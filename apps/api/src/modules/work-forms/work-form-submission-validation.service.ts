@@ -114,6 +114,10 @@ interface WorkFormSchemaSnapshot {
   readonly fields: readonly WorkFormSnapshotField[];
 }
 
+interface ValidateValuesOptions {
+  readonly enforceRequired?: boolean;
+}
+
 const FORBIDDEN_VALUE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const FDI_TOOTH_CODES = new Set([
   "11", "12", "13", "14", "15", "16", "17", "18",
@@ -382,8 +386,8 @@ export class WorkFormSubmissionValidationService {
     };
   }
 
-  public validateValues(snapshot: WorkFormSchemaSnapshot, input: unknown): WorkFormValues {
-    return this.validateValuesInternal(snapshot, input);
+  public validateValues(snapshot: WorkFormSchemaSnapshot, input: unknown, options: ValidateValuesOptions = {}): WorkFormValues {
+    return this.validateValuesInternal(snapshot, input, options);
   }
 
   private async getActiveTemplate(client: WorkFormClient, workTypeId: string): Promise<ActiveTemplateRecord | null> {
@@ -403,7 +407,7 @@ export class WorkFormSubmissionValidationService {
     });
   }
 
-  private validateValuesInternal(snapshot: WorkFormSchemaSnapshot, input: unknown): WorkFormValues {
+  private validateValuesInternal(snapshot: WorkFormSchemaSnapshot, input: unknown, options: ValidateValuesOptions): WorkFormValues {
     this.ensurePayloadSize(input);
     if (!this.isPlainObject(input)) {
       throw new BadRequestException("Valorile formularului trebuie trimise ca obiect simplu.");
@@ -425,16 +429,17 @@ export class WorkFormSubmissionValidationService {
     const normalized: Record<string, WorkFormValue> = {};
     for (const field of snapshot.fields) {
       const rawValue = Object.prototype.hasOwnProperty.call(source, field.key) ? source[field.key] : field.defaultValue;
-      normalized[field.key] = this.normalizeFieldValue(field, rawValue);
+      normalized[field.key] = this.normalizeFieldValue(field, rawValue, options);
     }
 
     return normalized;
   }
 
-  private normalizeFieldValue(field: WorkFormSnapshotField, value: unknown): WorkFormValue {
+  private normalizeFieldValue(field: WorkFormSnapshotField, value: unknown, options: ValidateValuesOptions): WorkFormValue {
+    const enforceRequired = options.enforceRequired ?? true;
     if (value === undefined || value === null || value === "") {
-      if (field.required) {
-        throw new BadRequestException(`${field.label} este obligatoriu.`);
+      if (field.required && enforceRequired) {
+        throw new BadRequestException(this.requiredMessage(field));
       }
       return field.type === "CHECKBOX" ? false : null;
     }
@@ -443,8 +448,8 @@ export class WorkFormSubmissionValidationService {
       if (typeof value !== "boolean") {
         throw new BadRequestException(`${field.label} trebuie să fie Da/Nu.`);
       }
-      if (field.required && value !== true) {
-        throw new BadRequestException(`${field.label} trebuie bifat.`);
+      if (field.required && enforceRequired && value !== true) {
+        throw new BadRequestException(this.requiredMessage(field, "trebuie bifat"));
       }
       return value;
     }
@@ -462,8 +467,8 @@ export class WorkFormSubmissionValidationService {
         throw new BadRequestException(`${field.label} trebuie să fie o listă de valori.`);
       }
       const unique = [...new Set(value.map((item) => item.trim()).filter((item) => item.length > 0))];
-      if (field.required && unique.length === 0) {
-        throw new BadRequestException(`${field.label} este obligatoriu.`);
+      if (field.required && enforceRequired && unique.length === 0) {
+        throw new BadRequestException(this.requiredMessage(field));
       }
       if (unique.length > MAX_ARRAY_SELECTIONS) {
         throw new BadRequestException(`${field.label} conține prea multe selecții.`);
@@ -477,8 +482,8 @@ export class WorkFormSubmissionValidationService {
     }
 
     const text = value.trim();
-    if (field.required && text.length === 0) {
-      throw new BadRequestException(`${field.label} este obligatoriu.`);
+    if (field.required && enforceRequired && text.length === 0) {
+      throw new BadRequestException(this.requiredMessage(field));
     }
     if (text.length === 0) {
       return null;
@@ -509,6 +514,10 @@ export class WorkFormSubmissionValidationService {
     if (field.type === "DATE" && typeof field.validation.maxDate === "string" && value > field.validation.maxDate) {
       throw new BadRequestException(`${field.label} este după data maximă.`);
     }
+  }
+
+  private requiredMessage(field: WorkFormSnapshotField, message = "este obligatoriu"): string {
+    return field.sectionLabel ? `${field.sectionLabel}: ${field.label} ${message}.` : `${field.label} ${message}.`;
   }
 
   private validateNumber(field: WorkFormSnapshotField, value: number): void {

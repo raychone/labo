@@ -14,11 +14,11 @@ Give technicians a personal queue and operational workbench.
 
 ## Domain Concepts
 
-Available work, claimed work, workload, current technician, stage assignment.
+Available work, claimed work, workload, current technician, stage assignment, real laboratory sheet status.
 
 ## Business Rules
 
-Technicians can claim available works, view own claimed works, release own work where permitted, and execute workflow actions exposed by current endpoints.
+Technicians can claim available works, view own claimed works, release own work where permitted, execute workflow actions exposed by current endpoints, and open the real laboratory sheet for visible/owned work where sheet permissions allow it.
 
 ## Data Model
 
@@ -26,11 +26,11 @@ Technicians can claim available works, view own claimed works, release own work 
 
 ## API
 
-`GET /technician/workbench`, `GET /technician/workload`, `GET /technicians/options`, stage assign/unassign endpoints.
+`GET /technician/workbench`, `GET /technician/workload`, `GET /technicians/options`, stage assign/unassign endpoints. Workbench rows include compact real laboratory sheet status for the active cycle.
 
 ## UI
 
-`/workbench`.
+`/workbench` includes sheet status badges and `Completează fișa`/`Continuă fișa` actions that open the existing work detail sheet flow.
 
 ## Audit
 
@@ -46,7 +46,7 @@ Stale claims, abandoned assignments, conflicting stage actions. These are planne
 
 ## Implemented Tasks
 
-TECH-001, TECH-CLAIM-001A, TECH-CLAIM-001B.
+TECH-001, TECH-CLAIM-001A, TECH-CLAIM-001B, WORKFORM-REAL-001B workbench integration.
 
 ## Planned Tasks
 

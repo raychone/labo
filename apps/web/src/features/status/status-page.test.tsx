@@ -54,7 +54,7 @@ const operationalStatusResponse: OperationalStatusResponse = {
       claimStatus: "CLAIMED",
       clinic: { id: "clinic_1", name: "Clinica Test" },
       createdAt: "2026-08-04T07:00:00.000Z",
-      currentCycle: { code: "CYCLE_2", label: "Ciclul 2" },
+      currentCycle: { code: "CYCLE_2", id: "cycle_2", label: "Ciclul 2", number: 2, reason: "ADJUSTMENT", status: "ACTIVE" },
       currentStageTechnician: { displayName: "Tehnician Ana", publicId: "tech_1" },
       deadline: {
         badge: "Astăzi",
@@ -69,6 +69,13 @@ const operationalStatusResponse: OperationalStatusResponse = {
       logistics: { status: "IN_PRODUCTION" },
       patient: { id: "patient_1", name: "Maria Ionescu", reference: "MI-1" },
       priority: "URGENT",
+      realLabSheet: {
+        cycleNumber: 2,
+        finalizedAt: null,
+        label: "În lucru",
+        lastModifiedAt: "2026-08-04T08:00:00.000Z",
+        status: "IN_PROGRESS",
+      },
       updatedAt: "2026-08-04T08:00:00.000Z",
       workCode: "WO-2026-000001",
       workOwner: { displayName: "Tehnician Ana", publicId: "tech_1" },

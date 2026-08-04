@@ -315,6 +315,52 @@ const workTypeOptionsResponse = [
   { code: "WT-0001", id: "work_type_1", name: "Coroana zirconiu", unit: "UNIT" },
 ];
 
+const realLabSheetResponse = {
+  canEdit: true,
+  canFinalize: false,
+  canMarkComplete: true,
+  cycleNumber: 2,
+  fields: [
+    {
+      copyToNextCyclePolicy: "NEVER",
+      cycleScope: "PER_CYCLE",
+      defaultValue: null,
+      editableUntil: "FINALIZED",
+      helpText: null,
+      key: "observations",
+      label: "Observații",
+      options: [],
+      placeholder: null,
+      printable: true,
+      required: true,
+      roleOwner: "SHARED",
+      sectionKey: "technical",
+      sectionLabel: "Date tehnice",
+      sortOrder: 1,
+      sourceKind: "USER_ENTERED",
+      type: "TEXTAREA",
+      validation: {},
+    },
+  ],
+  finalizedAt: null,
+  finalizedBy: null,
+  isFinalized: false,
+  isReadOnly: false,
+  lastModifiedAt: "2026-08-04T08:00:00.000Z",
+  lastModifiedBy: { displayName: "Receptie", publicId: "user_1" },
+  revision: 1,
+  status: "IN_PROGRESS",
+  submittedAt: "2026-08-04T08:00:00.000Z",
+  templateId: "template_real",
+  templateKind: "REAL_LAB_SHEET",
+  templateName: "Fișă laborator reală",
+  templateVersion: 1,
+  updatedAt: "2026-08-04T08:00:00.000Z",
+  values: {},
+  workCycleId: "cycle_2",
+  workOrderId: "work_order_1",
+};
+
 describe("WorksPage", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -649,5 +695,87 @@ describe("WorksPage", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Înregistrează revenirea" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/works/work_order_1/cycles/next"), expect.objectContaining({ method: "POST" })));
+  });
+
+  it("saves real laboratory sheet drafts and marks complete with revision", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/auth/permissions")) {
+        return Promise.resolve(createJsonResponse({
+          permissions: [
+            { key: "cycles.history.read", scopes: ["ALL"] },
+            { key: "cycles.read", scopes: ["ALL"] },
+            { key: "work_forms.real.finalize", scopes: ["ALL"] },
+            { key: "work_forms.real.read", scopes: ["ALL"] },
+            { key: "work_forms.real.update", scopes: ["ALL"] },
+            { key: "works.read_all", scopes: ["ALL"] },
+          ],
+        }));
+      }
+      if (url.endsWith("/auth/csrf")) {
+        return Promise.resolve(createJsonResponse({ csrfToken: "csrf-token" }));
+      }
+      if (url.includes("/works/work_order_1/cycles/cycle_2/real-lab-sheet") && init?.method === "PATCH") {
+        const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+        expect(body).toMatchObject({
+          expectedRevision: 1,
+          saveMode: expect.stringMatching(/DRAFT|COMPLETE/),
+          templateId: "template_real",
+          templateVersion: 1,
+        });
+        return Promise.resolve(createJsonResponse({
+          ...realLabSheetResponse,
+          canFinalize: body.saveMode === "COMPLETE",
+          revision: 2,
+          status: body.saveMode === "COMPLETE" ? "COMPLETE" : "IN_PROGRESS",
+          values: body.values,
+        }));
+      }
+      if (url.includes("/works/work_order_1/cycles/cycle_2/real-lab-sheet")) {
+        return Promise.resolve(createJsonResponse(realLabSheetResponse));
+      }
+      if (url.includes("/works/work_order_1/cycles")) {
+        return Promise.resolve(createJsonResponse(cycleHistoryResponse));
+      }
+      if (url.includes("/works/work_order_1/workflow")) {
+        return Promise.resolve(createJsonResponse(workflowResponse));
+      }
+      if (url.includes("/works/work_order_1")) {
+        return Promise.resolve(createJsonResponse(workDetail));
+      }
+      if (url.includes("/works/work-type-options")) {
+        return Promise.resolve(createJsonResponse(workTypeOptionsResponse));
+      }
+      if (url.includes("/clinics/options")) {
+        return Promise.resolve(createJsonResponse(clinicOptionsResponse));
+      }
+      if (url.includes("/works?")) {
+        return Promise.resolve(createJsonResponse(worksListResponse));
+      }
+
+      return Promise.resolve(createJsonResponse({}, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(<WorksPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
+    expect(await screen.findByRole("heading", { name: "Fișă laborator" })).toBeDefined();
+    expect(await screen.findByLabelText("Observații")).toBeDefined();
+    const saveDraftButton = await screen.findByRole("button", { name: "Salvează schița" });
+    fireEvent.submit(saveDraftButton.closest("form") as HTMLFormElement);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/works/work_order_1/cycles/cycle_2/real-lab-sheet"),
+      expect.objectContaining({ method: "PATCH" }),
+    ));
+
+    fireEvent.change(screen.getByLabelText("Observații"), { target: { value: "Ajustare ocluzie" } });
+    fireEvent.click(screen.getByRole("button", { name: "Marchează completă" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/works/work_order_1/cycles/cycle_2/real-lab-sheet"),
+      expect.objectContaining({ body: expect.stringContaining("\"saveMode\":\"COMPLETE\""), method: "PATCH" }),
+    ));
   });
 });

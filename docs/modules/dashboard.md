@@ -14,7 +14,7 @@ Current `/dashboard` route has no specific required permission beyond authentica
 
 ## Domain Concepts
 
-Operational totals, deadline summaries, work status, role-specific visibility.
+Operational totals, deadline summaries, work status, real laboratory sheet status, role-specific visibility.
 
 ## Business Rules
 
@@ -28,11 +28,11 @@ Uses existing module read models; no dedicated dashboard model currently.
 
 Existing module endpoints plus `GET /status/operational` from STATUS-001A.
 
-`GET /status/operational` returns permission-aware rows, tab counters, and bounded pagination for operational work status. It does not expose pricing, billing, payments, agreements, or financial totals.
+`GET /status/operational` returns permission-aware rows, tab counters, bounded pagination, and compact real laboratory sheet status/filtering for operational work status. It does not expose pricing, billing, payments, agreements, or financial totals.
 
 ## UI
 
-`/dashboard`. `/status` is the implemented operational status workspace with tabs, counters, filters, sorting, bounded pagination UX, desktop table, and mobile cards.
+`/dashboard`. `/status` is the implemented operational status workspace with tabs, counters, filters, real laboratory sheet status, sorting, bounded pagination UX, desktop table, and mobile cards.
 
 ## Audit
 
@@ -48,7 +48,7 @@ Large lists, mixed company context, non-financial users.
 
 ## Implemented Tasks
 
-SHELL-001, module summaries, STATUS-001A, STATUS-001B.
+SHELL-001, module summaries, STATUS-001A, STATUS-001B, WORKFORM-REAL-001B status integration.
 
 ## Planned Tasks
 

@@ -36,6 +36,8 @@ import {
   type CreateWorkInput,
   type LegalEntityCode,
   type PatientOption,
+  type RealLabSheetOperationalStatus,
+  type RealLabSheetView,
   type TechnicianOption,
   type UpdateWorkInput,
   type WorkDeadlinePreviewInput,
@@ -124,6 +126,23 @@ const returnReasonLabels = {
   REPAIR: "Reparație",
   WARRANTY: "Garanție",
 } as const satisfies Record<Exclude<WorkCycleReason, "INITIAL">, string>;
+
+const realLabSheetStatusLabels = {
+  COMPLETE: "Completă",
+  FINALIZED: "Finalizată",
+  IN_PROGRESS: "În lucru",
+  NOT_STARTED: "Necompletată",
+} as const satisfies Record<RealLabSheetOperationalStatus, string>;
+
+function toRealLabSheetStatusVariant(status: RealLabSheetOperationalStatus): "awaiting" | "closed" | "production" {
+  if (status === "FINALIZED") {
+    return "closed";
+  }
+  if (status === "COMPLETE") {
+    return "production";
+  }
+  return "awaiting";
+}
 
 const cycleReasonLabels = {
   ...returnReasonLabels,
@@ -1147,6 +1166,21 @@ function toMutableDynamicValues(values: import("@dental-lab/shared").WorkFormVal
   return next;
 }
 
+function isMissingRequiredRealLabSheetValue(value: WorkFormValues["workFormValues"][string] | undefined): boolean {
+  return value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0);
+}
+
+function findFirstMissingRealLabSheetField(sheet: RealLabSheetView, values: WorkFormValues["workFormValues"]): RealLabSheetView["fields"][number] | null {
+  return sheet.fields.find((field) => field.required && field.sourceKind === "USER_ENTERED" && isMissingRequiredRealLabSheetValue(values[field.key])) ?? null;
+}
+
+function focusRealLabSheetField(fieldKey: string): void {
+  const selector = `[id="${CSS.escape(`workFormValues.${fieldKey}`)}"]`;
+  const element = document.querySelector<HTMLElement>(selector);
+  element?.scrollIntoView({ behavior: "smooth", block: "center" });
+  element?.focus();
+}
+
 function RealLabSheetSection({
   history,
   isCyclesLoading,
@@ -1172,6 +1206,9 @@ function RealLabSheetSection({
     },
   });
   const sheet = sheetQuery.data ?? null;
+  const hasUnsavedSheetChanges = form.formState.isDirty && Boolean(sheet?.canEdit);
+
+  useBeforeUnloadPrompt(hasUnsavedSheetChanges);
 
   useEffect(() => {
     if (activeCycleId && selectedCycleId === null) {
@@ -1188,21 +1225,49 @@ function RealLabSheetSection({
     }
   }, [form, sheet]);
 
-  function submitSheet(): void {
+  function handleCycleSelect(cycleId: string): void {
+    if (cycleId === effectiveCycleId) {
+      return;
+    }
+    if (hasUnsavedSheetChanges && !window.confirm("Ai modificări nesalvate în fișa laborator. Schimbi ciclul fără salvare?")) {
+      return;
+    }
+    setSelectedCycleId(cycleId);
+  }
+
+  function submitSheet(saveMode: "DRAFT" | "COMPLETE"): void {
     if (!sheet || !effectiveCycleId) {
       return;
+    }
+    const values = form.getValues("workFormValues");
+    if (saveMode === "COMPLETE") {
+      const missingField = findFirstMissingRealLabSheetField(sheet, values);
+      if (missingField) {
+        form.setError(`workFormValues.${missingField.key}`, { message: "Completează câmpul obligatoriu înainte de marcare completă." });
+        focusRealLabSheetField(missingField.key);
+        toast.showToast({ message: `Completează ${missingField.label}.`, title: "Fișa nu este completă", variant: "error" });
+        return;
+      }
     }
     saveMutation.mutate({
       cycleId: effectiveCycleId,
       input: {
+        expectedRevision: sheet.revision,
+        saveMode,
         templateId: sheet.templateId ?? "",
         templateVersion: sheet.templateVersion,
-        values: form.getValues("workFormValues"),
+        values,
       },
       workOrderId: work.id,
     }, {
       onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Fișa nu a fost salvată", variant: "error" }),
-      onSuccess: () => toast.showToast({ message: "Fișa laborator a fost salvată.", variant: "success" }),
+      onSuccess: (nextSheet) => {
+        form.reset({
+          ...defaultWorkFormValues,
+          workFormValues: toMutableDynamicValues(nextSheet.values),
+        });
+        toast.showToast({ message: saveMode === "COMPLETE" ? "Fișa laborator este marcată completă." : "Schița fișei a fost salvată.", variant: "success" });
+      },
     });
   }
 
@@ -1221,7 +1286,7 @@ function RealLabSheetSection({
                 aria-selected={cycle.id === effectiveCycleId}
                 className="works-page__tab"
                 key={cycle.id}
-                onClick={() => setSelectedCycleId(cycle.id)}
+                onClick={() => handleCycleSelect(cycle.id)}
                 type="button"
               >
                 Ciclul {cycle.cycleNumber}
@@ -1236,15 +1301,18 @@ function RealLabSheetSection({
             className="works-page__lab-sheet"
             onSubmit={(event) => {
               event.preventDefault();
-              submitSheet();
+              submitSheet("DRAFT");
             }}
           >
             <div className="works-page__meta">
               <StatusBadge
-                label={sheet.status === "FINALIZED" ? "Finalizată" : sheet.status === "READ_ONLY" ? "Read-only" : "În lucru"}
-                variant={sheet.status === "FINALIZED" || sheet.status === "READ_ONLY" ? "closed" : "production"}
+                label={realLabSheetStatusLabels[sheet.status]}
+                variant={toRealLabSheetStatusVariant(sheet.status)}
               />
               <span>{sheet.templateName} · v{sheet.templateVersion}</span>
+              <span>Revizia {sheet.revision}</span>
+              {sheet.lastModifiedAt ? <span>Actualizată: {formatDateTime(sheet.lastModifiedAt)}</span> : null}
+              {sheet.lastModifiedBy ? <span>De: {sheet.lastModifiedBy.displayName}</span> : null}
               {sheet.finalizedAt ? <span>Finalizată: {formatDateTime(sheet.finalizedAt)}</span> : null}
             </div>
             <FormGrid>
@@ -1269,19 +1337,30 @@ function RealLabSheetSection({
             </FormGrid>
             <div className="works-page__actions">
               <Button disabled={!sheet.canEdit || saveMutation.isPending || sheet.templateId === null} isLoading={saveMutation.isPending} type="submit">
-                Salvează fișa
+                Salvează schița
               </Button>
               <Button
-                disabled={!sheet.canFinalize || finalizeMutation.isPending}
+                disabled={!sheet.canMarkComplete || saveMutation.isPending || sheet.templateId === null}
+                isLoading={saveMutation.isPending}
+                onClick={() => submitSheet("COMPLETE")}
+                type="button"
+                variant="outline"
+              >
+                Marchează completă
+              </Button>
+              <Button
+                disabled={!sheet.canFinalize || finalizeMutation.isPending || hasUnsavedSheetChanges}
                 isLoading={finalizeMutation.isPending}
                 onClick={() => setFinalizeOpen(true)}
                 type="button"
                 variant="outline"
               >
-                Finalizează fișa
+              Finalizează fișa
               </Button>
             </div>
-            {!sheet.canEdit ? <p className="works-page__muted">Fișa este read-only pentru acest ciclu sau pentru rolul curent.</p> : null}
+            {hasUnsavedSheetChanges ? <p className="works-page__muted">Există modificări nesalvate. Salvează schița sau marchează completă înainte de finalizare.</p> : null}
+            {!sheet.canEdit ? <p className="works-page__muted">Fișa este doar pentru citire pentru acest ciclu sau pentru rolul curent.</p> : null}
+            {!sheet.canFinalize && sheet.status !== "FINALIZED" && sheet.canEdit ? <p className="works-page__muted">Finalizează după ce fișa este marcată completă.</p> : null}
           </form>
         ) : !sheetQuery.isLoading && !sheetQuery.error ? (
           <p className="works-page__muted">Nu există fișă laborator disponibilă pentru acest ciclu.</p>
@@ -1297,10 +1376,15 @@ function RealLabSheetSection({
           if (!effectiveCycleId) {
             return;
           }
-          finalizeMutation.mutate({ cycleId: effectiveCycleId, workOrderId: work.id }, {
+          if (!sheet || sheet.status !== "COMPLETE") {
+            toast.showToast({ message: "Marchează fișa completă înainte de finalizare.", title: "Fișa nu poate fi finalizată", variant: "error" });
+            return;
+          }
+          finalizeMutation.mutate({ cycleId: effectiveCycleId, input: { expectedRevision: sheet.revision }, workOrderId: work.id }, {
             onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Fișa nu a fost finalizată", variant: "error" }),
             onSuccess: () => {
               setFinalizeOpen(false);
+              form.reset(form.getValues());
               toast.showToast({ message: "Fișa laborator a fost finalizată.", variant: "success" });
             },
           });

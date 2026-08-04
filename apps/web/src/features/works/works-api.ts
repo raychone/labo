@@ -5,6 +5,7 @@ import type {
   ClaimWorkInput,
   ClaimWorksListParams,
   CompleteStageInput,
+  FinalizeRealLabSheetInput,
   PaginatedWorksResponse,
   RealLabSheetView,
   ReassignWorkInput,
@@ -203,8 +204,8 @@ export async function upsertRealLabSheet(workOrderId: string, cycleId: string, i
   return sendJson<RealLabSheetView>(`/works/${workOrderId}/cycles/${cycleId}/real-lab-sheet`, "PATCH", input);
 }
 
-export async function finalizeRealLabSheet(workOrderId: string, cycleId: string): Promise<RealLabSheetView> {
-  return sendJson<RealLabSheetView>(`/works/${workOrderId}/cycles/${cycleId}/real-lab-sheet/finalize`, "POST");
+export async function finalizeRealLabSheet(workOrderId: string, cycleId: string, input: FinalizeRealLabSheetInput): Promise<RealLabSheetView> {
+  return sendJson<RealLabSheetView>(`/works/${workOrderId}/cycles/${cycleId}/real-lab-sheet/finalize`, "POST", input);
 }
 
 export async function startWorkflowStage(workOrderId: string, stageExecutionId: string, input: StartStageInput): Promise<WorkWorkflowExecutionView> {
@@ -369,6 +370,8 @@ export function useUpsertRealLabSheet() {
         queryClient.invalidateQueries({ queryKey: worksQueryKeys.detail(variables.workOrderId) }),
         queryClient.invalidateQueries({ queryKey: worksQueryKeys.cycles(variables.workOrderId) }),
         queryClient.invalidateQueries({ queryKey: worksQueryKeys.realLabSheet(variables.workOrderId, variables.cycleId) }),
+        queryClient.invalidateQueries({ queryKey: statusQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ["technician-workbench"] }),
       ]);
     },
   });
@@ -377,12 +380,14 @@ export function useUpsertRealLabSheet() {
 export function useFinalizeRealLabSheet() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ cycleId, workOrderId }: { readonly cycleId: string; readonly workOrderId: string }) => finalizeRealLabSheet(workOrderId, cycleId),
+    mutationFn: ({ cycleId, input, workOrderId }: { readonly cycleId: string; readonly input: FinalizeRealLabSheetInput; readonly workOrderId: string }) => finalizeRealLabSheet(workOrderId, cycleId, input),
     onSuccess: async (_sheet, variables) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: worksQueryKeys.detail(variables.workOrderId) }),
         queryClient.invalidateQueries({ queryKey: worksQueryKeys.cycles(variables.workOrderId) }),
         queryClient.invalidateQueries({ queryKey: worksQueryKeys.realLabSheet(variables.workOrderId, variables.cycleId) }),
+        queryClient.invalidateQueries({ queryKey: statusQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ["technician-workbench"] }),
       ]);
     },
   });

@@ -23,6 +23,11 @@ export interface TechnicianWorkbenchItem {
   readonly patientName: string;
   readonly priority: WorkPriority;
   readonly progress: { readonly completed: number; readonly total: number };
+  readonly realLabSheet: {
+    readonly cycleNumber: number | null;
+    readonly label: string;
+    readonly status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETE" | "FINALIZED";
+  };
   readonly stage: {
     readonly allowedRoleLabels: readonly string[];
     readonly id: string;
@@ -86,6 +91,23 @@ export type TechnicianWorkbenchStageRecord = Prisma.WorkStageExecutionGetPayload
         };
         workOrder: {
           include: {
+            activeCycle: {
+              include: {
+                workFormSubmissions: {
+                  orderBy: {
+                    updatedAt: "desc";
+                  };
+                  select: {
+                    finalizedAt: true;
+                    realLabSheetStatus: true;
+                  };
+                  take: 1;
+                  where: {
+                    templateKind: "REAL_LAB_SHEET";
+                  };
+                };
+              };
+            };
             clinic: {
               select: {
                 id: true;
@@ -158,6 +180,7 @@ export function toTechnicianWorkbenchItem(stage: TechnicianWorkbenchStageRecord,
       completed,
       total: stage.workflowExecution.stages.length,
     },
+    realLabSheet: toRealLabSheetSummary(work.activeCycle),
     stage: {
       allowedRoleLabels: allowedRoleCodes.map((roleCode) => roleLabels[roleCode] ?? roleCode),
       id: stage.id,
@@ -173,6 +196,23 @@ export function toTechnicianWorkbenchItem(stage: TechnicianWorkbenchStageRecord,
       name: work.workType.name,
     },
     workflowStatus: stage.workflowExecution.status,
+  };
+}
+
+function toRealLabSheetSummary(activeCycle: TechnicianWorkbenchStageRecord["workflowExecution"]["workOrder"]["activeCycle"]): TechnicianWorkbenchItem["realLabSheet"] {
+  const submission = activeCycle?.workFormSubmissions[0] ?? null;
+  const status = submission?.finalizedAt ? "FINALIZED" : submission?.realLabSheetStatus ?? "NOT_STARTED";
+  const labels = {
+    COMPLETE: "Completă",
+    FINALIZED: "Finalizată",
+    IN_PROGRESS: "În lucru",
+    NOT_STARTED: "Necompletată",
+  } as const;
+
+  return {
+    cycleNumber: activeCycle?.cycleNumber ?? null,
+    label: labels[status],
+    status,
   };
 }
 

@@ -9,12 +9,12 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | Field | Value |
 |---|---|
 | Current task | WORKFORM-REAL-001B |
-| Status | APPROVED |
+| Status | COMPLETED |
 | Blocker | none |
-| Last completed task | WORKFORM-REAL-001A |
-| Last completed functional task | WORKFORM-REAL-001A |
-| Last completed functional commit | WORKFORM-REAL-001A commit |
-| Next approved task | WORKFORM-REAL-001B |
+| Last completed task | WORKFORM-REAL-001B |
+| Last completed functional task | WORKFORM-REAL-001B |
+| Last completed functional commit | WORKFORM-REAL-001B commit |
+| Next approved task | none |
 
 ## Roadmap
 
@@ -41,7 +41,7 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | forms | WORKFORMS-002 | COMPLETED | WORKFORMS-001, WORKS-001 | work form submissions/snapshots | [modules/forms.md](modules/forms.md) |
 | forms | WORKFORM-REAL-DISCOVERY-001 | COMPLETED | WORKFORM-REAL-001A definition | real paper work-sheet field audit and schema proposal | [discovery/WORKFORM-REAL-FIELD-AUDIT.md](discovery/WORKFORM-REAL-FIELD-AUDIT.md), [discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md) |
 | forms | WORKFORM-REAL-001A | COMPLETED | WORKFORMS-002, WORK-CYCLES-001B, WORKFORM-REAL-DISCOVERY-001 | real laboratory work sheet schema, cycle submissions, finalization, RBAC, and work-detail UI | [tasks/WORKFORM-REAL-001A.md](tasks/WORKFORM-REAL-001A.md) |
-| forms | WORKFORM-REAL-001B | APPROVED | WORKFORM-REAL-001A | operational laboratory sheet completion and workflow integration | [tasks/WORKFORM-REAL-001B.md](tasks/WORKFORM-REAL-001B.md) |
+| forms | WORKFORM-REAL-001B | COMPLETED | WORKFORM-REAL-001A | operational laboratory sheet completion and workflow integration | [tasks/WORKFORM-REAL-001B.md](tasks/WORKFORM-REAL-001B.md) |
 | pricing | PRICING-002 | COMPLETED | ORG-DATA-MIGRATION-001, WORKTYPES-001 | company pricing and agreements | [modules/pricing.md](modules/pricing.md) |
 | deadlines | WORK-DEADLINES-001A | COMPLETED | PRICING-002 | deadline engine/calendar | [modules/deadlines.md](modules/deadlines.md) |
 | deadlines | WORK-DEADLINES-001B | COMPLETED | WORK-DEADLINES-001A | persisted deadlines | [modules/deadlines.md](modules/deadlines.md) |

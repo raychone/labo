@@ -9,6 +9,7 @@ import {
   OPERATIONAL_STATUS_MAX_SCANNED_ROWS,
   OPERATIONAL_STATUS_SORT_FIELDS,
   OPERATIONAL_STATUS_TABS,
+  REAL_LAB_SHEET_OPERATIONAL_STATUSES,
   WORK_PRIORITIES,
   type DeadlineVisualState,
   type DeliveryStatus,
@@ -18,6 +19,7 @@ import {
   type OperationalStatusSortDirection,
   type OperationalStatusSortField,
   type OperationalStatusTab,
+  type RealLabSheetOperationalStatus,
   type WorkPriority,
 } from "@dental-lab/shared";
 import {
@@ -126,6 +128,10 @@ function isDeliveryStatus(value: string | null): value is DeliveryStatus {
   return DELIVERY_STATUSES.includes(value as DeliveryStatus);
 }
 
+function isRealLabSheetStatus(value: string | null): value is RealLabSheetOperationalStatus {
+  return REAL_LAB_SHEET_OPERATIONAL_STATUSES.includes(value as RealLabSheetOperationalStatus);
+}
+
 function readPositiveInt(value: string | null, fallback: number, max?: number): number {
   const parsed = Number.parseInt(value ?? "", 10);
   if (!Number.isFinite(parsed) || parsed < 1) {
@@ -142,6 +148,7 @@ function readQuery(searchParams: URLSearchParams): OperationalStatusQuery {
   const deadlineState = searchParams.get("deadlineState");
   const logisticsStatus = searchParams.get("logisticsStatus");
   const deliveryStatus = searchParams.get("deliveryStatus");
+  const sheetStatus = searchParams.get("sheetStatus");
 
   return {
     page: readPositiveInt(searchParams.get("page"), defaultQuery.page),
@@ -163,6 +170,7 @@ function readQuery(searchParams: URLSearchParams): OperationalStatusQuery {
     ...(deadlineState && isDeadlineState(deadlineState) ? { deadlineState } : {}),
     ...(logisticsStatus && isLogisticsStatus(logisticsStatus) ? { logisticsStatus } : {}),
     ...(deliveryStatus && isDeliveryStatus(deliveryStatus) ? { deliveryStatus } : {}),
+    ...(sheetStatus && isRealLabSheetStatus(sheetStatus) ? { sheetStatus } : {}),
   };
 }
 
@@ -254,6 +262,7 @@ function updateSearchParams(current: URLSearchParams, patch: StatusQueryPatch): 
     "patientId",
     "priority",
     "search",
+    "sheetStatus",
     "sortBy",
     "sortDirection",
     "stageTechnicianUserId",
@@ -315,6 +324,18 @@ const logisticsOptions: readonly SelectOption[] = [
 const deliveryOptions: readonly SelectOption[] = [
   { label: "Toate", value: "" },
   ...DELIVERY_STATUSES.map((status) => ({ label: DELIVERY_STATUS_LABELS[status], value: status })),
+];
+
+const realLabSheetStatusLabels = {
+  COMPLETE: "Completă",
+  FINALIZED: "Finalizată",
+  IN_PROGRESS: "În lucru",
+  NOT_STARTED: "Necompletată",
+} as const satisfies Record<RealLabSheetOperationalStatus, string>;
+
+const realLabSheetStatusOptions: readonly SelectOption[] = [
+  { label: "Toate", value: "" },
+  ...REAL_LAB_SHEET_OPERATIONAL_STATUSES.map((status) => ({ label: realLabSheetStatusLabels[status], value: status })),
 ];
 
 const sortOptions: readonly SelectOption[] = OPERATIONAL_STATUS_SORT_FIELDS.map((field) => ({ label: sortLabels[field], value: field }));
@@ -419,6 +440,19 @@ export function StatusPage(): ReactNode {
       header: "Ciclu",
       id: "cycle",
       renderCell: (row) => row.currentCycle?.label ?? "-",
+    },
+    {
+      header: "Fișă",
+      id: "realLabSheet",
+      renderCell: (row) => (
+        <div>
+          <StatusBadge
+            label={row.realLabSheet.label}
+            variant={row.realLabSheet.status === "FINALIZED" ? "closed" : row.realLabSheet.status === "COMPLETE" ? "production" : "awaiting"}
+          />
+          <span className="status-page__muted">{row.realLabSheet.cycleNumber ? `Ciclul ${row.realLabSheet.cycleNumber}` : "Fără ciclu"}</span>
+        </div>
+      ),
     },
     {
       header: "Prioritate",
@@ -566,6 +600,12 @@ export function StatusPage(): ReactNode {
                 value={query.deliveryStatus ?? ""}
               />
               <Select
+                label="Fișă laborator"
+                onChange={(event) => patchQuery({ sheetStatus: isRealLabSheetStatus(event.target.value) ? event.target.value : undefined })}
+                options={realLabSheetStatusOptions}
+                value={query.sheetStatus ?? ""}
+              />
+              <Select
                 label="Sortare"
                 onChange={(event) => patchQuery({ sortBy: isSortField(event.target.value) ? event.target.value : defaultQuery.sortBy })}
                 options={sortOptions}
@@ -662,6 +702,7 @@ function StatusCards({ error, isLoading, rows }: { readonly error: string | unde
             <Metric label="Tehnician" value={row.currentStageTechnician?.displayName ?? "Fără tehnician"} />
             <Metric label="Logistică" value={row.logistics.status ? LOGISTICS_STATUS_LABELS[row.logistics.status] : "Fără status"} />
             <Metric label="Livrare" value={row.delivery.status ? DELIVERY_STATUS_LABELS[row.delivery.status] : "Fără livrare"} />
+            <Metric label="Fișă" value={`${row.realLabSheet.label}${row.realLabSheet.cycleNumber ? ` · Ciclul ${row.realLabSheet.cycleNumber}` : ""}`} />
             {row.currentCycle ? <Metric label="Ciclu" value={row.currentCycle.label} /> : null}
           </div>
           <DeadlineBadge row={row} />

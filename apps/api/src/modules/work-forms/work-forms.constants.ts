@@ -12,6 +12,9 @@ export const WORK_FORMS_AUDIT_ACTIONS = {
   submissionUpdated: "work_forms.submission_updated",
   submissionReplaced: "work_forms.submission_replaced",
   realLabSheetCreated: "work_forms.real_lab_sheet_created",
+  realLabSheetDraftSaved: "work_forms.real_lab_sheet_draft_saved",
+  realLabSheetCompleted: "work_forms.real_lab_sheet_completed",
+  realLabSheetConflict: "work_forms.real_lab_sheet_conflict",
   realLabSheetUpdated: "work_forms.real_lab_sheet_updated",
   realLabSheetFinalized: "work_forms.real_lab_sheet_finalized",
 } as const;

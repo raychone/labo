@@ -37,7 +37,7 @@ Implemented or substantially implemented:
 - work types;
 - work orders with QR, forms, deadlines, claim ownership, execution snapshots;
 - work form templates and runtime submissions;
-- real laboratory sheet templates, cycle-scoped sheet submissions, finalization, and work-detail data-entry UI;
+- real laboratory sheet templates, cycle-scoped sheet submissions, operational draft/complete/final states, finalization, and work-detail/workbench/scan/status integrations;
 - workflow templates and stage execution;
 - technician workbench and workload;
 - pricing catalog, execution rules, clinic/doctor agreements, preview resolver;
@@ -59,13 +59,13 @@ Planned or partial:
 
 ## Current Status
 
-Last completed functional task: `WORKFORM-REAL-001A`, which added the real laboratory sheet template foundation, cycle-scoped sheet submissions, finalization/immutability, RBAC, non-destructive migration/backfill, demo seed coverage, and the work-detail data-entry UI.
+Last completed functional task: `WORKFORM-REAL-001B`, which added operational real laboratory sheet states, draft saving, completion/finalization UX, revision conflict handling, audit, RBAC-aware work detail/workbench/scan/status integrations, non-destructive migration, and demo seed coverage.
 
 Last completed documentation task: `WORKFORM-REAL-DISCOVERY-001`, which audited the real paper work sheet and produced [discovery/WORKFORM-REAL-FIELD-AUDIT.md](discovery/WORKFORM-REAL-FIELD-AUDIT.md) and [discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md). `DOCS-TOKEN-001` created the permanent token-efficient documentation system under `docs/`.
 
 `TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable.
 
-Next approved task: `WORKFORM-REAL-001B`, which is approved for operational laboratory sheet completion and workflow integration. It must not be implemented until explicitly requested.
+Next approved task: none. Do not start `WORKFORM-REAL-001C` or any other successor task without explicit approval.
 
 ## Source Of Truth
 

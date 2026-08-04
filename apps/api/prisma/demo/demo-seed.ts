@@ -1817,6 +1817,8 @@ function toDemoRealLabSheetSubmission(work: DemoWorkSeed, index: number): Prisma
   return {
     createdAt: work.createdAt,
     schemaSnapshot: template as Prisma.InputJsonObject,
+    realLabSheetStatus: suffix % 5 === 0 ? "COMPLETE" : "IN_PROGRESS",
+    revision: suffix % 5 === 0 ? 2 : 1,
     submittedAt: work.createdAt,
     submittedByUserId: "demo_user_receptie",
     templateId,

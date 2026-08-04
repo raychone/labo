@@ -3,6 +3,7 @@ import type { LogisticsStatus } from "./logistics.js";
 import type { LegalEntityCode } from "./organization-context.js";
 import type { DeadlineVisualState } from "./work-deadline-visual-state.js";
 import type { WorkClaimStatus, WorkPriority } from "./works.js";
+import type { RealLabSheetOperationalStatus } from "./work-forms.js";
 import type { WorkflowExecutionStatus, WorkStageExecutionStatus } from "./workflow-execution.js";
 
 export const OPERATIONAL_STATUS_TABS = ["TODAY", "IN_PROGRESS", "AVAILABLE", "LATE", "AT_CLINIC", "RETURNED", "COMPLETED"] as const;
@@ -29,6 +30,7 @@ export interface OperationalStatusQuery {
   readonly patientId?: string | null;
   readonly priority?: WorkPriority;
   readonly search?: string | null;
+  readonly sheetStatus?: RealLabSheetOperationalStatus;
   readonly sortBy: OperationalStatusSortField;
   readonly sortDirection: OperationalStatusSortDirection;
   readonly stageTechnicianUserId?: string | null;
@@ -62,7 +64,11 @@ export interface OperationalStatusDeadline {
 
 export interface OperationalStatusCurrentCycle {
   readonly code: string;
+  readonly id: string;
   readonly label: string;
+  readonly number: number;
+  readonly reason: string;
+  readonly status: string;
 }
 
 export interface OperationalStatusRow {
@@ -98,6 +104,13 @@ export interface OperationalStatusRow {
     readonly reference: string | null;
   };
   readonly priority: WorkPriority;
+  readonly realLabSheet: {
+    readonly cycleNumber: number | null;
+    readonly finalizedAt: string | null;
+    readonly label: string;
+    readonly lastModifiedAt: string | null;
+    readonly status: RealLabSheetOperationalStatus;
+  };
   readonly updatedAt: string;
   readonly workCode: string;
   readonly workOwner: OperationalStatusPerson | null;

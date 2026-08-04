@@ -92,6 +92,11 @@ function createWorkRecord(input: {
       reason: "INITIAL",
       status: "ACTIVE",
       logisticsState: input.logisticsStatus ? { status: input.logisticsStatus } : null,
+      workFormSubmissions: [{
+        finalizedAt: null,
+        realLabSheetStatus: "IN_PROGRESS",
+        updatedAt: new Date("2026-08-04T08:00:00.000Z"),
+      }],
       workflowExecution: {
         completedAt: input.workflowStatus === "COMPLETED" ? new Date("2026-08-04T10:00:00.000Z") : null,
         createdAt: new Date("2026-08-01T08:00:00.000Z"),
@@ -165,6 +170,7 @@ describe("operational status view", () => {
     expect(JSON.stringify(row)).not.toContain("totalPriceMinor");
     expect(JSON.stringify(row)).not.toContain("baseUnitPriceMinor");
     expect(row.currentCycle).toMatchObject({ code: "CYCLE_1", label: "Ciclul 1", number: 1, reason: "INITIAL", status: "ACTIVE" });
+    expect(row.realLabSheet).toMatchObject({ cycleNumber: 1, label: "În lucru", status: "IN_PROGRESS" });
   });
 
   it("classifies required tabs from existing operational state", () => {

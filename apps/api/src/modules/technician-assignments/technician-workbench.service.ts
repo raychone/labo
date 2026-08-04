@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { WorkStageExecutionStatus, WorkWorkflowExecutionStatus, type Prisma } from "@prisma/client";
+import { WorkFormTemplateKind, WorkStageExecutionStatus, WorkWorkflowExecutionStatus, type Prisma } from "@prisma/client";
 
 import type { AuthenticatedUser } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
@@ -225,6 +225,23 @@ export const workbenchStageInclude = {
         include: {
           clinic: { select: { id: true, name: true } },
           doctor: { select: { displayName: true, id: true } },
+          activeCycle: {
+            include: {
+              workFormSubmissions: {
+                orderBy: {
+                  updatedAt: "desc",
+                },
+                select: {
+                  finalizedAt: true,
+                  realLabSheetStatus: true,
+                },
+                take: 1,
+                where: {
+                  templateKind: WorkFormTemplateKind.REAL_LAB_SHEET,
+                },
+              },
+            },
+          },
           workType: { select: { id: true, name: true } },
         },
       },

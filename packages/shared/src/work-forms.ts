@@ -19,6 +19,12 @@ export type WorkFormCopyToNextCyclePolicy = (typeof WORK_FORM_COPY_TO_NEXT_CYCLE
 export const WORK_FORM_FIELD_SOURCE_KINDS = ["USER_ENTERED", "REGISTRY_DERIVED", "SYSTEM_DERIVED"] as const;
 export type WorkFormFieldSourceKind = (typeof WORK_FORM_FIELD_SOURCE_KINDS)[number];
 
+export const REAL_LAB_SHEET_OPERATIONAL_STATUSES = ["NOT_STARTED", "IN_PROGRESS", "COMPLETE", "FINALIZED"] as const;
+export type RealLabSheetOperationalStatus = (typeof REAL_LAB_SHEET_OPERATIONAL_STATUSES)[number];
+
+export const REAL_LAB_SHEET_SAVE_MODES = ["DRAFT", "COMPLETE"] as const;
+export type RealLabSheetSaveMode = (typeof REAL_LAB_SHEET_SAVE_MODES)[number];
+
 export const WORK_FORM_FIELD_TYPES = [
   "TEXT",
   "TEXTAREA",
@@ -108,9 +114,15 @@ export interface CreateWorkFormSubmissionInput {
 }
 
 export interface UpsertRealLabSheetInput {
+  readonly expectedRevision?: number;
+  readonly saveMode?: RealLabSheetSaveMode;
   readonly templateId: string;
   readonly templateVersion: number;
   readonly values: WorkFormValues;
+}
+
+export interface FinalizeRealLabSheetInput {
+  readonly expectedRevision?: number;
 }
 
 export type UpdateWorkFormValuesInput = WorkFormValues;
@@ -129,11 +141,16 @@ export interface WorkFormSubmissionView {
 export interface RealLabSheetView extends WorkFormSubmissionView {
   readonly canEdit: boolean;
   readonly canFinalize: boolean;
+  readonly canMarkComplete: boolean;
   readonly cycleNumber: number;
   readonly finalizedAt: string | null;
   readonly finalizedBy: { readonly displayName: string; readonly publicId: string } | null;
   readonly isFinalized: boolean;
-  readonly status: "DRAFT" | "FINALIZED" | "READ_ONLY";
+  readonly isReadOnly: boolean;
+  readonly lastModifiedAt: string | null;
+  readonly lastModifiedBy: { readonly displayName: string; readonly publicId: string } | null;
+  readonly revision: number;
+  readonly status: RealLabSheetOperationalStatus;
   readonly workCycleId: string;
   readonly workOrderId: string;
 }

@@ -193,6 +193,9 @@ export class OperationalStatusService {
     if (query.stageTechnicianUserId && row.currentStageTechnician?.publicId !== query.stageTechnicianUserId) {
       return false;
     }
+    if (query.sheetStatus && row.realLabSheet.status !== query.sheetStatus) {
+      return false;
+    }
     return true;
   }
 }

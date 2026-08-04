@@ -555,11 +555,14 @@ function WorkbenchItemCard({
         <span>Etapă: {item.stage.name}</span>
         <span>Termen: {formatDate(item.dueDate)}</span>
         <span>Progres: {item.progress.completed}/{item.progress.total}</span>
+        <span>Fișă: {item.realLabSheet.label}{item.realLabSheet.cycleNumber ? ` · Ciclul ${item.realLabSheet.cycleNumber}` : ""}</span>
         <span>{getAssignmentStatusLabel(item.assignment)}</span>
       </div>
       <div className="technician-workbench__actions">
         <StatusBadge label={getWorkStageExecutionStatusLabel(item.stage.status)} variant={item.stage.status === "IN_PROGRESS" ? "production" : "awaiting"} />
+        <StatusBadge label={item.realLabSheet.label} variant={item.realLabSheet.status === "FINALIZED" ? "closed" : item.realLabSheet.status === "COMPLETE" ? "production" : "awaiting"} />
         <Button onClick={onOpen} variant="outline">Deschide</Button>
+        <Button onClick={onOpen} variant="outline">{item.realLabSheet.status === "NOT_STARTED" ? "Completează fișa" : "Continuă fișa"}</Button>
         <Button disabled={item.stage.status !== "PENDING"} isLoading={isStarting} onClick={onStart} variant="outline">Începe etapa</Button>
         <Button disabled={item.stage.status !== "IN_PROGRESS"} isLoading={isCompleting} onClick={onComplete}>Finalizează etapa</Button>
       </div>

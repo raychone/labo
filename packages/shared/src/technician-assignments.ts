@@ -1,4 +1,5 @@
 import type { WorkPriority } from "./works.js";
+import type { RealLabSheetOperationalStatus } from "./work-forms.js";
 import type { WorkStageExecutionStatus } from "./workflow-execution.js";
 
 export const TECHNICIAN_QUEUE_CATEGORIES = ["ALL", "UNSTARTED", "IN_PROGRESS", "URGENT", "DUE_TODAY", "OVERDUE"] as const;
@@ -53,6 +54,11 @@ export interface TechnicianWorkbenchItem {
   readonly patientName: string;
   readonly priority: WorkPriority;
   readonly progress: { readonly completed: number; readonly total: number };
+  readonly realLabSheet: {
+    readonly cycleNumber: number | null;
+    readonly label: string;
+    readonly status: RealLabSheetOperationalStatus;
+  };
   readonly stage: {
     readonly allowedRoleLabels: readonly string[];
     readonly id: string;

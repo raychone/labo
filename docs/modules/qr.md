@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented base QR and operational scan actions.
+Implemented base QR, operational scan actions, and real laboratory sheet status context.
 
 ## Purpose
 
@@ -14,7 +14,7 @@ Identify and open work context through opaque QR codes.
 
 ## Domain Concepts
 
-Opaque token, QR image, print action, scan resolution, work-opened event.
+Opaque token, QR image, print action, scan resolution, work-opened event, current cycle sheet status.
 
 ## Business Rules
 
@@ -30,7 +30,7 @@ QR token fields on `WorkOrder` and audit/scan events where implemented.
 
 ## UI
 
-`/scan`, QR modal in `/works`, camera scanner and manual scan form.
+`/scan`, QR modal in `/works`, camera scanner and manual scan form. Scan results show current cycle real laboratory sheet status and an action that opens the existing work detail/sheet flow when the user is authorized.
 
 ## Audit
 
@@ -46,7 +46,7 @@ Invalid token, expired/replaced token, camera unavailable, manual fallback.
 
 ## Implemented Tasks
 
-QR-001, SCAN-002.
+QR-001, SCAN-002, WORKFORM-REAL-001B scan integration.
 
 ## Planned Tasks
 

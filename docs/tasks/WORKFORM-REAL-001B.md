@@ -2,9 +2,9 @@
 
 ## Status
 
-APPROVED
+COMPLETED
 
-Documentation-only definition created. Do not start implementation until explicitly requested.
+Implemented as one frontend/backend integration task.
 
 ## Objective
 
@@ -315,6 +315,20 @@ If a schema change is required for stable operational states or revision metadat
 ## Verification
 
 Run the standard checks from [../TESTING.md](../TESTING.md). Run migrations only if the implementation changes Prisma schema. Run demo seed twice only if seed/demo behavior changes.
+
+Completed verification:
+
+- `pnpm --filter @dental-lab/api prisma:validate`
+- `pnpm --filter @dental-lab/api prisma:generate`
+- `pnpm --filter @dental-lab/api prisma:migrate:dev`
+- `pnpm --filter @dental-lab/api prisma -- migrate status`
+- `pnpm --filter @dental-lab/api prisma -- migrate deploy`
+- `pnpm --filter @dental-lab/api prisma:db:seed`
+- `pnpm --filter @dental-lab/api prisma:db:seed:demo` twice
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm build`
+- `git diff --check`
 
 ## Commit
 

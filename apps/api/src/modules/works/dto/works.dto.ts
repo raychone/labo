@@ -261,7 +261,25 @@ export class WorkFormSubmissionDto {
   public readonly values!: Record<string, unknown>;
 }
 
-export class UpsertRealLabSheetDto extends WorkFormSubmissionDto {}
+export class FinalizeRealLabSheetDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  public readonly expectedRevision?: number;
+}
+
+export class UpsertRealLabSheetDto extends WorkFormSubmissionDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  public readonly expectedRevision?: number;
+
+  @IsOptional()
+  @IsIn(["DRAFT", "COMPLETE"])
+  public readonly saveMode: "DRAFT" | "COMPLETE" = "DRAFT";
+}
 
 export class CreateWorkDto extends WorkMutationDto {
   @Transform(({ value }) => trimRequiredString(value))

@@ -273,10 +273,18 @@ function ScanResult({
             <strong>{context.logistics.blockedReason ?? "Fără blocare"}</strong>
             <p>Acțiunile logistice se confirmă separat.</p>
           </div>
+          <div>
+            <span>Fișă laborator</span>
+            <strong>{context.realLabSheet.label}</strong>
+            <p>{context.realLabSheet.cycleNumber ? `Ciclul ${context.realLabSheet.cycleNumber}` : "Fără ciclu activ"}</p>
+          </div>
         </div>
         <div className="work-scan-page__actions">
           <Button disabled={!openAction?.enabled} isLoading={isOpening} onClick={onOpenWork} variant="outline">
             Deschide lucrarea
+          </Button>
+          <Button disabled={!openAction?.enabled} isLoading={isOpening} onClick={onOpenWork} variant="outline">
+            {context.realLabSheet.status === "NOT_STARTED" ? "Completează fișa" : "Deschide fișa"}
           </Button>
           {context.delivery ? (
             <Button onClick={() => window.location.assign(`/deliveries?deliveryId=${encodeURIComponent(context.delivery?.id ?? "")}`)} variant="outline">

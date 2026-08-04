@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented foundation, templates, generic work submissions, and the real laboratory work-sheet foundation.
+Implemented foundation, templates, generic work submissions, and operational real laboratory work-sheet completion.
 
 ## Purpose
 
@@ -22,11 +22,11 @@ Real laboratory sheets use dedicated permissions:
 
 ## Domain Concepts
 
-Template, template kind, version, field definition, field lifecycle metadata, runtime submission, cycle-scoped real laboratory sheet, immutable response snapshot, real paper-sheet field audit.
+Template, template kind, version, field definition, field lifecycle metadata, runtime submission, cycle-scoped real laboratory sheet, operational sheet status, revision, immutable response snapshot, real paper-sheet field audit.
 
 ## Business Rules
 
-Templates are versioned. Runtime submissions validate against field definitions and preserve submitted data. Generic work forms remain work-order submissions. Real laboratory sheets are `REAL_LAB_SHEET` templates, stored per `WorkCycle`, finalized per cycle, immutable for historical cycles, and financially isolated.
+Templates are versioned. Runtime submissions validate against field definitions and preserve submitted data. Generic work forms remain work-order submissions. Real laboratory sheets are `REAL_LAB_SHEET` templates, stored per `WorkCycle`, finalized per cycle, immutable for historical cycles, and financially isolated. Active-cycle real sheets support `NOT_STARTED`, `IN_PROGRESS`, `COMPLETE`, and `FINALIZED`; draft saves allow partial values, while complete/finalize enforce required fields server-side.
 
 The MVP real sheet uses one common field set for all work types:
 
@@ -48,7 +48,7 @@ The MVP real sheet uses one common field set for all work types:
 
 `WorkFormTemplate`, `WorkFormFieldDefinition`, `WorkFormSubmission`.
 
-`WorkFormTemplate.kind` separates `GENERIC` forms from `REAL_LAB_SHEET` templates. Field definitions include section/lifecycle/source metadata. `WorkFormSubmission` now supports `workCycleId`, `templateKind`, `finalizedAt`, and `finalizedByUserId`; existing generic submissions remain compatible.
+`WorkFormTemplate.kind` separates `GENERIC` forms from `REAL_LAB_SHEET` templates. Field definitions include section/lifecycle/source metadata. `WorkFormSubmission` supports `workCycleId`, `templateKind`, `realLabSheetStatus`, `revision`, `finalizedAt`, and `finalizedByUserId`; existing generic submissions remain compatible.
 
 ## API
 
@@ -62,11 +62,11 @@ Real sheet endpoints:
 
 ## UI
 
-`/work-types/:workTypeId/form` builder and dynamic generic work forms. Work detail includes a `Fișă laborator` section for cycle selection, editable active-cycle data entry, finalization, and read-only historical sheets.
+`/work-types/:workTypeId/form` builder and dynamic generic work forms. Work detail includes a `Fișă laborator` section for cycle selection, editable active-cycle data entry, draft save, complete state, finalization, revision conflict handling, and read-only historical sheets. `/workbench`, `/scan`, and `/status` expose compact sheet status without financial data.
 
 ## Audit
 
-Template create/update/activate/archive/clone; generic submission changes; real laboratory sheet create/update/finalize events.
+Template create/update/activate/archive/clone; generic submission changes; real laboratory sheet create/draft save/complete/finalize/conflict events.
 
 ## Security
 
@@ -78,11 +78,11 @@ Archived templates, cloned templates, invalid field option, stale template/versi
 
 ## Implemented Tasks
 
-FORMS-001, WORKFORMS-001, WORKFORMS-002, WORKFORM-REAL-DISCOVERY-001, WORKFORM-REAL-001A.
+FORMS-001, WORKFORMS-001, WORKFORMS-002, WORKFORM-REAL-DISCOVERY-001, WORKFORM-REAL-001A, WORKFORM-REAL-001B.
 
 ## Planned Tasks
 
-WORKFORM-REAL-001B is approved for operational sheet completion states, draft saving, finalization UX, and workflow integrations. It must not be implemented until explicitly requested.
+No next real-sheet task is approved.
 
 ## Deferred
 

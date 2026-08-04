@@ -26,6 +26,7 @@ import type {
   SetManualWorkDeadlineDto,
   UpdateWorkDto,
   UpsertRealLabSheetDto,
+  FinalizeRealLabSheetDto,
   WorkDeadlinePreviewDto,
 } from "./dto/works.dto.js";
 import { deadlineDataToPrisma, WorkDeadlineService } from "./work-deadline.service.js";
@@ -72,6 +73,7 @@ interface PricingSnapshot {
 type WorkDeadlinePrismaUpdate = ReturnType<typeof deadlineDataToPrisma>;
 
 type AuditClient = Pick<Prisma.TransactionClient, "auditLog"> | Pick<PrismaService, "auditLog">;
+type RealLabSheetSnapshot = Parameters<WorkFormSubmissionValidationService["validateValues"]>[0];
 
 const WORK_ORDER_INCLUDE = {
   assignedTechnician: {
@@ -270,6 +272,12 @@ const REAL_LAB_SHEET_WORK_INCLUDE = {
               id: true,
             },
           },
+          updatedBy: {
+            select: {
+              displayName: true,
+              id: true,
+            },
+          },
         },
         orderBy: {
           updatedAt: "desc",
@@ -290,6 +298,7 @@ type WorkFormValues = Readonly<Record<string, WorkFormValue>>;
 export interface RealLabSheetView {
   readonly canEdit: boolean;
   readonly canFinalize: boolean;
+  readonly canMarkComplete: boolean;
   readonly cycleNumber: number;
   readonly fields: readonly {
     readonly key: string;
@@ -314,7 +323,11 @@ export interface RealLabSheetView {
   readonly finalizedAt: string | null;
   readonly finalizedBy: { readonly displayName: string; readonly publicId: string } | null;
   readonly isFinalized: boolean;
-  readonly status: "DRAFT" | "FINALIZED" | "READ_ONLY";
+  readonly isReadOnly: boolean;
+  readonly lastModifiedAt: string | null;
+  readonly lastModifiedBy: { readonly displayName: string; readonly publicId: string } | null;
+  readonly revision: number;
+  readonly status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETE" | "FINALIZED";
   readonly submittedAt: string;
   readonly templateId: string | null;
   readonly templateKind: string;
@@ -504,16 +517,25 @@ export class WorksService {
     this.workFormSubmissionValidationService.ensureActiveTemplateMatches(template, dto.templateId, dto.templateVersion);
 
     const snapshot = this.workFormSubmissionValidationService.createSnapshot(template);
+    const saveMode = dto.saveMode ?? "DRAFT";
     const values = this.workFormSubmissionValidationService.validateValues(snapshot, {
       ...dto.values,
       ...this.getRealLabSheetDerivedValues(workOrder, cycle),
-    });
+    }, { enforceRequired: saveMode === "COMPLETE" });
     const existing = cycle.workFormSubmissions[0] ?? null;
+    await this.assertExpectedRealLabSheetRevision(context, workOrder, cycle, existing, dto.expectedRevision);
+    const nextStatus = saveMode === "COMPLETE" ? "COMPLETE" : "IN_PROGRESS";
+    const previousValues = existing ? existing.values as unknown as WorkFormValues : {};
+    const changedFieldKeys = getChangedWorkFormValueKeys(previousValues, values);
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const submission = existing
         ? await tx.workFormSubmission.update({
             data: {
+              realLabSheetStatus: nextStatus,
+              revision: {
+                increment: 1,
+              },
               schemaSnapshot: snapshot as unknown as Prisma.InputJsonObject,
               templateId: template.id,
               templateNameSnapshot: template.name,
@@ -528,6 +550,12 @@ export class WorksService {
                   id: true,
                 },
               },
+              updatedBy: {
+                select: {
+                  displayName: true,
+                  id: true,
+                },
+              },
             },
             where: {
               id: existing.id,
@@ -536,6 +564,7 @@ export class WorksService {
         : await tx.workFormSubmission.create({
             data: {
               schemaSnapshot: snapshot as unknown as Prisma.InputJsonObject,
+              realLabSheetStatus: nextStatus,
               submittedByUserId: context.actorUserId,
               templateId: template.id,
               templateKind: WorkFormTemplateKind.REAL_LAB_SHEET,
@@ -553,16 +582,28 @@ export class WorksService {
                   id: true,
                 },
               },
+              updatedBy: {
+                select: {
+                  displayName: true,
+                  id: true,
+                },
+              },
             },
           });
 
       await this.recordFormAudit(tx, {
-        action: existing ? WORK_FORMS_AUDIT_ACTIONS.realLabSheetUpdated : WORK_FORMS_AUDIT_ACTIONS.realLabSheetCreated,
+        action: saveMode === "COMPLETE"
+          ? WORK_FORMS_AUDIT_ACTIONS.realLabSheetCompleted
+          : existing
+            ? WORK_FORMS_AUDIT_ACTIONS.realLabSheetDraftSaved
+            : WORK_FORMS_AUDIT_ACTIONS.realLabSheetCreated,
         actorUserId: context.actorUserId,
         metadata: {
-          changedFieldKeys: Object.keys(values),
+          changedFieldKeys,
           cycleId: cycle.id,
           cycleNumber: cycle.cycleNumber,
+          previousRevision: existing?.revision ?? 0,
+          status: nextStatus,
           templateId: template.id,
           templateVersion: template.version,
           workCode: workOrder.code,
@@ -583,7 +624,7 @@ export class WorksService {
     return this.toRealLabSheetView(workOrder, { ...cycle, workFormSubmissions: [updated] }, template, context.actorUserId);
   }
 
-  public async finalizeRealLabSheet(context: ActorContext, workOrderId: string, cycleId: string): Promise<RealLabSheetView> {
+  public async finalizeRealLabSheet(context: ActorContext, workOrderId: string, cycleId: string, dto: FinalizeRealLabSheetDto = {}): Promise<RealLabSheetView> {
     const { cycle, workOrder } = await this.findRealLabSheetContextOrThrow(workOrderId, cycleId);
     await this.requireRealLabSheetPermission(context.actorUserId, workOrder, "work_forms.real.finalize");
     this.ensureCycleSheetEditable(workOrder, cycle);
@@ -592,6 +633,10 @@ export class WorksService {
     if (!existing) {
       throw new BadRequestException("Salvează fișa de laborator înainte de finalizare.");
     }
+    await this.assertExpectedRealLabSheetRevision(context, workOrder, cycle, existing, dto.expectedRevision);
+
+    const snapshot = this.parseRealLabSheetSnapshot(existing.schemaSnapshot);
+    this.workFormSubmissionValidationService.validateValues(snapshot, existing.values, { enforceRequired: true });
 
     const finalizedAt = new Date();
     const finalized = await this.prisma.$transaction(async (tx) => {
@@ -599,10 +644,20 @@ export class WorksService {
         data: {
           finalizedAt,
           finalizedByUserId: context.actorUserId,
+          realLabSheetStatus: "FINALIZED",
+          revision: {
+            increment: 1,
+          },
           updatedByUserId: context.actorUserId,
         },
         include: {
           finalizedBy: {
+            select: {
+              displayName: true,
+              id: true,
+            },
+          },
+          updatedBy: {
             select: {
               displayName: true,
               id: true,
@@ -619,6 +674,8 @@ export class WorksService {
         metadata: {
           cycleId: cycle.id,
           cycleNumber: cycle.cycleNumber,
+          previousRevision: existing.revision,
+          status: "FINALIZED",
           templateId: existing.templateId,
           templateVersion: existing.templateVersion,
           workCode: workOrder.code,
@@ -1620,6 +1677,48 @@ export class WorksService {
     }
   }
 
+  private async assertExpectedRealLabSheetRevision(
+    context: ActorContext,
+    workOrder: RealLabSheetWorkRecord,
+    cycle: RealLabSheetCycleRecord,
+    submission: RealLabSheetCycleRecord["workFormSubmissions"][number] | null,
+    expectedRevision: number | undefined,
+  ): Promise<void> {
+    if (expectedRevision === undefined) {
+      return;
+    }
+    const currentRevision = submission?.revision ?? 0;
+    if (expectedRevision === currentRevision) {
+      return;
+    }
+    await this.recordFormAudit(this.prisma, {
+      action: WORK_FORMS_AUDIT_ACTIONS.realLabSheetConflict,
+      actorUserId: context.actorUserId,
+      metadata: {
+        currentRevision,
+        cycleId: cycle.id,
+        cycleNumber: cycle.cycleNumber,
+        expectedRevision,
+        workCode: workOrder.code,
+        workId: workOrder.id,
+      },
+      requestMetadata: context.requestMetadata,
+      resourceId: submission?.id ?? cycle.id,
+    });
+    throw new ConflictException("Fișa a fost modificată de alt utilizator. Reîncarcă înainte de salvare.");
+  }
+
+  private parseRealLabSheetSnapshot(value: Prisma.JsonValue): RealLabSheetSnapshot {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      throw new BadRequestException("Snapshot-ul fișei de laborator este invalid.");
+    }
+    const fields = (value as { readonly fields?: unknown }).fields;
+    if (!Array.isArray(fields)) {
+      throw new BadRequestException("Snapshot-ul fișei de laborator este invalid.");
+    }
+    return { fields } as RealLabSheetSnapshot;
+  }
+
   private getRealLabSheetDerivedValues(workOrder: RealLabSheetWorkRecord, cycle: RealLabSheetCycleRecord): WorkFormValues {
     return {
       doctor: cycle.doctor?.displayName ?? workOrder.doctor.displayName,
@@ -1649,6 +1748,7 @@ export class WorksService {
       ...this.getRealLabSheetDerivedValues(workOrder, cycle),
     };
     const isFinalized = Boolean(submission?.finalizedAt);
+    const status = isFinalized ? "FINALIZED" : submission?.realLabSheetStatus ?? "NOT_STARTED";
     const isReadOnly = cycle.status !== "ACTIVE" || workOrder.activeCycleId !== cycle.id || isFinalized;
     const [canUpdate, canFinalize] = await Promise.all([
       this.hasRealLabSheetPermission(actorUserId, workOrder, "work_forms.real.update"),
@@ -1657,13 +1757,18 @@ export class WorksService {
 
     return {
       canEdit: !isReadOnly && canUpdate,
-      canFinalize: !isReadOnly && canFinalize && submission !== null,
+      canFinalize: !isReadOnly && canFinalize && submission !== null && status === "COMPLETE",
+      canMarkComplete: !isReadOnly && canUpdate,
       cycleNumber: cycle.cycleNumber,
       fields: [...(snapshot.fields ?? [])].sort((left, right) => left.sortOrder - right.sortOrder),
       finalizedAt: submission?.finalizedAt?.toISOString() ?? null,
       finalizedBy: submission?.finalizedBy ? { displayName: submission.finalizedBy.displayName, publicId: submission.finalizedBy.id } : null,
       isFinalized,
-      status: isFinalized ? "FINALIZED" : isReadOnly ? "READ_ONLY" : "DRAFT",
+      isReadOnly,
+      lastModifiedAt: submission?.updatedAt.toISOString() ?? null,
+      lastModifiedBy: submission?.updatedBy ? { displayName: submission.updatedBy.displayName, publicId: submission.updatedBy.id } : null,
+      revision: submission?.revision ?? 0,
+      status,
       submittedAt: submission?.submittedAt.toISOString() ?? new Date(0).toISOString(),
       templateId: submission?.templateId ?? activeTemplate?.id ?? null,
       templateKind: "REAL_LAB_SHEET",
@@ -2457,6 +2562,12 @@ function isPrismaErrorCode(error: unknown, code: string): boolean {
 
 function getGenericWorkFormSubmission(workOrder: WorkOrderRecord): WorkOrderRecord["workFormSubmissions"][number] | null {
   return workOrder.workFormSubmissions?.find((submission) => submission.templateKind === "GENERIC") ?? null;
+}
+
+function getChangedWorkFormValueKeys(before: WorkFormValues, after: WorkFormValues): readonly string[] {
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+
+  return [...keys].filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key])).sort();
 }
 
 function isCompletedOnTimeInWindow(workOrder: WorkOrderRecord, windowStart: Date): boolean {

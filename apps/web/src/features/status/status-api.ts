@@ -33,6 +33,7 @@ function toOperationalStatusQuery(params: OperationalStatusQuery): string {
   appendOptional(query, "patientId", params.patientId);
   appendOptional(query, "priority", params.priority);
   appendOptional(query, "search", params.search);
+  appendOptional(query, "sheetStatus", params.sheetStatus);
   appendOptional(query, "stageTechnicianUserId", params.stageTechnicianUserId);
   appendOptional(query, "workTypeId", params.workTypeId);
 

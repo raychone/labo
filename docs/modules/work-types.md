@@ -50,7 +50,7 @@ WORKTYPES-001.
 
 ## Planned Tasks
 
-WORKFORM-REAL-001A real work-sheet template foundation; WORKFORM-REAL-001B remains planned.
+Real laboratory sheet template foundation and operational completion are implemented by WORKFORM-REAL-001A/B.
 
 ## Deferred
 
