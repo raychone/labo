@@ -1,5 +1,7 @@
 export const BILLING_AUDIT_ACTIONS = {
   attachmentPrintViewed: "billing.attachment_print_viewed",
+  ambiguousLegacyReviewViewed: "billing.ambiguous_legacy_review_viewed",
+  companyMismatchRejected: "billing.company_mismatch_rejected",
   csvExported: "billing.csv_exported",
   documentCancelled: "billing.document_cancelled",
   documentPrintViewed: "billing.document_print_viewed",

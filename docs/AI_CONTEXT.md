@@ -59,13 +59,13 @@ Planned or partial:
 
 ## Current Status
 
-Last completed functional task: `BILLING-REALIGN-001A`, which realigned billing documents, billable works, lines, payments, series, print views, migration/backfill, and demo seed around the immutable `NC`/`NG` execution company fixed on each work cycle.
+Last completed functional task: `BILLING-REALIGN-001B`, which completed the company-scoped manager billing workspace with overview counters, billable works, proformas, invoices, manual payment recording, receivables, statements, month-end registry, safe CSV/print views, read-only ambiguous legacy review, RBAC, audit, tests, and documentation updates.
 
 Last completed documentation task: `WORKFORM-REAL-DISCOVERY-001`, which audited the real paper work sheet and produced [discovery/WORKFORM-REAL-FIELD-AUDIT.md](discovery/WORKFORM-REAL-FIELD-AUDIT.md) and [discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md). `DOCS-TOKEN-001` created the permanent token-efficient documentation system under `docs/`.
 
 `TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable.
 
-Next approved task: `BILLING-REALIGN-001B`, which finishes the manager-facing company-scoped billing workspace, receivables, manual receipt UX, statements, month-end registry, and read-only ambiguous legacy review on top of `BILLING-REALIGN-001A`. `BILLING-REALIGN-001C` is planned only and must not be started.
+Next task: `BILLING-REALIGN-001C` is planned only and must not be started unless explicitly approved. It will cover ambiguous legacy billing correction workflow; `BILLING-REALIGN-001B` intentionally added read-only review only.
 
 ## Source Of Truth
 

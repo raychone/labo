@@ -345,6 +345,7 @@ export {
   PAYMENT_STATUSES,
 } from "./billing.js";
 export type {
+  AmbiguousLegacyBillingRecord,
   BillableWork,
   BillingClinicSnapshot,
   BillingDocumentAttachment,
@@ -359,6 +360,8 @@ export type {
   BillingListQuery,
   BillingOverview,
   BillingPrintParty,
+  BillingReceivableRow,
+  BillingReceivables,
   BillingSeriesView,
   BillingStatementRow,
   BillingStatementWorkRow,

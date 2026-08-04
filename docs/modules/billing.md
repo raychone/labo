@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented, including company-aware `NC`/`NG` realignment in BILLING-REALIGN-001A. BILLING-REALIGN-001B is approved to finish the manager-facing billing workspace UX.
+Implemented, including company-aware `NC`/`NG` realignment in BILLING-REALIGN-001A and the manager-facing financial workspace, receivables, month-end registry, and read-only ambiguous legacy review in BILLING-REALIGN-001B.
 
 ## Purpose
 
@@ -24,7 +24,7 @@ Billable works, documents, series, payments, and print views are scoped by the `
 
 A work cycle without an unambiguous locked execution snapshot cannot be invoiced. One document cannot mix `NC` and `NG` cycles. Ambiguous legacy documents are flagged for review instead of being silently assigned.
 
-BILLING-REALIGN-001B must keep `/billing` company-scoped through the global `NC`/`NG` context, expose receivables, statements, month-end registry, manual receipt recording, and read-only ambiguous legacy review, and leave ambiguous correction workflow to BILLING-REALIGN-001C.
+`/billing` is company-scoped through the global `NC`/`NG` context. It exposes overview counters, billable works, proformas, invoices, manual payment recording, receivables/restanțe, clinic/doctor statements, month-end registry, company-scoped print/CSV views, series, and read-only ambiguous legacy review. Ambiguous correction workflow remains deferred to BILLING-REALIGN-001C.
 
 ## Data Model
 
@@ -32,15 +32,15 @@ BILLING-REALIGN-001B must keep `/billing` company-scoped through the global `NC`
 
 ## API
 
-`/billing/overview`, `/billing/billable-works`, `/billing/search`, `/billing/statements/*`, `/billing/month-registry`, CSV export, `/billing-documents/*`, `/billing-series/*`.
+`/billing/overview`, `/billing/billable-works`, `/billing/search`, `/billing/receivables`, `/billing/ambiguous-legacy`, `/billing/statements/*`, `/billing/month-registry`, CSV export, `/billing-documents/*`, `/billing-series/*`.
 
 ## UI
 
-`/billing`, print views under `/billing/documents/:id/print`.
+`/billing`, with tabs for overview, billable works, proformas, invoices, payments, receivables/restanțe, month-end, and series. Print views remain under `/billing/documents/:id/print`.
 
 ## Audit
 
-Create/update/issue/cancel documents, line changes, payment create/cancel.
+Create/update/issue/cancel documents, line changes, payment create/cancel, statement/month registry/export views, ambiguous legacy review, and rejected company mismatches.
 
 ## Security
 
@@ -52,11 +52,11 @@ Cancelled invoices, overpayment, partial payments, multiple payments, receipt/re
 
 ## Implemented Tasks
 
-BILLING-001, BILLING-002, BILLING-REALIGN-001A.
+BILLING-001, BILLING-002, BILLING-REALIGN-001A, BILLING-REALIGN-001B.
 
 ## Planned Tasks
 
-BILLING-REALIGN-001B is approved. BILLING-REALIGN-001C, PAYMENTS-002, DOCUMENTS-001, and REPORTS-001 are planned.
+BILLING-REALIGN-001C, PAYMENTS-002, DOCUMENTS-001, and REPORTS-001 are planned.
 
 ## Deferred
 

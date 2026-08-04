@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented as manual payment evidence inside billing.
+Implemented as manual payment evidence inside billing, with the BILLING-REALIGN-001B workspace exposing company-scoped manual receipt recording and payment evidence.
 
 ## Purpose
 
@@ -30,7 +30,7 @@ Payment statuses are derived: `UNPAID`, `PARTIALLY_PAID`, `PAID`. Zero/negative 
 
 ## UI
 
-Payment evidence appears in billing workspace. BILLING-REALIGN-001B is approved to improve manual receipt recording UX without adding payment processing.
+Payment evidence appears in the billing workspace under `Încasări` and in invoice payment actions. The application records payments only; it does not process money or generate fiscal receipts.
 
 ## Audit
 
@@ -46,11 +46,11 @@ Partial payments, multiple payments, receipt/reference search, cancelled payment
 
 ## Implemented Tasks
 
-BILLING-001.
+BILLING-001, BILLING-REALIGN-001B.
 
 ## Planned Tasks
 
-BILLING-REALIGN-001B integration, PAYMENTS-002.
+PAYMENTS-002.
 
 ## Deferred
 

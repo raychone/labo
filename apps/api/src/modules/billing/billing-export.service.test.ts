@@ -13,8 +13,10 @@ describe("billing CSV export", () => {
     const csv = createMonthRegistryCsv([
       {
         clinicNameSnapshot: "Clinica Test",
+        dueDate: new Date("2026-08-01T00:00:00.000Z"),
         formattedNumber: "FACT-2026-000001",
         issueDate: new Date("2026-07-23T00:00:00.000Z"),
+        lines: [{ doctorNameSnapshot: "Dr. Test", patientNameSnapshot: "Pacient Test", workCode: "WO-1" }],
         payments: [{ amountMinor: 40000, cancelledAt: null }],
         status: "PARTIALLY_PAID",
         totalMinor: 100000,

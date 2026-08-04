@@ -73,6 +73,30 @@ export class BillableWorksQueryDto extends BillingRangeQueryDto {
   public readonly workTypeId?: string | null;
 
   @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(120)
+  public readonly patient?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(80)
+  public readonly workCode?: string | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  public readonly cycleNumber?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(80)
+  public readonly status?: string | null;
+
+  @IsOptional()
   @Type(() => Boolean)
   public readonly uninvoicedOnly: boolean = true;
 }
@@ -160,6 +184,20 @@ export class ListBillingDocumentsQueryDto {
   @IsOptional()
   @IsISO8601({ strict: true })
   public readonly dateTo?: string;
+
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  public readonly dueDateFrom?: string;
+
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  public readonly dueDateTo?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(80)
+  public readonly workCode?: string | null;
 
   @IsOptional()
   @IsIn(BILLING_DOCUMENT_SORT_FIELDS)
@@ -266,6 +304,11 @@ export class ClinicStatementQueryDto {
   @Transform(({ value }) => trimRequiredString(value))
   @IsString()
   public readonly clinicId!: string;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  public readonly doctorId?: string | null;
 
   @IsOptional()
   @IsISO8601({ strict: true })

@@ -2,9 +2,9 @@
 
 ## Status
 
-APPROVED
+COMPLETED
 
-Documentation-only definition. Do not start implementation from this task definition commit.
+Implemented in the application. `BILLING-REALIGN-001C` remains planned and was not started.
 
 ## Objective
 
@@ -335,12 +335,24 @@ Include coverage for:
 17. Search covers financial identifiers and operational references.
 18. RBAC and masking are server-side.
 19. Mobile and desktop UX are usable.
-20. Tests are defined.
+20. Tests are defined and required verification passes.
 21. `BILLING-REALIGN-001C` remains unstarted.
-22. No application code changes.
+22. Application code changes are limited to the approved billing workspace scope.
 23. Documentation checks pass.
-24. One documentation commit.
-25. Working tree is clean.
+24. One implementation commit.
+25. Working tree is clean after commit.
+
+## Implementation Notes
+
+- `/billing` now exposes the required Romanian tabs: overview, billable works, proformas, invoices, payments, receivables/restanțe, month-end, and series.
+- Overview counters are company-scoped and include unpaid, partial, paid, issued, collected, outstanding, and ambiguous legacy counts.
+- Billable-work and document filters include date, search, patient, work code, payment status, and existing clinic/doctor/server filters.
+- Proforma/invoice lists are split while preserving existing issue, print, conversion, and manual payment flows.
+- Receivables are exposed through a company-scoped API and UI tab with balance, due date, days overdue, clinic, doctor, patient, and work references.
+- Month-end registry includes patient/work/doctor references, paid/partial/unpaid totals, print preview, and safe CSV export.
+- Ambiguous legacy records are visible read-only for managers/finance reports. No correction workflow, reassignment, or silent migration was added.
+- Manual payments remain evidence-only. No e-Factura, fiscal receipts, POS/card processing, bank reconciliation, or accounting redesign was added.
+- No Prisma schema change was required; no migration was created.
 
 ## Verification
 

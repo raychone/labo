@@ -79,6 +79,18 @@ export class BillingController {
     return this.billingStatementService.getMonthRegistry({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, legalEntity, query);
   }
 
+  @Get("billing/receivables")
+  @RequirePermission("finance.read_reports", "ALL")
+  public getReceivables(@CurrentLegalEntity() legalEntity: LegalEntityContext, @Query() query: ListBillingDocumentsQueryDto) {
+    return this.billingService.listReceivables(legalEntity, query);
+  }
+
+  @Get("billing/ambiguous-legacy")
+  @RequirePermission("finance.read_reports", "ALL")
+  public getAmbiguousLegacyRecords(@CurrentLegalEntity() legalEntity: LegalEntityContext, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
+    return this.billingService.listAmbiguousLegacyRecords(legalEntity, { actorUserId: actor.id, requestMetadata: getRequestMetadata(request) });
+  }
+
   @Get("billing/exports/registry.csv")
   @RequirePermission("invoice.download", "ALL")
   public async exportMonthRegistryCsv(

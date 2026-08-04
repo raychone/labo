@@ -42,6 +42,7 @@ describe("BillingPage", () => {
         return Promise.resolve(createJsonResponse({
           permissions: [
             { key: "finance.read", scopes: ["ALL"] },
+            { key: "finance.read_reports", scopes: ["ALL"] },
             { key: "finance.record_payment", scopes: ["ALL"] },
             { key: "invoice.create", scopes: ["ALL"] },
             { key: "invoice.download", scopes: ["ALL"] },
@@ -51,20 +52,25 @@ describe("BillingPage", () => {
         }));
       }
       if (url.endsWith("/settings")) {
-        return Promise.resolve(createJsonResponse({ currency: "RON", locale: "ro-RO" }));
+        return Promise.resolve(createJsonResponse({ currency: "RON", legalEntityCode: "NC", legalEntityDisplayName: "Nicolaie Cristina", locale: "ro-RO" }));
       }
       if (url.includes("/billing/overview")) {
         return Promise.resolve(createJsonResponse({
           currency: "RON",
           documentCount: 1,
+          ambiguousLegacyCount: 0,
           from: "2026-07-01",
           groups: [{ balanceMinor: 35000, count: 1, invoicedMinor: 0, key: "clinic_1", label: "Clinica Test", paidMinor: 0, uninvoicedMinor: 35000 }],
           invoiceCount: 0,
           openProformaCount: 0,
+          overdueInvoiceCount: 0,
           outstandingMinor: 0,
           paidMinor: 0,
+          paidInvoiceCount: 0,
+          partialInvoiceCount: 0,
           proformaMinor: 0,
           to: "2026-07-31",
+          totalIssuedMinor: 0,
           unpaidInvoiceCount: 0,
           uninvoicedMinor: 35000,
           uninvoicedWorkCount: 1,
@@ -85,6 +91,8 @@ describe("BillingPage", () => {
             id: "work_order_1",
             invoicedDocumentId: null,
             isBillable: true,
+            legalEntityCode: "NC",
+            legalEntityName: "Nicolaie Cristina",
             patientName: "Ion Pop",
             patientReference: null,
             quantity: 1,
@@ -92,9 +100,20 @@ describe("BillingPage", () => {
             status: "REGISTERED",
             totalPriceMinor: 35000,
             unavailableReason: null,
+            workCycleId: "cycle_1",
+            workCycleNumber: 1,
             workTypeName: "Coroana zirconiu",
           }],
         }));
+      }
+      if (url.includes("/billing/receivables")) {
+        return Promise.resolve(createJsonResponse({ currency: "RON", generatedAt: "2026-08-04T00:00:00.000Z", items: [], overdueCount: 0, totalBalanceMinor: 0 }));
+      }
+      if (url.endsWith("/billing/ambiguous-legacy")) {
+        return Promise.resolve(createJsonResponse({ items: [] }));
+      }
+      if (url.includes("/billing/month-registry")) {
+        return Promise.resolve(createJsonResponse({ currency: "RON", dateFrom: "2026-08-01", dateTo: "2026-08-31", generatedAt: "2026-08-04T00:00:00.000Z", paidMinor: 0, paidTotalMinor: 0, partialTotalMinor: 0, rows: [], totalMinor: 0, unpaidTotalMinor: 0 }));
       }
       if (url.includes("/billing-documents")) {
         return Promise.resolve(createJsonResponse({ items: [], page: 1, pageCount: 1, pageSize: 20, total: 0 }));
@@ -114,6 +133,7 @@ describe("BillingPage", () => {
     expect(await screen.findByRole("heading", { name: "Facturare" })).toBeDefined();
     expect(await screen.findByLabelText("Status încasare")).toBeDefined();
     expect((await screen.findAllByText("Nefacturat")).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("tab", { name: "Lucrări nefacturate" }));
     expect(await screen.findByText("WO-2026-000001")).toBeDefined();
     fireEvent.click(screen.getByLabelText("Selectează WO-2026-000001"));
     expect(await screen.findByText(/1 lucrări selectate/)).toBeDefined();

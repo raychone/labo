@@ -49,6 +49,7 @@ export interface BillingDocumentSummary {
   readonly clinicId: string;
   readonly clinicName: string;
   readonly currency: string;
+  readonly dueDate: string | null;
   readonly formattedNumber: string | null;
   readonly id: string;
   readonly legalEntityCode: string | null;
@@ -59,6 +60,7 @@ export interface BillingDocumentSummary {
   readonly status: BillingDocumentStatus;
   readonly totalMinor: number;
   readonly type: BillingDocumentType;
+  readonly workCodes: readonly string[];
   readonly workCount: number;
 }
 
@@ -122,16 +124,21 @@ export interface BillingGroup {
 }
 
 export interface BillingOverview {
+  readonly ambiguousLegacyCount: number;
   readonly currency: string;
   readonly documentCount: number;
   readonly from: string;
   readonly groups: readonly BillingGroup[];
   readonly invoiceCount: number;
   readonly openProformaCount: number;
+  readonly overdueInvoiceCount: number;
   readonly outstandingMinor: number;
   readonly paidMinor: number;
+  readonly paidInvoiceCount: number;
+  readonly partialInvoiceCount: number;
   readonly proformaMinor: number;
   readonly to: string;
+  readonly totalIssuedMinor: number;
   readonly unpaidInvoiceCount: number;
   readonly uninvoicedMinor: number;
   readonly uninvoicedWorkCount: number;
@@ -199,6 +206,7 @@ export function toBillingDocumentSummary(document: BillingDocumentRecord): Billi
     clinicId: document.clinicId,
     clinicName: document.clinicNameSnapshot,
     currency: document.currency,
+    dueDate: document.dueDate?.toISOString() ?? null,
     formattedNumber: document.formattedNumber,
     id: document.id,
     issueDate: document.issueDate.toISOString(),
@@ -209,6 +217,7 @@ export function toBillingDocumentSummary(document: BillingDocumentRecord): Billi
     status: document.status as BillingDocumentStatus,
     totalMinor: document.totalMinor,
     type: document.type as BillingDocumentType,
+    workCodes: document.lines.map((line) => line.workCode),
     workCount: document.lines.length,
   };
 }
@@ -336,14 +345,19 @@ export function createEmptyBillingOverview(from: string, to: string, currency: s
   return {
     currency,
     documentCount: 0,
+    ambiguousLegacyCount: 0,
     from,
     groups: [],
     invoiceCount: 0,
     openProformaCount: 0,
+    overdueInvoiceCount: 0,
     outstandingMinor: 0,
     paidMinor: 0,
+    paidInvoiceCount: 0,
+    partialInvoiceCount: 0,
     proformaMinor: 0,
     to,
+    totalIssuedMinor: 0,
     unpaidInvoiceCount: 0,
     uninvoicedMinor: 0,
     uninvoicedWorkCount: 0,

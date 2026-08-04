@@ -86,6 +86,7 @@ export class BillingStatementService {
         orderBy: [{ issueDate: "asc" }, { createdAt: "asc" }],
         where: {
           clinicId: query.clinicId,
+          ...(query.doctorId ? { doctorId: query.doctorId } : {}),
           issueDate: { gte: range.from, lte: range.to },
           legalEntityId: legalEntity.id,
           status: { not: "CANCELLED" },
@@ -97,6 +98,7 @@ export class BillingStatementService {
         where: {
           clinicId: query.clinicId,
           createdAt: { gte: range.from, lte: range.to },
+          ...(query.doctorId ? { doctorId: query.doctorId } : {}),
           activeCycle: {
             billingLines: { none: { billingDocument: { status: { not: "CANCELLED" }, type: "INVOICE" } } },
             executionLegalEntityId: legalEntity.id,
@@ -206,8 +208,11 @@ export class BillingStatementService {
       dateTo: toDateOnly(range.to),
       generatedAt: new Date().toISOString(),
       paidMinor: rows.reduce((total, row) => total + row.paidMinor, 0),
+      paidTotalMinor: rows.filter((row) => calculateRegistryPaymentStatus(row) === "PAID").reduce((total, row) => total + row.totalMinor, 0),
+      partialTotalMinor: rows.filter((row) => calculateRegistryPaymentStatus(row) === "PARTIALLY_PAID").reduce((total, row) => total + row.totalMinor, 0),
       rows,
       totalMinor: rows.reduce((total, row) => total + row.totalMinor, 0),
+      unpaidTotalMinor: rows.filter((row) => calculateRegistryPaymentStatus(row) === "UNPAID").reduce((total, row) => total + row.totalMinor, 0),
     };
   }
 
@@ -242,10 +247,12 @@ function toStatementRow(document: StatementDocumentRecord) {
     documentId: document.id,
     documentNumber: document.formattedNumber,
     documentType: document.type,
+    dueDate: document.dueDate?.toISOString() ?? null,
     issueDate: document.issueDate.toISOString(),
     paidMinor: amounts.paidMinor,
     status: document.status,
     totalMinor: document.totalMinor,
+    workCodes: uniqueStrings(document.lines.map((line) => line.workCode)),
   };
 }
 
@@ -255,6 +262,8 @@ function toRegistryRow(document: StatementDocumentRecord) {
   return {
     ...row,
     clinicName: document.clinicNameSnapshot,
+    doctorNames: uniqueStrings(document.lines.map((line) => line.doctorNameSnapshot)),
+    patientNames: uniqueStrings(document.lines.map((line) => line.patientNameSnapshot)),
   };
 }
 
@@ -276,4 +285,16 @@ function resolveCurrency(documents: readonly StatementDocumentRecord[], works: r
 
 function getWorkSnapshotTotal(work: UninvoicedWorkRecord): number {
   return work.activeCycle?.executionSnapshot?.pricingTotalMinor ?? 0;
+}
+
+function uniqueStrings(values: readonly (string | null)[]): readonly string[] {
+  return [...new Set(values.filter((value): value is string => typeof value === "string" && value.length > 0))];
+}
+
+function calculateRegistryPaymentStatus(row: { readonly balanceMinor: number; readonly paidMinor: number }): "PAID" | "PARTIALLY_PAID" | "UNPAID" {
+  if (row.balanceMinor === 0) {
+    return "PAID";
+  }
+
+  return row.paidMinor > 0 ? "PARTIALLY_PAID" : "UNPAID";
 }

@@ -61,6 +61,7 @@ export interface BillingDocumentSummary {
   readonly clinicId: string;
   readonly clinicName: string;
   readonly currency: string;
+  readonly dueDate: string | null;
   readonly formattedNumber: string | null;
   readonly id: string;
   readonly legalEntityCode: string | null;
@@ -71,6 +72,7 @@ export interface BillingDocumentSummary {
   readonly status: BillingDocumentStatus;
   readonly totalMinor: number;
   readonly type: BillingDocumentType;
+  readonly workCodes: readonly string[];
   readonly workCount: number;
 }
 
@@ -98,15 +100,20 @@ export interface BillingGroup {
 }
 
 export interface BillingOverview {
+  readonly ambiguousLegacyCount: number;
   readonly currency: string;
   readonly documentCount: number;
   readonly from: string;
   readonly groups: readonly BillingGroup[];
   readonly invoiceCount: number;
   readonly openProformaCount: number;
+  readonly overdueInvoiceCount: number;
   readonly paidMinor: number;
+  readonly paidInvoiceCount: number;
+  readonly partialInvoiceCount: number;
   readonly proformaMinor: number;
   readonly to: string;
+  readonly totalIssuedMinor: number;
   readonly unpaidInvoiceCount: number;
   readonly outstandingMinor: number;
   readonly uninvoicedMinor: number;
@@ -178,12 +185,14 @@ export interface RecordPaymentInput {
 }
 
 export interface BillingListQuery {
+  readonly amountMaxMinor?: number;
+  readonly amountMinMinor?: number;
   readonly clinicId?: string;
   readonly dateFrom?: string;
   readonly dateTo?: string;
   readonly doctorId?: string;
-  readonly amountMaxMinor?: number;
-  readonly amountMinMinor?: number;
+  readonly dueDateFrom?: string;
+  readonly dueDateTo?: string;
   readonly page: number;
   readonly pageSize: number;
   readonly paymentStatus?: PaymentStatus;
@@ -196,6 +205,7 @@ export interface BillingListQuery {
   readonly sortDirection: "asc" | "desc";
   readonly status?: BillingDocumentStatus;
   readonly type?: BillingDocumentType;
+  readonly workCode?: string;
 }
 
 export interface PaginatedBillingDocumentsResponse {
@@ -243,10 +253,12 @@ export interface BillingStatementRow {
   readonly documentId: string;
   readonly documentNumber: string | null;
   readonly documentType: BillingDocumentType;
+  readonly dueDate: string | null;
   readonly issueDate: string;
   readonly paidMinor: number;
   readonly status: BillingDocumentStatus;
   readonly totalMinor: number;
+  readonly workCodes: readonly string[];
 }
 
 export interface BillingStatementWorkRow {
@@ -293,10 +305,14 @@ export interface MonthEndRegistryRow {
   readonly documentId: string;
   readonly documentNumber: string | null;
   readonly documentType: BillingDocumentType;
+  readonly doctorNames: readonly string[];
+  readonly dueDate: string | null;
   readonly issueDate: string;
   readonly paidMinor: number;
+  readonly patientNames: readonly string[];
   readonly status: BillingDocumentStatus;
   readonly totalMinor: number;
+  readonly workCodes: readonly string[];
 }
 
 export interface MonthEndRegistry {
@@ -305,6 +321,48 @@ export interface MonthEndRegistry {
   readonly dateTo: string;
   readonly generatedAt: string;
   readonly paidMinor: number;
+  readonly paidTotalMinor: number;
+  readonly partialTotalMinor: number;
   readonly rows: readonly MonthEndRegistryRow[];
   readonly totalMinor: number;
+  readonly unpaidTotalMinor: number;
+}
+
+export interface BillingReceivableRow {
+  readonly balanceMinor: number;
+  readonly clinicName: string;
+  readonly currency: string;
+  readonly daysOverdue: number;
+  readonly doctorNames: readonly string[];
+  readonly documentId: string;
+  readonly documentNumber: string | null;
+  readonly dueDate: string | null;
+  readonly issueDate: string;
+  readonly paidMinor: number;
+  readonly patientNames: readonly string[];
+  readonly status: BillingDocumentStatus;
+  readonly totalMinor: number;
+  readonly workCodes: readonly string[];
+}
+
+export interface BillingReceivables {
+  readonly currency: string;
+  readonly generatedAt: string;
+  readonly items: readonly BillingReceivableRow[];
+  readonly overdueCount: number;
+  readonly totalBalanceMinor: number;
+}
+
+export interface AmbiguousLegacyBillingRecord {
+  readonly clinicName: string;
+  readonly companyAssignmentNotes: string | null;
+  readonly companyAssignmentStatus: "AMBIGUOUS" | "UNASSIGNED";
+  readonly createdAt: string;
+  readonly documentId: string;
+  readonly documentNumber: string | null;
+  readonly documentType: BillingDocumentType;
+  readonly issueDate: string;
+  readonly lineCompanyCodes: readonly string[];
+  readonly totalMinor: number;
+  readonly workCodes: readonly string[];
 }

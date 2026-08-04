@@ -17,11 +17,14 @@ import {
 } from "@dental-lab/ui";
 import {
   formatMoneyMinor,
+  type AmbiguousLegacyBillingRecord,
   type BillableWork,
   type BillingDocumentSummary,
   type BillingListQuery,
   type BillingOverview,
+  type BillingReceivableRow,
   type DocumentPaymentFilter,
+  type MonthEndRegistry,
   type PaymentMethod,
   type RecordPaymentInput,
 } from "@dental-lab/shared";
@@ -40,8 +43,11 @@ import {
   useCreateProforma,
   useConvertProforma,
   useIssueDocument,
+  useMonthRegistry,
   usePayments,
   useRecordPayment,
+  useReceivables,
+  useAmbiguousLegacyRecords,
   downloadMonthRegistryCsv,
   type BillingWorkspaceParams,
 } from "./billing-api.js";
@@ -173,11 +179,28 @@ function toPaymentMethodLabel(method: PaymentMethod | string): string {
   return method in labels ? labels[method as PaymentMethod] : "Altă metodă";
 }
 
+function toDocumentCsvRow(document: BillingDocumentSummary, currency: string): Readonly<Record<string, string | number | null>> {
+  return {
+    "Număr": document.formattedNumber,
+    "Tip": document.type === "INVOICE" ? "Factură" : "Proformă",
+    "Status": toDocumentStatusLabel(document.status),
+    "Clinică": document.clinicName,
+    "Data emiterii": formatCsvDate(document.issueDate),
+    "Scadență": formatCsvDate(document.dueDate),
+    "Lucrări": document.workCodes.join(", "),
+    "Valoare totală": (document.totalMinor / 100).toFixed(2),
+    "Încasat": (document.paidMinor / 100).toFixed(2),
+    "Sold restant": (document.balanceMinor / 100).toFixed(2),
+    "Monedă": currency,
+  };
+}
+
 export function BillingPage(): ReactNode {
   const toast = useToast();
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   const canReadFinance = hasPermission(permissionsQuery.data, "finance.read");
   const canReadInvoices = hasPermission(permissionsQuery.data, "invoice.read");
+  const canReadReports = hasPermission(permissionsQuery.data, "finance.read_reports");
   const canCreateInvoice = hasPermission(permissionsQuery.data, "invoice.create");
   const canRecordPayment = hasPermission(permissionsQuery.data, "finance.record_payment");
   const canConfigureSeries = hasPermission(permissionsQuery.data, "invoice.configure_series");
@@ -189,25 +212,36 @@ export function BillingPage(): ReactNode {
   const [range, setRange] = useState(currentMonthRange);
   const [groupBy, setGroupBy] = useState("clinic");
   const [paymentFilter, setPaymentFilter] = useState<DocumentPaymentFilter>("ALL");
+  const [patientFilter, setPatientFilter] = useState("");
+  const [workCodeFilter, setWorkCodeFilter] = useState("");
   const [search, setSearch] = useState("");
   const [paymentForm, setPaymentForm] = useState<ManualPaymentFormState>(createEmptyPaymentForm(range.dateTo));
   const [selectedWorkIds, setSelectedWorkIds] = useState<readonly string[]>([]);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const overviewParams: BillingWorkspaceParams = { ...range, groupBy };
-  const billableParams: BillingWorkspaceParams = { ...range, search, uninvoicedOnly: true };
-  const documentParams: BillingListQuery = {
+  const billableParams: BillingWorkspaceParams = { ...range, search, uninvoicedOnly: true, ...(patientFilter ? { patient: patientFilter } : {}), ...(workCodeFilter ? { workCode: workCodeFilter } : {}) };
+  const baseDocumentParams: BillingListQuery = {
     ...range,
     page: 1,
     pageSize,
     paymentFilter,
     sortBy: "createdAt",
     sortDirection: "desc",
+    ...(patientFilter ? { patient: patientFilter } : {}),
     ...(search ? { search } : {}),
+    ...(workCodeFilter ? { workCode: workCodeFilter } : {}),
   };
+  const proformaParams: BillingListQuery = { ...baseDocumentParams, paymentFilter: "ALL", type: "PROFORMA" };
+  const invoiceParams: BillingListQuery = { ...baseDocumentParams, type: "INVOICE" };
+  const receivablesParams: BillingListQuery = { ...baseDocumentParams, paymentFilter: paymentFilter === "ALL" ? "OUTSTANDING" : paymentFilter, type: "INVOICE" };
   const overviewQuery = useBillingOverview(overviewParams, canReadFinance);
   const billableWorksQuery = useBillableWorks(billableParams, canCreateInvoice);
-  const documentsQuery = useBillingDocuments(documentParams, canReadInvoices);
+  const proformasQuery = useBillingDocuments(proformaParams, canReadInvoices);
+  const invoicesQuery = useBillingDocuments(invoiceParams, canReadInvoices);
   const paymentsQuery = usePayments(canReadFinance);
+  const receivablesQuery = useReceivables(receivablesParams, canReadReports);
+  const monthRegistryQuery = useMonthRegistry(overviewParams, canReadReports);
+  const ambiguousLegacyQuery = useAmbiguousLegacyRecords(canReadReports);
   const seriesQuery = useBillingSeries(canConfigureSeries);
   const createProformaMutation = useCreateProforma();
   const createInvoiceMutation = useCreateInvoice();
@@ -219,9 +253,10 @@ export function BillingPage(): ReactNode {
     () => (billableWorksQuery.data?.items ?? []).filter((work) => selectedWorkIds.includes(work.id)),
     [billableWorksQuery.data?.items, selectedWorkIds],
   );
+  const documents = useMemo(() => [...(proformasQuery.data?.items ?? []), ...(invoicesQuery.data?.items ?? [])], [invoicesQuery.data?.items, proformasQuery.data?.items]);
   const selectedClinicId = selectedWorks[0]?.clinicId ?? null;
   const selectedTotal = selectedWorks.reduce((total, work) => total + (work.totalPriceMinor ?? 0), 0);
-  const selectedDocument = documentsQuery.data?.items.find((document) => document.id === selectedDocumentId) ?? documentsQuery.data?.items[0] ?? null;
+  const selectedDocument = documents.find((document) => document.id === selectedDocumentId) ?? invoicesQuery.data?.items[0] ?? proformasQuery.data?.items[0] ?? null;
 
   function toggleWork(work: BillableWork): void {
     if (!work.isBillable) {
@@ -319,6 +354,8 @@ export function BillingPage(): ReactNode {
         <DateInput label="De la" value={range.dateFrom} onChange={(event) => setRange((current) => ({ ...current, dateFrom: event.target.value }))} />
         <DateInput label="Până la" value={range.dateTo} onChange={(event) => setRange((current) => ({ ...current, dateTo: event.target.value }))} />
         <TextInput label="Căutare" placeholder="Caută pacient, clinică, medic, cod lucrare, factură sau chitanță" value={search} onChange={(event) => setSearch(event.target.value)} />
+        <TextInput label="Pacient" placeholder="Filtru pacient" value={patientFilter} onChange={(event) => setPatientFilter(event.target.value)} />
+        <TextInput label="Cod lucrare" placeholder="WO-2026..." value={workCodeFilter} onChange={(event) => setWorkCodeFilter(event.target.value)} />
         <Select
           label="Status încasare"
           options={paymentFilterOptions}
@@ -348,6 +385,19 @@ export function BillingPage(): ReactNode {
       <Tabs
         tabs={[
           {
+            id: "overview",
+            label: "Prezentare generală",
+            content: (
+              <OverviewTab
+                ambiguousLegacy={ambiguousLegacyQuery.data?.items ?? []}
+                currency={currency}
+                locale={locale}
+                onPrint={() => window.print()}
+                overview={overviewQuery.data}
+              />
+            ),
+          },
+          {
             id: "uninvoiced",
             label: "Lucrări nefacturate",
             content: (
@@ -374,27 +424,43 @@ export function BillingPage(): ReactNode {
             ),
           },
           {
-            id: "documents",
-            label: "Proforme și facturi",
+            id: "proformas",
+            label: "Proforme",
+            content: (
+              <DocumentsTab
+                canRecordPayment={false}
+                currency={currency}
+                documents={proformasQuery.data?.items ?? []}
+                error={proformasQuery.error}
+                isLoading={proformasQuery.isLoading}
+                isMutating={issueMutation.isPending || convertMutation.isPending || recordPaymentMutation.isPending}
+                locale={locale}
+                onConvert={convertSelectedProforma}
+                onExport={() => downloadCsv("proforme.csv", toCsv((proformasQuery.data?.items ?? []).map((document) => toDocumentCsvRow(document, currency))))}
+                onIssue={issueSelectedDocument}
+                onPrint={(documentId) => window.open(`/billing/documents/${documentId}/print`, "_blank", "noopener,noreferrer")}
+                onRecordPayment={recordManualPayment}
+                onSelect={setSelectedDocumentId}
+                paymentForm={paymentForm}
+                setPaymentForm={setPaymentForm}
+                selectedDocument={selectedDocument}
+              />
+            ),
+          },
+          {
+            id: "invoices",
+            label: "Facturi",
             content: (
               <DocumentsTab
                 canRecordPayment={canRecordPayment}
                 currency={currency}
-                documents={documentsQuery.data?.items ?? []}
-                error={documentsQuery.error}
-                isLoading={documentsQuery.isLoading}
+                documents={invoicesQuery.data?.items ?? []}
+                error={invoicesQuery.error}
+                isLoading={invoicesQuery.isLoading}
                 isMutating={issueMutation.isPending || convertMutation.isPending || recordPaymentMutation.isPending}
                 locale={locale}
                 onConvert={convertSelectedProforma}
-                onExport={() => downloadCsv("documente-facturare.csv", toCsv((documentsQuery.data?.items ?? []).map((document) => ({
-                  "Număr": document.formattedNumber,
-                  "Tip": document.type === "INVOICE" ? "Factură" : "Proformă",
-                  "Status": toDocumentStatusLabel(document.status),
-                  "Clinică": document.clinicName,
-                  "Valoare totală": (document.totalMinor / 100).toFixed(2),
-                  "Sold restant": (document.balanceMinor / 100).toFixed(2),
-                  "Monedă": currency,
-                }))))}
+                onExport={() => downloadCsv("facturi.csv", toCsv((invoicesQuery.data?.items ?? []).map((document) => toDocumentCsvRow(document, currency))))}
                 onIssue={issueSelectedDocument}
                 onPrint={(documentId) => window.open(`/billing/documents/${documentId}/print`, "_blank", "noopener,noreferrer")}
                 onRecordPayment={recordManualPayment}
@@ -407,7 +473,7 @@ export function BillingPage(): ReactNode {
           },
           {
             id: "payments",
-            label: "Evidență încasări",
+            label: "Încasări",
             content: (
               <PaymentsTab
                 currency={currency}
@@ -427,10 +493,36 @@ export function BillingPage(): ReactNode {
             ),
           },
           {
+            id: "receivables",
+            label: "Restanțe",
+            content: (
+              <ReceivablesTab
+                currency={currency}
+                error={receivablesQuery.error}
+                isLoading={receivablesQuery.isLoading}
+                items={receivablesQuery.data?.items ?? []}
+                locale={locale}
+                onExport={() => downloadCsv("restante.csv", toCsv((receivablesQuery.data?.items ?? []).map((item) => ({
+                  "Factură": item.documentNumber,
+                  "Clinică": item.clinicName,
+                  "Medici": item.doctorNames.join(", "),
+                  "Pacienți": item.patientNames.join(", "),
+                  "Lucrări": item.workCodes.join(", "),
+                  "Data emiterii": formatCsvDate(item.issueDate),
+                  "Scadență": formatCsvDate(item.dueDate),
+                  "Zile întârziere": item.daysOverdue,
+                  "Sold": (item.balanceMinor / 100).toFixed(2),
+                  "Monedă": item.currency,
+                }))))}
+              />
+            ),
+          },
+          {
             id: "month-close",
             label: "Închidere lună",
             content: <MonthCloseTab
               overview={overviewQuery.data}
+              registry={monthRegistryQuery.data}
               currency={currency}
               locale={locale}
               onExportRegistry={async () => {
@@ -455,12 +547,15 @@ export function BillingPage(): ReactNode {
 
 function OverviewCards({ currency, locale, overview }: { readonly currency: string; readonly locale: string; readonly overview: BillingOverview }): ReactNode {
   const cards = [
-    { label: "Nefacturat", value: overview.uninvoicedMinor, count: overview.uninvoicedWorkCount },
-    { label: "Facturat", value: overview.proformaMinor + overview.outstandingMinor + overview.paidMinor, count: overview.invoiceCount },
-    { label: "Încasat", value: overview.paidMinor, count: overview.documentCount },
-    { label: "Sold restant", value: overview.outstandingMinor, count: overview.unpaidInvoiceCount },
+    { label: "Lucrări nefacturate", value: overview.uninvoicedMinor, count: overview.uninvoicedWorkCount },
     { label: "Proforme deschise", value: overview.proformaMinor, count: overview.openProformaCount },
-    { label: "Facturi neîncasate", value: overview.outstandingMinor, count: overview.unpaidInvoiceCount },
+    { label: "Facturi neachitate", value: overview.outstandingMinor, count: overview.unpaidInvoiceCount },
+    { label: "Facturi parțial achitate", value: overview.outstandingMinor, count: overview.partialInvoiceCount },
+    { label: "Facturi achitate", value: overview.paidMinor, count: overview.paidInvoiceCount },
+    { label: "Total emis", value: overview.totalIssuedMinor, count: overview.invoiceCount },
+    { label: "Total încasat", value: overview.paidMinor, count: overview.documentCount },
+    { label: "Sold restant", value: overview.outstandingMinor, count: overview.unpaidInvoiceCount },
+    { label: "Ambigue legacy", value: 0, count: overview.ambiguousLegacyCount },
   ];
 
   return (
@@ -474,6 +569,43 @@ function OverviewCards({ currency, locale, overview }: { readonly currency: stri
           <CardContent><strong>{formatMoneyMinor(card.value, currency, locale)}</strong></CardContent>
         </Card>
       ))}
+    </section>
+  );
+}
+
+function OverviewTab({
+  ambiguousLegacy,
+  currency,
+  locale,
+  onPrint,
+  overview,
+}: {
+  readonly ambiguousLegacy: readonly AmbiguousLegacyBillingRecord[];
+  readonly currency: string;
+  readonly locale: string;
+  readonly onPrint: () => void;
+  readonly overview: BillingOverview | undefined;
+}): ReactNode {
+  if (!overview) {
+    return <LoadingState text="Se încarcă prezentarea generală" />;
+  }
+
+  const columns: readonly DataTableColumn<AmbiguousLegacyBillingRecord>[] = [
+    { id: "number", header: "Document", renderCell: (row) => row.documentNumber ?? "Legacy fără număr" },
+    { id: "type", header: "Tip", renderCell: (row) => toDocumentTypeLabel(row.documentType) },
+    { id: "clinic", header: "Clinică", renderCell: (row) => row.clinicName },
+    { id: "works", header: "Lucrări", renderCell: (row) => row.workCodes.join(", ") || "-" },
+    { id: "companies", header: "Firme pe linii", renderCell: (row) => row.lineCompanyCodes.join(", ") || "-" },
+    { id: "total", header: "Total", align: "right", renderCell: (row) => formatMoneyMinor(row.totalMinor, currency, locale) },
+  ];
+
+  return (
+    <section className="billing-page__tab">
+      <div className="billing-page__toolbar">
+        <p>Documente ambigue legacy pentru revizuire read-only: {overview.ambiguousLegacyCount}</p>
+        <Button onClick={onPrint} variant="outline">Print prezentare</Button>
+      </div>
+      <DataTable columns={columns} emptyMessage="Nu există documente legacy ambigue pentru firma activă." getRowKey={(row) => row.documentId} rows={ambiguousLegacy} />
     </section>
   );
 }
@@ -572,6 +704,8 @@ function DocumentsTab({
     { id: "status", header: "Status", renderCell: (document) => toDocumentStatusLabel(document.status) },
     { id: "company", header: "Firmă", renderCell: (document) => document.legalEntityCode ?? "-" },
     { id: "clinic", header: "Clinică", renderCell: (document) => document.clinicName },
+    { id: "works", header: "Lucrări", renderCell: (document) => document.workCodes.join(", ") || "-" },
+    { id: "due", header: "Scadență", renderCell: (document) => document.dueDate ? formatDate(document.dueDate) : "-" },
     { id: "total", header: "Total", align: "right", renderCell: (document) => formatMoneyMinor(document.totalMinor, document.currency, locale) },
     { id: "payment", header: "Încasare", renderCell: (document) => toPaymentStatusLabel(document.paymentStatus) },
     { id: "balance", header: "Sold restant", align: "right", renderCell: (document) => formatMoneyMinor(document.balanceMinor, document.currency, locale) },
@@ -654,7 +788,42 @@ function PaymentsTab({ currency, isLoading, locale, onExport, payments }: { read
   );
 }
 
-function MonthCloseTab({ currency, locale, onExportRegistry, overview }: { readonly currency: string; readonly locale: string; readonly onExportRegistry: () => void; readonly overview: BillingOverview | undefined }): ReactNode {
+function ReceivablesTab({
+  currency,
+  error,
+  isLoading,
+  items,
+  locale,
+  onExport,
+}: {
+  readonly currency: string;
+  readonly error: unknown;
+  readonly isLoading: boolean;
+  readonly items: readonly BillingReceivableRow[];
+  readonly locale: string;
+  readonly onExport: () => void;
+}): ReactNode {
+  const columns = useMemo<readonly DataTableColumn<BillingReceivableRow>[]>(() => [
+    { id: "number", header: "Factură", renderCell: (item) => item.documentNumber ?? "-" },
+    { id: "clinic", header: "Clinică", renderCell: (item) => item.clinicName },
+    { id: "doctor", header: "Medic", renderCell: (item) => item.doctorNames.join(", ") || "-" },
+    { id: "patient", header: "Pacient", renderCell: (item) => item.patientNames.join(", ") || "-" },
+    { id: "works", header: "Lucrări", renderCell: (item) => item.workCodes.join(", ") || "-" },
+    { id: "issue", header: "Emisă", renderCell: (item) => formatDate(item.issueDate) },
+    { id: "due", header: "Scadență", renderCell: (item) => item.dueDate ? formatDate(item.dueDate) : "-" },
+    { id: "overdue", header: "Restanță", renderCell: (item) => item.daysOverdue > 0 ? `${item.daysOverdue} zile` : "În termen" },
+    { id: "balance", header: "Sold", align: "right", renderCell: (item) => formatMoneyMinor(item.balanceMinor, item.currency ?? currency, locale) },
+  ], [currency, locale]);
+
+  return (
+    <section className="billing-page__tab">
+      <div className="billing-page__toolbar"><Button onClick={onExport} variant="outline">Export CSV</Button></div>
+      <DataTable columns={columns} emptyMessage="Nu există facturi restante sau parțial achitate pentru filtrele curente." error={error ? getErrorMessage(error) : undefined} getRowKey={(item) => item.documentId} isLoading={isLoading} rows={items} />
+    </section>
+  );
+}
+
+function MonthCloseTab({ currency, locale, onExportRegistry, overview, registry }: { readonly currency: string; readonly locale: string; readonly onExportRegistry: () => void; readonly overview: BillingOverview | undefined; readonly registry: MonthEndRegistry | undefined }): ReactNode {
   if (!overview) {
     return <LoadingState text="Se încarcă închiderea lunii" />;
   }
@@ -663,7 +832,17 @@ function MonthCloseTab({ currency, locale, onExportRegistry, overview }: { reado
     <section className="billing-page__tab">
       <div className="billing-page__toolbar">
         <Button onClick={onExportRegistry} variant="outline">Export registru lunar CSV</Button>
+        <Button onClick={() => window.print()} variant="outline">Print registru</Button>
       </div>
+      {registry ? (
+        <div className="billing-page__registry-summary">
+          <span>Total emis: {formatMoneyMinor(registry.totalMinor, currency, locale)}</span>
+          <span>Încasat: {formatMoneyMinor(registry.paidMinor, currency, locale)}</span>
+          <span>Neachitat: {formatMoneyMinor(registry.unpaidTotalMinor, currency, locale)}</span>
+          <span>Parțial: {formatMoneyMinor(registry.partialTotalMinor, currency, locale)}</span>
+          <span>Achitat: {formatMoneyMinor(registry.paidTotalMinor, currency, locale)}</span>
+        </div>
+      ) : null}
       <div className="billing-page__month-close">
         {overview.groups.map((group) => (
           <Card key={group.key}>

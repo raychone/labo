@@ -31,6 +31,7 @@
 
 .billing-page__filters,
 .billing-page__cards,
+.billing-page__registry-summary,
 .billing-page__month-close {
   display: grid;
   gap: var(--dl-space-4);
@@ -171,6 +172,7 @@
   }
 
   .billing-page__cards,
+  .billing-page__registry-summary,
   .billing-page__month-close {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }

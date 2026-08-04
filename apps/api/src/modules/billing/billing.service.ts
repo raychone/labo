@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import type { BillingDocumentType, Prisma } from "@prisma/client";
+import type { BillingDocumentType, Prisma, WorkStatus } from "@prisma/client";
 
 import { AuditService } from "../auth/audit.service.js";
 import type { RequestMetadata } from "../auth/auth.types.js";
@@ -97,7 +97,7 @@ export class BillingService {
     const workWhere = this.createWorkWhere(legalEntity, query, range);
     const documentWhere = this.createDocumentWhere(legalEntity, query, range);
 
-    const [works, documents] = await this.prisma.$transaction([
+    const [works, documents, ambiguousLegacyCount] = await this.prisma.$transaction([
       this.prisma.workOrder.findMany({
         include: BILLABLE_WORK_INCLUDE,
         where: workWhere,
@@ -106,12 +106,18 @@ export class BillingService {
         include: BILLING_DOCUMENT_INCLUDE,
         where: documentWhere,
       }),
+      this.prisma.billingDocument.count({
+        where: this.createAmbiguousLegacyWhere(legalEntity),
+      }),
     ]);
 
     const billableWorks = works.filter((work) => this.isWorkCycleBillable(work));
 
     if (billableWorks.length === 0 && documents.length === 0) {
-      return createEmptyBillingOverview(toDateOnly(range.from), toDateOnly(range.to), currency);
+      return {
+        ...createEmptyBillingOverview(toDateOnly(range.from), toDateOnly(range.to), currency),
+        ambiguousLegacyCount,
+      };
     }
 
     const workValueMinor = billableWorks.reduce((total, work) => total + (this.getRequiredBillableSnapshot(work).pricingTotalMinor ?? 0), 0);
@@ -122,19 +128,27 @@ export class BillingService {
     const proformas = activeDocuments.filter((document) => document.type === "PROFORMA");
     const paidMinor = invoices.reduce((total, document) => total + calculateBillingAmounts(document).paidMinor, 0);
     const outstandingMinor = invoices.reduce((total, document) => total + calculateBillingAmounts(document).balanceMinor, 0);
-    const unpaidInvoiceCount = invoices.filter((document) => calculateBillingAmounts(document).balanceMinor > 0).length;
+    const unpaidInvoiceCount = invoices.filter((document) => calculateBillingAmounts(document).paymentStatus === "UNPAID").length;
+    const partialInvoiceCount = invoices.filter((document) => calculateBillingAmounts(document).paymentStatus === "PARTIALLY_PAID").length;
+    const paidInvoiceCount = invoices.filter((document) => calculateBillingAmounts(document).paymentStatus === "PAID").length;
+    const overdueInvoiceCount = invoices.filter((document) => this.isOverdueInvoice(document)).length;
 
     return {
+      ambiguousLegacyCount,
       currency,
       documentCount: activeDocuments.length,
       from: toDateOnly(range.from),
       groups: this.createOverviewGroups(query.groupBy, billableWorks, invoices),
       invoiceCount: invoices.length,
       openProformaCount: proformas.filter((document) => document.status !== "CANCELLED").length,
+      overdueInvoiceCount,
       outstandingMinor,
       paidMinor,
+      paidInvoiceCount,
+      partialInvoiceCount,
       proformaMinor: proformas.reduce((total, document) => total + document.totalMinor, 0),
       to: toDateOnly(range.to),
+      totalIssuedMinor: invoices.reduce((total, document) => total + document.totalMinor, 0),
       unpaidInvoiceCount,
       uninvoicedMinor,
       uninvoicedWorkCount: uninvoicedWorks.length,
@@ -145,28 +159,52 @@ export class BillingService {
   public async listBillableWorks(legalEntity: LegalEntityContext, query: BillableWorksQueryDto, includeMoney: boolean) {
     const range = this.resolveDateRange(query);
     const search = query.search?.trim();
+    const activeCycleWhere = {
+      executionLegalEntityId: legalEntity.id,
+      ...(query.cycleNumber ? { cycleNumber: query.cycleNumber } : {}),
+      ...(query.uninvoicedOnly ? { billingLines: { none: { billingDocument: { status: { not: "CANCELLED" }, type: "INVOICE" } } } } : {}),
+    } satisfies Prisma.WorkCycleWhereInput;
+    const where: Prisma.WorkOrderWhereInput = {
+      activeCycle: { is: activeCycleWhere },
+      createdAt: {
+        gte: range.from,
+        lte: endOfDateOnly(range.to),
+      },
+    };
+    if (query.clinicId) {
+      where.clinicId = query.clinicId;
+    }
+    if (query.doctorId) {
+      where.doctorId = query.doctorId;
+    }
+    if (query.patient) {
+      where.patientName = { contains: query.patient, mode: "insensitive" };
+    }
+    if (query.status) {
+      where.status = query.status as WorkStatus;
+    }
+    if (query.workCode) {
+      where.code = { contains: query.workCode, mode: "insensitive" };
+    }
+    if (query.workTypeId) {
+      where.workTypeId = query.workTypeId;
+    }
+    if (search) {
+      where.OR = [
+        { code: { contains: search, mode: "insensitive" } },
+        { patientName: { contains: search, mode: "insensitive" } },
+        { patientReference: { contains: search, mode: "insensitive" } },
+        { clinic: { name: { contains: search, mode: "insensitive" } } },
+        { doctor: { displayName: { contains: search, mode: "insensitive" } } },
+      ];
+    }
     const workOrders = await this.prisma.workOrder.findMany({
       include: BILLABLE_WORK_INCLUDE,
       orderBy: {
         createdAt: "desc",
       },
       take: 200,
-      where: {
-        ...this.createWorkWhere(legalEntity, query, range),
-        ...(query.workTypeId ? { workTypeId: query.workTypeId } : {}),
-        ...(query.uninvoicedOnly ? { activeCycle: { billingLines: { none: { billingDocument: { status: { not: "CANCELLED" }, type: "INVOICE" } } } } } : {}),
-        ...(search
-          ? {
-              OR: [
-                { code: { contains: search, mode: "insensitive" } },
-                { patientName: { contains: search, mode: "insensitive" } },
-                { patientReference: { contains: search, mode: "insensitive" } },
-                { clinic: { name: { contains: search, mode: "insensitive" } } },
-                { doctor: { displayName: { contains: search, mode: "insensitive" } } },
-              ],
-            }
-          : {}),
-      },
+      where,
     });
 
     return {
@@ -199,6 +237,68 @@ export class BillingService {
 
   public async getDocument(legalEntity: LegalEntityContext, documentId: string) {
     return toBillingDocumentDetail(await this.findDocumentOrThrow(legalEntity, documentId));
+  }
+
+  public async listReceivables(legalEntity: LegalEntityContext, query: ListBillingDocumentsQueryDto) {
+    const where = {
+      ...this.createDocumentsListWhere(legalEntity, {
+        ...query,
+        paymentFilter: "OUTSTANDING",
+        type: "INVOICE",
+      }),
+      type: "INVOICE" as const,
+    };
+    const documents = await this.prisma.billingDocument.findMany({
+      include: BILLING_DOCUMENT_INCLUDE,
+      orderBy: [{ dueDate: "asc" }, { issueDate: "asc" }],
+      take: 500,
+      where,
+    });
+    const items = documents
+      .filter((document) => document.status !== "CANCELLED" && calculateBillingAmounts(document).balanceMinor > 0)
+      .filter((document) => this.matchesDocumentPaymentFilter(document, { paymentFilter: query.paymentFilter ?? "OUTSTANDING" }))
+      .map((document) => this.toReceivableRow(document));
+
+    return {
+      currency: items[0]?.currency ?? await this.getCurrency(legalEntity),
+      generatedAt: new Date().toISOString(),
+      items,
+      overdueCount: items.filter((item) => item.daysOverdue > 0).length,
+      totalBalanceMinor: items.reduce((total, item) => total + item.balanceMinor, 0),
+    };
+  }
+
+  public async listAmbiguousLegacyRecords(legalEntity: LegalEntityContext, context: ActorContext) {
+    const documents = await this.prisma.billingDocument.findMany({
+      include: BILLING_DOCUMENT_INCLUDE,
+      orderBy: [{ issueDate: "desc" }, { createdAt: "desc" }],
+      take: 200,
+      where: this.createAmbiguousLegacyWhere(legalEntity),
+    });
+
+    await this.auditService.record({
+      action: BILLING_AUDIT_ACTIONS.ambiguousLegacyReviewViewed,
+      actorUserId: context.actorUserId,
+      metadata: { legalEntityCode: legalEntity.code, rowCount: documents.length },
+      requestMetadata: context.requestMetadata,
+      resourceType: BILLING_RESOURCE_TYPES.billingExport,
+    });
+
+    return {
+      items: documents.map((document) => ({
+        clinicName: document.clinicNameSnapshot,
+        companyAssignmentNotes: document.companyAssignmentNotes,
+        companyAssignmentStatus: document.companyAssignmentStatus as "AMBIGUOUS" | "UNASSIGNED",
+        createdAt: document.createdAt.toISOString(),
+        documentId: document.id,
+        documentNumber: document.formattedNumber,
+        documentType: document.type,
+        issueDate: document.issueDate.toISOString(),
+        lineCompanyCodes: uniqueStrings(document.lines.map((line) => line.legalEntityCodeSnapshot)),
+        totalMinor: document.totalMinor,
+        workCodes: uniqueStrings(document.lines.map((line) => line.workCode)),
+      })),
+    };
   }
 
   public async createProforma(context: ActorContext, legalEntity: LegalEntityContext, dto: CreateBillingDocumentDto) {
@@ -655,6 +755,12 @@ export class BillingService {
 
     const invalidCompany = works.find((work) => this.getBillableCycle(work)?.executionLegalEntityId !== legalEntity.id);
     if (invalidCompany) {
+      await this.auditService.record({
+        action: BILLING_AUDIT_ACTIONS.companyMismatchRejected,
+        metadata: { activeLegalEntityCode: legalEntity.code, workId: invalidCompany.id },
+        resourceId: invalidCompany.id,
+        resourceType: BILLING_RESOURCE_TYPES.billingDocument,
+      });
       throw new BadRequestException("Lucrarea selectata apartine altei firme. Schimba firma activa.");
     }
 
@@ -877,9 +983,7 @@ export class BillingService {
 
   private createWorkWhere(legalEntity: LegalEntityContext, query: Pick<BillingRangeQueryDto, "clinicId" | "dateFrom" | "dateTo" | "doctorId">, range: BillingDateRange): Prisma.WorkOrderWhereInput {
     return {
-      activeCycle: {
-        executionLegalEntityId: legalEntity.id,
-      },
+      activeCycle: { is: { executionLegalEntityId: legalEntity.id } },
       ...(query.clinicId ? { clinicId: query.clinicId } : {}),
       ...(query.doctorId ? { doctorId: query.doctorId } : {}),
       createdAt: {
@@ -918,8 +1022,22 @@ export class BillingService {
       filters.push({ payments: { some: { receiptNumber: { contains: query.receiptNumber, mode: "insensitive" } } } });
     }
 
+    if (query.workCode) {
+      filters.push({ lines: { some: { workCode: { contains: query.workCode, mode: "insensitive" } } } });
+    }
+
+    const dueDateRange = query.dueDateFrom || query.dueDateTo
+      ? {
+          dueDate: {
+            ...(query.dueDateFrom ? { gte: parseDateOnly(query.dueDateFrom, "dueDateFrom") } : {}),
+            ...(query.dueDateTo ? { lte: endOfDateOnly(parseDateOnly(query.dueDateTo, "dueDateTo")) } : {}),
+          },
+        }
+      : {};
+
     return {
       ...this.createDocumentWhere(legalEntity, query, range),
+      ...dueDateRange,
       ...(query.amountMinMinor !== undefined || query.amountMaxMinor !== undefined
         ? { totalMinor: { ...(query.amountMinMinor !== undefined ? { gte: query.amountMinMinor } : {}), ...(query.amountMaxMinor !== undefined ? { lte: query.amountMaxMinor } : {}) } }
         : {}),
@@ -967,7 +1085,7 @@ export class BillingService {
     }
 
     if (filter === "OVERDUE") {
-      return document.type === "INVOICE" && amounts.balanceMinor > 0 && document.dueDate !== null && document.dueDate.getTime() < Date.now();
+      return this.isOverdueInvoice(document);
     }
 
     return document.type === "INVOICE" && amounts.paymentStatus === filter;
@@ -1073,6 +1191,55 @@ export class BillingService {
     return document;
   }
 
+  private createAmbiguousLegacyWhere(legalEntity: LegalEntityContext): Prisma.BillingDocumentWhereInput {
+    return {
+      companyAssignmentStatus: { in: ["AMBIGUOUS", "UNASSIGNED"] },
+      OR: [
+        { legalEntityId: legalEntity.id },
+        { legalEntityCodeSnapshot: legalEntity.code },
+        { lines: { some: { legalEntityId: legalEntity.id } } },
+        { lines: { some: { legalEntityCodeSnapshot: legalEntity.code } } },
+      ],
+    };
+  }
+
+  private toReceivableRow(document: BillingDocumentRecord) {
+    const amounts = calculateBillingAmounts(document);
+
+    return {
+      balanceMinor: amounts.balanceMinor,
+      clinicName: document.clinicNameSnapshot,
+      currency: document.currency,
+      daysOverdue: this.getDaysOverdue(document),
+      doctorNames: uniqueStrings(document.lines.map((line) => line.doctorNameSnapshot)),
+      documentId: document.id,
+      documentNumber: document.formattedNumber,
+      dueDate: document.dueDate?.toISOString() ?? null,
+      issueDate: document.issueDate.toISOString(),
+      paidMinor: amounts.paidMinor,
+      patientNames: uniqueStrings(document.lines.map((line) => line.patientNameSnapshot)),
+      status: document.status,
+      totalMinor: document.totalMinor,
+      workCodes: uniqueStrings(document.lines.map((line) => line.workCode)),
+    };
+  }
+
+  private isOverdueInvoice(document: BillingDocumentRecord): boolean {
+    return document.type === "INVOICE" && document.status !== "CANCELLED" && calculateBillingAmounts(document).balanceMinor > 0 && this.getDaysOverdue(document) > 0;
+  }
+
+  private getDaysOverdue(document: Pick<BillingDocumentRecord, "dueDate">): number {
+    if (!document.dueDate) {
+      return 0;
+    }
+    const today = new Date();
+    const due = new Date(document.dueDate);
+    const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+    const dueUtc = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
+
+    return Math.max(0, Math.floor((todayUtc - dueUtc) / 86_400_000));
+  }
+
   private async getCurrency(legalEntity: LegalEntityContext): Promise<string> {
     const settings = await this.prisma.legalEntitySettings.findUnique({
       select: { currency: true },
@@ -1097,4 +1264,8 @@ export class BillingService {
       resourceType: BILLING_RESOURCE_TYPES.billingDocument,
     });
   }
+}
+
+function uniqueStrings(values: readonly (string | null)[]): readonly string[] {
+  return [...new Set(values.filter((value): value is string => typeof value === "string" && value.length > 0))];
 }

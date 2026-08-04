@@ -5,6 +5,8 @@ import type {
   BillingDocumentAttachment,
   BillingListQuery,
   BillingOverview,
+  AmbiguousLegacyBillingRecord,
+  BillingReceivables,
   BillingSeriesView,
   ClinicBillingStatement,
   CreateBillingDocumentInput,
@@ -28,6 +30,7 @@ export const billingQueryKeys = {
   monthRegistry: (params: BillingWorkspaceParams) => ["billing", "month-registry", params] as const,
   overview: (params: BillingWorkspaceParams) => ["billing", "overview", params] as const,
   payments: ["billing", "payments"] as const,
+  receivables: (params: BillingListQuery) => ["billing", "receivables", params] as const,
   search: (q: string) => ["billing", "search", q] as const,
   series: ["billing", "series"] as const,
   statementClinic: (params: BillingStatementParams) => ["billing", "statements", "clinic", params] as const,
@@ -40,8 +43,10 @@ export interface BillingWorkspaceParams {
   readonly dateTo?: string;
   readonly doctorId?: string;
   readonly groupBy?: string;
+  readonly patient?: string;
   readonly search?: string;
   readonly uninvoicedOnly?: boolean;
+  readonly workCode?: string;
 }
 
 export interface BillingStatementParams {
@@ -181,6 +186,16 @@ export async function fetchMonthRegistry(params: BillingWorkspaceParams): Promis
   return parseApiResponse<MonthEndRegistry>(response);
 }
 
+export async function fetchReceivables(params: BillingListQuery): Promise<BillingReceivables> {
+  const response = await apiFetch(`/billing/receivables?${toQueryString(Object.entries(params))}`);
+  return parseApiResponse<BillingReceivables>(response);
+}
+
+export async function fetchAmbiguousLegacyRecords(): Promise<{ readonly items: readonly AmbiguousLegacyBillingRecord[] }> {
+  const response = await apiFetch("/billing/ambiguous-legacy");
+  return parseApiResponse<{ readonly items: readonly AmbiguousLegacyBillingRecord[] }>(response);
+}
+
 export async function downloadMonthRegistryCsv(params: BillingWorkspaceParams): Promise<string> {
   const response = await apiFetch(`/billing/exports/registry.csv?${toQueryString(Object.entries(params))}`);
   if (!response.ok) {
@@ -212,6 +227,14 @@ export function useBillingSeries(enabled: boolean) {
 
 export function useMonthRegistry(params: BillingWorkspaceParams, enabled: boolean) {
   return useQuery({ enabled, queryFn: () => fetchMonthRegistry(params), queryKey: billingQueryKeys.monthRegistry(params), retry: false });
+}
+
+export function useReceivables(params: BillingListQuery, enabled: boolean) {
+  return useQuery({ enabled, queryFn: () => fetchReceivables(params), queryKey: billingQueryKeys.receivables(params), retry: false });
+}
+
+export function useAmbiguousLegacyRecords(enabled: boolean) {
+  return useQuery({ enabled, queryFn: fetchAmbiguousLegacyRecords, queryKey: ["billing", "ambiguous-legacy"], retry: false });
 }
 
 function useBillingMutation<TVariables>(mutationFn: (variables: TVariables) => Promise<BillingDocumentDetail>) {

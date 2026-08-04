@@ -18,8 +18,14 @@ interface ActorContext {
 
 interface CsvDocumentRecord {
   readonly clinicNameSnapshot: string;
+  readonly dueDate: Date | null;
   readonly formattedNumber: string | null;
   readonly issueDate: Date;
+  readonly lines: readonly {
+    readonly doctorNameSnapshot: string;
+    readonly patientNameSnapshot: string;
+    readonly workCode: string;
+  }[];
   readonly payments: readonly { readonly amountMinor: number; readonly cancelledAt: Date | null }[];
   readonly status: string;
   readonly totalMinor: number;
@@ -80,15 +86,19 @@ export class BillingExportService {
 
 export function createMonthRegistryCsv(documents: readonly CsvDocumentRecord[]): string {
   const rows = [
-    ["Data", "Tip", "Număr", "Clinică", "Status", "Total", "Încasat manual", "Sold restant", "Monedă"],
+    ["Data", "Scadență", "Tip", "Număr", "Clinică", "Medici", "Pacienți", "Lucrări", "Status", "Total", "Încasat manual", "Sold restant", "Monedă"],
     ...documents.map((document) => {
       const amounts = calculateBillingAmounts(document);
 
       return [
         formatRoDate(document.issueDate),
+        document.dueDate ? formatRoDate(document.dueDate) : "",
         document.type === "INVOICE" ? "Factură" : "Proformă",
         document.formattedNumber ?? "Draft",
         document.clinicNameSnapshot,
+        uniqueStrings(document.lines.map((line) => line.doctorNameSnapshot)).join(", "),
+        uniqueStrings(document.lines.map((line) => line.patientNameSnapshot)).join(", "),
+        uniqueStrings(document.lines.map((line) => line.workCode)).join(", "),
         formatBillingDocumentStatus(document.status),
         minorToCsvMoney(document.totalMinor),
         minorToCsvMoney(amounts.paidMinor),
@@ -99,6 +109,10 @@ export function createMonthRegistryCsv(documents: readonly CsvDocumentRecord[]):
   ];
 
   return `\uFEFF${rows.map((row) => row.map(toSafeCsvCell).join(";")).join("\r\n")}\r\n`;
+}
+
+function uniqueStrings(values: readonly string[]): readonly string[] {
+  return [...new Set(values.filter((value) => value.length > 0))];
 }
 
 export function formatBillingDocumentStatus(status: string): string {
