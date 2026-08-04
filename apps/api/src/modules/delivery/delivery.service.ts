@@ -80,7 +80,7 @@ export class DeliveryService {
           clinic: true,
           deliveries: { where: { isActive: true } },
           items: {
-            include: { workOrder: { include: { logisticsState: true } } },
+            include: { workOrder: { include: { activeCycle: { include: { logisticsState: true } } } } },
             where: { isActive: true },
           },
         },
@@ -102,7 +102,7 @@ export class DeliveryService {
         if (item.workOrder.clinicId !== group.clinicId) {
           throw new BadRequestException("Toate lucrările livrării trebuie să aparțină aceleiași clinici.");
         }
-        if (item.workOrder.logisticsState?.status !== WorkLogisticsStatus.READY_FOR_DELIVERY) {
+        if (item.workOrder.activeCycle?.logisticsState?.status !== WorkLogisticsStatus.READY_FOR_DELIVERY) {
           throw new BadRequestException("Toate lucrările trebuie să fie gata de livrare.");
         }
       }

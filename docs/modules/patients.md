@@ -18,11 +18,11 @@ Patient first/last name, normalized search fields, optional birth date, sex, not
 
 ## Business Rules
 
-The patient has no operational code; work code remains the operational identifier. A patient can have many works.
+The patient has no operational code; work code remains the operational identifier. A patient can have many works. Work cycles do not create duplicate patient history; repeated laboratory cycles stay under the same work and patient.
 
 ## Data Model
 
-`Patient`, relation to `WorkOrder`.
+`Patient`, relation to `WorkOrder`; cycle history remains under each work.
 
 ## API
 
@@ -46,7 +46,7 @@ Duplicate names, archived patients with historical works, optional demographic f
 
 ## Implemented Tasks
 
-PATIENTS-001.
+PATIENTS-001, WORK-CYCLES-001A compatibility.
 
 ## Planned Tasks
 

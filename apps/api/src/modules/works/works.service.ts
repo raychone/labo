@@ -14,6 +14,7 @@ import { WorkflowExecutionService } from "../workflow-execution/workflow-executi
 import { WORK_ORDER_AUDIT_ACTIONS, WORK_ORDER_RESOURCE_TYPE } from "./works.constants.js";
 import type {
   ClaimWorkDto,
+  CreateNextWorkCycleDto,
   CreateWorkDto,
   ListClaimWorksQueryDto,
   ListWorksQueryDto,
@@ -49,6 +50,9 @@ import {
   type WorkAssignmentEventView,
   toWorkAssignmentEventView,
   type WorkClaimAccessViewInput,
+  workCycleHistoryInclude,
+  type WorkCyclesHistoryView,
+  toWorkCyclesHistoryView,
 } from "./works.view.js";
 
 interface ActorContext {
@@ -119,77 +123,81 @@ const WORK_ORDER_INCLUDE = {
       displayName: true,
     },
   },
-  executionSnapshot: {
+  activeCycle: {
     include: {
-      executionLegalEntity: {
-        select: {
-          code: true,
-          displayName: true,
-          id: true,
+      executionSnapshot: {
+        include: {
+          executionLegalEntity: {
+            select: {
+              code: true,
+              displayName: true,
+              id: true,
+            },
+          },
+          technician: {
+            select: {
+              displayName: true,
+              id: true,
+            },
+          },
         },
       },
-      technician: {
+      logisticsState: {
         select: {
-          displayName: true,
-          id: true,
+          status: true,
         },
       },
-    },
-  },
-  logisticsState: {
-    select: {
-      status: true,
+      workflowExecution: {
+        include: {
+          events: {
+            include: {
+              actor: {
+                select: {
+                  displayName: true,
+                  id: true,
+                },
+              },
+            },
+          },
+          stages: {
+            include: {
+              completedBy: {
+                select: {
+                  displayName: true,
+                  id: true,
+                },
+              },
+              startedBy: {
+                select: {
+                  displayName: true,
+                  id: true,
+                },
+              },
+              assignedBy: {
+                select: {
+                  displayName: true,
+                  id: true,
+                },
+              },
+              assignedUser: {
+                select: {
+                  displayName: true,
+                  email: true,
+                  id: true,
+                },
+              },
+            },
+            orderBy: {
+              sortOrder: "asc",
+            },
+          },
+        },
+      },
     },
   },
   patient: true,
   workFormSubmission: true,
   workType: true,
-  workflowExecution: {
-    include: {
-      events: {
-        include: {
-          actor: {
-            select: {
-              displayName: true,
-              id: true,
-            },
-          },
-        },
-      },
-      stages: {
-        include: {
-          completedBy: {
-            select: {
-              displayName: true,
-              id: true,
-            },
-          },
-          startedBy: {
-            select: {
-              displayName: true,
-              id: true,
-            },
-          },
-          assignedBy: {
-            select: {
-              displayName: true,
-              id: true,
-            },
-          },
-          assignedUser: {
-            select: {
-              displayName: true,
-              email: true,
-              id: true,
-            },
-          },
-        },
-        orderBy: {
-          sortOrder: "asc",
-        },
-      },
-    },
-  },
 } as const satisfies Prisma.WorkOrderInclude;
 
 const WORK_ORDER_MUTATION_FIELDS = [
@@ -347,6 +355,185 @@ export class WorksService {
   public async getWork(actorUserId: string, workOrderId: string, includePricing: boolean): Promise<WorkDetailView> {
     const workOrder = await this.findWorkOrderOrThrow(workOrderId);
     return toWorkDetailView(workOrder, includePricing, await this.createClaimAccess(actorUserId));
+  }
+
+  public async listCycles(actorUserId: string, workOrderId: string, includePricing: boolean): Promise<WorkCyclesHistoryView> {
+    await this.authorizationService.requirePermission({
+      permission: "works.read_all",
+      requiredScope: "ALL",
+      userId: actorUserId,
+    });
+    const workOrder = await this.prisma.workOrder.findUnique({
+      include: workCycleHistoryInclude,
+      where: { id: workOrderId },
+    });
+    if (!workOrder) {
+      throw new NotFoundException("Work order was not found.");
+    }
+    return toWorkCyclesHistoryView(workOrder, includePricing);
+  }
+
+  public async createNextCycle(context: ActorContext, legalEntity: LegalEntityContext, workOrderId: string, dto: CreateNextWorkCycleDto, includePricing: boolean): Promise<WorkCyclesHistoryView> {
+    await this.authorizationService.requirePermission({
+      permission: "works.update",
+      requiredScope: "ALL",
+      userId: context.actorUserId,
+    });
+    const before = await this.findWorkOrderOrThrow(workOrderId);
+    if (!before.activeCycle) {
+      throw new ConflictException("Lucrarea nu are un ciclu activ.");
+    }
+    if (dto.expectedActiveCycleId && dto.expectedActiveCycleId !== before.activeCycle.id) {
+      throw new ConflictException("Ciclul activ s-a schimbat. Reîncarcă lucrarea.");
+    }
+    const nextDoctorId = dto.doctorId ?? before.doctorId;
+    await this.validateDoctor(this.prisma, nextDoctorId, before.clinicId, dto.doctorId !== undefined);
+
+    const history = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${workOrderId} FOR UPDATE`;
+      const fresh = await tx.workOrder.findUnique({
+        include: WORK_ORDER_INCLUDE,
+        where: { id: workOrderId },
+      });
+      if (!fresh) {
+        throw new NotFoundException("Work order was not found.");
+      }
+      if (!fresh.activeCycle) {
+        throw new ConflictException("Lucrarea nu are un ciclu activ.");
+      }
+      if (dto.expectedActiveCycleId && dto.expectedActiveCycleId !== fresh.activeCycle.id) {
+        throw new ConflictException("Ciclul activ s-a schimbat. Reîncarcă lucrarea.");
+      }
+      const operationNow = new Date();
+      const latestCycle = await tx.workCycle.findFirst({
+        orderBy: { cycleNumber: "desc" },
+        select: { cycleNumber: true },
+        where: { workOrderId },
+      });
+      const nextCycleNumber = (latestCycle?.cycleNumber ?? 0) + 1;
+      const deadline = await this.workDeadlineService.resolveForWork({
+        client: tx,
+        clinicId: fresh.clinicId,
+        doctorId: nextDoctorId,
+        includeStartDay: false,
+        legalEntity,
+        now: operationNow,
+        quantity: fresh.quantity,
+        source: "MANUAL_RECALCULATION",
+        startAt: operationNow,
+        workTypeId: fresh.workTypeId,
+      });
+      const deadlineUpdate = deadlineDataToPrisma(deadline, fresh.deadlineRevision + 1);
+
+      await tx.workCycle.update({
+        data: {
+          closedAt: operationNow,
+          status: "CLOSED",
+        },
+        where: { id: fresh.activeCycle.id },
+      });
+
+      const createdCycle = await tx.workCycle.create({
+        data: {
+          createdByUserId: context.actorUserId,
+          cycleNumber: nextCycleNumber,
+          deadlineEffectiveDueAtSnapshot: deadline.effectiveDueAt,
+          deadlineModeSnapshot: deadline.deadlineMode,
+          deadlineSnapshotJson: deadline.deadlineRuleSnapshot,
+          doctorId: nextDoctorId,
+          openedAt: operationNow,
+          reason: dto.reason,
+          reasonNotes: dto.reasonNotes ?? null,
+          status: "ACTIVE",
+          workOrderId,
+        },
+      });
+
+      await tx.workOrder.update({
+        data: {
+          ...deadlineUpdate,
+          activeCycleId: createdCycle.id,
+          assignedTechnicianId: null,
+          assignmentUpdatedAt: operationNow,
+          claimedAt: null,
+          claimedByUserId: null,
+          claimRevision: { increment: 1 },
+          claimSource: "MANAGER_RELEASE",
+          claimStatus: "UNCLAIMED",
+          doctorId: nextDoctorId,
+          executionLegalEntityId: null,
+          releaseReason: `Ciclu nou: ${dto.reason}`,
+          releasedAt: operationNow,
+          releasedByUserId: context.actorUserId,
+          updatedByUserId: context.actorUserId,
+          version: { increment: 1 },
+        },
+        where: { id: workOrderId },
+      });
+
+      await this.workflowExecutionService.createSnapshotForWork(tx, {
+        actorUserId: context.actorUserId,
+        requestMetadata: context.requestMetadata,
+        workCode: fresh.code,
+        workCycleId: createdCycle.id,
+        workOrderId,
+        workTypeId: fresh.workTypeId,
+      });
+
+      const logisticsState = await tx.workLogisticsState.create({
+        data: {
+          physicalLocationCode: "RECEPTIE",
+          status: "RECEIVED",
+          workCycleId: createdCycle.id,
+          workOrderId,
+        },
+      });
+      await tx.logisticsEvent.create({
+        data: {
+          actorUserId: context.actorUserId,
+          logisticsStateId: logisticsState.id,
+          metadata: { cycleId: createdCycle.id, cycleNumber: createdCycle.cycleNumber, newStatus: "RECEIVED", workCode: fresh.code, workId: workOrderId },
+          type: "WORK_RECEIVED",
+          workCycleId: createdCycle.id,
+          workOrderId,
+        },
+      });
+
+      await this.recordAudit(tx, {
+        action: WORK_ORDER_AUDIT_ACTIONS.cycleClosed,
+        actorUserId: context.actorUserId,
+        metadata: { cycleId: fresh.activeCycle.id, cycleNumber: fresh.activeCycle.cycleNumber, workCode: fresh.code },
+        requestMetadata: context.requestMetadata,
+        resourceId: workOrderId,
+      });
+      await this.recordAudit(tx, {
+        action: WORK_ORDER_AUDIT_ACTIONS.cycleCreated,
+        actorUserId: context.actorUserId,
+        metadata: {
+          cycleId: createdCycle.id,
+          cycleNumber: createdCycle.cycleNumber,
+          doctorChanged: nextDoctorId !== fresh.doctorId,
+          previousCycleId: fresh.activeCycle.id,
+          reason: dto.reason,
+          workCode: fresh.code,
+        },
+        requestMetadata: context.requestMetadata,
+        resourceId: workOrderId,
+      });
+
+      const updatedHistory = await tx.workOrder.findUniqueOrThrow({
+        include: workCycleHistoryInclude,
+        where: { id: workOrderId },
+      });
+      return updatedHistory;
+    }).catch((error: unknown) => {
+      if (isPrismaErrorCode(error, "P2002")) {
+        throw new ConflictException("Lucrarea are deja un ciclu activ pentru această operațiune.");
+      }
+      throw error;
+    });
+
+    return toWorkCyclesHistoryView(history, includePricing);
   }
 
   public async claimWork(context: ActorContext, workOrderId: string, dto: ClaimWorkDto): Promise<WorkDetailView> {
@@ -517,8 +704,8 @@ export class WorksService {
       await tx.workAssignmentEvent.create({
         data: {
           actorUserId: context.actorUserId,
-          executionSnapshotStatus: before.executionSnapshot?.status ?? null,
-          executionSnapshotVersion: before.executionSnapshot?.version ?? null,
+          executionSnapshotStatus: before.activeCycle?.executionSnapshot?.status ?? null,
+          executionSnapshotVersion: before.activeCycle?.executionSnapshot?.version ?? null,
           eventType: "RELEASED",
           previousLegalEntityId: before.executionLegalEntityId,
           previousTechnicianId: before.assignedTechnicianId,
@@ -567,7 +754,7 @@ export class WorksService {
       this.validateExecutionLegalEntity(this.prisma, dto.executionLegalEntityCode),
       this.validateClaimTechnician(dto.technicianId),
     ]);
-    if (before.logisticsState?.status === "DELIVERED" || before.logisticsState?.status === "HANDED_TO_DELIVERY") {
+    if (before.activeCycle?.logisticsState?.status === "DELIVERED" || before.activeCycle?.logisticsState?.status === "HANDED_TO_DELIVERY") {
       throw new BadRequestException("Lucrarea livrată nu poate fi reasignată.");
     }
 
@@ -764,8 +951,33 @@ export class WorksService {
         include: WORK_ORDER_INCLUDE,
       });
 
+      const initialCycle = await tx.workCycle.create({
+        data: {
+          createdByUserId: context.actorUserId,
+          cycleNumber: 1,
+          deadlineEffectiveDueAtSnapshot: createdWorkOrder.effectiveDueAt,
+          deadlineModeSnapshot: createdWorkOrder.deadlineMode,
+          ...(createdWorkOrder.deadlineRuleSnapshot !== null ? { deadlineSnapshotJson: createdWorkOrder.deadlineRuleSnapshot } : {}),
+          doctorId: createdWorkOrder.doctorId,
+          openedAt: operationNow,
+          reason: "INITIAL",
+          status: "ACTIVE",
+          workOrderId: createdWorkOrder.id,
+        },
+      });
+
+      await tx.workOrder.update({
+        data: {
+          activeCycleId: initialCycle.id,
+        },
+        where: {
+          id: createdWorkOrder.id,
+        },
+      });
+
       await this.workflowExecutionService.createSnapshotForWork(tx, {
         actorUserId: context.actorUserId,
+        workCycleId: initialCycle.id,
         ...(dto.expectedWorkflowTemplateId ? { expectedWorkflowTemplateId: dto.expectedWorkflowTemplateId } : {}),
         ...(dto.expectedWorkflowTemplateVersion ? { expectedWorkflowTemplateVersion: dto.expectedWorkflowTemplateVersion } : {}),
         requestMetadata: context.requestMetadata,
@@ -1322,7 +1534,11 @@ export class WorksService {
     readonly status: "INVALID" | "LOCKED" | "NOT_CREATED";
     readonly version: number | null;
   }> {
-    const existingSnapshot = input.workOrder.executionSnapshot;
+    const activeCycle = input.workOrder.activeCycle;
+    if (!activeCycle) {
+      throw new ConflictException("Lucrarea nu are un ciclu activ.");
+    }
+    const existingSnapshot = activeCycle.executionSnapshot;
     if (existingSnapshot) {
       if (existingSnapshot.executionLegalEntityCode !== input.legalEntity.code) {
         await this.recordAudit(tx, {
@@ -1438,7 +1654,25 @@ export class WorksService {
         technicianDisplayName: technician.displayName,
         technicianId: technician.id,
         version: EXECUTION_SNAPSHOT_VERSION,
+        workCycleId: activeCycle.id,
         workOrderId: input.workOrder.id,
+      },
+    });
+
+    await tx.workCycle.update({
+      data: {
+        deadlineEffectiveDueAtSnapshot: deadline.effectiveDueAt,
+        deadlineModeSnapshot: deadline.deadlineMode,
+        deadlineSnapshotJson: deadlineSnapshot,
+        executionLegalEntityCodeSnapshot: input.legalEntity.code,
+        executionLegalEntityId: input.legalEntity.id,
+        executionLegalEntityNameSnapshot: input.legalEntity.displayName,
+        executionSnapshotJson: contextSnapshot,
+        executionSnapshotVersion: EXECUTION_SNAPSHOT_VERSION,
+        pricingSnapshotJson: pricingSnapshot,
+      },
+      where: {
+        id: activeCycle.id,
       },
     });
 
@@ -1626,7 +1860,7 @@ export class WorksService {
     if (workOrder.claimStatus !== "UNCLAIMED") {
       throw new ConflictException("Lucrarea este deja revendicată.");
     }
-    const logisticsStatus = workOrder.logisticsState?.status;
+    const logisticsStatus = workOrder.activeCycle?.logisticsState?.status;
     if (logisticsStatus === "BLOCKED") {
       throw new BadRequestException("Lucrarea blocată nu poate fi revendicată.");
     }
@@ -1786,7 +2020,7 @@ function isPrismaErrorCode(error: unknown, code: string): boolean {
 }
 
 function isCompletedOnTimeInWindow(workOrder: WorkOrderRecord, windowStart: Date): boolean {
-  const completedAt = workOrder.workflowExecution?.completedAt;
+  const completedAt = workOrder.activeCycle?.workflowExecution?.completedAt;
   if (!completedAt || !workOrder.effectiveDueAt) {
     return false;
   }

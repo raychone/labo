@@ -175,6 +175,7 @@ export class TechnicianWorkbenchService {
       where: {
         currentStageExecutionId: { not: null },
         status: WorkWorkflowExecutionStatus.ACTIVE,
+        workCycle: { activeForWorkOrder: { isNot: null } },
         workOrder: workOrderWhere,
       },
     });

@@ -53,6 +53,7 @@ describe("WorkflowExecutionService", () => {
       expectedWorkflowTemplateVersion: 3,
       requestMetadata: { ipAddress: "127.0.0.1" },
       workCode: "WO-2026-000001",
+      workCycleId: "cycle_1",
       workOrderId: "work_1",
       workTypeId: "work_type_1",
     });
@@ -67,6 +68,12 @@ describe("WorkflowExecutionService", () => {
         stageDefinitionId: "stage_1",
         stageNameSnapshot: "Recepție",
         workflowExecutionId: "workflow_exec_1",
+      }),
+    });
+    expect(tx.workWorkflowExecution.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        workCycleId: "cycle_1",
+        workOrderId: "work_1",
       }),
     });
     expect(tx.workWorkflowExecution.update).toHaveBeenCalledWith({
@@ -97,6 +104,7 @@ describe("WorkflowExecutionService", () => {
       actorUserId: "user_1",
       requestMetadata: {},
       workCode: "WO-2026-000001",
+      workCycleId: "cycle_1",
       workOrderId: "work_1",
       workTypeId: "work_type_1",
     })).resolves.toBeNull();
@@ -112,6 +120,7 @@ describe("WorkflowExecutionService", () => {
       expectedWorkflowTemplateVersion: 2,
       requestMetadata: {},
       workCode: "WO-2026-000001",
+      workCycleId: "cycle_1",
       workOrderId: "work_1",
       workTypeId: "work_type_1",
     })).rejects.toThrow(WORKFLOW_STALE_TEMPLATE_MESSAGE);

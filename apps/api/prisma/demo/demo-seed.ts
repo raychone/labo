@@ -8,6 +8,8 @@ import {
   WorkLogisticsStatus,
   type PricingAgreementSubjectType,
   type PricingRuleScope,
+  WorkCycleReason,
+  WorkCycleStatus,
   type WorkTypeUnit,
 } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
@@ -905,6 +907,10 @@ function toDemoClaimPriceCatalogItemId(legalEntityCode: string, key: string): st
   return `demo_price_catalog_claim_${legalEntityCode.toLowerCase()}_${key}`;
 }
 
+function toDemoWorkCycleId(workId: string): string {
+  return `cycle_${workId}`;
+}
+
 function toDemoPricingDescription(item: RealPricingCatalogEntry): string {
   const validationNote = item.requiresClientValidation ? " Necesită validare client pentru valoarea finală." : "";
   const sourceNote = item.sourceNote ? ` ${item.sourceNote}` : "";
@@ -964,7 +970,24 @@ async function seedDemoWorks(prisma: PrismaClient, dataset: DemoDataset): Promis
               },
             }
           : {}),
+        cycles: {
+          create: {
+            cycleNumber: 1,
+            deadlineEffectiveDueAtSnapshot: deadline.effectiveDueAt,
+            deadlineModeSnapshot: deadline.deadlineMode,
+            deadlineSnapshotJson: deadline.deadlineRuleSnapshot,
+            doctorId: work.doctorId,
+            id: toDemoWorkCycleId(work.id),
+            openedAt: work.createdAt,
+            reason: WorkCycleReason.INITIAL,
+            status: WorkCycleStatus.ACTIVE,
+          },
+        },
       },
+    });
+    await prisma.workOrder.update({
+      data: { activeCycleId: toDemoWorkCycleId(work.id) },
+      where: { id: work.id },
     });
   }
 
@@ -1235,8 +1258,65 @@ async function createDemoExecutionSnapshot(prisma: PrismaClient, scenario: DemoC
       technicianDisplayName: technician.displayName,
       technicianId: technician.id,
       version: 1,
+      workCycleId: toDemoWorkCycleId(work.id),
       workOrderId: work.id,
     },
+  });
+  await prisma.workCycle.update({
+    data: {
+      deadlineEffectiveDueAtSnapshot: work.effectiveDueAt,
+      deadlineModeSnapshot: deadlineMode,
+      deadlineSnapshotJson: {
+        calculatedDueAt: work.calculatedDueAt?.toISOString() ?? null,
+        effectiveDueAt: work.effectiveDueAt?.toISOString() ?? null,
+        executionDays: work.deadlineExecutionDays,
+        explanation: work.deadlineExplanation,
+        mode: deadlineMode,
+        reasonCode: work.deadlineReasonCode,
+        resolvedAt: createdAt.toISOString(),
+        ruleSnapshot: work.deadlineRuleSnapshot ?? { version: 1 },
+        source: work.deadlineSource,
+        startAt: (work.deadlineStartAt ?? createdAt).toISOString(),
+        timezone: work.deadlineTimezone ?? "Europe/Bucharest",
+        version: 1,
+      },
+      executionLegalEntityId: legalEntity.id,
+      executionLegalEntityCodeSnapshot: legalEntity.code,
+      executionLegalEntityNameSnapshot: legalEntity.displayName,
+      executionSnapshotJson: {
+        claim: { claimedAt: createdAt.toISOString(), revision: Math.max(1, scenario.revision), source: scenario.source.startsWith("MANAGER") ? "MANAGER_ASSIGNMENT" : "TECHNICIAN_FIRST_CLAIM" },
+        executionLegalEntity: { code: legalEntity.code, displayName: legalEntity.displayName, publicId: legalEntity.id },
+        technician: { displayName: technician.displayName, publicId: technician.id },
+        version: 1,
+        work: {
+          clinicName: work.clinic.name,
+          clinicPublicId: work.clinic.id,
+          doctorName: work.doctor.displayName,
+          doctorPublicId: work.doctor.id,
+          quantity: work.quantity,
+          workCode: work.code,
+          workTypeCode: work.workType.code,
+          workTypeName: work.workType.name,
+          workTypePublicId: work.workType.id,
+        },
+      },
+      executionSnapshotVersion: 1,
+      pricingSnapshotJson: {
+        catalogItemPublicId: catalogItem?.id ?? null,
+        currency: work.currency,
+        explanation: catalogItem ? "Se folosește prețul standard al firmei active." : "Demo fallback la prețul legacy al lucrării.",
+        legalEntityCode: legalEntity.code,
+        priceSource: { agreementPublicId: null, ruleScope: null, sourceLabel: pricingSourceLabel, sourceType: pricingSourceType },
+        quantity: work.quantity,
+        resolvedAt: createdAt.toISOString(),
+        totalPriceMinor: totalMinor,
+        unit: work.workType.unit,
+        unitPriceMinor,
+        version: 1,
+        workTypePublicId: work.workType.id,
+      },
+    },
+    where: { id: toDemoWorkCycleId(work.id) },
   });
 }
 
@@ -1406,6 +1486,7 @@ async function seedDemoWorkflowExecutions(prisma: PrismaClient, dataset: DemoDat
         workflowNameSnapshot: template.name,
         workflowTemplateId: template.id,
         workflowTemplateVersion: template.version,
+        workCycleId: toDemoWorkCycleId(work.id),
         workOrderId: work.id,
       },
     });
@@ -1734,6 +1815,7 @@ async function seedDemoLogistics(prisma: PrismaClient): Promise<void> {
         readyForPackingByUserId: seed.status === "READY_FOR_PACKING" || seed.status === "PACKING" || seed.status === "READY_FOR_DELIVERY" ? "demo_user_logistica" : null,
         status: seed.status,
         updatedByUserId: "demo_user_logistica",
+        workCycleId: toDemoWorkCycleId(`demo_work_${seed.suffix}`),
         workOrderId: `demo_work_${seed.suffix}`,
       },
     });
@@ -1744,6 +1826,7 @@ async function seedDemoLogistics(prisma: PrismaClient): Promise<void> {
         logisticsStateId: `demo_logistics_state_${seed.suffix}`,
         metadata: { newStatus: seed.status, workId: `demo_work_${seed.suffix}` },
         type: seed.status === "BLOCKED" ? "WORK_BLOCKED" : "WORK_RECEIVED",
+        workCycleId: toDemoWorkCycleId(`demo_work_${seed.suffix}`),
         workOrderId: `demo_work_${seed.suffix}`,
       },
     });
@@ -1796,6 +1879,7 @@ async function createDemoDeliveryPreparationGroup(
           addedByUserId: "demo_user_logistica",
           id: `demo_delivery_item_${suffix}_${workOrderId.replace("demo_work_", "")}`,
           isActive: true,
+          workCycleId: toDemoWorkCycleId(workOrderId),
           workOrderId,
         })),
       },

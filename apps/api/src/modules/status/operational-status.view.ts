@@ -72,36 +72,40 @@ export const operationalStatusWorkInclude = {
       displayName: true,
     },
   },
-  logisticsState: {
-    select: {
-      status: true,
+  activeCycle: {
+    include: {
+      logisticsState: {
+        select: {
+          status: true,
+        },
+      },
+      workflowExecution: {
+        include: {
+          currentStage: {
+            include: {
+              assignedUser: {
+                select: {
+                  displayName: true,
+                  id: true,
+                },
+              },
+            },
+          },
+          stages: {
+            orderBy: {
+              sortOrder: "asc",
+            },
+            select: {
+              status: true,
+            },
+          },
+        },
+      },
     },
   },
   patient: {
     select: {
       id: true,
-    },
-  },
-  workflowExecution: {
-    include: {
-      currentStage: {
-        include: {
-          assignedUser: {
-            select: {
-              displayName: true,
-              id: true,
-            },
-          },
-        },
-      },
-      stages: {
-        orderBy: {
-          sortOrder: "asc",
-        },
-        select: {
-          status: true,
-        },
-      },
     },
   },
   workType: {
@@ -126,7 +130,13 @@ export interface OperationalStatusRowView {
     readonly id: string;
     readonly name: string;
   };
-  readonly currentCycle: null;
+  readonly currentCycle: {
+    readonly id: string;
+    readonly label: string;
+    readonly number: number;
+    readonly reason: string;
+    readonly status: string;
+  } | null;
   readonly currentStageTechnician: OperationalStatusPersonView | null;
   readonly deadline: {
     readonly badge: string;
@@ -236,7 +246,7 @@ export function matchesOperationalStatusTab(row: OperationalStatusRowView, tab: 
       || row.delivery.status === "DELIVERED";
   }
   if (tab === "RETURNED") {
-    return row.currentCycle !== null && row.delivery.status !== "DELIVERED";
+    return row.currentCycle !== null && row.currentCycle.number > 1 && row.delivery.status !== "DELIVERED";
   }
   return row.workflow.status === "COMPLETED" || row.logistics.status === "DELIVERED" || row.delivery.status === "DELIVERED";
 }
@@ -258,9 +268,11 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
     mode: work.deadlineMode,
     now: now.toISOString(),
   });
-  const currentStage = work.workflowExecution?.currentStage ?? null;
-  const progressCompleted = work.workflowExecution?.stages.filter((stage) => stage.status === "COMPLETED").length ?? 0;
-  const progressTotal = work.workflowExecution?.stages.length ?? 0;
+  const workflowExecution = work.activeCycle?.workflowExecution ?? null;
+  const logisticsState = work.activeCycle?.logisticsState ?? null;
+  const currentStage = workflowExecution?.currentStage ?? null;
+  const progressCompleted = workflowExecution?.stages.filter((stage) => stage.status === "COMPLETED").length ?? 0;
+  const progressTotal = workflowExecution?.stages.length ?? 0;
 
   return {
     claimStatus: work.claimStatus,
@@ -269,7 +281,13 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
       id: work.clinic.id,
       name: work.clinic.name,
     },
-    currentCycle: null,
+    currentCycle: work.activeCycle ? {
+      id: work.activeCycle.id,
+      label: `Cycle ${work.activeCycle.cycleNumber}`,
+      number: work.activeCycle.cycleNumber,
+      reason: work.activeCycle.reason,
+      status: work.activeCycle.status,
+    } : null,
     currentStageTechnician: currentStage?.assignedUser ? toPerson(currentStage.assignedUser) : null,
     deadline: {
       badge: deadline.badge,
@@ -292,7 +310,7 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
     } : null,
     id: work.id,
     logistics: {
-      status: work.logisticsState?.status ?? null,
+      status: logisticsState?.status ?? null,
     },
     patient: {
       id: work.patient?.id ?? null,
@@ -312,7 +330,7 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
       progress: progressTotal > 0 ? `${progressCompleted}/${progressTotal}` : null,
       progressCompleted,
       progressTotal,
-      status: work.workflowExecution?.status ?? null,
+      status: workflowExecution?.status ?? null,
     },
     workType: {
       id: work.workType.id,

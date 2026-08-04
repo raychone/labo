@@ -146,6 +146,8 @@ describe("WorksController", () => {
             recalculateDeadline: vi.fn().mockResolvedValue(responseBody),
             setManualDeadline: vi.fn().mockResolvedValue(responseBody),
             getWork: vi.fn().mockResolvedValue({ ...responseBody, currency: null, totalPriceMinor: null }),
+            createNextCycle: vi.fn().mockResolvedValue({ activeCycleId: "cycle_2", cycles: [], work: { code: "WO-2026-000001", id: "work_order_1" } }),
+            listCycles: vi.fn().mockResolvedValue({ activeCycleId: "cycle_1", cycles: [{ cycleNumber: 1, id: "cycle_1", reason: "INITIAL", status: "ACTIVE" }], work: { code: "WO-2026-000001", id: "work_order_1" } }),
             listWorkTypeFormOptions: vi.fn().mockResolvedValue([{ code: "WT-0001", id: "work_type_1", name: "Coroana zirconiu", unit: "UNIT" }]),
             listWorks: vi.fn().mockResolvedValue({
               deadlineDashboard: {
@@ -239,5 +241,31 @@ describe("WorksController", () => {
       .expect(responseBody);
 
     expect(requirePermission).toHaveBeenCalledWith(expect.objectContaining({ permission: "works.create" }));
+  });
+
+  it("reads work cycle history for authorized work readers", async () => {
+    await request(app.getHttpServer() as App)
+      .get("/works/work_order_1/cycles")
+      .set("Cookie", ["dl_session=session-token"])
+      .expect(200)
+      .expect({
+        activeCycleId: "cycle_1",
+        cycles: [{ cycleNumber: 1, id: "cycle_1", reason: "INITIAL", status: "ACTIVE" }],
+        work: { code: "WO-2026-000001", id: "work_order_1" },
+      });
+
+    expect(requirePermission).toHaveBeenCalledWith(expect.objectContaining({ permission: "works.read_all" }));
+  });
+
+  it("creates the next cycle with CSRF", async () => {
+    await request(app.getHttpServer() as App)
+      .post("/works/work_order_1/cycles/next")
+      .set("Cookie", ["dl_session=session-token", "dl_csrf=csrf-token"])
+      .set("x-csrf-token", "csrf-token")
+      .send({ expectedActiveCycleId: "cycle_1", reason: "REPAIR", reasonNotes: "Retur medic" })
+      .expect(201)
+      .expect({ activeCycleId: "cycle_2", cycles: [], work: { code: "WO-2026-000001", id: "work_order_1" } });
+
+    expect(requirePermission).toHaveBeenCalledWith(expect.objectContaining({ permission: "works.update" }));
   });
 });

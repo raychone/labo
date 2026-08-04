@@ -129,33 +129,37 @@ const scanWorkInclude = {
       isActive: true,
     },
   },
-  logisticsState: true,
+  activeCycle: {
+    include: {
+      logisticsState: true,
+      workflowExecution: {
+        include: {
+          stages: {
+            include: {
+              assignedUser: {
+                select: {
+                  displayName: true,
+                  id: true,
+                },
+              },
+            },
+            orderBy: {
+              sortOrder: "asc",
+            },
+          },
+        },
+      },
+    },
+  },
   workType: {
     select: {
       name: true,
     },
   },
-  workflowExecution: {
-    include: {
-      stages: {
-        include: {
-          assignedUser: {
-            select: {
-              displayName: true,
-              id: true,
-            },
-          },
-        },
-        orderBy: {
-          sortOrder: "asc",
-        },
-      },
-    },
-  },
 } as const satisfies Prisma.WorkOrderInclude;
 
 type ScanWorkRecord = Prisma.WorkOrderGetPayload<{ include: typeof scanWorkInclude }>;
-type ScanStageRecord = NonNullable<ScanWorkRecord["workflowExecution"]>["stages"][number];
+type ScanStageRecord = NonNullable<NonNullable<ScanWorkRecord["activeCycle"]>["workflowExecution"]>["stages"][number];
 
 @Injectable()
 export class ScanService {
@@ -263,8 +267,8 @@ export class ScanService {
       this.authorizationService.hasPermission({ permission: "works.read_all", requiredScope: "ALL", userId: actor.id }),
       this.authorizationService.hasPermission({ permission: "workflow.assign_stage", requiredScope: "ALL", userId: actor.id }),
       this.authorizationService.hasPermission({ permission: "workflow.reassign_stage", requiredScope: "ALL", userId: actor.id }),
-      this.getStageAction("workflow.start_stage", actor, roleCodes, currentStage, work.workflowExecution?.status ?? null, WorkStageExecutionStatus.PENDING),
-      this.getStageAction("workflow.complete_stage", actor, roleCodes, currentStage, work.workflowExecution?.status ?? null, WorkStageExecutionStatus.IN_PROGRESS),
+      this.getStageAction("workflow.start_stage", actor, roleCodes, currentStage, work.activeCycle?.workflowExecution?.status ?? null, WorkStageExecutionStatus.PENDING),
+      this.getStageAction("workflow.complete_stage", actor, roleCodes, currentStage, work.activeCycle?.workflowExecution?.status ?? null, WorkStageExecutionStatus.IN_PROGRESS),
     ]);
     const assignAction = this.getAssignmentAction("ASSIGN_STAGE", currentStage, canAssign.allowed);
     const reassignAction = this.getAssignmentAction("REASSIGN_STAGE", currentStage, canReassign.allowed);
@@ -359,7 +363,8 @@ export class ScanService {
   }
 
   private toScanContextView(work: ScanWorkRecord, actions: readonly ScanActionAvailability[]): ScanContextView {
-    const execution = work.workflowExecution;
+    const execution = work.activeCycle?.workflowExecution ?? null;
+    const logisticsState = work.activeCycle?.logisticsState ?? null;
     const currentStage = this.getCurrentStage(work);
     const completed = execution?.stages.filter((stage) => stage.status === WorkStageExecutionStatus.COMPLETED).length ?? 0;
 
@@ -368,9 +373,9 @@ export class ScanService {
       delivery: this.toDeliverySummary(work),
       logistics: {
         activeGroup: work.deliveryPreparationItems[0]?.group ?? null,
-        blockedReason: work.logisticsState?.blockedReasonNotes ?? work.logisticsState?.blockedReasonCode ?? null,
-        locationCode: work.logisticsState?.physicalLocationCode ?? null,
-        status: work.logisticsState?.status ?? (execution?.status === WorkWorkflowExecutionStatus.ACTIVE ? "IN_PRODUCTION" : "RECEIVED"),
+        blockedReason: logisticsState?.blockedReasonNotes ?? logisticsState?.blockedReasonCode ?? null,
+        locationCode: logisticsState?.physicalLocationCode ?? null,
+        status: logisticsState?.status ?? (execution?.status === WorkWorkflowExecutionStatus.ACTIVE ? "IN_PRODUCTION" : "RECEIVED"),
       },
       resolvedAt: new Date().toISOString(),
       work: {
@@ -428,7 +433,7 @@ export class ScanService {
   }
 
   private getCurrentStage(work: ScanWorkRecord): ScanStageRecord | null {
-    const execution = work.workflowExecution;
+    const execution = work.activeCycle?.workflowExecution ?? null;
 
     return execution?.stages.find((stage) => stage.id === execution.currentStageExecutionId) ?? null;
   }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 
 import { assertDemoDatasetConsistency, buildDemoDataset } from "./demo-data.js";
 
@@ -40,5 +41,18 @@ describe("demo dataset", () => {
 
   it("passes referential and financial consistency checks", () => {
     expect(() => assertDemoDatasetConsistency(buildDemoDataset(new Date("2026-07-24T10:00:00.000Z")))).not.toThrow();
+  });
+
+  it("keeps direct demo seed writes cycle-aware", () => {
+    const seedSource = readFileSync("prisma/demo/demo-seed.ts", "utf8");
+    const resetSource = readFileSync("prisma/demo/demo-reset.ts", "utf8");
+
+    expect(seedSource).toContain("cycles: {");
+    expect(seedSource).toMatch(/workExecutionSnapshot\.create\(\{[\s\S]*workCycleId: toDemoWorkCycleId\(work\.id\)/);
+    expect(seedSource).toMatch(/workWorkflowExecution\.create\(\{[\s\S]*workCycleId: toDemoWorkCycleId\(work\.id\)/);
+    expect(seedSource).toMatch(/workLogisticsState\.create\(\{[\s\S]*workCycleId: toDemoWorkCycleId\(`demo_work_\$\{seed\.suffix\}`\)/);
+    expect(seedSource).toMatch(/logisticsEvent\.create\(\{[\s\S]*workCycleId: toDemoWorkCycleId\(`demo_work_\$\{seed\.suffix\}`\)/);
+    expect(seedSource).toMatch(/items: \{[\s\S]*workCycleId: toDemoWorkCycleId\(workOrderId\)/);
+    expect(resetSource).toContain("activeCycleId: null");
   });
 });

@@ -14,19 +14,19 @@ Key permissions include `works.create`, `works.read_all`, `works.read_assigned`,
 
 ## Domain Concepts
 
-Work code, clinic, doctor, patient, work type, quantity, priority, status, QR token, deadline, workflow, ownership, execution snapshot.
+Work code, clinic, doctor, patient, work type, quantity, priority, status, QR token, deadline, workflow, ownership, execution snapshot, work cycles.
 
 ## Business Rules
 
-Reception creates works without selecting `NC`/`NG`. Company context is fixed by first valid technical claim or manager assignment. Work updates use optimistic revision checks where implemented.
+Reception creates works without selecting `NC`/`NG`. Company context is fixed per cycle by first valid technical claim or manager assignment. Work updates use optimistic revision checks where implemented. A work can have multiple cycles while retaining the same work code, patient, and clinic; exactly one cycle is active.
 
 ## Data Model
 
-`WorkOrder`, `WorkAssignmentEvent`, `WorkExecutionSnapshot`, `WorkFormSubmission`, workflow/logistics/billing relations.
+`WorkOrder`, `WorkCycle`, `WorkAssignmentEvent`, `WorkExecutionSnapshot`, `WorkFormSubmission`, workflow/logistics/billing relations.
 
 ## API
 
-`GET /works`, `GET /works/:id`, `POST /works`, `PATCH /works/:id`, `GET /works/work-type-options`, deadline, claim, release, reassign, assignment-history endpoints.
+`GET /works`, `GET /works/:id`, `POST /works`, `PATCH /works/:id`, `GET /works/work-type-options`, deadline, claim, release, reassign, assignment-history endpoints, `GET /works/:id/cycles`, `POST /works/:id/cycles/next`.
 
 STATUS-001A adds `GET /status/operational` as a separate read-only aggregate over work orders, claim ownership, workflow, deadlines, logistics, and delivery. It returns operational fields only and masks financial data server-side.
 
@@ -36,7 +36,7 @@ STATUS-001A adds `GET /status/operational` as a separate read-only aggregate ove
 
 ## Audit
 
-Create/update/deadline/claim/release/reassign/snapshot actions.
+Create/update/deadline/claim/release/reassign/snapshot actions, cycle creation, active-cycle closure, cycle conflicts.
 
 ## Security
 
@@ -44,15 +44,15 @@ Server-side RBAC, resource visibility, financial masking, CSRF on mutations.
 
 ## Edge Cases
 
-Inactive clinic/doctor/work type, promised date constraints, pricing unresolved at claim, firm mismatch after snapshot, concurrent claim/reassign.
+Inactive clinic/doctor/work type, promised date constraints, pricing unresolved at claim, firm mismatch after snapshot, concurrent claim/reassign, active-cycle conflicts, doctor changes between cycles.
 
 ## Implemented Tasks
 
-WORKS-001, QR-001, WORK-DEADLINES-001A/B/C, TECH-CLAIM-001A/B, WORKFORMS-002, WORKFLOW-002, STATUS-001A, STATUS-001B.
+WORKS-001, QR-001, WORK-DEADLINES-001A/B/C, TECH-CLAIM-001A/B, WORKFORMS-002, WORKFLOW-002, STATUS-001A, STATUS-001B, WORK-CYCLES-001A.
 
 ## Planned Tasks
 
-Work cycles and materials/inventory integration.
+Cycle-aware UI refinements and materials/inventory integration.
 
 ## Deferred
 

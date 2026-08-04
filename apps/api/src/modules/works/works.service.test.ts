@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException } from "@nestjs/common";
-import type { Clinic, Doctor, Patient, WorkOrder, WorkType } from "@prisma/client";
+import type { Clinic, Doctor, Patient, WorkType } from "@prisma/client";
 import { plainToInstance } from "class-transformer";
 import { validate } from "class-validator";
 import { describe, expect, it, vi } from "vitest";
@@ -121,7 +121,7 @@ function patient(overrides: Partial<Patient> = {}): Patient {
   };
 }
 
-function workOrder(overrides: Partial<WorkOrder> = {}) {
+function workOrder(overrides: Record<string, unknown> = {}) {
   return {
     baseUnitPriceMinor: 35000,
     assignedTechnician: null,
@@ -144,7 +144,16 @@ function workOrder(overrides: Partial<WorkOrder> = {}) {
     doctorId: "doctor_1",
     executionLegalEntity: null,
     executionLegalEntityId: null,
-    executionSnapshot: null,
+    activeCycle: {
+      cycleNumber: 1,
+      executionSnapshot: null,
+      id: "cycle_1",
+      logisticsState: null,
+      reason: "INITIAL",
+      status: "ACTIVE",
+      workflowExecution: null,
+    },
+    activeCycleId: "cycle_1",
     externalReference: null,
     calculatedDueAt: new Date("2026-07-27T14:00:00.000Z"),
     deadlineCalculatedAt: new Date("2026-07-22T12:00:00.000Z"),
@@ -184,10 +193,8 @@ function workOrder(overrides: Partial<WorkOrder> = {}) {
     version: 1,
     invoicedDocumentId: null,
     logisticsEvents: [],
-    logisticsState: null,
     deliveryPreparationItems: [],
     manualDueAt: null,
-    workflowExecution: null,
     workFormSubmission: null,
     workType: workType(),
     workTypeId: "work_type_1",
@@ -286,7 +293,8 @@ describe("WorksService", () => {
           laboratorySettings: {
             upsert: vi.fn().mockResolvedValue({ currency: "RON" }),
           },
-          workOrder: { create, findUniqueOrThrow: vi.fn().mockResolvedValue(createdWorkOrder) },
+          workCycle: { create: vi.fn().mockResolvedValue({ id: "cycle_1" }) },
+          workOrder: { create, findUniqueOrThrow: vi.fn().mockResolvedValue(createdWorkOrder), update: vi.fn().mockResolvedValue(createdWorkOrder) },
           workType: { findUnique: vi.fn().mockResolvedValue({ basePriceMinor: 35000, isActive: true }) },
         }),
       ),
@@ -457,6 +465,7 @@ describe("WorksService", () => {
           auditLog: { create: auditCreate },
           user: { findUnique: vi.fn().mockResolvedValue({ displayName: "Actor", id: "actor_1" }) },
           workAssignmentEvent: { create: assignmentCreate },
+          workCycle: { update: vi.fn().mockResolvedValue({}) },
           workExecutionSnapshot: { create: snapshotCreate },
           workOrder: { findUniqueOrThrow: vi.fn().mockResolvedValue(after), updateMany },
         }),
@@ -504,6 +513,7 @@ describe("WorksService", () => {
         callback({
           auditLog: { create: vi.fn().mockResolvedValue({}) },
           user: { findUnique: vi.fn().mockResolvedValue({ displayName: "Actor", id: "actor_1" }) },
+          workCycle: { update: vi.fn().mockResolvedValue({}) },
           workExecutionSnapshot: { create: vi.fn().mockResolvedValue({}) },
           workOrder: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
         }),
@@ -562,6 +572,83 @@ describe("WorksService", () => {
         totalPriceMinor: 105000,
       }),
     }));
+  });
+
+  it("creates the next cycle without duplicating the work order", async () => {
+    const before = workOrder({
+      activeCycle: {
+        cycleNumber: 1,
+        executionSnapshot: null,
+        id: "cycle_1",
+        logisticsState: { status: "DELIVERED" },
+        reason: "INITIAL",
+        status: "ACTIVE",
+        workflowExecution: null,
+      },
+      assignedTechnicianId: "tech_1",
+      claimRevision: 2,
+      claimStatus: "CLAIMED",
+      claimedByUserId: "tech_1",
+      executionLegalEntityId: "legal_nc",
+    });
+    const auditCreate = vi.fn().mockResolvedValue({});
+    const workflowCreate = vi.fn().mockResolvedValue("workflow_2");
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          $queryRaw: vi.fn().mockResolvedValue([]),
+          auditLog: { create: auditCreate },
+          doctor: { findUnique: vi.fn().mockResolvedValue({ clinicId: "clinic_1", isActive: true }) },
+          logisticsEvent: { create: vi.fn().mockResolvedValue({}) },
+          workCycle: {
+            create: vi.fn().mockResolvedValue({ cycleNumber: 2, id: "cycle_2" }),
+            findFirst: vi.fn().mockResolvedValue({ cycleNumber: 1 }),
+            update: vi.fn().mockResolvedValue({}),
+          },
+          workLogisticsState: { create: vi.fn().mockResolvedValue({ id: "logistics_2" }) },
+          workOrder: {
+            findUnique: vi.fn().mockResolvedValue(before),
+            findUniqueOrThrow: vi.fn().mockResolvedValue({
+              activeCycle: { id: "cycle_2" },
+              activeCycleId: "cycle_2",
+              clinicId: "clinic_1",
+              code: "WO-2026-000001",
+              cycles: [],
+              doctorId: "doctor_1",
+              id: "work_order_1",
+              patientId: "patient_1",
+              patientName: "Ion Pop",
+            }),
+            update: vi.fn().mockResolvedValue({}),
+          },
+        }),
+      ),
+      doctor: { findUnique: vi.fn().mockResolvedValue({ clinicId: "clinic_1", isActive: true }) },
+      workOrder: { findUnique: vi.fn().mockResolvedValue(before) },
+    }, {
+      hasPermission: vi.fn().mockResolvedValue({ allowed: false, effectiveScopes: [], permission: "pricing.read" }),
+      requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ALL"], permission: "works.update" }),
+    }, undefined, undefined, undefined, undefined, { createSnapshotForWork: workflowCreate });
+
+    const result = await service.createNextCycle(
+      { actorUserId: "actor_1", requestMetadata: {} },
+      legalEntity,
+      "work_order_1",
+      { expectedActiveCycleId: "cycle_1", reason: "REPAIR", reasonNotes: "Retur medic" },
+      false,
+    );
+
+    expect(workflowCreate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      workCycleId: "cycle_2",
+      workOrderId: "work_order_1",
+    }));
+    expect(auditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ action: "work_cycles.closed", resourceId: "work_order_1" }),
+    });
+    expect(auditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ action: "work_cycles.created", resourceId: "work_order_1" }),
+    });
+    expect(result.activeCycleId).toBe("cycle_2");
   });
 });
 

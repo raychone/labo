@@ -5,7 +5,7 @@ import { DEMO_EMAIL_DOMAIN, DEMO_ID_PREFIX, DEMO_INVOICE_SERIES, DEMO_PROFORMA_S
 export async function resetDemoData(prisma: PrismaClient): Promise<void> {
   await prisma.$transaction(async (tx) => {
     await tx.workOrder.updateMany({
-      data: { invoicedDocumentId: null },
+      data: { activeCycleId: null, invoicedDocumentId: null },
       where: {
         OR: [
           demoWorkOrderWhere(),

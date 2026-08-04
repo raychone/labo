@@ -22,7 +22,7 @@ Current implemented behavior:
 
 - Unclaimed eligible works appear in available-for-claim.
 - Technician claims with explicit `executionLegalEntityCode` `NC` or `NG`.
-- First valid claim creates a locked execution snapshot with legal entity, technician, pricing, deadline, and context JSON.
+- First valid claim in a cycle creates a locked execution snapshot with legal entity, technician, pricing, deadline, and context JSON.
 - Release clears active owner/legal entity but does not delete or recalculate the snapshot.
 - Reclaim must use the already locked legal entity.
 - Manager reassign changes current technician but preserves locked execution context.
@@ -35,11 +35,11 @@ Deferred behavior:
 - No automatic claim expiration exists.
 - No automatic reassignment exists.
 - Existing manual manager release/reassign remains the current recovery mechanism.
-- Execution snapshots always remain immutable and are not recalculated by release, reclaim, reassign, or future recovery flows unless a future approved repair task explicitly defines a controlled versioning rule.
+- Execution snapshots always remain immutable inside their cycle and are not recalculated by release, reclaim, reassign, or future recovery flows unless a future approved repair task explicitly defines a controlled versioning rule.
 
 ## Data Model
 
-`WorkOrder` claim fields, `WorkAssignmentEvent`, `WorkExecutionSnapshot`.
+`WorkOrder` claim fields, `WorkCycle`, `WorkAssignmentEvent`, `WorkExecutionSnapshot`.
 
 ## API
 
@@ -59,11 +59,11 @@ RBAC, CSRF, server-side legal entity validation, financial masking.
 
 ## Edge Cases
 
-Concurrent claim, stale revision, delivered work cannot be claimed, pricing unresolved, firm mismatch after snapshot.
+Concurrent claim, stale revision, delivered work cannot be claimed, pricing unresolved, firm mismatch after snapshot, new cycle resets active owner while preserving historical snapshots.
 
 ## Implemented Tasks
 
-TECH-CLAIM-001A, TECH-CLAIM-001B.
+TECH-CLAIM-001A, TECH-CLAIM-001B, WORK-CYCLES-001A.
 
 ## Planned Tasks
 

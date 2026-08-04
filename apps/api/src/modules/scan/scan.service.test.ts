@@ -12,35 +12,37 @@ function createWork() {
     doctor: { displayName: "Dr. Ana Popescu" },
     deliveryPreparationItems: [],
     id: "work_1",
-    logisticsState: {
-      blockedReasonCode: null,
-      blockedReasonNotes: null,
-      physicalLocationCode: "PRODUCTIE",
-      status: "IN_PRODUCTION",
+    activeCycle: {
+      logisticsState: {
+        blockedReasonCode: null,
+        blockedReasonNotes: null,
+        physicalLocationCode: "PRODUCTIE",
+        status: "IN_PRODUCTION",
+      },
+      workflowExecution: {
+        currentStageExecutionId: "stage_1",
+        id: "workflow_1",
+        stages: [
+          {
+            allowedRoleCodesSnapshot: ["TEHNICIAN"],
+            assignedUser: { displayName: "Tehnician Demo", id: "actor_1" },
+            assignedUserId: "actor_1",
+            id: "stage_1",
+            stageNameSnapshot: "Modelare",
+            status: "PENDING",
+            version: 3,
+          },
+        ],
+        status: "ACTIVE",
+        version: 5,
+        workflowNameSnapshot: "Flux standard",
+      },
     },
     patientName: "Ion Pop",
     priority: "NORMAL",
     requestedDeliveryDate: new Date("2026-08-01T00:00:00.000Z"),
     status: "REGISTERED",
     workType: { name: "Coroana zirconiu" },
-    workflowExecution: {
-      currentStageExecutionId: "stage_1",
-      id: "workflow_1",
-      stages: [
-        {
-          allowedRoleCodesSnapshot: ["TEHNICIAN"],
-          assignedUser: { displayName: "Tehnician Demo", id: "actor_1" },
-          assignedUserId: "actor_1",
-          id: "stage_1",
-          stageNameSnapshot: "Modelare",
-          status: "PENDING",
-          version: 3,
-        },
-      ],
-      status: "ACTIVE",
-      version: 5,
-      workflowNameSnapshot: "Flux standard",
-    },
   };
 }
 

@@ -91,77 +91,81 @@ const WORK_DETAIL_INCLUDE = {
       displayName: true,
     },
   },
-  executionSnapshot: {
+  activeCycle: {
     include: {
-      executionLegalEntity: {
-        select: {
-          code: true,
-          displayName: true,
-          id: true,
+      executionSnapshot: {
+        include: {
+          executionLegalEntity: {
+            select: {
+              code: true,
+              displayName: true,
+              id: true,
+            },
+          },
+          technician: {
+            select: {
+              displayName: true,
+              id: true,
+            },
+          },
         },
       },
-      technician: {
+      logisticsState: {
         select: {
-          displayName: true,
-          id: true,
+          status: true,
         },
       },
-    },
-  },
-  logisticsState: {
-    select: {
-      status: true,
+      workflowExecution: {
+        include: {
+          events: {
+            include: {
+              actor: {
+                select: {
+                  displayName: true,
+                  id: true,
+                },
+              },
+            },
+          },
+          stages: {
+            include: {
+              completedBy: {
+                select: {
+                  displayName: true,
+                  id: true,
+                },
+              },
+              startedBy: {
+                select: {
+                  displayName: true,
+                  id: true,
+                },
+              },
+              assignedBy: {
+                select: {
+                  displayName: true,
+                  id: true,
+                },
+              },
+              assignedUser: {
+                select: {
+                  displayName: true,
+                  email: true,
+                  id: true,
+                },
+              },
+            },
+            orderBy: {
+              sortOrder: "asc",
+            },
+          },
+        },
+      },
     },
   },
   patient: true,
   workFormSubmission: true,
   workType: true,
-  workflowExecution: {
-    include: {
-      events: {
-        include: {
-          actor: {
-            select: {
-              displayName: true,
-              id: true,
-            },
-          },
-        },
-      },
-      stages: {
-        include: {
-          completedBy: {
-            select: {
-              displayName: true,
-              id: true,
-            },
-          },
-          startedBy: {
-            select: {
-              displayName: true,
-              id: true,
-            },
-          },
-          assignedBy: {
-            select: {
-              displayName: true,
-              id: true,
-            },
-          },
-          assignedUser: {
-            select: {
-              displayName: true,
-              email: true,
-              id: true,
-            },
-          },
-        },
-        orderBy: {
-          sortOrder: "asc",
-        },
-      },
-    },
-  },
 } as const satisfies Prisma.WorkOrderInclude;
 
 @Injectable()

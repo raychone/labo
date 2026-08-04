@@ -172,11 +172,11 @@ export class TechnicianAssignmentsService {
   }
 
   private async findCurrentStageForUpdate(tx: AssignmentTx, workOrderId: string, stageExecutionId: string) {
-    const execution = await tx.workWorkflowExecution.findUnique({
+    const execution = await tx.workWorkflowExecution.findFirst({
       include: {
         workOrder: { select: { code: true } },
       },
-      where: { workOrderId },
+      where: { workCycle: { activeForWorkOrder: { id: workOrderId } }, workOrderId },
     });
     if (!execution) {
       throw new NotFoundException("Fluxul lucrării nu a fost găsit.");

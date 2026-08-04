@@ -15,11 +15,14 @@ erDiagram
   Clinic ||--o{ WorkOrder : orders
   Doctor ||--o{ WorkOrder : requests
   WorkType ||--o{ WorkOrder : classifies
+  WorkOrder ||--o{ WorkCycle : owns
+  WorkCycle ||--o{ WorkWorkflowExecution : runs
+  WorkCycle ||--o{ WorkLogisticsState : tracks
   WorkOrder ||--o{ WorkAssignmentEvent : records
-  WorkOrder ||--|| WorkExecutionSnapshot : locks
+  WorkCycle ||--o{ WorkExecutionSnapshot : locks
   WorkOrder ||--o{ WorkFormSubmission : has
   WorkOrder ||--o{ WorkWorkflowExecution : runs
-  WorkOrder ||--|| WorkLogisticsState : tracks
+  WorkOrder ||--o{ WorkLogisticsState : tracks
   WorkOrder ||--o{ BillingDocumentLine : bills
   BillingDocument ||--o{ BillingDocumentLine : contains
   BillingDocument ||--o{ Payment : records
@@ -43,12 +46,13 @@ erDiagram
 | WorkType | Operational work category. | Price base and form/workflow links. Implemented. |
 | PriceCatalogItem, ExecutionTimeRule | Company price and execution-time base. | Company-specific; money minor units. Implemented. |
 | PricingAgreement, PricingAgreementRule | Clinic/doctor negotiated pricing. | Precedence: doctor, clinic, catalog. Implemented. |
-| WorkOrder | Core work record. | Code, clinic, doctor, patient, work type, QR, deadline, ownership, workflow. Implemented. |
+| WorkOrder | Core work record. | Code, clinic, doctor, patient, work type, QR, current deadline, current ownership, active cycle. Implemented. |
+| WorkCycle | Repeatable laboratory lifecycle for one work. | One active cycle per work; cycle number/reason/status/audit fields; cycle-scoped snapshots and history. Implemented. |
 | WorkAssignmentEvent | Append-only claim/release/reassign history. | Records revision and snapshot references. Implemented. |
-| WorkExecutionSnapshot | Locked execution context. | One per work; stores company, technician, pricing, deadline snapshots. Implemented. |
+| WorkExecutionSnapshot | Locked execution context. | Cycle-scoped; stores company, technician, pricing, deadline snapshots. Implemented. |
 | WorkFormTemplate, WorkFormFieldDefinition, WorkFormSubmission | Dynamic forms. | Templates versioned; submissions snapshot responses. Implemented. |
-| WorkflowTemplate, WorkflowStageDefinition, WorkWorkflowExecution, WorkStageExecution, WorkStageEvent | Workflow templates and runtime execution. | Ordered stages and event timeline. Implemented. |
-| WorkLogisticsState, LogisticsEvent, DeliveryPreparationGroup, DeliveryPreparationItem | Physical logistics flow. | Location/block/packing/group transitions. Implemented. |
+| WorkflowTemplate, WorkflowStageDefinition, WorkWorkflowExecution, WorkStageExecution, WorkStageEvent | Workflow templates and runtime execution. | Ordered stages and cycle-scoped event timeline. Implemented. |
+| WorkLogisticsState, LogisticsEvent, DeliveryPreparationGroup, DeliveryPreparationItem | Physical logistics flow. | Cycle-scoped location/block/packing/group transitions. Implemented. |
 | Delivery, DeliveryEvent, DeliveryProof | Courier delivery and proof. | Delivery transitions and internal signature proof. Implemented. |
 | BillingDocument, BillingDocumentLine, Payment, BillingSeries | Proformas, invoices, payments, numbering. | Manual payments only; overpayment rejected by billing rules. Implemented. |
 

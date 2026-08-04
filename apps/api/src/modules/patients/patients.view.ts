@@ -45,17 +45,21 @@ export const patientWorkInclude = {
       name: true,
     },
   },
-  workflowExecution: {
+  activeCycle: {
     include: {
-      events: {
-        orderBy: {
-          occurredAt: "desc",
-        },
-        take: 20,
-      },
-      stages: {
-        orderBy: {
-          sortOrder: "asc",
+      workflowExecution: {
+        include: {
+          events: {
+            orderBy: {
+              occurredAt: "desc",
+            },
+            take: 20,
+          },
+          stages: {
+            orderBy: {
+              sortOrder: "asc",
+            },
+          },
         },
       },
     },
@@ -251,7 +255,7 @@ export function toPatientDetailView(
 }
 
 export function toPatientWorkView(work: PatientWorkRecord): PatientWorkView {
-  const stages = work.workflowExecution?.stages ?? [];
+  const stages = work.activeCycle?.workflowExecution?.stages ?? [];
   const completed = stages.filter((stage) => stage.status === "COMPLETED").length;
   const currentStage = stages.find((stage) => stage.status === "IN_PROGRESS") ?? stages.find((stage) => stage.status === "PENDING") ?? null;
   const billingDocument = work.billingLines[0]?.billingDocument ?? null;
@@ -393,7 +397,7 @@ function toPatientTimeline(
       type: "work_created",
     });
 
-    for (const event of work.workflowExecution?.events ?? []) {
+    for (const event of work.activeCycle?.workflowExecution?.events ?? []) {
       events.push({
         createdAt: event.occurredAt.toISOString(),
         description: `${work.code} - ${event.type.toLowerCase().replaceAll("_", " ")}`,

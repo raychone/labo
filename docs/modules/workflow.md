@@ -2,7 +2,7 @@
 
 ## Status
 
-Templates and execution are implemented. Advanced lifecycle/KPI behavior is planned.
+Templates and execution are implemented. Runtime execution is cycle-scoped. Advanced lifecycle/KPI behavior is planned.
 
 ## Purpose
 
@@ -14,15 +14,15 @@ Define ordered technical stages and track runtime execution for work orders.
 
 ## Domain Concepts
 
-Template, ordered stages, optional stage, runtime execution, stage assignment, start, complete, timeline event.
+Template, ordered stages, optional stage, cycle-scoped runtime execution, stage assignment, start, complete, timeline event.
 
 ## Business Rules
 
-Only confirmed behavior should be used: templates have ordered stages and runtime work execution supports stage start/complete and assignment. Pause/resume/skip/reopen are permission concepts and future/partial behavior unless confirmed by task code.
+Only confirmed behavior should be used: templates have ordered stages and runtime work execution supports stage start/complete and assignment on the active work cycle. Pause/resume/skip/reopen are permission concepts and future/partial behavior unless confirmed by task code.
 
 ## Data Model
 
-`WorkflowTemplate`, `WorkflowStageDefinition`, `WorkWorkflowExecution`, `WorkStageExecution`, `WorkStageEvent`.
+`WorkflowTemplate`, `WorkflowStageDefinition`, `WorkCycle`, `WorkWorkflowExecution`, `WorkStageExecution`, `WorkStageEvent`.
 
 ## API
 
@@ -46,7 +46,7 @@ Archived template, existing runtime from older template, stage already started/c
 
 ## Implemented Tasks
 
-WORKFLOW-001, WORKFLOW-002, TECH-001, STATUS-001A read-model integration.
+WORKFLOW-001, WORKFLOW-002, TECH-001, STATUS-001A read-model integration, WORK-CYCLES-001A.
 
 ## Planned Tasks
 

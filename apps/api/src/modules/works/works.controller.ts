@@ -15,6 +15,7 @@ import { PermissionsGuard } from "../rbac/permissions.guard.js";
 import { RequirePermission } from "../rbac/require-permission.decorator.js";
 import {
   ClaimWorkDto,
+  CreateNextWorkCycleDto,
   CreateWorkDto,
   ListClaimWorksQueryDto,
   ListWorksQueryDto,
@@ -75,6 +76,25 @@ export class WorksController {
   @RequirePermission("works.read_all", "ALL")
   public async getWork(@CurrentUser() actor: AuthenticatedUser, @Param("id") workOrderId: string) {
     return this.worksService.getWork(actor.id, workOrderId, await this.canReadPricing(actor.id));
+  }
+
+  @Get(":id/cycles")
+  @RequirePermission("works.read_all", "ALL")
+  public async listCycles(@CurrentUser() actor: AuthenticatedUser, @Param("id") workOrderId: string) {
+    return this.worksService.listCycles(actor.id, workOrderId, await this.canReadPricing(actor.id));
+  }
+
+  @Post(":id/cycles/next")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("works.update", "ALL")
+  public async createNextCycle(
+    @Param("id") workOrderId: string,
+    @Body() dto: CreateNextWorkCycleDto,
+    @CurrentLegalEntity() legalEntity: LegalEntityContext,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Req() request: Request,
+  ) {
+    return this.worksService.createNextCycle({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, legalEntity, workOrderId, dto, await this.canReadPricing(actor.id));
   }
 
   @Get(":id/assignment-history")

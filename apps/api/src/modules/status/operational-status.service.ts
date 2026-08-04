@@ -95,10 +95,10 @@ export class OperationalStatusService {
           ...(query.workTypeId ? { workTypeId: query.workTypeId } : {}),
           ...(query.executionLegalEntityCode ? { executionLegalEntity: { is: { code: query.executionLegalEntityCode } } } : {}),
           ...(query.priority ? { priority: query.priority } : {}),
-          ...(query.logisticsStatus ? { logisticsState: { is: { status: query.logisticsStatus } } } : {}),
+          ...(query.logisticsStatus ? { activeCycle: { is: { logisticsState: { is: { status: query.logisticsStatus } } } } } : {}),
           ...(query.ownerUserId ? { OR: [{ assignedTechnicianId: query.ownerUserId }, { claimedByUserId: query.ownerUserId }] } : {}),
           ...(query.stageTechnicianUserId
-            ? { workflowExecution: { is: { currentStage: { is: { assignedUserId: query.stageTechnicianUserId } } } } }
+            ? { activeCycle: { is: { workflowExecution: { is: { currentStage: { is: { assignedUserId: query.stageTechnicianUserId } } } } } } }
             : {}),
           ...(query.deliveryStatus
             ? {
@@ -150,8 +150,8 @@ export class OperationalStatusService {
       visibility.push(
         { assignedTechnicianId: actor.id },
         { claimedByUserId: actor.id },
-        { workflowExecution: { is: { currentStage: { is: { assignedUserId: actor.id } } } } },
-        { workflowExecution: { is: { stages: { some: { assignedUserId: actor.id } } } } },
+        { activeCycle: { is: { workflowExecution: { is: { currentStage: { is: { assignedUserId: actor.id } } } } } } },
+        { activeCycle: { is: { workflowExecution: { is: { stages: { some: { assignedUserId: actor.id } } } } } } },
       );
     }
 

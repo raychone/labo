@@ -25,6 +25,7 @@ interface CreateSnapshotInput {
   readonly expectedWorkflowTemplateVersion?: number;
   readonly requestMetadata: RequestMetadata;
   readonly workCode: string;
+  readonly workCycleId: string;
   readonly workOrderId: string;
   readonly workTypeId: string;
 }
@@ -126,6 +127,7 @@ export class WorkflowExecutionService {
         workflowNameSnapshot: template.name,
         workflowTemplateId: template.id,
         workflowTemplateVersion: template.version,
+        workCycleId: input.workCycleId,
         workOrderId: input.workOrderId,
       },
     });
@@ -394,16 +396,17 @@ export class WorkflowExecutionService {
   }
 
   private async findExecutionByWorkId(workOrderId: string): Promise<WorkflowExecutionRecord | null> {
-    return this.prisma.workWorkflowExecution.findUnique({
+    return this.prisma.workWorkflowExecution.findFirst({
       include: workflowExecutionInclude,
       where: {
+        workCycle: { activeForWorkOrder: { id: workOrderId } },
         workOrderId,
       },
     });
   }
 
   private async findExecutionForTransition(tx: WorkflowTx, workOrderId: string) {
-    const execution = await tx.workWorkflowExecution.findUnique({
+    const execution = await tx.workWorkflowExecution.findFirst({
       include: {
         workOrder: {
           select: {
@@ -412,6 +415,7 @@ export class WorkflowExecutionService {
         },
       },
       where: {
+        workCycle: { activeForWorkOrder: { id: workOrderId } },
         workOrderId,
       },
     });

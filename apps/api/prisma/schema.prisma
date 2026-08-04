@@ -36,6 +36,7 @@ model User {
   archivedWorkTypes                   WorkType[]                 @relation("WorkTypeArchivedBy")
   createdWorkOrders                   WorkOrder[]                @relation("WorkOrderCreatedBy")
   updatedWorkOrders                   WorkOrder[]                @relation("WorkOrderUpdatedBy")
+  createdWorkCycles                   WorkCycle[]                @relation("WorkCycleCreatedBy")
   assignedClaimedWorkOrders           WorkOrder[]                @relation("WorkOrderAssignedTechnician")
   claimedWorkOrders                   WorkOrder[]                @relation("WorkOrderClaimedBy")
   releasedWorkOrders                  WorkOrder[]                @relation("WorkOrderReleasedBy")
@@ -143,6 +144,7 @@ model LegalEntity {
   pricingAgreements            PricingAgreement[]
   executionWorkOrders          WorkOrder[]             @relation("WorkOrderExecutionLegalEntity")
   executionSnapshots           WorkExecutionSnapshot[]
+  workCycles                   WorkCycle[]
   previousWorkAssignmentEvents WorkAssignmentEvent[]   @relation("WorkAssignmentEventPreviousLegalEntity")
   newWorkAssignmentEvents      WorkAssignmentEvent[]   @relation("WorkAssignmentEventNewLegalEntity")
 
@@ -297,6 +299,7 @@ model Doctor {
   version           Int                @default(1)
   clinic            Clinic             @relation(fields: [clinicId], references: [id], onDelete: Restrict)
   workOrders        WorkOrder[]
+  workCycles        WorkCycle[]
   billingDocuments  BillingDocument[]
   pricingAgreements PricingAgreement[]
 
@@ -637,6 +640,20 @@ enum WorkDeadlineSource {
   FUTURE_TECH_CLAIM
 }
 
+enum WorkCycleStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum WorkCycleReason {
+  INITIAL
+  ADJUSTMENT
+  REPAIR
+  REMAKE
+  WARRANTY
+  OTHER
+}
+
 model WorkOrder {
   id                       String                    @id @default(cuid())
   code                     String                    @unique @db.VarChar(24)
@@ -693,6 +710,7 @@ model WorkOrder {
   updatedAt                DateTime                  @updatedAt @map("updated_at")
   version                  Int                       @default(1)
   invoicedDocumentId       String?                   @map("invoiced_document_id")
+  activeCycleId            String?                   @unique @map("active_cycle_id")
   clinic                   Clinic                    @relation(fields: [clinicId], references: [id], onDelete: Restrict)
   doctor                   Doctor                    @relation(fields: [doctorId], references: [id], onDelete: Restrict)
   patient                  Patient?                  @relation(fields: [patientId], references: [id], onDelete: Restrict)
@@ -701,17 +719,19 @@ model WorkOrder {
   updatedBy                User?                     @relation("WorkOrderUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   assignedTechnician       User?                     @relation("WorkOrderAssignedTechnician", fields: [assignedTechnicianId], references: [id], onDelete: SetNull)
   executionLegalEntity     LegalEntity?              @relation("WorkOrderExecutionLegalEntity", fields: [executionLegalEntityId], references: [id], onDelete: SetNull)
+  activeCycle              WorkCycle?                @relation("ActiveWorkCycle", fields: [activeCycleId], references: [id], onDelete: SetNull)
   claimedBy                User?                     @relation("WorkOrderClaimedBy", fields: [claimedByUserId], references: [id], onDelete: SetNull)
   releasedBy               User?                     @relation("WorkOrderReleasedBy", fields: [releasedByUserId], references: [id], onDelete: SetNull)
   billingLines             BillingDocumentLine[]
   invoicedDocument         BillingDocument?          @relation("WorkOrderInvoicedDocument", fields: [invoicedDocumentId], references: [id], onDelete: SetNull)
+  cycles                   WorkCycle[]               @relation("WorkOrderCycles")
   workFormSubmission       WorkFormSubmission?
-  workflowExecution        WorkWorkflowExecution?
-  logisticsState           WorkLogisticsState?
+  workflowExecutions       WorkWorkflowExecution[]
+  logisticsStates          WorkLogisticsState[]
   logisticsEvents          LogisticsEvent[]
   deliveryPreparationItems DeliveryPreparationItem[]
   assignmentEvents         WorkAssignmentEvent[]
-  executionSnapshot        WorkExecutionSnapshot?
+  executionSnapshots       WorkExecutionSnapshot[]
 
   @@index([clinicId])
   @@index([doctorId])
@@ -734,7 +754,50 @@ model WorkOrder {
   @@index([createdByUserId])
   @@index([updatedByUserId])
   @@index([invoicedDocumentId])
+  @@index([activeCycleId])
   @@map("work_orders")
+}
+
+model WorkCycle {
+  id                                String                  @id @default(cuid())
+  workOrderId                       String                  @map("work_order_id")
+  cycleNumber                       Int                     @map("cycle_number")
+  reason                            WorkCycleReason
+  reasonNotes                       String?                 @map("reason_notes") @db.VarChar(1000)
+  status                            WorkCycleStatus         @default(ACTIVE)
+  openedAt                          DateTime                @default(now()) @map("opened_at")
+  closedAt                          DateTime?               @map("closed_at")
+  createdByUserId                   String?                 @map("created_by_user_id")
+  createdAt                         DateTime                @default(now()) @map("created_at")
+  updatedAt                         DateTime                @updatedAt @map("updated_at")
+  doctorId                          String?                 @map("doctor_id")
+  executionLegalEntityId            String?                 @map("execution_legal_entity_id")
+  executionLegalEntityCodeSnapshot  String?                 @map("execution_legal_entity_code_snapshot") @db.VarChar(8)
+  executionLegalEntityNameSnapshot  String?                 @map("execution_legal_entity_name_snapshot") @db.VarChar(160)
+  executionSnapshotVersion          Int?                    @map("execution_snapshot_version")
+  executionSnapshotJson             Json?                   @map("execution_snapshot_json")
+  pricingSnapshotJson               Json?                   @map("pricing_snapshot_json")
+  deadlineModeSnapshot              WorkDeadlineMode?       @map("deadline_mode_snapshot")
+  deadlineEffectiveDueAtSnapshot    DateTime?               @map("deadline_effective_due_at_snapshot")
+  deadlineSnapshotJson              Json?                   @map("deadline_snapshot_json")
+  workOrder                         WorkOrder               @relation("WorkOrderCycles", fields: [workOrderId], references: [id], onDelete: Cascade)
+  activeForWorkOrder                WorkOrder?              @relation("ActiveWorkCycle")
+  doctor                            Doctor?                 @relation(fields: [doctorId], references: [id], onDelete: SetNull)
+  executionLegalEntity              LegalEntity?            @relation(fields: [executionLegalEntityId], references: [id], onDelete: SetNull)
+  createdBy                         User?                   @relation("WorkCycleCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  workflowExecution                 WorkWorkflowExecution?
+  logisticsState                    WorkLogisticsState?
+  logisticsEvents                   LogisticsEvent[]
+  deliveryPreparationItems          DeliveryPreparationItem[]
+  executionSnapshot                 WorkExecutionSnapshot?
+
+  @@unique([workOrderId, cycleNumber])
+  @@index([workOrderId, status])
+  @@index([status])
+  @@index([createdByUserId])
+  @@index([doctorId])
+  @@index([executionLegalEntityId])
+  @@map("work_cycles")
 }
 
 model WorkAssignmentEvent {
@@ -769,7 +832,8 @@ model WorkAssignmentEvent {
 
 model WorkExecutionSnapshot {
   id                       String                  @id @default(cuid())
-  workOrderId              String                  @unique @map("work_order_id")
+  workOrderId              String                  @map("work_order_id")
+  workCycleId              String?                 @unique @map("work_cycle_id")
   version                  Int                     @default(1)
   status                   ExecutionSnapshotStatus
   source                   ExecutionSnapshotSource
@@ -808,11 +872,13 @@ model WorkExecutionSnapshot {
   createdAt                DateTime                @default(now()) @map("created_at")
   updatedAt                DateTime                @updatedAt @map("updated_at")
   workOrder                WorkOrder               @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  workCycle                WorkCycle?              @relation(fields: [workCycleId], references: [id], onDelete: SetNull)
   executionLegalEntity     LegalEntity             @relation(fields: [executionLegalEntityId], references: [id], onDelete: Restrict)
   technician               User                    @relation("WorkExecutionSnapshotOriginalTechnician", fields: [technicianId], references: [id], onDelete: Restrict)
   createdBy                User                    @relation("WorkExecutionSnapshotCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
 
   @@index([status])
+  @@index([workOrderId])
   @@index([executionLegalEntityId, status])
   @@index([snapshotCreatedAt])
   @@map("work_execution_snapshots")
@@ -1043,7 +1109,8 @@ enum WorkAssignmentEventType {
 
 model WorkLogisticsState {
   id                       String                    @id @default(cuid())
-  workOrderId              String                    @unique @map("work_order_id")
+  workOrderId              String                    @map("work_order_id")
+  workCycleId              String?                   @unique @map("work_cycle_id")
   status                   WorkLogisticsStatus       @default(RECEIVED)
   physicalLocationCode     LogisticsLocationCode?    @map("physical_location_code")
   blockedReasonCode        LogisticsBlockReasonCode? @map("blocked_reason_code")
@@ -1067,7 +1134,9 @@ model WorkLogisticsState {
   readyForDeliveryBy       User?                     @relation("WorkLogisticsReadyForDeliveryBy", fields: [readyForDeliveryByUserId], references: [id], onDelete: SetNull)
   updatedBy                User?                     @relation("WorkLogisticsUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   events                   LogisticsEvent[]
+  workCycle                WorkCycle?                @relation(fields: [workCycleId], references: [id], onDelete: SetNull)
 
+  @@index([workOrderId])
   @@index([status])
   @@index([physicalLocationCode])
   @@index([blockedByUserId])
@@ -1082,6 +1151,7 @@ model WorkLogisticsState {
 model LogisticsEvent {
   id               String              @id @default(cuid())
   workOrderId      String              @map("work_order_id")
+  workCycleId      String?             @map("work_cycle_id")
   logisticsStateId String?             @map("logistics_state_id")
   type             LogisticsEventType
   actorUserId      String?             @map("actor_user_id")
@@ -1089,10 +1159,12 @@ model LogisticsEvent {
   metadata         Json?
   createdAt        DateTime            @default(now()) @map("created_at")
   workOrder        WorkOrder           @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  workCycle        WorkCycle?          @relation(fields: [workCycleId], references: [id], onDelete: SetNull)
   logisticsState   WorkLogisticsState? @relation(fields: [logisticsStateId], references: [id], onDelete: SetNull)
   actor            User?               @relation("LogisticsEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([workOrderId, occurredAt])
+  @@index([workCycleId, occurredAt])
   @@index([logisticsStateId])
   @@index([type])
   @@index([actorUserId])
@@ -1129,6 +1201,7 @@ model DeliveryPreparationItem {
   id              String                   @id @default(cuid())
   groupId         String                   @map("group_id")
   workOrderId     String                   @map("work_order_id")
+  workCycleId     String?                  @map("work_cycle_id")
   addedByUserId   String?                  @map("added_by_user_id")
   addedAt         DateTime                 @default(now()) @map("added_at")
   removedByUserId String?                  @map("removed_by_user_id")
@@ -1136,12 +1209,14 @@ model DeliveryPreparationItem {
   isActive        Boolean                  @default(true) @map("is_active")
   group           DeliveryPreparationGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   workOrder       WorkOrder                @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  workCycle       WorkCycle?               @relation(fields: [workCycleId], references: [id], onDelete: SetNull)
   addedBy         User?                    @relation("DeliveryPreparationItemAddedBy", fields: [addedByUserId], references: [id], onDelete: SetNull)
   removedBy       User?                    @relation("DeliveryPreparationItemRemovedBy", fields: [removedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([groupId, workOrderId])
   @@index([groupId])
   @@index([workOrderId])
+  @@index([workCycleId])
   @@index([isActive])
   @@index([addedByUserId])
   @@index([removedByUserId])
@@ -1339,7 +1414,8 @@ enum SignatureOverrideReasonCode {
 
 model WorkWorkflowExecution {
   id                      String                      @id @default(cuid())
-  workOrderId             String                      @unique @map("work_order_id")
+  workOrderId             String                      @map("work_order_id")
+  workCycleId             String?                     @unique @map("work_cycle_id")
   workflowTemplateId      String?                     @map("workflow_template_id")
   workflowTemplateVersion Int                         @map("workflow_template_version")
   workflowNameSnapshot    String                      @map("workflow_name_snapshot") @db.VarChar(160)
@@ -1351,12 +1427,14 @@ model WorkWorkflowExecution {
   updatedAt               DateTime                    @updatedAt @map("updated_at")
   version                 Int                         @default(1)
   workOrder               WorkOrder                   @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  workCycle               WorkCycle?                  @relation(fields: [workCycleId], references: [id], onDelete: SetNull)
   workflowTemplate        WorkflowTemplate?           @relation(fields: [workflowTemplateId], references: [id], onDelete: SetNull)
   currentStage            WorkStageExecution?         @relation("CurrentWorkflowStage", fields: [currentStageExecutionId], references: [id], onDelete: SetNull)
   stages                  WorkStageExecution[]        @relation("WorkflowExecutionStages")
   events                  WorkStageEvent[]
 
   @@index([workflowTemplateId])
+  @@index([workOrderId])
   @@index([status])
   @@index([startedAt])
   @@index([completedAt])

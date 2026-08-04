@@ -87,77 +87,81 @@ export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
         displayName: true;
       };
     };
-    executionSnapshot: {
+    activeCycle: {
       include: {
-        executionLegalEntity: {
-          select: {
-            code: true;
-            displayName: true;
-            id: true;
+        executionSnapshot: {
+          include: {
+            executionLegalEntity: {
+              select: {
+                code: true;
+                displayName: true;
+                id: true;
+              };
+            };
+            technician: {
+              select: {
+                displayName: true;
+                id: true;
+              };
+            };
           };
         };
-        technician: {
+        logisticsState: {
           select: {
-            displayName: true;
-            id: true;
+            status: true;
+          };
+        };
+        workflowExecution: {
+          include: {
+            events: {
+              include: {
+                actor: {
+                  select: {
+                    displayName: true;
+                    id: true;
+                  };
+                };
+              };
+            };
+            stages: {
+              include: {
+                completedBy: {
+                  select: {
+                    displayName: true;
+                    id: true;
+                  };
+                };
+                startedBy: {
+                  select: {
+                    displayName: true;
+                    id: true;
+                  };
+                };
+                assignedBy: {
+                  select: {
+                    displayName: true;
+                    id: true;
+                  };
+                };
+                assignedUser: {
+                  select: {
+                    displayName: true;
+                    email: true;
+                    id: true;
+                  };
+                };
+              };
+              orderBy: {
+                sortOrder: "asc";
+              };
+            };
           };
         };
       };
     };
     patient: true;
-    logisticsState: {
-      select: {
-        status: true;
-      };
-    };
     workFormSubmission: true;
     workType: true;
-    workflowExecution: {
-      include: {
-        events: {
-          include: {
-            actor: {
-              select: {
-                displayName: true;
-                id: true;
-              };
-            };
-          };
-        };
-        stages: {
-          include: {
-            completedBy: {
-              select: {
-                displayName: true;
-                id: true;
-              };
-            };
-            startedBy: {
-              select: {
-                displayName: true;
-                id: true;
-              };
-            };
-            assignedBy: {
-              select: {
-                displayName: true;
-                id: true;
-              };
-            };
-            assignedUser: {
-              select: {
-                displayName: true;
-                email: true;
-                id: true;
-              };
-            };
-          };
-          orderBy: {
-            sortOrder: "asc";
-          };
-        };
-      };
-    };
   };
 }>;
 
@@ -282,6 +286,93 @@ export interface WorkDetailView extends Omit<WorkSummaryView, "workflow"> {
   readonly workForm: WorkFormSubmissionView | null;
 }
 
+export interface WorkCycleView {
+  readonly id: string;
+  readonly cycleNumber: number;
+  readonly reason: string;
+  readonly reasonNotes: string | null;
+  readonly status: string;
+  readonly openedAt: string;
+  readonly closedAt: string | null;
+  readonly createdBy: { readonly displayName: string; readonly publicId: string } | null;
+  readonly doctor: { readonly displayName: string; readonly id: string } | null;
+  readonly executionCompany: { readonly code: string; readonly displayName: string } | null;
+  readonly workflow: { readonly id: string | null; readonly status: string | null };
+  readonly logistics: { readonly id: string | null; readonly status: string | null };
+  readonly delivery: { readonly activePreparationItemCount: number };
+  readonly deadline: { readonly effectiveDueAt: string | null; readonly mode: string | null; readonly snapshot: unknown | null };
+  readonly executionSnapshot: { readonly snapshot: unknown | null; readonly status: string | null; readonly version: number | null };
+  readonly pricingSnapshot: unknown | null;
+}
+
+export interface WorkCyclesHistoryView {
+  readonly activeCycleId: string | null;
+  readonly cycles: readonly WorkCycleView[];
+  readonly work: {
+    readonly clinicId: string;
+    readonly code: string;
+    readonly doctorId: string;
+    readonly id: string;
+    readonly patientId: string | null;
+    readonly patientName: string;
+  };
+}
+
+export const workCycleHistoryInclude = {
+  activeCycle: {
+    select: {
+      id: true,
+    },
+  },
+  cycles: {
+    include: {
+      createdBy: {
+        select: {
+          displayName: true,
+          id: true,
+        },
+      },
+      deliveryPreparationItems: {
+        select: {
+          id: true,
+        },
+        where: {
+          isActive: true,
+        },
+      },
+      doctor: {
+        select: {
+          displayName: true,
+          id: true,
+        },
+      },
+      executionSnapshot: {
+        select: {
+          status: true,
+          version: true,
+        },
+      },
+      logisticsState: {
+        select: {
+          id: true,
+          status: true,
+        },
+      },
+      workflowExecution: {
+        select: {
+          id: true,
+          status: true,
+        },
+      },
+    },
+    orderBy: {
+      cycleNumber: "asc",
+    },
+  },
+} as const satisfies Prisma.WorkOrderInclude;
+
+export type WorkCycleHistoryRecord = Prisma.WorkOrderGetPayload<{ include: typeof workCycleHistoryInclude }>;
+
 export interface ExecutionSnapshotSummaryView {
   readonly createdAt: string | null;
   readonly exists: boolean;
@@ -382,7 +473,7 @@ export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: bo
     totalPriceMinor: includePricing ? workOrder.totalPriceMinor : null,
     executionSnapshot: toExecutionSnapshotView(workOrder, includePricing),
     updatedAt: workOrder.updatedAt.toISOString(),
-    workflow: toWorkflowSummaryView(workOrder.workflowExecution),
+    workflow: toWorkflowSummaryView(workOrder.activeCycle?.workflowExecution ?? null),
     workType: {
       code: workOrder.workType.code,
       id: workOrder.workType.id,
@@ -473,7 +564,7 @@ function toWorkDeadlineView(workOrder: WorkOrderRecord): WorkDeadlineView {
 }
 
 function toExecutionSnapshotView(workOrder: WorkOrderRecord, includePricing: boolean): ExecutionSnapshotView {
-  const snapshot = workOrder.executionSnapshot;
+  const snapshot = workOrder.activeCycle?.executionSnapshot ?? null;
 
   if (!snapshot) {
     return {
@@ -556,14 +647,64 @@ export function toWorkDetailView(workOrder: WorkOrderRecord, includePricing: boo
     internalNotes: workOrder.internalNotes,
     updatedByUserId: workOrder.updatedByUserId,
     version: workOrder.version,
-    workflow: workOrder.workflowExecution
-      ? toWorkflowExecutionView(workOrder.workflowExecution, {
+    workflow: workOrder.activeCycle?.workflowExecution
+      ? toWorkflowExecutionView(workOrder.activeCycle.workflowExecution, {
           canCompleteCurrentStage: false,
           canStartCurrentStage: false,
           reason: "Acțiunile se verifică pe endpointul dedicat de workflow.",
         })
       : null,
     workForm: toWorkFormSubmissionView(workOrder.workFormSubmission),
+  };
+}
+
+export function toWorkCyclesHistoryView(workOrder: WorkCycleHistoryRecord, includePricing: boolean): WorkCyclesHistoryView {
+  return {
+    activeCycleId: workOrder.activeCycle?.id ?? null,
+    cycles: workOrder.cycles.map((cycle) => ({
+      closedAt: cycle.closedAt?.toISOString() ?? null,
+      createdBy: cycle.createdBy ? { displayName: cycle.createdBy.displayName, publicId: cycle.createdBy.id } : null,
+      cycleNumber: cycle.cycleNumber,
+      deadline: {
+        effectiveDueAt: cycle.deadlineEffectiveDueAtSnapshot?.toISOString() ?? null,
+        mode: cycle.deadlineModeSnapshot,
+        snapshot: includePricing ? cycle.deadlineSnapshotJson : null,
+      },
+      delivery: {
+        activePreparationItemCount: cycle.deliveryPreparationItems.length,
+      },
+      doctor: cycle.doctor ? { displayName: cycle.doctor.displayName, id: cycle.doctor.id } : null,
+      executionCompany: cycle.executionLegalEntityCodeSnapshot && cycle.executionLegalEntityNameSnapshot
+        ? { code: cycle.executionLegalEntityCodeSnapshot, displayName: cycle.executionLegalEntityNameSnapshot }
+        : null,
+      executionSnapshot: {
+        snapshot: includePricing ? cycle.executionSnapshotJson : null,
+        status: cycle.executionSnapshot?.status ?? null,
+        version: cycle.executionSnapshot?.version ?? cycle.executionSnapshotVersion,
+      },
+      id: cycle.id,
+      logistics: {
+        id: cycle.logisticsState?.id ?? null,
+        status: cycle.logisticsState?.status ?? null,
+      },
+      openedAt: cycle.openedAt.toISOString(),
+      pricingSnapshot: includePricing ? cycle.pricingSnapshotJson : null,
+      reason: cycle.reason,
+      reasonNotes: cycle.reasonNotes,
+      status: cycle.status,
+      workflow: {
+        id: cycle.workflowExecution?.id ?? null,
+        status: cycle.workflowExecution?.status ?? null,
+      },
+    })),
+    work: {
+      clinicId: workOrder.clinicId,
+      code: workOrder.code,
+      doctorId: workOrder.doctorId,
+      id: workOrder.id,
+      patientId: workOrder.patientId,
+      patientName: workOrder.patientName,
+    },
   };
 }
 

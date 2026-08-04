@@ -113,7 +113,11 @@ export const deliveryInclude = {
                   displayName: true,
                 },
               },
-              logisticsState: true,
+              activeCycle: {
+                include: {
+                  logisticsState: true,
+                },
+              },
               workType: {
                 select: {
                   name: true,
@@ -214,7 +218,7 @@ export function toDeliveryDetail(delivery: DeliveryRecord, context: DeliveryAcce
     works: delivery.preparationGroup.items.map((item) => ({
       doctorName: item.workOrder.doctor.displayName,
       id: item.workOrder.id,
-      logisticsStatus: item.workOrder.logisticsState?.status ?? "RECEIVED",
+      logisticsStatus: item.workOrder.activeCycle?.logisticsState?.status ?? "RECEIVED",
       patientName: item.workOrder.patientName,
       priority: item.workOrder.priority as WorkPriority,
       requestedDeliveryDate: item.workOrder.requestedDeliveryDate.toISOString(),

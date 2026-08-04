@@ -18,11 +18,11 @@ Price catalog, execution time rules, clinic agreement, doctor agreement, adjustm
 
 ## Business Rules
 
-Confirmed precedence from code: doctor-specific agreement, then clinic-specific agreement, then company standard catalog. Money uses minor units and currency. Reception, technicians, logistics, and couriers must not receive pricing fields unless explicitly permitted.
+Confirmed precedence from code: doctor-specific agreement, then clinic-specific agreement, then company standard catalog. Money uses minor units and currency. Reception, technicians, logistics, and couriers must not receive pricing fields unless explicitly permitted. Pricing snapshots are immutable inside each work cycle.
 
 ## Data Model
 
-`PriceCatalogItem`, `ExecutionTimeRule`, `PricingAgreement`, `PricingAgreementRule`, pricing fields in `WorkExecutionSnapshot`.
+`PriceCatalogItem`, `ExecutionTimeRule`, `PricingAgreement`, `PricingAgreementRule`, cycle-scoped pricing fields in `WorkExecutionSnapshot`.
 
 ## API
 
@@ -46,7 +46,7 @@ No active catalog price, future agreement, archived agreement, conflicting agree
 
 ## Implemented Tasks
 
-PRICING-002, TECH-CLAIM-001B integration.
+PRICING-002, TECH-CLAIM-001B integration, WORK-CYCLES-001A cycle snapshots.
 
 ## Planned Tasks
 

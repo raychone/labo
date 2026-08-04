@@ -53,7 +53,7 @@ function createTx(stage = createStage()): Prisma.TransactionClient {
       update: vi.fn().mockResolvedValue({ id: "stage_exec_1" }),
     },
     workWorkflowExecution: {
-      findUnique: vi.fn().mockResolvedValue({
+      findFirst: vi.fn().mockResolvedValue({
         currentStageExecutionId: "stage_exec_1",
         id: "workflow_exec_1",
       }),

@@ -18,11 +18,11 @@ Location, block reason, packing readiness, preparation group, logistics event.
 
 ## Business Rules
 
-Physical status is operational and shared across `NC`/`NG`; financial fields must remain masked for non-financial roles.
+Physical status is operational and shared across `NC`/`NG`; financial fields must remain masked for non-financial roles. Current logistics APIs resolve the active work cycle.
 
 ## Data Model
 
-`WorkLogisticsState`, `LogisticsEvent`, `DeliveryPreparationGroup`, `DeliveryPreparationItem`.
+`WorkCycle`, `WorkLogisticsState`, `LogisticsEvent`, `DeliveryPreparationGroup`, `DeliveryPreparationItem`.
 
 ## API
 
@@ -46,11 +46,11 @@ Blocked work, already grouped work, cancelled groups, packing completion conflic
 
 ## Implemented Tasks
 
-LOGISTICS-001, STATUS-001A read-model integration.
+LOGISTICS-001, STATUS-001A read-model integration, WORK-CYCLES-001A cycle scoping.
 
 ## Planned Tasks
 
-Work cycles and frontend status/dashboard integration.
+Cycle-aware frontend status/dashboard integration.
 
 ## Deferred
 

@@ -2,7 +2,9 @@
 
 ## Status
 
-APPROVED
+COMPLETED
+
+Completed on 2026-08-04.
 
 ## Objective
 
@@ -119,19 +121,19 @@ Every cycle remains visible forever and the original work is not duplicated.
 
 ## Data model changes
 
-- Add `WorkCycle` and related enums for status and reason.
-- Link workflow execution, logistics state/events, delivery/preparation relations, deadline snapshots, and execution/pricing snapshots to a cycle where required.
-- Preserve existing `WorkOrder` identifiers and current work relations through migration/backfill.
-- Backfill existing works with cycle number `1` and reason `INITIAL`.
-- Enforce one active cycle per work with database and service-level constraints.
-- Keep historical cycle rows immutable through service-level rules and audit.
+- Added `WorkCycle` plus `WorkCycleStatus` and `WorkCycleReason`.
+- Linked workflow execution, logistics state/events, delivery preparation items, execution snapshots, deadline snapshots, and pricing snapshots to cycles.
+- Preserved existing `WorkOrder` identifiers and current work relations through migration/backfill.
+- Backfilled existing works with deterministic cycle `1` records using reason `INITIAL`.
+- Enforced one active cycle per work with `WorkOrder.activeCycleId`, database constraints, and transactional service rules.
+- Historical closed cycles are not mutated by normal lifecycle APIs.
 
 ## API changes
 
-- Add read API for complete cycle history.
-- Add create-next-cycle API.
-- Existing work, workflow, logistics, delivery, deadline, claim, and status APIs must remain compatible by resolving the active/current cycle where applicable.
-- Do not expose financial data to unauthorized roles through cycle history.
+- Added `GET /works/:id/cycles` for authorized cycle history.
+- Added `POST /works/:id/cycles/next` for creating a next active cycle.
+- Existing work, workflow, logistics, delivery, deadline, claim, scan, QR, technician, patient, and status APIs resolve the active/current cycle where applicable.
+- Financial cycle snapshot data is masked unless the caller has existing pricing visibility.
 
 ## UI changes
 
@@ -147,26 +149,15 @@ None. This task is backend-only.
 
 ## Audit
 
-- Audit cycle creation.
-- Audit active-cycle closure when it happens as part of next-cycle creation.
-- Audit conflicts such as duplicate active-cycle attempts or invalid doctor/company transitions.
+- Cycle creation is audited.
+- Active-cycle closure during next-cycle creation is audited.
+- Active-cycle conflict checks are audited.
 
 ## Task-specific tests
 
-- Migration/backfill gives existing works a first cycle.
-- One work can own multiple cycles.
-- Exactly one active cycle exists.
-- Creating a next cycle closes or supersedes the previous active cycle according to the implemented rule.
-- Historical cycles cannot be mutated through normal lifecycle APIs.
-- Workflow execution is scoped to the active cycle.
-- Logistics state/events are scoped to the active cycle.
-- Delivery state/history is scoped to the active cycle.
-- Deadline snapshots are independent per cycle.
-- Company, execution, and pricing snapshots are immutable inside each cycle.
-- Doctor can change between cycles while patient, clinic, and work code remain stable.
-- Existing APIs continue working against the active/current cycle.
-- Cycle read API exposes complete authorized history.
-- Create-next-cycle API is audited and permission-protected.
+- Service and controller tests cover cycle history and create-next-cycle behavior.
+- Existing workflow, logistics, delivery, scan, technician, patient, and status tests were updated for active-cycle compatibility.
+- Prisma validation/generation, typecheck, tests, build, and diff checks passed for the implementation.
 
 ## Acceptance criteria
 

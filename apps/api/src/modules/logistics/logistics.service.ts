@@ -118,7 +118,7 @@ export class LogisticsService {
         },
         where: { id: current.id },
       });
-      await this.recordLogisticsEvent(tx, context, workOrderId, updated.id, LogisticsEventType.LOCATION_UPDATED, {
+      await this.recordLogisticsEvent(tx, context, workOrderId, updated.workCycleId, updated.id, LogisticsEventType.LOCATION_UPDATED, {
         newLocation: dto.locationCode,
         oldLocation: current.physicalLocationCode,
         workId: workOrderId,
@@ -154,7 +154,7 @@ export class LogisticsService {
         },
         where: { id: current.id },
       });
-      await this.recordLogisticsEvent(tx, context, workOrderId, updated.id, LogisticsEventType.WORK_BLOCKED, {
+      await this.recordLogisticsEvent(tx, context, workOrderId, updated.workCycleId, updated.id, LogisticsEventType.WORK_BLOCKED, {
         newStatus: updated.status,
         oldStatus: current.status,
         reasonCode: dto.reasonCode,
@@ -193,7 +193,7 @@ export class LogisticsService {
         },
         where: { id: current.id },
       });
-      await this.recordLogisticsEvent(tx, context, workOrderId, updated.id, LogisticsEventType.WORK_UNBLOCKED, {
+      await this.recordLogisticsEvent(tx, context, workOrderId, updated.workCycleId, updated.id, LogisticsEventType.WORK_UNBLOCKED, {
         newStatus: targetStatus,
         oldStatus: current.status,
         workId: workOrderId,
@@ -229,7 +229,7 @@ export class LogisticsService {
         },
         where: { id: current.id },
       });
-      await this.recordLogisticsEvent(tx, context, workOrderId, updated.id, LogisticsEventType.READY_FOR_PACKING_CONFIRMED, {
+      await this.recordLogisticsEvent(tx, context, workOrderId, updated.workCycleId, updated.id, LogisticsEventType.READY_FOR_PACKING_CONFIRMED, {
         newStatus: updated.status,
         oldStatus: current.status,
         workflowOverride: dto.workflowOverride === true,
@@ -351,16 +351,22 @@ export class LogisticsService {
     const group = await this.prisma.$transaction(async (tx) => {
       const [groupRecord, work] = await Promise.all([
         tx.deliveryPreparationGroup.findUnique({ include: { items: { where: { isActive: true } } }, where: { id: groupId } }),
-        tx.workOrder.findUnique({ include: { deliveryPreparationItems: { where: { isActive: true } }, logisticsState: true }, where: { id: workOrderId } }),
+        tx.workOrder.findUnique({
+          include: {
+            activeCycle: { include: { logisticsState: true } },
+            deliveryPreparationItems: { where: { isActive: true } },
+          },
+          where: { id: workOrderId },
+        }),
       ]);
       if (!groupRecord || !work) {
         throw new NotFoundException("Grupul sau lucrarea nu a fost găsită.");
       }
-      const status = work.logisticsState?.status ?? WorkLogisticsStatus.RECEIVED;
+      const status = work.activeCycle?.logisticsState?.status ?? WorkLogisticsStatus.RECEIVED;
       if (!canAddWorkToPreparationGroup({
         groupClinicId: groupRecord.clinicId,
         groupStatus: groupRecord.status,
-        hasActiveGroup: work.deliveryPreparationItems.length > 0,
+          hasActiveGroup: work.deliveryPreparationItems.some((item) => item.workCycleId === work.activeCycleId),
         workClinicId: work.clinicId,
         workLogisticsStatus: status,
       })) {
@@ -370,10 +376,11 @@ export class LogisticsService {
         data: {
           addedByUserId: context.actor.id,
           groupId,
+          workCycleId: work.activeCycleId,
           workOrderId,
         },
       });
-      await this.recordLogisticsEvent(tx, context, workOrderId, work.logisticsState?.id ?? null, LogisticsEventType.WORK_ADDED_TO_DELIVERY_GROUP, {
+      await this.recordLogisticsEvent(tx, context, workOrderId, work.activeCycleId, work.activeCycle?.logisticsState?.id ?? null, LogisticsEventType.WORK_ADDED_TO_DELIVERY_GROUP, {
         clinicId: groupRecord.clinicId,
         groupId,
         workId: workOrderId,
@@ -406,7 +413,7 @@ export class LogisticsService {
         },
         where: { groupId, isActive: true, workOrderId },
       });
-      await this.recordLogisticsEvent(tx, context, workOrderId, null, LogisticsEventType.WORK_REMOVED_FROM_DELIVERY_GROUP, {
+      await this.recordLogisticsEvent(tx, context, workOrderId, null, null, LogisticsEventType.WORK_REMOVED_FROM_DELIVERY_GROUP, {
         groupId,
         workId: workOrderId,
       });
@@ -497,7 +504,7 @@ export class LogisticsService {
         },
         where: { id: current.id },
       });
-      await this.recordLogisticsEvent(tx, context, workOrderId, updated.id, options.eventType, {
+      await this.recordLogisticsEvent(tx, context, workOrderId, updated.workCycleId, updated.id, options.eventType, {
         newStatus: next,
         oldStatus: current.status,
         workId: workOrderId,
@@ -513,18 +520,22 @@ export class LogisticsService {
   }
 
   private async ensureState(tx: LogisticsTx, workOrderId: string): Promise<WorkLogisticsState> {
-    const work = await tx.workOrder.findUnique({ include: { logisticsState: true, workflowExecution: true }, where: { id: workOrderId } });
+      const work = await tx.workOrder.findUnique({ include: { activeCycle: { include: { logisticsState: true, workflowExecution: true } } }, where: { id: workOrderId } });
     if (!work) {
       throw new NotFoundException("Lucrarea nu a fost găsită.");
     }
-    if (work.logisticsState) {
-      return work.logisticsState;
+    if (!work.activeCycle) {
+      throw new ConflictException("Lucrarea nu are un ciclu activ.");
     }
-    const status = work.workflowExecution?.status === WorkWorkflowExecutionStatus.ACTIVE ? WorkLogisticsStatus.IN_PRODUCTION : WorkLogisticsStatus.RECEIVED;
+    if (work.activeCycle.logisticsState) {
+      return work.activeCycle.logisticsState;
+    }
+    const status = work.activeCycle.workflowExecution?.status === WorkWorkflowExecutionStatus.ACTIVE ? WorkLogisticsStatus.IN_PRODUCTION : WorkLogisticsStatus.RECEIVED;
     const state = await tx.workLogisticsState.create({
       data: {
         physicalLocationCode: status === WorkLogisticsStatus.IN_PRODUCTION ? "PRODUCTIE" : "RECEPTIE",
         status,
+        workCycleId: work.activeCycle.id,
         workOrderId,
       },
     });
@@ -533,6 +544,7 @@ export class LogisticsService {
         logisticsStateId: state.id,
         metadata: { newStatus: status, workId: workOrderId },
         type: LogisticsEventType.WORK_RECEIVED,
+        workCycleId: work.activeCycle.id,
         workOrderId,
       },
     });
@@ -540,7 +552,7 @@ export class LogisticsService {
   }
 
   private async assertWorkflowCompletedOrOverride(tx: LogisticsTx, workOrderId: string, override: boolean): Promise<void> {
-    const execution = await tx.workWorkflowExecution.findUnique({ select: { status: true }, where: { workOrderId } });
+    const execution = await tx.workWorkflowExecution.findFirst({ select: { status: true }, where: { workCycle: { activeForWorkOrder: { id: workOrderId } }, workOrderId } });
     if (execution?.status === WorkWorkflowExecutionStatus.COMPLETED) {
       return;
     }
@@ -551,7 +563,7 @@ export class LogisticsService {
   }
 
   private async deriveNonBlockedStatus(tx: LogisticsTx, workOrderId: string): Promise<WorkLogisticsStatus> {
-    const execution = await tx.workWorkflowExecution.findUnique({ select: { status: true }, where: { workOrderId } });
+    const execution = await tx.workWorkflowExecution.findFirst({ select: { status: true }, where: { workCycle: { activeForWorkOrder: { id: workOrderId } }, workOrderId } });
     return execution?.status === WorkWorkflowExecutionStatus.COMPLETED ? WorkLogisticsStatus.READY_FOR_PACKING : WorkLogisticsStatus.IN_PRODUCTION;
   }
 
@@ -586,9 +598,9 @@ export class LogisticsService {
       ...(query.doctorId ? { doctorId: query.doctorId } : {}),
       ...(query.priority ? { priority: query.priority } : {}),
       ...(query.dateFrom || query.dateTo ? { requestedDeliveryDate: { ...(query.dateFrom ? { gte: new Date(query.dateFrom) } : {}), ...(query.dateTo ? { lte: new Date(query.dateTo) } : {}) } } : {}),
-      ...(query.logisticsStatus ? { logisticsState: { status: query.logisticsStatus } } : {}),
-      ...(query.technicianId ? { workflowExecution: { stages: { some: { assignedUserId: query.technicianId } } } } : {}),
-      ...(query.workflowStageKey ? { workflowExecution: { currentStage: { stageKeySnapshot: query.workflowStageKey } } } : {}),
+      ...(query.logisticsStatus ? { activeCycle: { is: { logisticsState: { is: { status: query.logisticsStatus } } } } } : {}),
+      ...(query.technicianId ? { activeCycle: { is: { workflowExecution: { is: { stages: { some: { assignedUserId: query.technicianId } } } } } } } : {}),
+      ...(query.workflowStageKey ? { activeCycle: { is: { workflowExecution: { is: { currentStage: { is: { stageKeySnapshot: query.workflowStageKey } } } } } } } : {}),
       ...(search ? {
         OR: [
           { code: { contains: search, mode: "insensitive" } },
@@ -678,6 +690,7 @@ export class LogisticsService {
     tx: LogisticsTx,
     context: ActorContext,
     workOrderId: string,
+    workCycleId: string | null,
     logisticsStateId: string | null,
     type: LogisticsEventType,
     metadata: Prisma.InputJsonObject,
@@ -688,6 +701,7 @@ export class LogisticsService {
         logisticsStateId,
         metadata,
         type,
+        workCycleId,
         workOrderId,
       },
     });

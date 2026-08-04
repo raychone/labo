@@ -1,7 +1,7 @@
 import { Transform, Type } from "class-transformer";
 import { IsBoolean, IsIn, IsInt, IsISO8601, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
 
-import { MAX_WORK_ORDER_QUANTITY, SORT_DIRECTIONS, WORK_CLAIM_STATUSES, WORK_ORDER_SORT_FIELDS, WORK_PRIORITIES, WORK_STATUSES } from "../works.constants.js";
+import { MAX_WORK_ORDER_QUANTITY, SORT_DIRECTIONS, WORK_CLAIM_STATUSES, WORK_CYCLE_REASONS, WORK_ORDER_SORT_FIELDS, WORK_PRIORITIES, WORK_STATUSES } from "../works.constants.js";
 import { DEADLINE_FILTERS } from "../work-deadline-visual.js";
 
 function trimOptionalString(value: unknown): string | null | undefined {
@@ -145,6 +145,28 @@ export class ReassignWorkDto extends ClaimWorkDto {
   @MinLength(3)
   @MaxLength(500)
   public readonly reason!: string;
+}
+
+export class CreateNextWorkCycleDto {
+  @IsIn(WORK_CYCLE_REASONS.filter((reason) => reason !== "INITIAL"))
+  public readonly reason!: Exclude<(typeof WORK_CYCLE_REASONS)[number], "INITIAL">;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MinLength(3)
+  @MaxLength(1000)
+  public readonly reasonNotes?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  public readonly doctorId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  public readonly expectedActiveCycleId?: string;
 }
 
 export class WorkMutationDto {

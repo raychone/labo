@@ -18,11 +18,11 @@ Business calendar, Romanian holidays/weekends, execution days, calculated deadli
 
 ## Business Rules
 
-`effectiveDueAt` is the official visible due date. Manual deadlines can override calculated deadlines. Automatic deadlines use company timezone, currently `Europe/Bucharest`. Claim integration in TECH-CLAIM-001B uses claim timestamp as execution start for locked execution snapshot deadlines unless a manual deadline is already set.
+`effectiveDueAt` is the official visible due date for the active cycle. Manual deadlines can override calculated deadlines. Automatic deadlines use company timezone, currently `Europe/Bucharest`. Claim integration in TECH-CLAIM-001B uses claim timestamp as execution start for locked execution snapshot deadlines unless a manual deadline is already set. Each cycle keeps its own deadline snapshot.
 
 ## Data Model
 
-Deadline fields on `WorkOrder`, deadline fields/JSON in `WorkExecutionSnapshot`.
+Deadline fields on `WorkOrder` for current compatibility, cycle deadline snapshot fields on `WorkCycle`, and deadline fields/JSON in `WorkExecutionSnapshot`.
 
 ## API
 
@@ -46,7 +46,7 @@ Unresolved rule, manual due date, due today/tomorrow, late, weekends/holidays, p
 
 ## Implemented Tasks
 
-WORK-DEADLINES-001A, WORK-DEADLINES-001B, WORK-DEADLINES-001C, TECH-CLAIM-001B integration.
+WORK-DEADLINES-001A, WORK-DEADLINES-001B, WORK-DEADLINES-001C, TECH-CLAIM-001B integration, WORK-CYCLES-001A cycle snapshots.
 
 ## Planned Tasks
 

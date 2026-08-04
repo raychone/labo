@@ -182,51 +182,55 @@ export const logisticsWorkInclude = {
       id: true,
     },
   },
-  logisticsEvents: {
+  activeCycle: {
     include: {
-      actor: {
-        select: {
-          displayName: true,
-        },
-      },
-    },
-    orderBy: {
-      occurredAt: "desc",
-    },
-    take: 50,
-  },
-  logisticsState: true,
-  workFormSubmission: true,
-  workType: {
-    select: {
-      name: true,
-    },
-  },
-  workflowExecution: {
-    include: {
-      currentStage: {
+      logisticsEvents: {
         include: {
-          assignedUser: {
+          actor: {
             select: {
               displayName: true,
-              id: true,
-            },
-          },
-        },
-      },
-      stages: {
-        include: {
-          assignedUser: {
-            select: {
-              displayName: true,
-              id: true,
             },
           },
         },
         orderBy: {
-          sortOrder: "asc",
+          occurredAt: "desc",
+        },
+        take: 50,
+      },
+      logisticsState: true,
+      workflowExecution: {
+        include: {
+          currentStage: {
+            include: {
+              assignedUser: {
+                select: {
+                  displayName: true,
+                  id: true,
+                },
+              },
+            },
+          },
+          stages: {
+            include: {
+              assignedUser: {
+                select: {
+                  displayName: true,
+                  id: true,
+                },
+              },
+            },
+            orderBy: {
+              sortOrder: "asc",
+            },
+          },
         },
       },
+    },
+  },
+  workFormSubmission: true,
+  workType: {
+    select: {
+      name: true,
     },
   },
 } as const satisfies Prisma.WorkOrderInclude;
@@ -306,7 +310,7 @@ export function toLogisticsCenterItem(work: LogisticsWorkRecord, actionContext: 
 export function toWorkLogisticsView(work: LogisticsWorkRecord, actionContext: ActionContext, now: Date): WorkLogisticsView {
   return {
     ...toLogisticsCenterItem(work, actionContext, now),
-    events: work.logisticsEvents.map(toLogisticsEventView),
+    events: (work.activeCycle?.logisticsEvents ?? []).map(toLogisticsEventView),
     formSnapshot: toFormSnapshot(work.workFormSubmission),
   };
 }
@@ -387,8 +391,8 @@ export function createLogisticsSummary(items: readonly LogisticsCenterItem[]): L
 }
 
 function toLogisticsStateView(work: LogisticsWorkRecord): LogisticsStateView {
-  const state = work.logisticsState;
-  const status = state?.status ?? deriveInitialStatus(work.workflowExecution?.status ?? null);
+  const state = work.activeCycle?.logisticsState ?? null;
+  const status = state?.status ?? deriveInitialStatus(work.activeCycle?.workflowExecution?.status ?? null);
   const blockedReasonCode = state?.blockedReasonCode ?? null;
   const locationCode = state?.physicalLocationCode ?? null;
 
@@ -439,7 +443,7 @@ function createDefaultLogisticsActions(): LogisticsActionAvailability {
 }
 
 function toWorkflowSummary(work: LogisticsWorkRecord): LogisticsCenterItem["workflow"] {
-  const execution = work.workflowExecution;
+  const execution = work.activeCycle?.workflowExecution ?? null;
   if (!execution) {
     return {
       assignedUserName: null,
@@ -492,7 +496,7 @@ function toBillingSummary(work: LogisticsWorkRecord): LogisticsCenterItem["billi
   };
 }
 
-function toLogisticsEventView(event: LogisticsWorkRecord["logisticsEvents"][number]): LogisticsEventView {
+function toLogisticsEventView(event: NonNullable<LogisticsWorkRecord["activeCycle"]>["logisticsEvents"][number]): LogisticsEventView {
   return {
     actorName: event.actor?.displayName ?? null,
     id: event.id,

@@ -44,11 +44,12 @@ Implemented or substantially implemented:
 - deliveries and internal proof/signature rendering;
 - billing documents, payments, statements, exports;
 - operational status read-model API and frontend `/status` workspace;
+- backend work-cycle model, active-cycle lifecycle APIs, and cycle-scoped workflow/logistics/delivery history;
 - demo seed.
 
 Planned or partial:
 
-- work cycles;
+- cycle-aware frontend/status refinements;
 - materials and inventory;
 - dashboard/status evolution beyond the implemented `/status` workspace;
 - search;
@@ -58,13 +59,13 @@ Planned or partial:
 
 ## Current Status
 
-Last completed functional task: `STATUS-001B`, which added the frontend `/status` operational status workspace on top of the STATUS-001A read model/API.
+Last completed functional task: `WORK-CYCLES-001A`, which added the backend work-cycle model, active-cycle compatibility behavior, cycle history read API, create-next-cycle API, audit, and safe migration/backfill.
 
 Last completed documentation task: `DOCS-TOKEN-001`, which created the permanent token-efficient documentation system under `docs/`.
 
 `TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable.
 
-Next approved task: `WORK-CYCLES-001A`, a backend-only work cycle model and lifecycle foundation task. `WORK-CYCLES-001B` remains planned and must not be started. No other task is approved.
+No task is currently approved. `WORK-CYCLES-001B` remains planned and must not be started. No other task is approved.
 
 ## Source Of Truth
 

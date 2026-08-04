@@ -18,11 +18,11 @@ Delivery, courier, assignment, pickup, transit, completion, failure, reschedule,
 
 ## Business Rules
 
-Delivery actions follow controlled transitions. Couriers see own deliveries where permitted.
+Delivery actions follow controlled transitions against delivery preparation items tied to the active work cycle. Couriers see own deliveries where permitted.
 
 ## Data Model
 
-`Delivery`, `DeliveryEvent`, delivery relations to preparation groups and users.
+`Delivery`, `DeliveryEvent`, delivery relations to preparation groups, preparation items, work cycles, and users.
 
 ## API
 
@@ -46,11 +46,11 @@ Already assigned, failed delivery, reschedule, cancelled delivery, proof require
 
 ## Implemented Tasks
 
-DELIVERY-001, STATUS-001A read-model integration.
+DELIVERY-001, STATUS-001A read-model integration, WORK-CYCLES-001A cycle scoping.
 
 ## Planned Tasks
 
-Status/dashboard and reports integration.
+Cycle-aware status/dashboard and reports integration.
 
 ## Deferred
 

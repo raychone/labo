@@ -31,14 +31,14 @@ export class DeliveryTransitionService {
         throw new BadRequestException("Doar livrările atribuite pot fi preluate.");
       }
       for (const item of current.preparationGroup.items) {
-        if (item.workOrder.logisticsState?.status !== WorkLogisticsStatus.READY_FOR_DELIVERY) {
+        if (item.workOrder.activeCycle?.logisticsState?.status !== WorkLogisticsStatus.READY_FOR_DELIVERY) {
           throw new BadRequestException("Toate lucrările trebuie să fie gata de livrare.");
         }
       }
       const now = new Date();
       await tx.workLogisticsState.updateMany({
         data: { physicalLocationCode: "GATA_LIVRARE", status: WorkLogisticsStatus.HANDED_TO_DELIVERY, updatedByUserId: context.actor.id, version: { increment: 1 } },
-        where: { workOrderId: { in: current.preparationGroup.items.map((item) => item.workOrderId) } },
+        where: { workCycleId: { in: current.preparationGroup.items.map((item) => item.workCycleId).filter((id): id is string => id !== null) } },
       });
       const updated = await tx.delivery.update({
         data: { pickedUpAt: now, pickedUpByUserId: context.actor.id, status: DeliveryStatus.PICKED_UP, updatedByUserId: context.actor.id, version: { increment: 1 } },
@@ -82,7 +82,7 @@ export class DeliveryTransitionService {
       const proofResult = await this.deliveryProofService.createForCompletedDelivery(tx, context, current, dto, now);
       await tx.workLogisticsState.updateMany({
         data: { status: WorkLogisticsStatus.DELIVERED, updatedByUserId: context.actor.id, version: { increment: 1 } },
-        where: { workOrderId: { in: current.preparationGroup.items.map((item) => item.workOrderId) } },
+        where: { workCycleId: { in: current.preparationGroup.items.map((item) => item.workCycleId).filter((id): id is string => id !== null) } },
       });
       const updated = await tx.delivery.update({
         data: {
