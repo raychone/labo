@@ -13,6 +13,7 @@ import { QrModule } from "./qr/qr.module.js";
 import { RbacModule } from "./rbac/rbac.module.js";
 import { ScanModule } from "./scan/scan.module.js";
 import { SettingsModule } from "./settings/settings.module.js";
+import { StatusModule } from "./status/status.module.js";
 import { TechnicianAssignmentsModule } from "./technician-assignments/technician-assignments.module.js";
 import { UsersModule } from "./users/users.module.js";
 import { WorkTypesModule } from "./work-types/work-types.module.js";
@@ -21,6 +22,6 @@ import { WorkflowTemplatesModule } from "./workflow-templates/workflow-templates
 import { WorksModule } from "./works/works.module.js";
 
 @Module({
-  imports: [AuthModule, BillingModule, ClinicsModule, DeliveryModule, HealthModule, LogisticsModule, OrganizationContextModule, PatientsModule, PricingModule, QrModule, RbacModule, ScanModule, SettingsModule, TechnicianAssignmentsModule, UsersModule, WorkTypesModule, WorkFormsModule, WorkflowTemplatesModule, WorksModule],
+  imports: [AuthModule, BillingModule, ClinicsModule, DeliveryModule, HealthModule, LogisticsModule, OrganizationContextModule, PatientsModule, PricingModule, QrModule, RbacModule, ScanModule, SettingsModule, StatusModule, TechnicianAssignmentsModule, UsersModule, WorkTypesModule, WorkFormsModule, WorkflowTemplatesModule, WorksModule],
 })
 export class AppModule {}

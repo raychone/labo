@@ -2,7 +2,7 @@
 
 ## Status
 
-APPROVED.
+COMPLETED on 2026-08-04.
 
 ## Objective
 
@@ -94,11 +94,31 @@ No required data model changes are expected. If implementation discovers a neces
 
 ## API changes
 
-Define backend read endpoints for operational status. Endpoint names should follow existing REST conventions and must be documented after implementation.
+Implemented:
+
+- `GET /status/operational`
+
+Query contract:
+
+- `page`, `pageSize` with `pageSize <= 100`;
+- `tab`: `TODAY`, `IN_PROGRESS`, `AVAILABLE`, `LATE`, `AT_CLINIC`, `RETURNED`, `COMPLETED`;
+- `search`;
+- `clinicId`, `doctorId`, `patientId`, `workTypeId`;
+- `ownerUserId`, `stageTechnicianUserId`;
+- `executionLegalEntityCode`: `NC` or `NG`;
+- `priority`;
+- `logisticsStatus`, `deliveryStatus`;
+- `deadlineState`;
+- `sortBy`: `effectiveDueAt`, `priority`, `createdAt`, `updatedAt`, `workCode`, `clinicName`, `patientName`;
+- `sortDirection`: `asc` or `desc`.
+
+The endpoint uses a bounded read-model strategy: it scans at most 1,000 matching base rows plus one overflow row, applies computed operational filters/tab classification in memory, returns pagination metadata, and sets `meta.hasMore` when the bounded scan or requested page has more results.
 
 ## UI changes
 
 None, except updating generated/shared contracts if the frontend needs typed API contracts. Do not build the final `/status` page in this task.
+
+Implemented shared contracts in `packages/shared/src/status.ts`. No `/status` frontend page was implemented.
 
 ## Security and RBAC
 
@@ -119,6 +139,12 @@ Read-only aggregation does not require audit events.
 - Tests for filters, sorting, bounded result strategy, and summary counters.
 - Regression tests for unavailable current cycle data.
 
+Implemented tests:
+
+- `apps/api/src/modules/status/operational-status.view.test.ts`
+- `apps/api/src/modules/status/operational-status.service.test.ts`
+- `apps/api/src/modules/status/operational-status.controller.test.ts`
+
 ## Acceptance criteria
 
 - API returns permission-aware operational status rows for active works.
@@ -131,6 +157,12 @@ Read-only aggregation does not require audit events.
 - Existing claim snapshot immutability is unchanged.
 - No frontend `/status` page is implemented.
 - Standard verification from [../TESTING.md](../TESTING.md) passes.
+
+Acceptance status:
+
+- Completed. The endpoint is read-only, permission-aware, non-financial, bounded, and covered by task-specific tests.
+- `RETURNED` is present as a tab/counter but remains zero while work-cycle data does not exist.
+- Claim snapshot behavior was not modified.
 
 ## Documentation updates
 

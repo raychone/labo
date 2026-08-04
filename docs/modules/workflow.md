@@ -26,7 +26,7 @@ Only confirmed behavior should be used: templates have ordered stages and runtim
 
 ## API
 
-Template endpoints under work types and `/workflow-templates/:id`. Runtime endpoints under `/works/:workId/workflow`.
+Template endpoints under work types and `/workflow-templates/:id`. Runtime endpoints under `/works/:workId/workflow`. STATUS-001A also reads current stage and progress through `GET /status/operational`.
 
 ## UI
 
@@ -46,7 +46,7 @@ Archived template, existing runtime from older template, stage already started/c
 
 ## Implemented Tasks
 
-WORKFLOW-001, WORKFLOW-002, TECH-001.
+WORKFLOW-001, WORKFLOW-002, TECH-001, STATUS-001A read-model integration.
 
 ## Planned Tasks
 

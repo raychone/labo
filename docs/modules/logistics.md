@@ -26,7 +26,7 @@ Physical status is operational and shared across `NC`/`NG`; financial fields mus
 
 ## API
 
-`/logistics/center`, `/logistics/center/summary`, `/works/:workId/logistics/*`, `/delivery-preparation-groups/*`.
+`/logistics/center`, `/logistics/center/summary`, `/works/:workId/logistics/*`, `/delivery-preparation-groups/*`. STATUS-001A reads logistics status through `GET /status/operational`.
 
 ## UI
 
@@ -46,11 +46,11 @@ Blocked work, already grouped work, cancelled groups, packing completion conflic
 
 ## Implemented Tasks
 
-LOGISTICS-001.
+LOGISTICS-001, STATUS-001A read-model integration.
 
 ## Planned Tasks
 
-Work cycles and status/dashboard integration.
+Work cycles and frontend status/dashboard integration.
 
 ## Deferred
 

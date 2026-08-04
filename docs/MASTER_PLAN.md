@@ -10,10 +10,10 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 |---|---|
 | Current task | NONE / AWAITING APPROVAL |
 | Status | AWAITING APPROVAL |
-| Last completed task | DOCS-TOKEN-001 |
-| Last completed functional task | TECH-CLAIM-001B |
-| Last completed functional commit | `ccba29a TECH-CLAIM-001B: lock execution pricing and deadline snapshot` |
-| Next approved task | STATUS-001A |
+| Last completed task | STATUS-001A |
+| Last completed functional task | STATUS-001A |
+| Last completed functional commit | pending commit |
+| Next approved task | NONE |
 
 ## Roadmap
 
@@ -55,11 +55,11 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | signatures | SIGNATURES-001 | COMPLETED | DELIVERY-001 | internal delivery proof | [modules/signatures.md](modules/signatures.md) |
 | billing | BILLING-001 | COMPLETED | WORKS-001, PRICING-002 | billing workspace/payments | [modules/billing.md](modules/billing.md) |
 | billing | BILLING-002 | COMPLETED | BILLING-001 | printable docs/statements | [modules/billing.md](modules/billing.md) |
-| status | STATUS-001A | APPROVED | TECH-CLAIM-001B, WORKFLOW-002, LOGISTICS-001, DELIVERY-001 | operational status read model and API | [tasks/STATUS-001A.md](tasks/STATUS-001A.md) |
+| status | STATUS-001A | COMPLETED | TECH-CLAIM-001B, WORKFLOW-002, LOGISTICS-001, DELIVERY-001 | operational status read model and API | [tasks/STATUS-001A.md](tasks/STATUS-001A.md) |
 | materials | MATERIALS-001 | PLANNED | STATUS-001A | material catalog/selection | [modules/materials.md](modules/materials.md) |
 | inventory | INVENTORY-001 | PLANNED | MATERIALS-001 | stock, NIR, consumption | [modules/inventory.md](modules/inventory.md) |
 | dashboard | DASHBOARD-001 | DEFERRED | SHELL-001 | legacy operational dashboard | [modules/dashboard.md](modules/dashboard.md) |
-| dashboard | DASHBOARD-002 | PLANNED | STATUS-001 | real workflow dashboard | [modules/dashboard.md](modules/dashboard.md) |
+| dashboard | DASHBOARD-002 | PLANNED | STATUS-001A | real workflow dashboard | [modules/dashboard.md](modules/dashboard.md) |
 | search | SEARCH-001 | PLANNED | core modules | global search | [modules/search.md](modules/search.md) |
 | reports | REPORTS-001 | PLANNED | billing, workflow, delivery | reports | [modules/reports.md](modules/reports.md) |
 | audit | AUDIT-UI-001 | PLANNED | audit logs | audit viewer UI | [modules/audit.md](modules/audit.md) |

@@ -43,6 +43,7 @@ Implemented or substantially implemented:
 - logistics center and delivery preparation groups;
 - deliveries and internal proof/signature rendering;
 - billing documents, payments, statements, exports;
+- operational status read-model API;
 - demo seed.
 
 Planned or partial:
@@ -56,13 +57,13 @@ Planned or partial:
 
 ## Current Status
 
-Last completed functional task: `TECH-CLAIM-001B`, commit `ccba29a`, which added locked execution snapshots for final pricing, deadline, legal entity, and technician context.
+Last completed functional task: `STATUS-001A`, which added the backend/read-model API foundation for operational status.
 
 Last completed documentation task: `DOCS-TOKEN-001`, which created the permanent token-efficient documentation system under `docs/`.
 
 `TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable.
 
-Next approved task: `STATUS-001A`, the backend/read-model foundation for the operational status page.
+No next task is currently approved. `STATUS-001B` is the likely follow-up if the frontend operational status page is approved.
 
 ## Source Of Truth
 

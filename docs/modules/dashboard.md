@@ -10,7 +10,7 @@ Provide operational overview.
 
 ## Roles And Permissions
 
-Current `/dashboard` route has no specific required permission beyond authentication. Future dashboard sections must be permission-aware.
+Current `/dashboard` route has no specific required permission beyond authentication. The operational status read model uses `works.read_all` and `works.read_assigned` with server-side resource visibility.
 
 ## Domain Concepts
 
@@ -26,7 +26,9 @@ Uses existing module read models; no dedicated dashboard model currently.
 
 ## API
 
-Existing module endpoints; future aggregate endpoint planned.
+Existing module endpoints plus `GET /status/operational` from STATUS-001A.
+
+`GET /status/operational` returns permission-aware rows, tab counters, and bounded pagination for operational work status. It does not expose pricing, billing, payments, agreements, or financial totals.
 
 ## UI
 
@@ -46,11 +48,11 @@ Large lists, mixed company context, non-financial users.
 
 ## Implemented Tasks
 
-SHELL-001 and module summaries.
+SHELL-001, module summaries, STATUS-001A.
 
 ## Planned Tasks
 
-DASHBOARD-002, STATUS-001.
+DASHBOARD-002, STATUS-001B.
 
 ## Deferred
 
@@ -58,7 +60,7 @@ Legacy DASHBOARD-001 is superseded/deferred.
 
 ## Open Decisions
 
-Final dashboard metrics.
+Final dashboard metrics and final work-cycle semantics for returned works.
 
 ## Related Documents
 

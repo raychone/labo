@@ -266,7 +266,7 @@ const createDto = {
   patientReference: "P-100",
   priority: "NORMAL",
   quantity: 2,
-  requestedDeliveryDate: "2026-08-01",
+  requestedDeliveryDate: "2026-08-20",
   workTypeId: "work_type_1",
 } as const;
 

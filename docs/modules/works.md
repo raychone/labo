@@ -28,6 +28,8 @@ Reception creates works without selecting `NC`/`NG`. Company context is fixed by
 
 `GET /works`, `GET /works/:id`, `POST /works`, `PATCH /works/:id`, `GET /works/work-type-options`, deadline, claim, release, reassign, assignment-history endpoints.
 
+STATUS-001A adds `GET /status/operational` as a separate read-only aggregate over work orders, claim ownership, workflow, deadlines, logistics, and delivery. It returns operational fields only and masks financial data server-side.
+
 ## UI
 
 `/works` registry, create modal, detail/edit drawer, QR modal, workflow section, deadline and execution context cards.
@@ -46,11 +48,11 @@ Inactive clinic/doctor/work type, promised date constraints, pricing unresolved 
 
 ## Implemented Tasks
 
-WORKS-001, QR-001, WORK-DEADLINES-001A/B/C, TECH-CLAIM-001A/B, WORKFORMS-002, WORKFLOW-002.
+WORKS-001, QR-001, WORK-DEADLINES-001A/B/C, TECH-CLAIM-001A/B, WORKFORMS-002, WORKFLOW-002, STATUS-001A.
 
 ## Planned Tasks
 
-TECH-CLAIM-001C, work cycles, materials/inventory integration.
+Work cycles, materials/inventory integration, STATUS-001B frontend status page if approved.
 
 ## Deferred
 

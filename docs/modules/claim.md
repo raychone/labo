@@ -67,7 +67,7 @@ TECH-CLAIM-001A, TECH-CLAIM-001B.
 
 ## Planned Tasks
 
-TECH-CLAIM-001C is deferred. STATUS-001A is the next approved task and will read claim ownership for operational status.
+TECH-CLAIM-001C is deferred. STATUS-001A reads claim ownership for operational status without changing claim lifecycle rules.
 
 ## Deferred
 

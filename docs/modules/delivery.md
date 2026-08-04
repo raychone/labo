@@ -26,7 +26,7 @@ Delivery actions follow controlled transitions. Couriers see own deliveries wher
 
 ## API
 
-`GET /deliveries`, `GET /deliveries/:id`, `GET /couriers/options`, create from preparation group, patch, assign/unassign, cancel, pickup, start-transit, complete, fail, reschedule.
+`GET /deliveries`, `GET /deliveries/:id`, `GET /couriers/options`, create from preparation group, patch, assign/unassign, cancel, pickup, start-transit, complete, fail, reschedule. STATUS-001A reads current delivery state through `GET /status/operational`.
 
 ## UI
 
@@ -46,7 +46,7 @@ Already assigned, failed delivery, reschedule, cancelled delivery, proof require
 
 ## Implemented Tasks
 
-DELIVERY-001.
+DELIVERY-001, STATUS-001A read-model integration.
 
 ## Planned Tasks
 
