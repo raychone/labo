@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented as a permission-aware landing page for core roles. Operational `/status` is implemented separately; deeper workflow analytics remain planned.
+Implemented as a permission-aware landing page for core roles. ROLE-DASHBOARDS-002 composes distinct Manager, Recepție and Tehnician panels on the existing `/dashboard` route and reuses existing read models for operational and financial summaries. Operational `/status` is implemented separately; deeper workflow analytics remain planned.
 
 ## Purpose
 
@@ -22,7 +22,7 @@ Do not expose financial data to non-financial roles.
 
 ## Data Model
 
-Uses existing module read models; no dedicated dashboard model currently. CORE-ROLE-UX-001 composes works deadline summaries, billing overview counters and technician workbench summaries.
+Uses existing module read models; no dedicated dashboard model currently. CORE-ROLE-UX-001 and ROLE-DASHBOARDS-002 compose works deadline summaries, billing overview counters, technician workbench summaries and role-specific dashboard panels.
 
 ## API
 
@@ -32,7 +32,7 @@ Existing module endpoints plus `GET /status/operational` from STATUS-001A.
 
 ## UI
 
-`/dashboard` shows permission-aware Manager, Recepție and Tehnician panels, primary actions, compact counters and links into `/works`, `/status`, `/workbench`, `/billing`, `/pricing` and `/scan` where allowed. `/status` is the implemented operational status workspace with tabs, counters, filters, real laboratory sheet status, sorting, bounded pagination UX, desktop table, and mobile cards.
+`/dashboard` shows permission-aware Manager, Recepție and Tehnician panels, primary actions, compact counters and links into `/works`, `/status`, `/workbench`, `/billing`, `/pricing` and `/scan` where allowed. Technician content is never blank when technician permissions exist. `/status` is the implemented operational status workspace with tabs, counters, filters, real laboratory sheet status, sorting, bounded pagination UX, desktop table, and mobile cards.
 
 ## Audit
 
@@ -48,11 +48,11 @@ Large lists, mixed company context, non-financial users.
 
 ## Implemented Tasks
 
-SHELL-001, module summaries, STATUS-001A, STATUS-001B, WORKFORM-REAL-001B status integration, CORE-ROLE-UX-001.
+SHELL-001, module summaries, STATUS-001A, STATUS-001B, WORKFORM-REAL-001B status integration, CORE-ROLE-UX-001, ROLE-DASHBOARDS-002.
 
 ## Planned Tasks
 
-DASHBOARD-002.
+DEMO-POLISH-002.
 
 ## Deferred
 

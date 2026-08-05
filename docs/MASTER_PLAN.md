@@ -8,12 +8,12 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 
 | Field | Value |
 |---|---|
-| Current task | none |
-| Status | AWAITING APPROVAL |
+| Current task | DEMO-POLISH-002 |
+| Status | PLANNED |
 | Blocker | none |
-| Last completed task | CORE-ROLE-UX-001 |
-| Last completed functional task | CORE-ROLE-UX-001 |
-| Last completed functional commit | CORE-ROLE-UX-001 commit |
+| Last completed task | ROLE-DASHBOARDS-002 |
+| Last completed functional task | ROLE-DASHBOARDS-002 |
+| Last completed functional commit | ROLE-DASHBOARDS-002 commit |
 | Next approved task | none |
 
 ## Roadmap
@@ -63,6 +63,7 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | billing | BILLING-REALIGN-001B | COMPLETED | BILLING-REALIGN-001A | financial workspace, receivables and month-end UX | [tasks/BILLING-REALIGN-001B.md](tasks/BILLING-REALIGN-001B.md) |
 | billing | BILLING-REALIGN-001C | DEFERRED | BILLING-REALIGN-001B | ambiguous legacy billing correction workflow | [modules/billing.md](modules/billing.md) |
 | core UX | CORE-ROLE-UX-001 | COMPLETED | BILLING-REALIGN-001B, STATUS-001B, WORKFORM-REAL-001B, WORK-CYCLES-001B, TECH-CLAIM-001B | simplified Manager, Reception and Technician workflows | [tasks/CORE-ROLE-UX-001.md](tasks/CORE-ROLE-UX-001.md) |
+| dashboard | ROLE-DASHBOARDS-002 | COMPLETED | CORE-ROLE-UX-001 | complete distinct Manager, Reception and Technician dashboards | [tasks/ROLE-DASHBOARDS-002.md](tasks/ROLE-DASHBOARDS-002.md) |
 | demo | DEMO-POLISH-002 | PLANNED | CORE-ROLE-UX-001 | demo polish after core role UX simplification | [modules/demo.md](modules/demo.md) |
 | status | STATUS-001A | COMPLETED | TECH-CLAIM-001B, WORKFLOW-002, LOGISTICS-001, DELIVERY-001 | operational status read model and API | [tasks/STATUS-001A.md](tasks/STATUS-001A.md) |
 | status | STATUS-001B | COMPLETED | STATUS-001A, SHELL-001 | operational status page and internal role visibility | [tasks/STATUS-001B.md](tasks/STATUS-001B.md) |

@@ -30,7 +30,7 @@ Physical status is operational and shared across `NC`/`NG`; financial fields mus
 
 ## UI
 
-`/logistics`.
+`/logistics` presents a wrapped tab bar, a clear filter strip, grouped row metadata and responsive cards/tables. Billing labels and `NEFACTURATE` views stay hidden from non-financial users.
 
 ## Audit
 

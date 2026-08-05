@@ -465,6 +465,143 @@
   font-weight: var(--dl-font-weight-bold);
 }
 
+.dashboard-page__workspace,
+.dashboard-page__section-content,
+.dashboard-page__attention-list {
+  display: grid;
+  gap: var(--dl-space-4);
+}
+
+.dashboard-page__workspace-header,
+.dashboard-page__section-header,
+.dashboard-page__work-main,
+.dashboard-page__work-actions,
+.dashboard-page__finance-row {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-3);
+  justify-content: space-between;
+}
+
+.dashboard-page__workspace-header h2 {
+  font-size: var(--dl-font-size-section-title);
+  margin: 0;
+}
+
+.dashboard-page__workspace-header p,
+.dashboard-page__note,
+.dashboard-page__empty p,
+.dashboard-page__field span,
+.dashboard-page__attention-item span,
+.dashboard-page__work-main span {
+  color: var(--dl-color-text-muted);
+}
+
+.dashboard-page__columns {
+  display: grid;
+  gap: var(--dl-space-4);
+  grid-template-columns: 1fr;
+}
+
+.dashboard-page__metric--link {
+  color: inherit;
+}
+
+.dashboard-page__metric--link:hover {
+  border-color: var(--app-brand-primary);
+  box-shadow: 0 0 0 1px var(--app-brand-primary);
+}
+
+.dashboard-page__metrics--five,
+.dashboard-page__metrics--six,
+.dashboard-page__metrics--seven {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-page__work-card,
+.dashboard-page__attention-item,
+.dashboard-page__empty {
+  background: var(--dl-color-surface);
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  display: grid;
+  gap: var(--dl-space-3);
+  padding: var(--dl-space-4);
+}
+
+.dashboard-page__work-main > div,
+.dashboard-page__field,
+.dashboard-page__attention-item > div:first-child {
+  display: grid;
+  gap: var(--dl-space-1);
+  min-width: 0;
+}
+
+.dashboard-page__work-grid {
+  display: grid;
+  gap: var(--dl-space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-page__field strong,
+.dashboard-page__work-main strong,
+.dashboard-page__attention-item strong {
+  overflow-wrap: anywhere;
+}
+
+.dashboard-page__field span {
+  font-size: var(--dl-font-size-sm);
+}
+
+.dashboard-page__field strong {
+  font-size: var(--dl-font-size-sm);
+}
+
+.dashboard-page__pill {
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-sm);
+  color: var(--dl-color-text-muted);
+  display: inline-flex;
+  font-size: var(--dl-font-size-sm);
+  font-weight: var(--dl-font-weight-semibold);
+  line-height: 1;
+  padding: var(--dl-space-2) var(--dl-space-3);
+}
+
+.dashboard-page__pill--late,
+.dashboard-page__pill--red {
+  background: var(--dl-color-danger-background);
+  border-color: var(--dl-color-danger-border);
+  color: var(--dl-color-danger-foreground);
+}
+
+.dashboard-page__pill--due_today,
+.dashboard-page__pill--due_tomorrow,
+.dashboard-page__pill--warning,
+.dashboard-page__pill--yellow {
+  background: var(--dl-color-warning-background);
+  border-color: var(--dl-color-warning-border);
+  color: var(--dl-color-warning-foreground);
+}
+
+.dashboard-page__pill--on_time,
+.dashboard-page__pill--green {
+  background: var(--dl-color-success-background);
+  border-color: var(--dl-color-success-border);
+  color: var(--dl-color-success-foreground);
+}
+
+.dashboard-page__finance-row {
+  justify-content: flex-start;
+}
+
+.dashboard-page__finance-row span {
+  background: var(--dl-color-background-secondary);
+  border-radius: var(--dl-radius-sm);
+  padding: var(--dl-space-2) var(--dl-space-3);
+}
+
 @media (min-width: 48rem) {
   .dashboard-page__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -480,6 +617,16 @@
 
   .dashboard-page__metrics--compact {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-page__metrics--five,
+  .dashboard-page__metrics--six,
+  .dashboard-page__metrics--seven {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .dashboard-page__work-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
@@ -535,6 +682,22 @@
   }
 
   .dashboard-page__metrics--compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-page__metrics--five {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .dashboard-page__metrics--six {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .dashboard-page__metrics--seven {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .dashboard-page__columns {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

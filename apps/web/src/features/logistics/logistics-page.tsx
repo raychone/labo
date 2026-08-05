@@ -82,12 +82,16 @@ export function LogisticsPage(): ReactNode {
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   const canRead = hasPermission(permissionsQuery.data, "logistics.center.read");
   const canCreateWork = hasPermission(permissionsQuery.data, "works.create");
+  const canReadBilling = hasPermission(permissionsQuery.data, "finance.read") || hasPermission(permissionsQuery.data, "invoice.read");
   const centerQuery = useLogisticsCenter(query, canRead);
   const summaryQuery = useLogisticsSummary(query, canRead);
   const groupsQuery = useDeliveryPreparationGroups(canRead);
   const selectedQuery = useWorkLogistics(selectedWorkId, selectedWorkId !== null);
   const transition = useLogisticsTransition();
   const createGroup = useCreateDeliveryPreparationGroup();
+  const visibleCategories = canReadBilling
+    ? LOGISTICS_CENTER_CATEGORIES
+    : LOGISTICS_CENTER_CATEGORIES.filter((category) => category !== "NEFACTURATE");
 
   function setCategory(category: LogisticsCenterCategory): void {
     setQuery((current) => ({ ...current, category, page: 1 }));
@@ -137,7 +141,7 @@ export function LogisticsPage(): ReactNode {
           </CardHeader>
           <CardContent className="logistics-page__content">
             <div className="logistics-page__tabs" role="list" aria-label="Filtre rapide">
-              {LOGISTICS_CENTER_CATEGORIES.map((category) => (
+              {visibleCategories.map((category) => (
                 <button aria-pressed={(query.category ?? "ALL") === category} key={category} onClick={() => setCategory(category)} type="button">
                   {categoryLabels[category]}
                 </button>
@@ -187,7 +191,7 @@ export function LogisticsPage(): ReactNode {
             {centerQuery.isError ? <ErrorState title="Centrul operațional nu a fost încărcat" description={getErrorMessage(centerQuery.error)} /> : null}
             <div className="logistics-page__list">
               {(centerQuery.data?.items ?? []).map((item) => (
-                <WorkRow item={item} key={item.id} onOpen={() => setSelectedWorkId(item.id)} onTransition={runTransition} />
+                <WorkRow canReadBilling={canReadBilling} item={item} key={item.id} onOpen={() => setSelectedWorkId(item.id)} onTransition={runTransition} />
               ))}
             </div>
           </CardContent>
@@ -244,7 +248,17 @@ function SummaryCard({ label, onClick, value }: { readonly label: string; readon
   );
 }
 
-function WorkRow({ item, onOpen, onTransition }: { readonly item: LogisticsCenterItem; readonly onOpen: () => void; readonly onTransition: (workId: string, path: string, input: BlockWorkInput | LogisticsTransitionInput | UpdateLogisticsLocationInput) => void }): ReactNode {
+function WorkRow({
+  canReadBilling,
+  item,
+  onOpen,
+  onTransition,
+}: {
+  readonly canReadBilling: boolean;
+  readonly item: LogisticsCenterItem;
+  readonly onOpen: () => void;
+  readonly onTransition: (workId: string, path: string, input: BlockWorkInput | LogisticsTransitionInput | UpdateLogisticsLocationInput) => void;
+}): ReactNode {
   return (
     <article className="logistics-page__row">
       <button className="logistics-page__row-main" onClick={onOpen} type="button">
@@ -254,10 +268,24 @@ function WorkRow({ item, onOpen, onTransition }: { readonly item: LogisticsCente
         <span>{item.workTypeName}</span>
       </button>
       <div className="logistics-page__row-meta">
-        <PriorityBadge label={item.priority === "URGENT" ? "Urgent" : "Normal"} variant={item.priority === "URGENT" ? "urgent" : "normal"} />
-        <StatusBadge label={item.logistics.statusLabel} variant={item.logistics.status === "BLOCKED" ? "rejected" : item.logistics.status === "READY_FOR_DELIVERY" ? "delivered" : "production"} />
-        <span>Termen {formatDate(item.requestedDeliveryDate)}</span>
-        <span>{item.billing.label}</span>
+        <div>
+          <span>Prioritate</span>
+          <PriorityBadge label={item.priority === "URGENT" ? "Urgent" : "Normal"} variant={item.priority === "URGENT" ? "urgent" : "normal"} />
+        </div>
+        <div>
+          <span>Logistică</span>
+          <StatusBadge label={item.logistics.statusLabel} variant={item.logistics.status === "BLOCKED" ? "rejected" : item.logistics.status === "READY_FOR_DELIVERY" ? "delivered" : "production"} />
+        </div>
+        <div>
+          <span>Termen</span>
+          <strong>{formatDate(item.requestedDeliveryDate)}</strong>
+        </div>
+        {canReadBilling ? (
+          <div>
+            <span>Facturare</span>
+            <strong>{item.billing.label}</strong>
+          </div>
+        ) : null}
       </div>
       <div className="logistics-page__row-actions">
         {item.actions.readyForPacking ? <Button onClick={() => onTransition(item.id, "ready-for-packing", { version: item.logistics.version, workflowOverride: true })} size="small" variant="outline">De ambalat</Button> : null}

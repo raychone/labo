@@ -51,7 +51,7 @@ Implemented or substantially implemented:
 Planned or partial:
 
 - materials and inventory;
-- dashboard/status evolution beyond the implemented `/status` workspace;
+- dashboard/status evolution beyond the implemented `/status` workspace and role-composed `/dashboard` panels;
 - search;
 - reports;
 - audit UI;
@@ -59,7 +59,7 @@ Planned or partial:
 
 ## Current Status
 
-Last completed functional task: `CORE-ROLE-UX-001`, which simplified the Manager, Reception and Technician workflows using existing business rules and APIs. It added permission-aware landing panels on `/dashboard`, simplified navigation grouping, reception-oriented `/works` counters and quick filters, clearer `/status` and `/workbench` labels, and a billing manual-payment modal while keeping financial RBAC and company scoping intact.
+Last completed functional task: `ROLE-DASHBOARDS-002`, which completed the permission-composed Manager, Recepție and Tehnician dashboard compositions on `/dashboard` and tightened the operational-center presentation without changing business rules. It keeps financial RBAC and company scoping intact.
 
 Last completed documentation task: `WORKFORM-REAL-DISCOVERY-001`, which audited the real paper work sheet and produced [discovery/WORKFORM-REAL-FIELD-AUDIT.md](discovery/WORKFORM-REAL-FIELD-AUDIT.md) and [discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md). `DOCS-TOKEN-001` created the permanent token-efficient documentation system under `docs/`.
 
