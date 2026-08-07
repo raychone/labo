@@ -38,6 +38,15 @@
   grid-template-columns: 1fr;
 }
 
+.billing-page__filters-shell {
+  display: grid;
+  gap: var(--dl-space-4);
+}
+
+.billing-page__toolbar--filters {
+  align-items: center;
+}
+
 .billing-page__cards strong {
   font-size: var(--dl-font-size-section-title);
 }
@@ -158,6 +167,27 @@
 .billing-page__month-close div {
   display: flex;
   justify-content: space-between;
+}
+
+.billing-page__month-close-groups {
+  display: grid;
+  gap: var(--dl-space-3);
+}
+
+.billing-page__month-close-group {
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  display: grid;
+  gap: var(--dl-space-2);
+  padding: var(--dl-space-3);
+}
+
+.billing-page__month-close-group strong {
+  font-size: var(--dl-font-size-label);
+}
+
+.billing-page__month-close-group span {
+  color: var(--dl-color-text-muted);
 }
 
 @media (min-width: 48rem) {

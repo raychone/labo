@@ -60,7 +60,7 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | billing | BILLING-001 | COMPLETED | WORKS-001, PRICING-002 | billing workspace/payments | [modules/billing.md](modules/billing.md) |
 | billing | BILLING-002 | COMPLETED | BILLING-001 | printable docs/statements | [modules/billing.md](modules/billing.md) |
 | billing | BILLING-REALIGN-001A | COMPLETED | BILLING-001, BILLING-002, ORG-DATA-MIGRATION-001, TECH-CLAIM-001B, WORK-CYCLES-001A | company-aware billing foundation for NC and NG | [tasks/BILLING-REALIGN-001A.md](tasks/BILLING-REALIGN-001A.md) |
-| billing | BILLING-REALIGN-001B | COMPLETED | BILLING-REALIGN-001A | financial workspace, receivables and month-end UX | [tasks/BILLING-REALIGN-001B.md](tasks/BILLING-REALIGN-001B.md) |
+| billing | BILLING-REALIGN-001B | COMPLETED | BILLING-REALIGN-001A | financial workspace, receivables and month-end UX, hidden-default filters, and KPI-only manager dashboard | [tasks/BILLING-REALIGN-001B.md](tasks/BILLING-REALIGN-001B.md) |
 | billing | BILLING-REALIGN-001C | DEFERRED | BILLING-REALIGN-001B | ambiguous legacy billing correction workflow | [modules/billing.md](modules/billing.md) |
 | core UX | CORE-ROLE-UX-001 | COMPLETED | BILLING-REALIGN-001B, STATUS-001B, WORKFORM-REAL-001B, WORK-CYCLES-001B, TECH-CLAIM-001B | simplified Manager, Reception and Technician workflows | [tasks/CORE-ROLE-UX-001.md](tasks/CORE-ROLE-UX-001.md) |
 | dashboard | ROLE-DASHBOARDS-002 | COMPLETED | CORE-ROLE-UX-001 | complete distinct Manager, Reception and Technician dashboards | [tasks/ROLE-DASHBOARDS-002.md](tasks/ROLE-DASHBOARDS-002.md) |

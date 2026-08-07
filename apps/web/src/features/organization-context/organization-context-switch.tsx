@@ -159,13 +159,16 @@ function DesktopOrganizationContext({
             <Tooltip content={option.displayName} key={option.code}>
               <button
                 aria-checked={activeCode === option.code}
+                aria-label={option.code}
                 className={`organization-context__segment${activeCode === option.code ? " organization-context__segment--active" : ""}`}
                 disabled={isPending || activeCode === option.code}
                 onClick={() => onSwitch(option.code)}
+                title={option.displayName}
                 role="radio"
                 type="button"
               >
-                {option.code}
+                <span>{option.code}</span>
+                <small>{option.displayName}</small>
               </button>
             </Tooltip>
           ))}

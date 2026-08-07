@@ -145,6 +145,66 @@ describe("BillingPage", () => {
       if (url.includes("/billing/month-registry")) {
         return Promise.resolve(createJsonResponse({ currency: "RON", dateFrom: "2026-08-01", dateTo: "2026-08-31", generatedAt: "2026-08-04T00:00:00.000Z", paidMinor: 0, paidTotalMinor: 0, partialTotalMinor: 0, rows: [], totalMinor: 0, unpaidTotalMinor: 0 }));
       }
+      if (url.includes("/billing-documents") && url.includes("type=PROFORMA")) {
+        return Promise.resolve(createJsonResponse({
+          items: [{
+            balanceMinor: 35000,
+            clinicId: "clinic_1",
+            clinicName: "Clinica Test",
+            createdAt: "2026-07-22T12:00:00.000Z",
+            currency: "RON",
+            doctorId: "doctor_1",
+            doctorName: "Dr. Ana Popescu",
+            dueDate: null,
+            formattedNumber: "PF-2026-000001",
+            id: "proforma_1",
+            issueDate: "2026-07-22T12:00:00.000Z",
+            legalEntityCode: "NC",
+            legalEntityName: "Nicolaie Cristina",
+            paidMinor: 0,
+            paymentStatus: "UNPAID",
+            status: "ISSUED",
+            totalMinor: 35000,
+            type: "PROFORMA",
+            workCodes: ["WO-2026-000001"],
+            workCount: 1,
+          }],
+          page: 1,
+          pageCount: 1,
+          pageSize: 20,
+          total: 1,
+        }));
+      }
+      if (url.includes("/billing-documents") && url.includes("type=INVOICE")) {
+        return Promise.resolve(createJsonResponse({
+          items: [{
+            balanceMinor: 10000,
+            clinicId: "clinic_1",
+            clinicName: "Clinica Test",
+            createdAt: "2026-07-23T12:00:00.000Z",
+            currency: "RON",
+            doctorId: "doctor_1",
+            doctorName: "Dr. Ana Popescu",
+            dueDate: "2026-08-10T00:00:00.000Z",
+            formattedNumber: "FACT-2026-000001",
+            id: "invoice_1",
+            issueDate: "2026-07-23T12:00:00.000Z",
+            legalEntityCode: "NC",
+            legalEntityName: "Nicolaie Cristina",
+            paidMinor: 0,
+            paymentStatus: "UNPAID",
+            status: "ISSUED",
+            totalMinor: 10000,
+            type: "INVOICE",
+            workCodes: ["WO-2026-000002"],
+            workCount: 1,
+          }],
+          page: 1,
+          pageCount: 1,
+          pageSize: 20,
+          total: 1,
+        }));
+      }
       if (url.includes("/billing-documents")) {
         return Promise.resolve(createJsonResponse({ items: [], page: 1, pageCount: 1, pageSize: 20, total: 0 }));
       }
@@ -161,13 +221,20 @@ describe("BillingPage", () => {
     renderWithProviders(<BillingPage />);
 
     expect(await screen.findByRole("heading", { name: "Facturare" })).toBeDefined();
+    expect(screen.queryByLabelText("Status încasare")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Vezi filtrele" }));
     expect(await screen.findByLabelText("Status încasare")).toBeDefined();
     expect((await screen.findAllByText("Nefacturat")).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("tab", { name: "Lucrări nefacturate" }));
-    expect(await screen.findByText("WO-2026-000001")).toBeDefined();
+    expect(await screen.findByRole("checkbox", { name: "Selectează WO-2026-000001" })).toBeDefined();
     fireEvent.click(screen.getByLabelText("Selectează WO-2026-000001"));
     expect(await screen.findByText(/1 lucrări selectate/)).toBeDefined();
     expect(screen.getByRole("button", { name: "Creează proformă" })).toBeDefined();
+    fireEvent.click(screen.getByRole("tab", { name: "Proforme" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Selectează" }));
+    fireEvent.click(screen.getByRole("button", { name: "Înregistrează încasare" }));
+    fireEvent.change(screen.getByLabelText("Sumă încasată"), { target: { value: "350.00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Înregistrează încasarea" }));
     expect(screen.queryByText("Incaseaza sold")).toBeNull();
   });
 });

@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented as a permission-aware landing page for core roles. ROLE-DASHBOARDS-002 composes distinct Manager, Recepție and Tehnician panels on the existing `/dashboard` route and reuses existing read models for operational and financial summaries. Operational `/status` is implemented separately; deeper workflow analytics remain planned.
+Implemented as a permission-aware landing page for core roles. ROLE-DASHBOARDS-002 composes distinct Manager, Recepție and Tehnician panels on the existing `/dashboard` route and reuses existing read models for operational and financial summaries. Manager view is KPI-only and does not surface technician worklists. Operational `/status` is implemented separately; deeper workflow analytics remain planned.
 
 ## Purpose
 

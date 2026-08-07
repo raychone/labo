@@ -44,6 +44,8 @@ Implemented or substantially implemented:
 - logistics center and delivery preparation groups;
 - deliveries and internal proof/signature rendering;
 - billing documents, payments, statements, exports, and company-aware billing series/print views;
+- manager dashboard is KPI-only and keeps billing entry points company-scoped;
+- billing filters stay collapsed by default and expand on demand;
 - operational status read-model API and frontend `/status` workspace;
 - backend work-cycle model, active-cycle lifecycle APIs, cycle-scoped workflow/logistics/delivery history, and returned-work registration UI;
 - demo seed.

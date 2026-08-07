@@ -299,8 +299,9 @@ describe("DashboardPage", () => {
     expect(await screen.findByRole("heading", { name: "Manager" })).toBeDefined();
     expect(await screen.findByText(/NC · Nicolaie Cristina/)).toBeDefined();
     expect(await screen.findByText("Situație financiară")).toBeDefined();
+    expect(await screen.findByText("Lucrări")).toBeDefined();
     expect(screen.getAllByText("Lucrări nefacturate").length).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: "Înregistrează încasare" })).toBeDefined();
+    expect(screen.queryByText("Activitate operațională")).toBeNull();
   });
 
   it("renders manager operational content when optional finance query fails", async () => {
@@ -309,7 +310,7 @@ describe("DashboardPage", () => {
     renderWithProviders(<DashboardPage />);
 
     expect(await screen.findByRole("heading", { name: "Manager" })).toBeDefined();
-    expect(await screen.findByText("Activitate operațională")).toBeDefined();
     expect(await screen.findByText("Secțiunea nu a fost încărcată")).toBeDefined();
+    expect(screen.queryByText("Necesită atenție")).toBeNull();
   });
 });

@@ -36,7 +36,7 @@ A work cycle without an unambiguous locked execution snapshot cannot be invoiced
 
 ## UI
 
-`/billing`, with tabs for overview, billable works, proformas, invoices, payments, receivables/restanțe, month-end, statements, and series. Manual payment recording is presented in a modal for a selected invoice with outstanding balance and still records only external payment evidence. Print views remain under `/billing/documents/:id/print`, and company-scoped clinic/doctor statement print views live under `/billing/statements/:scope/print`.
+`/billing`, with tabs for overview, billable works, proformas, invoices, payments, receivables/restanțe, month-end, statements, and series. Filters start collapsed behind an explicit toggle so the page stays usable by default. Manual payment recording is presented in a modal for a selected invoice or proforma with outstanding balance; proformas are converted to invoices before payment is recorded. Print views remain under `/billing/documents/:id/print`, and company-scoped clinic/doctor statement print views live under `/billing/statements/:scope/print`.
 
 ## Audit
 

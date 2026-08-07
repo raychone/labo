@@ -222,6 +222,7 @@ export function BillingPage(): ReactNode {
   const [patientFilter, setPatientFilter] = useState("");
   const [workCodeFilter, setWorkCodeFilter] = useState("");
   const [search, setSearch] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [paymentForm, setPaymentForm] = useState<ManualPaymentFormState>(createEmptyPaymentForm(range.dateTo));
   const [selectedWorkIds, setSelectedWorkIds] = useState<readonly string[]>([]);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
@@ -245,6 +246,8 @@ export function BillingPage(): ReactNode {
   const invoiceParams: BillingListQuery = { ...baseDocumentParams, type: "INVOICE" };
   const receivablesParams: BillingListQuery = { ...baseDocumentParams, paymentFilter: paymentFilter === "ALL" ? "OUTSTANDING" : paymentFilter, type: "INVOICE" };
   const overviewQuery = useBillingOverview(overviewParams, canReadFinance);
+  const monthCloseClinicOverviewQuery = useBillingOverview({ ...overviewParams, groupBy: "clinic" }, canReadReports);
+  const monthCloseDoctorOverviewQuery = useBillingOverview({ ...overviewParams, groupBy: "doctor" }, canReadReports);
   const billableWorksQuery = useBillableWorks(billableParams, canCreateInvoice || canReadReports);
   const proformasQuery = useBillingDocuments(proformaParams, canReadInvoices);
   const invoicesQuery = useBillingDocuments(invoiceParams, canReadInvoices);
@@ -380,10 +383,14 @@ export function BillingPage(): ReactNode {
       return;
     }
     try {
-      await recordPaymentMutation.mutateAsync({
-        documentId: selectedDocument.id,
-        input,
-      });
+      let documentId = selectedDocument.id;
+      if (selectedDocument.type === "PROFORMA") {
+        const issuedDocument = selectedDocument.status === "DRAFT" ? await issueMutation.mutateAsync(selectedDocument.id) : selectedDocument;
+        const invoice = await convertMutation.mutateAsync(issuedDocument.id);
+        documentId = invoice.id;
+        setSelectedDocumentId(invoice.id);
+      }
+      await recordPaymentMutation.mutateAsync({ documentId, input });
       setPaymentForm(createEmptyPaymentForm(range.dateTo));
       toast.showToast({ message: "Încasarea a fost înregistrată manual.", variant: "success" });
     } catch (error) {
@@ -410,32 +417,42 @@ export function BillingPage(): ReactNode {
         </div>
       </section>
 
-      <section className="billing-page__filters" aria-label="Filtre facturare">
-        <DateInput label="De la" value={range.dateFrom} onChange={(event) => setRange((current) => ({ ...current, dateFrom: event.target.value }))} />
-        <DateInput label="Până la" value={range.dateTo} onChange={(event) => setRange((current) => ({ ...current, dateTo: event.target.value }))} />
-        <TextInput label="Căutare" placeholder="Caută pacient, clinică, medic, cod lucrare, factură sau chitanță" value={search} onChange={(event) => setSearch(event.target.value)} />
-        <TextInput label="Pacient" placeholder="Filtru pacient" value={patientFilter} onChange={(event) => setPatientFilter(event.target.value)} />
-        <TextInput label="Cod lucrare" placeholder="WO-2026..." value={workCodeFilter} onChange={(event) => setWorkCodeFilter(event.target.value)} />
-        <Select
-          label="Status încasare"
-          options={paymentFilterOptions}
-          value={paymentFilter}
-          onChange={(event) => setPaymentFilter(event.target.value as DocumentPaymentFilter)}
-        />
-        <Select
-          label="Grupare"
-          options={[
-            { label: "Clinică", value: "clinic" },
-            { label: "Medic", value: "doctor" },
-            { label: "Zi", value: "day" },
-            { label: "Lună", value: "month" },
-            { label: "Pacient", value: "patient" },
-            { label: "Status facturare", value: "billingStatus" },
-            { label: "Status încasare", value: "paymentStatus" },
-          ]}
-          value={groupBy}
-          onChange={(event) => setGroupBy(event.target.value)}
-        />
+      <section className="billing-page__filters-shell" aria-label="Filtre facturare">
+        <div className="billing-page__toolbar billing-page__toolbar--filters">
+          <p>Filtrele nu sunt afișate până nu le ceri.</p>
+          <Button onClick={() => setFiltersOpen((current) => !current)} variant="secondary">
+            {filtersOpen ? "Ascunde filtrele" : "Vezi filtrele"}
+          </Button>
+        </div>
+        {filtersOpen ? (
+          <section className="billing-page__filters" aria-label="Filtre facturare">
+            <DateInput label="De la" value={range.dateFrom} onChange={(event) => setRange((current) => ({ ...current, dateFrom: event.target.value }))} />
+            <DateInput label="Până la" value={range.dateTo} onChange={(event) => setRange((current) => ({ ...current, dateTo: event.target.value }))} />
+            <TextInput label="Căutare" placeholder="Caută pacient, clinică, medic, cod lucrare, factură sau chitanță" value={search} onChange={(event) => setSearch(event.target.value)} />
+            <TextInput label="Pacient" placeholder="Filtru pacient" value={patientFilter} onChange={(event) => setPatientFilter(event.target.value)} />
+            <TextInput label="Cod lucrare" placeholder="WO-2026..." value={workCodeFilter} onChange={(event) => setWorkCodeFilter(event.target.value)} />
+            <Select
+              label="Status încasare"
+              options={paymentFilterOptions}
+              value={paymentFilter}
+              onChange={(event) => setPaymentFilter(event.target.value as DocumentPaymentFilter)}
+            />
+            <Select
+              label="Grupare"
+              options={[
+                { label: "Clinică", value: "clinic" },
+                { label: "Medic", value: "doctor" },
+                { label: "Zi", value: "day" },
+                { label: "Lună", value: "month" },
+                { label: "Pacient", value: "patient" },
+                { label: "Status facturare", value: "billingStatus" },
+                { label: "Status încasare", value: "paymentStatus" },
+              ]}
+              value={groupBy}
+              onChange={(event) => setGroupBy(event.target.value)}
+            />
+          </section>
+        ) : null}
       </section>
 
       {overviewQuery.isLoading ? <LoadingState text="Se încarcă situația financiară" /> : null}
@@ -488,7 +505,7 @@ export function BillingPage(): ReactNode {
             label: "Proforme",
             content: (
               <DocumentsTab
-                canRecordPayment={false}
+                canRecordPayment
                 currency={currency}
                 documents={proformasQuery.data?.items ?? []}
                 error={proformasQuery.error}
@@ -611,10 +628,12 @@ export function BillingPage(): ReactNode {
             id: "month-close",
             label: "Închidere lună",
             content: <MonthCloseTab
+              clinicOverview={monthCloseClinicOverviewQuery.data}
               overview={overviewQuery.data}
               registry={monthRegistryQuery.data}
               currency={currency}
               locale={locale}
+              doctorOverview={monthCloseDoctorOverviewQuery.data}
               onExportRegistry={async () => {
                 try {
                   downloadCsv("registru-lunar-facturare.csv", await downloadMonthRegistryCsv(overviewParams));
@@ -951,7 +970,7 @@ function DocumentsTab({
     { id: "payment", header: "Încasare", renderCell: (document) => toPaymentStatusLabel(document.paymentStatus) },
     { id: "balance", header: "Sold restant", align: "right", renderCell: (document) => formatMoneyMinor(document.balanceMinor, document.currency, locale) },
   ], [locale]);
-  const canUsePaymentForm = Boolean(selectedDocument && selectedDocument.type === "INVOICE" && selectedDocument.status !== "CANCELLED" && selectedDocument.balanceMinor > 0);
+  const canUsePaymentForm = Boolean(selectedDocument && selectedDocument.status !== "CANCELLED" && selectedDocument.balanceMinor > 0);
 
   return (
     <section className="billing-page__tab">
@@ -1072,7 +1091,23 @@ function ReceivablesTab({
   );
 }
 
-function MonthCloseTab({ currency, locale, onExportRegistry, overview, registry }: { readonly currency: string; readonly locale: string; readonly onExportRegistry: () => void; readonly overview: BillingOverview | undefined; readonly registry: MonthEndRegistry | undefined }): ReactNode {
+function MonthCloseTab({
+  clinicOverview,
+  currency,
+  doctorOverview,
+  locale,
+  onExportRegistry,
+  overview,
+  registry,
+}: {
+  readonly clinicOverview: BillingOverview | undefined;
+  readonly currency: string;
+  readonly doctorOverview: BillingOverview | undefined;
+  readonly locale: string;
+  readonly onExportRegistry: () => void;
+  readonly overview: BillingOverview | undefined;
+  readonly registry: MonthEndRegistry | undefined;
+}): ReactNode {
   if (!overview) {
     return <LoadingState text="Se încarcă închiderea lunii" />;
   }
@@ -1093,21 +1128,47 @@ function MonthCloseTab({ currency, locale, onExportRegistry, overview, registry 
         </div>
       ) : null}
       <div className="billing-page__month-close">
-        {overview.groups.map((group) => (
-          <Card key={group.key}>
-            <CardHeader><CardTitle>{group.label}</CardTitle><CardDescription>{group.count} lucrări</CardDescription></CardHeader>
-            <CardContent>
+        <MonthCloseGroupPanel title="Clinici" overview={clinicOverview ?? overview} currency={currency} locale={locale} />
+        <MonthCloseGroupPanel title="Medici" overview={doctorOverview ?? overview} currency={currency} locale={locale} />
+      </div>
+    </section>
+  );
+}
+
+function MonthCloseGroupPanel({
+  currency,
+  locale,
+  overview,
+  title,
+}: {
+  readonly currency: string;
+  readonly locale: string;
+  readonly overview: BillingOverview;
+  readonly title: string;
+}): ReactNode {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{overview.groups.length} grupuri</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="billing-page__month-close-groups">
+          {overview.groups.map((group) => (
+            <article className="billing-page__month-close-group" key={group.key}>
+              <strong>{group.label}</strong>
+              <span>{group.count} lucrări</span>
               <dl>
                 <div><dt>Nefacturat</dt><dd>{formatMoneyMinor(group.uninvoicedMinor, currency, locale)}</dd></div>
                 <div><dt>Facturat</dt><dd>{formatMoneyMinor(group.invoicedMinor, currency, locale)}</dd></div>
                 <div><dt>Încasat manual</dt><dd>{formatMoneyMinor(group.paidMinor, currency, locale)}</dd></div>
                 <div><dt>Sold restant</dt><dd>{formatMoneyMinor(group.balanceMinor, currency, locale)}</dd></div>
               </dl>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </section>
+            </article>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

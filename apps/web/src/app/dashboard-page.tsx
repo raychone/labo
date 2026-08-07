@@ -85,7 +85,6 @@ export function DashboardPage(): ReactNode {
   const canReadOperational = canReadWorks || canReadAssignedWorks;
   const canScanWork = permissionKeys.includes("scan.use");
   const canReadBilling = permissionKeys.includes("finance.read") || permissionKeys.includes("invoice.read");
-  const canRecordPayment = permissionKeys.includes("finance.record_payment");
   const canReadTechnician = permissionKeys.includes("technician.workbench.read");
   const canReadAvailable = permissionKeys.includes("works.claim.available.read");
   const canReadOwnClaims = permissionKeys.includes("works.claim.own.read");
@@ -117,9 +116,23 @@ export function DashboardPage(): ReactNode {
   const operationalTodayQuery = useOperationalStatus(operationalQuery("TODAY", 8), canReadOperational);
   const operationalLateQuery = useOperationalStatus(operationalQuery("LATE", 8), canReadOperational);
   const operationalReturnedQuery = useOperationalStatus(operationalQuery("RETURNED", 8), canReadOperational);
-  const operationalInProgressQuery = useOperationalStatus(operationalQuery("IN_PROGRESS", 8), canReadOperational);
   const availableWorksQuery = useAvailableWorksForClaim(claimListParams, canReadAvailable);
   const myClaimedWorksQuery = useMyClaimedWorks(claimListParams, canReadOwnClaims);
+  const allWorksQuery = useWorks({
+    clinicId: undefined,
+    dateFrom: undefined,
+    dateTo: undefined,
+    deadlineFilter: undefined,
+    doctorId: undefined,
+    page: 1,
+    pageSize: 1,
+    priority: undefined,
+    search: undefined,
+    sortBy: "createdAt",
+    sortDirection: "desc",
+    status: undefined,
+    workTypeId: undefined,
+  }, canReadWorks);
   const technicianWorkbenchQuery = useTechnicianWorkbench({
     page: 1,
     pageSize: shortListSize,
@@ -191,9 +204,9 @@ export function DashboardPage(): ReactNode {
       {isManagerWorkspace ? (
         <ManagerDashboard
           activeCompanyLabel={activeCompanyLabel}
+          allWorksTotal={allWorksQuery.data?.total}
           billing={billingOverviewQuery.data}
           canReadBilling={canReadBilling}
-          canRecordPayment={canRecordPayment}
           counters={{
             inProgress: getCounter(operationalCounters, "IN_PROGRESS"),
             late: getCounter(operationalCounters, "LATE"),
@@ -205,11 +218,8 @@ export function DashboardPage(): ReactNode {
             ]),
             unassigned: getCounter(operationalCounters, "AVAILABLE"),
           }}
-          inProgressRows={operationalInProgressQuery.data?.items ?? []}
           isBillingError={billingOverviewQuery.isError}
           isBillingLoading={billingOverviewQuery.isLoading}
-          lateRows={operationalLateQuery.data?.items ?? []}
-          returnedRows={operationalReturnedQuery.data?.items ?? []}
         />
       ) : null}
 
@@ -524,20 +534,17 @@ function ReceptionDashboard({
 
 function ManagerDashboard({
   activeCompanyLabel,
+  allWorksTotal,
   billing,
   canReadBilling,
-  canRecordPayment,
   counters,
-  inProgressRows,
   isBillingError,
   isBillingLoading,
-  lateRows,
-  returnedRows,
 }: {
   readonly activeCompanyLabel: string;
+  readonly allWorksTotal: number | undefined;
   readonly billing: { readonly currency: string; readonly outstandingMinor: number; readonly overdueInvoiceCount: number; readonly partialInvoiceCount: number; readonly totalIssuedMinor: number; readonly paidMinor: number; readonly uninvoicedWorkCount: number; readonly unpaidInvoiceCount: number } | undefined;
   readonly canReadBilling: boolean;
-  readonly canRecordPayment: boolean;
   readonly counters: {
     readonly inProgress: number | undefined;
     readonly late: number | undefined;
@@ -546,14 +553,10 @@ function ManagerDashboard({
     readonly sheets: number | undefined;
     readonly unassigned: number | undefined;
   };
-  readonly inProgressRows: readonly OperationalStatusRow[];
   readonly isBillingError: boolean;
   readonly isBillingLoading: boolean;
-  readonly lateRows: readonly OperationalStatusRow[];
-  readonly returnedRows: readonly OperationalStatusRow[];
 }): ReactNode {
   const currency = billing?.currency ?? "RON";
-  const attentionItems = [...lateRows.slice(0, 4), ...returnedRows.slice(0, 4)].filter((item, index, list) => list.findIndex((candidate) => candidate.id === item.id) === index);
   return (
     <div className="dashboard-page__workspace" aria-labelledby="manager-dashboard-title">
       <div className="dashboard-page__workspace-header">
@@ -564,16 +567,13 @@ function ManagerDashboard({
         <div className="dashboard-page__actions">
           <DashboardAction label="Vezi statusul" to="/status" variant="primary" />
           {canReadBilling ? <DashboardAction label="Facturare" to="/billing" /> : null}
-          {canReadBilling ? <DashboardAction label="Lucrări nefacturate" to="/billing" /> : null}
-          {canRecordPayment ? <DashboardAction label="Înregistrează încasare" to="/billing" /> : null}
-          {canReadBilling ? <DashboardAction label="Vezi restanțele" to="/billing" /> : null}
         </div>
       </div>
       <div className="dashboard-page__metrics dashboard-page__metrics--seven">
-        <SummaryMetricCard label="Lucrări înregistrate astăzi" to="/works" value={counters.registeredToday} />
-        <SummaryMetricCard label="În producție" to="/status?tab=IN_PROGRESS" value={counters.inProgress} />
-        <SummaryMetricCard label="Neasignate" to="/status?tab=AVAILABLE" value={counters.unassigned} />
+        <SummaryMetricCard label="Lucrări" to="/status" value={allWorksTotal ?? counters.registeredToday} />
+        <SummaryMetricCard label="În lucru" to="/status?tab=IN_PROGRESS" value={counters.inProgress} />
         <SummaryMetricCard label="Întârziate" to="/status?tab=LATE" value={counters.late} />
+        <SummaryMetricCard label="Neasignate" to="/status?tab=AVAILABLE" value={counters.unassigned} />
         <SummaryMetricCard label="Revenite" to="/status?tab=RETURNED" value={counters.returned} />
         <SummaryMetricCard label="Fișe incomplete" to="/status?sheetStatus=IN_PROGRESS" value={counters.sheets} />
       </div>
@@ -586,16 +586,6 @@ function ManagerDashboard({
           <SummaryMetricCard label="Sold restant" to="/billing" value={billing ? formatMoneyMinor(billing.outstandingMinor, currency, "ro-RO") : undefined} />
         </div>
       ) : null}
-      <div className="dashboard-page__columns">
-        <DashboardSection title="Necesită atenție" description="Operațional separat de financiar.">
-          <AttentionList items={attentionItems} />
-          {canReadBilling ? <p className="dashboard-page__note">Financiar: {billing?.uninvoicedWorkCount ?? "..."} lucrări nefacturate și {billing?.overdueInvoiceCount ?? "..."} facturi restante.</p> : null}
-        </DashboardSection>
-        <DashboardSection title="Activitate operațională" description="Stage, progres, tehnician, termen, NC/NG și ciclu.">
-          {inProgressRows.length === 0 ? <DashboardEmptyState description="Nu există activitate în producție în lista curentă." title="Fără lucrări în producție" /> : null}
-          {inProgressRows.slice(0, shortListSize).map((row) => <OperationalPreviewCard key={row.id} actionLabel="Deschide lucrarea" row={row} />)}
-        </DashboardSection>
-      </div>
       {canReadBilling ? (
         <DashboardSection title="Situație financiară" description="Date filtrate de firma activă NC/NG.">
           <SectionState error={isBillingError} isLoading={isBillingLoading} text="Se încarcă situația financiară" />

@@ -254,12 +254,28 @@
 .organization-context__segment {
   background: var(--dl-color-surface);
   border: var(--dl-border-width) solid var(--dl-color-border-strong);
-  border-radius: var(--dl-radius-md);
+  border-radius: 9999px;
   color: var(--dl-color-text);
   cursor: pointer;
   font: inherit;
   font-weight: var(--dl-font-weight-bold);
-  min-height: 2.5rem;
+  min-height: 3rem;
+  padding: var(--dl-space-2) var(--dl-space-3);
+  text-align: left;
+}
+
+.organization-context__segment span,
+.organization-context__segment small {
+  display: block;
+}
+
+.organization-context__segment span {
+  font-size: var(--dl-font-size-label);
+}
+
+.organization-context__segment small {
+  color: var(--dl-color-text-muted);
+  font-weight: var(--dl-font-weight-normal);
 }
 
 .organization-context__segment:hover:not(:disabled),
@@ -267,6 +283,10 @@
   background: color-mix(in srgb, var(--app-brand-primary) 12%, var(--dl-color-surface));
   border-color: var(--app-brand-primary);
   color: var(--app-brand-primary);
+}
+
+.organization-context__segment--active small {
+  color: inherit;
 }
 
 .organization-context__segment:disabled {

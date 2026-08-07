@@ -9,7 +9,9 @@ Implemented in the application. `BILLING-REALIGN-001C` remains planned and was n
 Delivered scope:
 
 - company-scoped manager billing workspace;
+- manager dashboard KPI view with company-scoped billing entry points only;
 - billing overview counters and tabs;
+- billing filters collapsed by default behind an explicit toggle;
 - billable works filters and selection;
 - proformas, invoices, manual payment recording, receivables/restanțe;
 - clinic and doctor statements with printable browser views;
