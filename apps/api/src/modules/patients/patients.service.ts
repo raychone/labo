@@ -28,7 +28,7 @@ interface ActorContext {
 
 type AuditClient = Pick<Prisma.TransactionClient, "auditLog"> | Pick<PrismaService, "auditLog">;
 
-const PATIENT_MUTATION_FIELDS = ["birthDate", "firstName", "lastName", "notes", "sex"] as const satisfies readonly (keyof UpdatePatientDto)[];
+const PATIENT_MUTATION_FIELDS = ["birthDate", "clinicId", "doctorId", "firstName", "lastName", "notes", "sex"] as const satisfies readonly (keyof UpdatePatientDto)[];
 const DEFAULT_PATIENT_PAGE = 1;
 const DEFAULT_PATIENT_PAGE_SIZE = 20;
 const DEFAULT_PATIENT_OPTION_LIMIT = 10;
@@ -99,7 +99,7 @@ export class PatientsService {
   }
 
   public async getPatient(patientId: string, actions: PatientAccessActions): Promise<PatientDetailView> {
-    const patient = await this.findPatientOrThrow(patientId);
+    const patient = await this.findPatientDetailOrThrow(patientId);
     const works = await this.findPatientWorks(patientId, {});
     const aggregate = (await this.getAggregates([patientId])).get(patientId) ?? emptyAggregate();
 
@@ -136,11 +136,14 @@ export class PatientsService {
   public async createPatient(context: ActorContext, dto: CreatePatientDto): Promise<PatientDetailView> {
     const normalized = normalizePatientName(dto.firstName, dto.lastName);
     const patient = await this.prisma.$transaction(async (tx) => {
+      await this.validateReferral(tx, dto.clinicId ?? null, dto.doctorId ?? null);
       const created = await tx.patient.create({
         data: {
           birthDate: dto.birthDate ? parseDateOnly(dto.birthDate) : null,
           createdByUserId: context.actorUserId,
+          clinicId: dto.clinicId ?? null,
           firstName: dto.firstName,
+          doctorId: dto.doctorId ?? null,
           lastName: dto.lastName,
           normalizedFirstName: normalized.firstName,
           normalizedLastName: normalized.lastName,
@@ -169,6 +172,8 @@ export class PatientsService {
     if (before.isArchived) {
       throw new BadRequestException("Pacientul arhivat trebuie restaurat înainte de editare.");
     }
+    const nextClinicId = dto.clinicId !== undefined ? dto.clinicId : before.clinicId;
+    const nextDoctorId = dto.doctorId !== undefined ? dto.doctorId : before.doctorId;
 
     const data = this.toUpdateData(dto, context.actorUserId, before);
     if (Object.keys(data).length <= 2) {
@@ -176,6 +181,7 @@ export class PatientsService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      await this.validateReferral(tx, nextClinicId, nextDoctorId);
       const after = await tx.patient.update({
         data,
         where: {
@@ -275,6 +281,34 @@ export class PatientsService {
 
   private async findPatientOrThrow(patientId: string): Promise<PatientRecord> {
     const patient = await this.prisma.patient.findUnique({
+      where: {
+        id: patientId,
+      },
+    });
+
+    if (!patient) {
+      throw new NotFoundException("Pacientul nu a fost găsit.");
+    }
+
+    return patient;
+  }
+
+  private async findPatientDetailOrThrow(patientId: string): Promise<PatientRecord & { readonly clinic: { readonly id: string; readonly name: string } | null; readonly doctor: { readonly displayName: string; readonly id: string } | null }> {
+    const patient = await this.prisma.patient.findUnique({
+      include: {
+        clinic: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        doctor: {
+          select: {
+            displayName: true,
+            id: true,
+          },
+        },
+      },
       where: {
         id: patientId,
       },
@@ -449,6 +483,9 @@ export class PatientsService {
         case "birthDate":
           data.birthDate = value === null ? null : parseDateOnly(value);
           break;
+        case "clinicId":
+          data.clinicId = value ?? null;
+          break;
         case "firstName":
           if (typeof value === "string") {
             data.firstName = value;
@@ -461,6 +498,9 @@ export class PatientsService {
             data.normalizedLastName = normalized.lastName;
           }
           break;
+        case "doctorId":
+          data.doctorId = value ?? null;
+          break;
         case "notes":
           data.notes = value;
           break;
@@ -471,6 +511,28 @@ export class PatientsService {
     }
 
     return data;
+  }
+
+  private async validateReferral(client: Prisma.TransactionClient | PrismaService, clinicId: string | null | undefined, doctorId: string | null | undefined): Promise<void> {
+    if (clinicId !== undefined && clinicId !== null) {
+      const clinic = await client.clinic.findFirst({ select: { id: true }, where: { id: clinicId, isActive: true } });
+      if (!clinic) {
+        throw new BadRequestException("Clinica selectată nu este activă.");
+      }
+    }
+
+    if (doctorId !== undefined && doctorId !== null) {
+      const doctor = await client.doctor.findFirst({
+        select: { clinicId: true, id: true },
+        where: { id: doctorId, isActive: true },
+      });
+      if (!doctor) {
+        throw new BadRequestException("Medicul selectat nu este activ.");
+      }
+      if (clinicId !== undefined && clinicId !== null && doctor.clinicId !== clinicId) {
+        throw new BadRequestException("Medicul selectat nu aparține clinicii alese.");
+      }
+    }
   }
 
   private getChangedFields(before: PatientRecord, after: PatientRecord): readonly string[] {

@@ -78,11 +78,13 @@ export interface PatientAggregate {
 
 export interface PatientRecord {
   readonly archivedAt: Date | null;
+  readonly clinicId: string | null;
   readonly birthDate: Date | null;
   readonly createdAt: Date;
   readonly firstName: string;
   readonly id: string;
   readonly isArchived: boolean;
+  readonly doctorId: string | null;
   readonly lastName: string;
   readonly notes: string | null;
   readonly sex: PatientSex;
@@ -108,7 +110,9 @@ export interface PatientSummaryView extends PatientNameView {
   readonly activeWorks: number;
   readonly birthDate: string | null;
   readonly createdAt: string;
+  readonly clinic: { readonly id: string; readonly name: string } | null;
   readonly isArchived: boolean;
+  readonly doctor: { readonly displayName: string; readonly id: string } | null;
   readonly lastClinic: { readonly id: string; readonly name: string } | null;
   readonly lastDoctor: { readonly displayName: string; readonly id: string } | null;
   readonly lastWorkDate: string | null;
@@ -210,7 +214,9 @@ export function toPatientSummaryView(patient: PatientRecord, aggregate: PatientA
     activeWorks: aggregate.activeWorks,
     birthDate: patient.birthDate?.toISOString().slice(0, 10) ?? null,
     createdAt: patient.createdAt.toISOString(),
+    clinic: null,
     isArchived: patient.isArchived,
+    doctor: null,
     lastClinic: aggregate.lastClinic,
     lastDoctor: aggregate.lastDoctor,
     lastWorkDate: aggregate.lastWorkDate?.toISOString() ?? null,
@@ -231,7 +237,7 @@ export function toPatientOptionView(
 }
 
 export function toPatientDetailView(
-  patient: PatientRecord,
+  patient: PatientRecord & { readonly clinic: { readonly id: string; readonly name: string } | null; readonly doctor: { readonly displayName: string; readonly id: string } | null },
   aggregate: PatientAggregate,
   works: readonly PatientWorkRecord[],
   actions: PatientAccessActions,
@@ -245,6 +251,8 @@ export function toPatientDetailView(
     overview: {
       ...toPatientSummaryView(patient, aggregate),
       archivedAt: patient.archivedAt?.toISOString() ?? null,
+      clinic: patient.clinic,
+      doctor: patient.doctor,
       notes: patient.notes,
       updatedAt: patient.updatedAt.toISOString(),
     },

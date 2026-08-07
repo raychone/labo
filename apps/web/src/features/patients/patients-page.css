@@ -15,6 +15,11 @@
   justify-content: space-between;
 }
 
+.patients-page__drawer-actions {
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
 .patients-page__filters,
 .patients-page__form-grid {
   display: grid;
@@ -56,6 +61,25 @@
 .patients-page__tabs button[aria-selected="true"] {
   background: var(--dl-color-primary);
   color: var(--dl-color-primary-contrast);
+}
+
+.patients-page__link-button {
+  align-items: center;
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-sm);
+  color: var(--dl-color-primary);
+  display: inline-flex;
+  font: inherit;
+  font-weight: var(--dl-font-weight-semibold);
+  min-height: 40px;
+  padding: var(--dl-space-2) var(--dl-space-3);
+  text-decoration: none;
+}
+
+.patients-page__link-button:focus,
+.patients-page__link-button:hover {
+  background: var(--dl-color-primary-soft);
+  border-color: var(--dl-color-primary);
 }
 
 @media (min-width: 760px) {

@@ -36,6 +36,7 @@ import {
   type CreateWorkInput,
   type LegalEntityCode,
   type PatientOption,
+  type PatientDetail,
   type RealLabSheetOperationalStatus,
   type RealLabSheetView,
   type TechnicianOption,
@@ -55,7 +56,7 @@ import { Link, useSearchParams } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
 import { fetchClinicOptions, fetchDoctorOptions } from "../clinics/clinics-api.js";
-import { useCreatePatient, usePatientOptions } from "../patients/patients-api.js";
+import { fetchPatient, useCreatePatient, usePatientOptions } from "../patients/patients-api.js";
 import { patientFormSchema, type PatientFormValues } from "../patients/patients-page.schema.js";
 import { useSettings } from "../settings/settings-api.js";
 import { hasPermission } from "../users/users-api.js";
@@ -343,7 +344,10 @@ export function WorksPage(): ReactNode {
   const [params, setParams] = useState<WorksListParams>(defaultListParams);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const initialPatientId = searchParams.get("patientId");
+  const initialClinicId = searchParams.get("clinicId");
+  const initialDoctorId = searchParams.get("doctorId");
+  const [isCreateOpen, setIsCreateOpen] = useState(initialPatientId !== null || initialClinicId !== null || initialDoctorId !== null);
   const [qrWorkId, setQrWorkId] = useState<string | null>(null);
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   const canRead = hasPermission(permissionsQuery.data, "works.read_all")
@@ -372,6 +376,12 @@ export function WorksPage(): ReactNode {
   const settingsQuery = useSettings(canReadPricing);
   const createMutation = useCreateWork();
   const updateMutation = useUpdateWork();
+  const initialPatientQuery = useQuery({
+    enabled: isCreateOpen && initialPatientId !== null,
+    queryFn: () => fetchPatient(initialPatientId ?? ""),
+    queryKey: ["patients", "detail", "works-create", initialPatientId],
+    retry: false,
+  });
   const currency = settingsQuery.data?.currency ?? "RON";
   const locale = settingsQuery.data?.locale ?? "ro-RO";
   const selectedWork = selectedWorkQuery.data;
@@ -634,6 +644,10 @@ export function WorksPage(): ReactNode {
         clinicOptions={clinicOptionsQuery.data ?? []}
         formWorkTypeOptions={formWorkTypeOptionsQuery.data ?? []}
         isOpen={isCreateOpen}
+        initialClinicId={initialClinicId ?? undefined}
+        initialDoctorId={initialDoctorId ?? undefined}
+        initialPatient={initialPatientQuery.data}
+        initialPatientId={initialPatientId ?? undefined}
         pricingWorkTypeOptions={pricingWorkTypeOptionsQuery.data ?? []}
         isSaving={createMutation.isPending}
         onOpenChange={setIsCreateOpen}
@@ -689,6 +703,10 @@ function CreateWorkModal({
   clinicOptions,
   formWorkTypeOptions,
   currency,
+  initialClinicId,
+  initialDoctorId,
+  initialPatient,
+  initialPatientId,
   isOpen,
   isSaving,
   locale,
@@ -700,6 +718,10 @@ function CreateWorkModal({
   readonly clinicOptions: readonly { readonly code: string; readonly id: string; readonly name: string }[];
   readonly currency: string;
   readonly formWorkTypeOptions: readonly { readonly code: string; readonly id: string; readonly name: string; readonly unit: string }[];
+  readonly initialClinicId: string | undefined;
+  readonly initialDoctorId: string | undefined;
+  readonly initialPatient: PatientDetail | undefined;
+  readonly initialPatientId: string | undefined;
   readonly isOpen: boolean;
   readonly isSaving: boolean;
   readonly locale: string;
@@ -739,12 +761,32 @@ function CreateWorkModal({
   });
   const activeTemplateQuery = useActiveWorkFormTemplate(selectedWorkTypeId || undefined, isOpen && selectedWorkTypeId !== "");
   const submitDisabled = activeTemplateQuery.isLoading || activeTemplateQuery.isError;
+  const patientOptions = useMemo(() => mergePatientOptions(patientOptionsQuery.data ?? [], initialPatient?.overview ?? null), [initialPatient, patientOptionsQuery.data]);
 
   useEffect(() => {
     if (!isOpen) {
       form.reset(defaultWorkFormValues);
     }
   }, [form, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    if (initialPatientId) {
+      form.setValue("patientId", initialPatientId, { shouldDirty: false, shouldValidate: true });
+    }
+    if (initialClinicId) {
+      form.setValue("clinicId", initialClinicId, { shouldDirty: false, shouldValidate: true });
+    } else if (initialPatient?.overview.clinic?.id) {
+      form.setValue("clinicId", initialPatient.overview.clinic.id, { shouldDirty: false, shouldValidate: true });
+    }
+    if (initialDoctorId) {
+      form.setValue("doctorId", initialDoctorId, { shouldDirty: false, shouldValidate: true });
+    } else if (initialPatient?.overview.doctor?.id) {
+      form.setValue("doctorId", initialPatient.overview.doctor.id, { shouldDirty: false, shouldValidate: true });
+    }
+  }, [form, initialClinicId, initialDoctorId, initialPatient, initialPatientId, isOpen]);
 
   useEffect(() => {
     form.setValue("workFormValues", {}, { shouldDirty: form.formState.isDirty, shouldValidate: false });
@@ -790,7 +832,7 @@ function CreateWorkModal({
           deadlinePreview={deadlinePreviewQuery.data ?? null}
           isDeadlinePreviewLoading={deadlinePreviewQuery.isFetching}
           workTypeOptions={formWorkTypeOptions}
-          patientOptions={patientOptionsQuery.data ?? []}
+          patientOptions={patientOptions}
         />
       </Modal>
       <QuickPatientModal
@@ -1805,16 +1847,20 @@ function PageState({ children }: { readonly children: ReactNode }): ReactNode {
 
 const quickPatientDefaults: PatientFormValues = {
   birthDate: null,
+  clinicId: "",
   firstName: "",
   lastName: "",
+  doctorId: "",
   notes: null,
   sex: "UNSPECIFIED",
 };
 
 const quickPatientLabels: Record<keyof PatientFormValues, string> = {
   birthDate: "Data nașterii",
+  clinicId: "Clinică",
   firstName: "Prenume",
   lastName: "Nume",
+  doctorId: "Medic",
   notes: "Note limitate",
   sex: "Sex",
 };
@@ -1883,7 +1929,7 @@ function QuickPatientModal({
   );
 }
 
-function mergePatientOptions(options: readonly PatientOption[], selected: WorkSummary["patient"]): readonly PatientOption[] {
+function mergePatientOptions(options: readonly PatientOption[], selected: { readonly birthDate?: string | null; readonly firstName: string; readonly fullName: string; readonly id: string; readonly lastName: string } | null): readonly PatientOption[] {
   if (!selected || options.some((option) => option.id === selected.id)) {
     return options;
   }

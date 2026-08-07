@@ -193,6 +193,8 @@ model LegalEntitySettings {
 
 model Patient {
   id                  String      @id @default(cuid())
+  clinicId            String?     @map("clinic_id")
+  doctorId            String?     @map("doctor_id")
   firstName           String      @map("first_name") @db.VarChar(80)
   lastName            String      @map("last_name") @db.VarChar(80)
   normalizedFirstName String      @map("normalized_first_name") @db.VarChar(80)
@@ -210,10 +212,14 @@ model Patient {
   version             Int         @default(1)
   archivedBy          User?       @relation("PatientArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
   createdBy           User?       @relation("PatientCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  clinic              Clinic?     @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+  doctor              Doctor?     @relation(fields: [doctorId], references: [id], onDelete: SetNull)
   updatedBy           User?       @relation("PatientUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   workOrders          WorkOrder[]
 
   @@index([normalizedLastName, normalizedFirstName])
+  @@index([clinicId])
+  @@index([doctorId])
   @@index([isArchived])
   @@index([createdAt])
   @@index([createdByUserId])
@@ -277,6 +283,7 @@ model Clinic {
   archivedBy                User?                      @relation("ClinicArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
   deliveryPreparationGroups DeliveryPreparationGroup[]
   deliveries                Delivery[]
+  patients                  Patient[]
 
   @@index([name])
   @@index([city])
@@ -309,6 +316,7 @@ model Doctor {
   workCycles        WorkCycle[]
   billingDocuments  BillingDocument[]
   pricingAgreements PricingAgreement[]
+  patients          Patient[]
 
   @@index([clinicId])
   @@index([clinicId, isActive])

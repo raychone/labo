@@ -133,19 +133,17 @@
   gap: var(--dl-space-1);
 }
 
-.status-page__owner-line {
-  display: inline-flex;
-  gap: var(--dl-space-2);
-  align-items: center;
-}
-
-.status-page__color-dot {
-  border-radius: 999px;
+.status-page__technician-badge {
+  border-radius: var(--dl-radius-sm);
   box-shadow: inset 0 0 0 1px var(--dl-color-border);
   display: inline-block;
   flex: 0 0 auto;
-  height: 12px;
-  width: 12px;
+  height: 18px;
+  width: 64px;
+}
+
+.status-page__technician-badge--empty {
+  background: var(--dl-color-surface-muted);
 }
 
 .status-page__deadline {
@@ -278,6 +276,12 @@
   display: flex;
   justify-content: flex-start;
   margin-top: var(--dl-space-2);
+}
+
+.status-page__row-actions {
+  display: grid;
+  gap: var(--dl-space-2);
+  justify-items: start;
 }
 
 @media (min-width: 720px) {

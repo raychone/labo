@@ -143,11 +143,11 @@ describe("StatusPage", () => {
     renderWithProviders(<StatusPage />);
 
     expect(await screen.findByRole("heading", { name: "Status" })).toBeDefined();
-    expect((await screen.findAllByText("Tehnician Ana")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Maria Ionescu").length).toBeGreaterThan(0);
     expect(screen.getAllByText("1/4").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Ceramică").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Urgent").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Tehnician Ana")).toBeNull();
     expect(screen.getByText(/rezultate limitate la 1000/)).toBeDefined();
     expect(screen.queryByText(/120,00|RON|factură|preț/i)).toBeNull();
   });
@@ -158,7 +158,7 @@ describe("StatusPage", () => {
 
     renderWithProviders(<StatusPage />, ["/status?tab=LATE&search=Maria&sortBy=workCode&sortDirection=desc"]);
 
-    await screen.findAllByText("Tehnician Ana");
+    await waitFor(() => expect(screen.getAllByText("Maria Ionescu").length).toBeGreaterThan(0));
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/status/operational?"), expect.anything());
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("tab=LATE"), expect.anything());
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("search=Maria"), expect.anything());

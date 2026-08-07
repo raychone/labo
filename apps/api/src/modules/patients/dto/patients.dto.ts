@@ -183,6 +183,16 @@ export class PatientMutationDto {
   @IsString()
   @MaxLength(1000)
   public readonly notes?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  public readonly clinicId?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  public readonly doctorId?: string | null;
 }
 
 export class CreatePatientDto extends PatientMutationDto {

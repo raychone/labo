@@ -27,7 +27,7 @@ import { formatPatientSex, type PatientDetail, type PatientSortField, type Patie
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router";
-import { useForm } from "react-hook-form";
+import { useForm, type UseFormReturn } from "react-hook-form";
 
 import { fetchPermissions } from "../auth/auth-api.js";
 import { fetchClinicOptions, fetchDoctorOptions } from "../clinics/clinics-api.js";
@@ -55,16 +55,20 @@ const defaultParams: PatientsListParams = {
 
 const defaultPatientValues: PatientFormValues = {
   birthDate: null,
+  clinicId: "",
   firstName: "",
   lastName: "",
+  doctorId: "",
   notes: null,
   sex: "UNSPECIFIED",
 };
 
 const patientFieldLabels: Record<keyof PatientFormValues, string> = {
   birthDate: "Data nașterii",
+  clinicId: "Clinică",
   firstName: "Prenume",
   lastName: "Nume",
+  doctorId: "Medic",
   notes: "Note limitate",
   sex: "Sex",
 };
@@ -91,8 +95,10 @@ function toPatientFormValues(patient: PatientDetail | undefined): PatientFormVal
 
   return {
     birthDate: patient.overview.birthDate,
+    clinicId: patient.overview.clinic?.id ?? "",
     firstName: patient.overview.firstName,
     lastName: patient.overview.lastName,
+    doctorId: patient.overview.doctor?.id ?? "",
     notes: patient.overview.notes,
     sex: patient.overview.sex,
   };
@@ -108,6 +114,7 @@ export function PatientsPage(): ReactNode {
   const permissions = permissionsQuery.data;
   const canRead = hasPermission(permissions, "patients.read");
   const canCreate = hasPermission(permissions, "patients.create");
+  const canCreateWork = hasPermission(permissions, "works.create");
   const canUpdate = hasPermission(permissions, "patients.update");
   const canArchive = hasPermission(permissions, "patients.archive");
   const patientsQuery = useQuery({
@@ -264,6 +271,7 @@ export function PatientsPage(): ReactNode {
       </section>
 
       <PatientFormModal
+        clinicOptions={clinicOptionsQuery.data ?? []}
         isOpen={isCreateOpen}
         isSaving={createMutation.isPending}
         onOpenChange={setCreateOpen}
@@ -272,11 +280,13 @@ export function PatientsPage(): ReactNode {
         title="Pacient nou"
       />
       <PatientDrawer
-        canArchive={canArchive}
-        canUpdate={canUpdate}
-        isOpen={selectedPatientId !== null}
-        isSaving={updateMutation.isPending || archiveMutation.isPending || restoreMutation.isPending}
-        onArchive={() => archiveMutation.mutate()}
+      canArchive={canArchive}
+      canUpdate={canUpdate}
+      canCreateWork={canCreateWork}
+      clinicOptions={clinicOptionsQuery.data ?? []}
+      isOpen={selectedPatientId !== null}
+      isSaving={updateMutation.isPending || archiveMutation.isPending || restoreMutation.isPending}
+      onArchive={() => archiveMutation.mutate()}
         onOpenChange={(isOpen) => {
           if (!isOpen) {
             setSelectedPatientId(null);
@@ -295,6 +305,7 @@ export function PatientsPage(): ReactNode {
 function PatientFormModal({
   isOpen,
   isSaving,
+  clinicOptions,
   onOpenChange,
   onSubmit,
   patient,
@@ -303,6 +314,7 @@ function PatientFormModal({
 }: {
   readonly isOpen: boolean;
   readonly isSaving: boolean;
+  readonly clinicOptions: readonly { readonly code: string; readonly id: string; readonly name: string }[];
   readonly onOpenChange: (isOpen: boolean) => void;
   readonly onSubmit: (values: PatientFormValues) => void;
   readonly patient?: PatientDetail;
@@ -340,6 +352,7 @@ function PatientFormModal({
             <TextInput error={form.formState.errors.firstName?.message} id="firstName" label="Prenume" required {...form.register("firstName")} />
             <TextInput error={form.formState.errors.lastName?.message} id="lastName" label="Nume" required {...form.register("lastName")} />
             <DateInput error={form.formState.errors.birthDate?.message} id="birthDate" label="Data nașterii" {...form.register("birthDate")} />
+            <PatientReferralFields clinicOptions={clinicOptions} form={form} isDisabled={isSaving} />
             <Select
               error={form.formState.errors.sex?.message}
               id="sex"
@@ -363,6 +376,8 @@ function PatientFormModal({
 function PatientDrawer({
   canArchive,
   canUpdate,
+  canCreateWork,
+  clinicOptions,
   isOpen,
   isSaving,
   onArchive,
@@ -375,6 +390,8 @@ function PatientDrawer({
 }: {
   readonly canArchive: boolean;
   readonly canUpdate: boolean;
+  readonly canCreateWork: boolean;
+  readonly clinicOptions: readonly { readonly code: string; readonly id: string; readonly name: string }[];
   readonly isOpen: boolean;
   readonly isSaving: boolean;
   readonly onArchive: () => void;
@@ -387,6 +404,20 @@ function PatientDrawer({
 }): ReactNode {
   const [tab, setTab] = useState<"documents" | "overview" | "relationships" | "timeline" | "works">("overview");
 
+  useEffect(() => {
+    if (!patient?.actions.canReadDocuments && tab === "documents") {
+      setTab("overview");
+    }
+  }, [patient?.actions.canReadDocuments, tab]);
+
+  const tabs = [
+    ["overview", "Prezentare"],
+    ["works", "Lucrări"],
+    ["relationships", "Medici și clinici"],
+    patient?.actions.canReadDocuments ? ["documents", "Documente"] : null,
+    ["timeline", "Istoric"],
+  ].filter((entry): entry is [typeof tab, string] => entry !== null);
+
   return (
     <Drawer description={patient?.overview.fullName ?? "Dosar pacient"} isOpen={isOpen} onOpenChange={onOpenChange} title="Dosar pacient">
       {patientError ? <ErrorState title="Pacientul nu a fost încărcat" description={getErrorMessage(patientError)} /> : null}
@@ -396,21 +427,25 @@ function PatientDrawer({
             <div>
               <h2>{patient.overview.fullName}</h2>
               <p className="patients-page__muted">{formatPatientSex(patient.overview.sex)} · creat {formatDate(patient.overview.createdAt)}</p>
+              <p className="patients-page__muted">
+                Clinică curentă: {patient.overview.clinic?.name ?? "Neselectată"} · Medic curent: {patient.overview.doctor?.displayName ?? "Neselectat"}
+              </p>
             </div>
-            {canArchive ? (
-              patient.overview.isArchived
-                ? <Button disabled={isSaving} onClick={onRestore} variant="secondary">Restaurează</Button>
-                : <Button disabled={isSaving} onClick={onArchive} variant="danger">Arhivează</Button>
-            ) : null}
+            <div className="patients-page__drawer-actions">
+              {canCreateWork ? (
+                <Link className="patients-page__link-button" to={`/works?patientId=${encodeURIComponent(patient.overview.id)}${patient.overview.clinic?.id ? `&clinicId=${encodeURIComponent(patient.overview.clinic.id)}` : ""}${patient.overview.doctor?.id ? `&doctorId=${encodeURIComponent(patient.overview.doctor.id)}` : ""}`}>
+                  Creează lucrare
+                </Link>
+              ) : null}
+              {canArchive ? (
+                patient.overview.isArchived
+                  ? <Button disabled={isSaving} onClick={onRestore} variant="secondary">Restaurează</Button>
+                  : <Button disabled={isSaving} onClick={onArchive} variant="danger">Arhivează</Button>
+              ) : null}
+            </div>
           </div>
           <div className="patients-page__tabs" role="tablist">
-            {[
-              ["overview", "Prezentare"],
-              ["works", "Lucrări"],
-              ["relationships", "Medici și clinici"],
-              ["documents", "Documente"],
-              ["timeline", "Istoric"],
-            ].map(([value, label]) => (
+            {tabs.map(([value, label]) => (
               <Button aria-selected={tab === value} key={value} onClick={() => setTab(value as typeof tab)} type="button" variant="secondary">{label}</Button>
             ))}
           </div>
@@ -423,6 +458,7 @@ function PatientDrawer({
               </div>
               {canUpdate ? (
                 <PatientInlineForm
+                  clinicOptions={clinicOptions}
                   isSaving={isSaving}
                   onSubmit={onSubmit}
                   patient={patient}
@@ -469,11 +505,13 @@ function PatientInlineForm({
   isSaving,
   onSubmit,
   patient,
+  clinicOptions,
   submitError,
 }: {
   readonly isSaving: boolean;
   readonly onSubmit: (values: PatientFormValues) => void;
   readonly patient: PatientDetail;
+  readonly clinicOptions: readonly { readonly code: string; readonly id: string; readonly name: string }[];
   readonly submitError: unknown;
 }): ReactNode {
   const form = useForm<PatientFormValues>({
@@ -500,6 +538,7 @@ function PatientInlineForm({
         <TextInput error={form.formState.errors.firstName?.message} id="inlineFirstName" label="Prenume" required {...form.register("firstName")} />
         <TextInput error={form.formState.errors.lastName?.message} id="inlineLastName" label="Nume" required {...form.register("lastName")} />
         <DateInput error={form.formState.errors.birthDate?.message} id="inlineBirthDate" label="Data nașterii" {...form.register("birthDate")} />
+        <PatientReferralFields clinicOptions={clinicOptions} form={form} isDisabled={isSaving} />
         <Select
           error={form.formState.errors.sex?.message}
           id="inlineSex"
@@ -515,6 +554,62 @@ function PatientInlineForm({
       <Textarea error={form.formState.errors.notes?.message} id="inlineNotes" label="Note limitate" rows={4} {...form.register("notes")} />
       <FormActions formId="patient-inline-form" isSubmitting={isSaving} submitLabel="Salvează pacient" />
     </FormLayout>
+  );
+}
+
+function PatientReferralFields({
+  clinicOptions,
+  form,
+  isDisabled,
+}: {
+  readonly clinicOptions: readonly { readonly code: string; readonly id: string; readonly name: string }[];
+  readonly form: UseFormReturn<PatientFormValues>;
+  readonly isDisabled: boolean;
+}): ReactNode {
+  const selectedClinicId = form.watch("clinicId") ?? "";
+  const selectedDoctorId = form.watch("doctorId") ?? "";
+  const doctorsQuery = useQuery({
+    enabled: selectedClinicId !== "",
+    queryFn: () => fetchDoctorOptions(selectedClinicId),
+    queryKey: ["doctors", "options", "patients-form", selectedClinicId],
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (selectedClinicId === "" && selectedDoctorId !== "") {
+      form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true });
+    }
+  }, [form, selectedClinicId, selectedDoctorId]);
+
+  return (
+    <>
+      <Select
+        disabled={isDisabled}
+        error={form.formState.errors.clinicId?.message}
+        id="clinicId"
+        label="Clinică"
+        options={clinicOptions.map((clinic) => ({ label: `${clinic.code} · ${clinic.name}`, value: clinic.id }))}
+        placeholder="Alege clinica"
+        value={selectedClinicId}
+        {...form.register("clinicId", {
+          onChange: (event) => {
+            form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true });
+            form.setValue("clinicId", event.target.value, { shouldDirty: true, shouldValidate: true });
+          },
+        })}
+      />
+      <Select
+        disabled={isDisabled || selectedClinicId === ""}
+        error={form.formState.errors.doctorId?.message}
+        hint={selectedClinicId === "" ? "Alege mai întâi clinica." : doctorsQuery.data?.length === 0 ? "Nu există medici activi pentru clinica selectată." : undefined}
+        id="doctorId"
+        label="Medic curent"
+        options={(doctorsQuery.data ?? []).map((doctor) => ({ label: doctor.displayName, value: doctor.id }))}
+        placeholder="Alege medicul"
+        value={selectedDoctorId}
+        {...form.register("doctorId")}
+      />
+    </>
   );
 }
 

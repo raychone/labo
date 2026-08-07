@@ -14,11 +14,11 @@ Track patient identity and work history.
 
 ## Domain Concepts
 
-Patient first/last name, normalized search fields, optional birth date, sex, notes, archive state.
+Patient first/last name, normalized search fields, optional birth date, sex, notes, archive state, optional referring/current clinic and doctor metadata.
 
 ## Business Rules
 
-The patient has no operational code; work code remains the operational identifier. A patient can have many works. Work cycles do not create duplicate patient history; repeated laboratory cycles stay under the same work and patient.
+The patient has no operational code; work code remains the operational identifier. A patient can have many works. Work cycles do not create duplicate patient history; repeated laboratory cycles stay under the same work and patient. Clinic/doctor referral metadata can be edited later when a new external source of work arrives.
 
 ## Data Model
 
@@ -30,7 +30,7 @@ The patient has no operational code; work code remains the operational identifie
 
 ## UI
 
-`/patients`.
+`/patients` with create/edit referral fields for clinic and doctor, a dossier action that can open work creation prefilled from the patient context, and manager-only financial/document tabs.
 
 ## Audit
 

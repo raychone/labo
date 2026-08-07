@@ -9,9 +9,11 @@ function patient(overrides: Partial<Patient> = {}): Patient {
   return {
     archivedAt: null,
     archivedByUserId: null,
+    clinicId: null,
     birthDate: null,
     createdAt: new Date("2026-07-29T00:00:00.000Z"),
     createdByUserId: "actor_1",
+    doctorId: null,
     firstName: "Maria",
     id: "patient_1",
     isArchived: false,

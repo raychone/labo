@@ -393,14 +393,16 @@ export function StatusPage(): ReactNode {
       id: "technician",
       renderCell: (row) => (
         <div className="status-page__technician">
-          <div className="status-page__owner-line">
-            {row.workOwner?.preferredColor ? <span className="status-page__color-dot" style={{ backgroundColor: getSafeColor(row.workOwner.preferredColor) ?? "transparent" }} /> : null}
-            <strong>{row.workOwner?.displayName ?? "Fără tehnician"}</strong>
-          </div>
-          <span className="status-page__muted">{row.workOwner?.preferredColor ? "Culoare selectată" : "Fără culoare"}</span>
-          <Link className="status-page__open-link" to={`/works?workId=${encodeURIComponent(row.id)}`}>
-            Deschide
-          </Link>
+          {row.workOwner?.preferredColor ? (
+            <span
+              aria-label={row.workOwner.displayName}
+              className="status-page__technician-badge"
+              title={row.workOwner.displayName}
+              style={{ backgroundColor: getSafeColor(row.workOwner.preferredColor) ?? "transparent" }}
+            />
+          ) : (
+            <span className="status-page__technician-badge status-page__technician-badge--empty" title="Fără tehnician" />
+          )}
         </div>
       ),
     },
@@ -408,12 +410,7 @@ export function StatusPage(): ReactNode {
       header: "Pacient",
       id: "patientName",
       isSortable: true,
-      renderCell: (row) => (
-        <div>
-          <strong>{row.patient.name}</strong>
-          <span className="status-page__muted">{row.patient.reference ?? "Fără identificator"}</span>
-        </div>
-      ),
+      renderCell: (row) => <strong>{row.patient.name}</strong>,
     },
     {
       header: "Tip",
@@ -448,6 +445,18 @@ export function StatusPage(): ReactNode {
       id: "priority",
       isSortable: true,
       renderCell: (row) => <PriorityBadge label={toPriorityLabel(row.priority)} variant={row.priority === "URGENT" ? "urgent" : "normal"} />,
+    },
+    {
+      header: "Acțiuni",
+      id: "actions",
+      renderCell: (row) => (
+        <div className="status-page__row-actions">
+          <Button onClick={() => setSelectedRow(row)} size="small" variant="outline">Detalii</Button>
+          <Link className="status-page__open-link" to={`/works?workId=${encodeURIComponent(row.id)}`}>
+            Deschide
+          </Link>
+        </div>
+      ),
     },
   ], []);
 
@@ -635,14 +644,12 @@ export function StatusPage(): ReactNode {
                 error={statusQuery.isError ? getErrorMessage(statusQuery.error) : undefined}
                 getRowKey={(row) => row.id}
                 isLoading={statusQuery.isLoading}
-                onRowAction={(row) => setSelectedRow(row)}
                 onSortChange={(sort) => patchQuery(toApiSort(sort))}
                 pagination={{
                   onPageChange: (page) => patchQuery({ page }),
                   page: statusQuery.data?.meta.page ?? query.page,
                   pageCount: Math.max(statusQuery.data?.meta.totalPages ?? 1, 1),
                 }}
-                rowActionLabel="Detalii"
                 rows={visibleRows}
                 sort={toDataSort(query)}
               />
@@ -678,22 +685,15 @@ function StatusCards({ error, isLoading, onOpenDetails, rows }: { readonly error
         <article className="status-page__card" key={row.id}>
           <div className="status-page__card-header">
             <div>
-              <strong>{row.workOwner?.displayName ?? "Fără tehnician"}</strong>
-              <span>{row.patient.name}</span>
+              <strong>{row.patient.name}</strong>
+              <span>{row.workType.name}</span>
             </div>
             <PriorityBadge label={toPriorityLabel(row.priority)} variant={row.priority === "URGENT" ? "urgent" : "normal"} />
           </div>
           <div className="status-page__card-grid">
             <Metric
               label="Tehnician"
-              value={row.workOwner
-                ? (
-                <span className="status-page__metric-inline">
-                  {row.workOwner.preferredColor ? <span className="status-page__color-dot" style={{ backgroundColor: getSafeColor(row.workOwner.preferredColor) ?? "transparent" }} /> : null}
-                  {row.workOwner.displayName}
-                </span>
-              )
-                : "Fără tehnician"}
+              value={row.workOwner?.preferredColor ? <span className="status-page__technician-badge" aria-label={row.workOwner.displayName} title={row.workOwner.displayName} style={{ backgroundColor: getSafeColor(row.workOwner.preferredColor) ?? "transparent" }} /> : <span className="status-page__technician-badge status-page__technician-badge--empty" title="Fără tehnician" />}
             />
             <Metric label="Tip" value={<BadgePill label={row.workType.name} tone="neutral" />} />
             <Metric

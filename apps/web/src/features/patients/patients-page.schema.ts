@@ -6,8 +6,10 @@ const nullableTrimmedString = (maxLength: number) =>
 
 export const patientFormSchema = z.object({
   birthDate: z.string().nullable().transform((value) => value === "" ? null : value),
+  clinicId: z.string().nullable().transform((value) => value === "" ? null : value),
   firstName: z.string().trim().min(1, "Prenumele este obligatoriu.").max(80),
   lastName: z.string().trim().min(1, "Numele este obligatoriu.").max(80),
+  doctorId: z.string().nullable().transform((value) => value === "" ? null : value),
   notes: nullableTrimmedString(1000),
   sex: z.enum(PATIENT_SEX_VALUES),
 });

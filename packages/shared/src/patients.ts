@@ -32,6 +32,8 @@ export interface PatientSummary extends PatientNameView {
 
 export interface PatientOverview extends PatientSummary {
   readonly archivedAt: string | null;
+  readonly clinic: { readonly id: string; readonly name: string } | null;
+  readonly doctor: { readonly displayName: string; readonly id: string } | null;
   readonly notes: string | null;
   readonly updatedAt: string;
 }
@@ -143,8 +145,10 @@ export interface PaginatedPatientWorksResponse {
 
 export interface CreatePatientInput {
   readonly birthDate?: string | null;
+  readonly clinicId?: string | null;
   readonly firstName: string;
   readonly lastName: string;
+  readonly doctorId?: string | null;
   readonly notes?: string | null;
   readonly sex?: PatientSex;
 }
