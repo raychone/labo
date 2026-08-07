@@ -59,11 +59,11 @@ Planned or partial:
 
 ## Current Status
 
-Last completed functional task: `ROLE-DASHBOARDS-002`, which completed the permission-composed Manager, Recepție and Tehnician dashboard compositions on `/dashboard` and tightened the operational-center presentation without changing business rules. It keeps financial RBAC and company scoping intact.
+Last completed functional task: `BILLING-REALIGN-001B`, which completed the company-scoped manager billing workspace, receivables/restanțe, month-end registry, clinic/doctor statements, printable browser views, and read-only ambiguous legacy review without starting correction workflows.
 
 Last completed documentation task: `WORKFORM-REAL-DISCOVERY-001`, which audited the real paper work sheet and produced [discovery/WORKFORM-REAL-FIELD-AUDIT.md](discovery/WORKFORM-REAL-FIELD-AUDIT.md) and [discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md). `DOCS-TOKEN-001` created the permanent token-efficient documentation system under `docs/`.
 
-`TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable. Technicians can select a personal color that is surfaced as a badge in operational status and workbench views; patient dossiers can carry clinic/doctor referral metadata and manager-only financial tabs stay hidden from non-managers; role navigation is intentionally scoped so technicians stay focused on their own work queue.
+`TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable. Technicians can select a personal color that is surfaced as a badge in operational status and workbench views; status filters stay collapsed by default; patient dossiers can carry clinic/doctor referral metadata; manager-only financial tabs stay hidden from non-managers; role navigation is intentionally scoped so technicians stay focused on their own work queue and managers see only manager-facing navigation plus status.
 
 No task is currently in progress. `BILLING-REALIGN-001C` is deferred; ambiguous legacy billing remains read-only until explicitly resumed. `DEMO-POLISH-002` is planned only and must not be started unless explicitly approved.
 

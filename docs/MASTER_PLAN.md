@@ -11,9 +11,9 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | Current task | DEMO-POLISH-002 |
 | Status | PLANNED |
 | Blocker | none |
-| Last completed task | ROLE-DASHBOARDS-002 |
-| Last completed functional task | ROLE-DASHBOARDS-002 |
-| Last completed functional commit | ROLE-DASHBOARDS-002 commit |
+| Last completed task | BILLING-REALIGN-001B |
+| Last completed functional task | BILLING-REALIGN-001B |
+| Last completed functional commit | BILLING-REALIGN-001B commit |
 | Next approved task | none |
 
 ## Roadmap

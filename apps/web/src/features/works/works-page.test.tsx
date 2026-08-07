@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { WorksPage } from "./works-page.js";
 
-function renderWithProviders(component: ReactNode): void {
+function renderWithProviders(component: ReactNode, initialEntries = ["/works"]): void {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -17,7 +17,7 @@ function renderWithProviders(component: ReactNode): void {
   });
 
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <QueryClientProvider client={queryClient}>
         <ToastProvider>{component}</ToastProvider>
       </QueryClientProvider>
@@ -521,6 +521,40 @@ describe("WorksPage", () => {
     fireEvent.change(workTypeInput, { target: { value: "punte" } });
     await waitFor(() => expect(within(workTypeListbox).getAllByRole("option")).toHaveLength(1));
     expect(within(workTypeListbox).getByText("WT-0002 · Punte zirconiu")).toBeDefined();
+  });
+
+  it("opens the create modal from the dashboard query flag", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/auth/permissions")) {
+        return Promise.resolve(createJsonResponse({
+          permissions: [
+            { key: "clinics.read", scopes: ["ALL"] },
+            { key: "doctors.read", scopes: ["ALL"] },
+            { key: "works.create", scopes: ["ALL"] },
+            { key: "works.read_all", scopes: ["ALL"] },
+          ],
+        }));
+      }
+      if (url.includes("/works/work-type-options")) {
+        return Promise.resolve(createJsonResponse(workTypeOptionsResponse));
+      }
+      if (url.includes("/clinics/options")) {
+        return Promise.resolve(createJsonResponse(clinicOptionsResponse));
+      }
+      if (url.includes("/patients/options")) {
+        return Promise.resolve(createJsonResponse(patientOptionsResponse));
+      }
+      if (url.includes("/works?")) {
+        return Promise.resolve(createJsonResponse(worksListResponse));
+      }
+
+      return Promise.resolve(createJsonResponse({}, 404));
+    }));
+
+    renderWithProviders(<WorksPage />, ["/works?create=1"]);
+
+    expect(await screen.findByRole("heading", { name: "Lucrare nouă" })).toBeDefined();
   });
 
   it("shows access denied without works.read_all", async () => {

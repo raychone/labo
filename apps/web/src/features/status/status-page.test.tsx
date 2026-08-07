@@ -143,7 +143,7 @@ describe("StatusPage", () => {
     renderWithProviders(<StatusPage />);
 
     expect(await screen.findByRole("heading", { name: "Status" })).toBeDefined();
-    expect(screen.getAllByText("Maria Ionescu").length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getAllByText("Maria Ionescu").length).toBeGreaterThan(0));
     expect(screen.getAllByText("1/4").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Ceramică").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Urgent").length).toBeGreaterThan(0);

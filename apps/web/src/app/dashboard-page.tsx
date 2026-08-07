@@ -1,4 +1,5 @@
 import {
+  Button,
   Card,
   CardContent,
   CardDescription,
@@ -7,7 +8,10 @@ import {
   ErrorState,
   LoadingState,
   PriorityBadge,
+  Modal,
   StatusBadge,
+  TextInput,
+  useToast,
 } from "@dental-lab/ui";
 import {
   formatMoneyMinor,
@@ -17,16 +21,17 @@ import {
   type WorkSummary,
 } from "@dental-lab/shared";
 import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router";
 
 import { useAuthState } from "./auth-state.js";
 import { fetchOrganizationContext } from "../features/organization-context/organization-context-api.js";
-import { useAvailableWorksForClaim, useMyClaimedWorks, useWorks } from "../features/works/works-api.js";
+import { useAvailableWorksForClaim, useCreateNextWorkCycle, useMyClaimedWorks, useWorks } from "../features/works/works-api.js";
 import { useSettings } from "../features/settings/settings-api.js";
 import { useBillingOverview } from "../features/billing/billing-api.js";
 import { useOperationalStatus } from "../features/status/status-api.js";
 import { useTechnicianWorkbench } from "../features/technician-workbench/technician-workbench-api.js";
+import { getErrorMessage } from "../lib/form-utils.js";
 import { usePageTitle } from "./use-page-title.js";
 
 const shortListSize = 5;
@@ -74,6 +79,7 @@ export function DashboardPage(): ReactNode {
   const auth = useAuthState();
   const permissionKeys = auth.permissionKeys;
   const canCreateWork = permissionKeys.includes("works.create");
+  const canCreateNextCycle = permissionKeys.includes("cycles.create_next");
   const canReadWorks = permissionKeys.includes("works.read_all");
   const canReadAssignedWorks = permissionKeys.includes("works.read_assigned");
   const canReadOperational = canReadWorks || canReadAssignedWorks;
@@ -163,6 +169,7 @@ export function DashboardPage(): ReactNode {
       {isReceptionWorkspace ? (
         <ReceptionDashboard
           canCreateWork={canCreateWork}
+          canCreateNextCycle={canCreateNextCycle}
           canScanWork={canScanWork}
           counters={{
             dueToday: deadlineDashboard?.dueToday,
@@ -190,7 +197,6 @@ export function DashboardPage(): ReactNode {
           counters={{
             inProgress: getCounter(operationalCounters, "IN_PROGRESS"),
             late: getCounter(operationalCounters, "LATE"),
-            readyForDelivery: operationalTodayQuery.data?.items.filter((row) => row.logistics.status === "READY_FOR_DELIVERY").length,
             registeredToday: worksTodayQuery.data?.total,
             returned: getCounter(operationalCounters, "RETURNED"),
             sheets: countIncompleteRows([
@@ -254,7 +260,7 @@ function SummaryMetricCard({ label, to, value }: { readonly label: string; reado
 
 function DashboardAction({ label, to, variant = "outline" }: { readonly label: string; readonly to: string; readonly variant?: "outline" | "primary" }): ReactNode {
   const className = variant === "primary" ? "dl-button dl-button--primary dl-button--medium" : "dl-button dl-button--outline dl-button--medium";
-  return <Link className={className} to={to}><span className="dl-button__content"><span>{label}</span></span></Link>;
+  return <Link className={className} style={{ color: "inherit", textDecoration: "none" }} to={to}><span className="dl-button__content"><span>{label}</span></span></Link>;
 }
 
 function DashboardEmptyState({ action, description, title }: { readonly action?: { readonly label: string; readonly to: string }; readonly description: string; readonly title: string }): ReactNode {
@@ -371,6 +377,7 @@ function TechnicianDashboard({
 
 function ReceptionDashboard({
   canCreateWork,
+  canCreateNextCycle,
   canScanWork,
   counters,
   isRecentError,
@@ -380,6 +387,7 @@ function ReceptionDashboard({
   todayRows,
 }: {
   readonly canCreateWork: boolean;
+  readonly canCreateNextCycle: boolean;
   readonly canScanWork: boolean;
   readonly counters: {
     readonly dueToday: number | undefined;
@@ -396,7 +404,21 @@ function ReceptionDashboard({
   readonly returnedRows: readonly OperationalStatusRow[];
   readonly todayRows: readonly OperationalStatusRow[];
 }): ReactNode {
+  const toast = useToast();
+  const [returnSearch, setReturnSearch] = useState("");
+  const [selectedReturnedWorkId, setSelectedReturnedWorkId] = useState<string | null>(null);
+  const [isReturnModalOpen, setReturnModalOpen] = useState(false);
   const incompleteRows = todayRows.filter((row) => isIncompleteSheet(row.realLabSheet.status)).slice(0, shortListSize);
+  const returnQuery = useOperationalStatus({
+    page: 1,
+    pageSize: 8,
+    search: returnSearch || null,
+    sortBy: "updatedAt",
+    sortDirection: "desc",
+    tab: "COMPLETED",
+  }, isReturnModalOpen && canCreateNextCycle);
+  const returnMutation = useCreateNextWorkCycle();
+  const selectedReturnedWork = returnQuery.data?.items.find((row) => row.id === selectedReturnedWorkId) ?? null;
   return (
     <div className="dashboard-page__workspace" aria-labelledby="reception-dashboard-title">
       <div className="dashboard-page__workspace-header">
@@ -405,8 +427,8 @@ function ReceptionDashboard({
           <p>Înregistrare, reveniri, fișe de completat și verificări operative.</p>
         </div>
         <div className="dashboard-page__actions">
-          {canCreateWork ? <DashboardAction label="Lucrare nouă" to="/works" variant="primary" /> : null}
-          {canCreateWork ? <DashboardAction label="Înregistrează revenirea" to="/works" /> : null}
+          {canCreateWork ? <DashboardAction label="Lucrare nouă" to="/works?create=1" variant="primary" /> : null}
+          {canCreateNextCycle ? <Button onClick={() => setReturnModalOpen(true)} variant="outline">Înregistrează revenirea</Button> : null}
           {canScanWork ? <DashboardAction label="Scanează lucrare" to="/scan" /> : null}
         </div>
       </div>
@@ -434,6 +456,68 @@ function ReceptionDashboard({
         {returnedRows.length === 0 ? <DashboardEmptyState description="Nu există lucrări revenite în lista curentă." title="Nicio revenire recentă" /> : null}
         {returnedRows.slice(0, shortListSize).map((row) => <OperationalPreviewCard key={row.id} actionLabel="Deschide ciclul curent" row={row} />)}
       </DashboardSection>
+      <Modal
+        description="Caută o lucrare finalizată și înregistreaz-o ca revenire."
+        footer={selectedReturnedWork ? (
+          <Button
+            isLoading={returnMutation.isPending}
+            onClick={() => {
+              returnMutation.mutate({
+                input: {
+                  clinicId: selectedReturnedWork.clinic.id,
+                  doctorId: selectedReturnedWork.doctor.id,
+                  ...(selectedReturnedWork.currentCycle?.id ? { expectedActiveCycleId: selectedReturnedWork.currentCycle.id } : {}),
+                  notes: null,
+                  reason: "PROBA",
+                },
+                workOrderId: selectedReturnedWork.id,
+              }, {
+                onError: (error) => {
+                  toast.showToast({ message: getErrorMessage(error), title: "Revenirea nu a fost înregistrată", variant: "error" });
+                },
+                onSuccess: () => {
+                  setReturnModalOpen(false);
+                  setSelectedReturnedWorkId(null);
+                },
+              });
+            }}
+          >
+            Marchează revenită
+          </Button>
+        ) : null}
+        isOpen={isReturnModalOpen}
+        onOpenChange={(isOpen) => {
+          setReturnModalOpen(isOpen);
+          if (!isOpen) {
+            setSelectedReturnedWorkId(null);
+            setReturnSearch("");
+          }
+        }}
+        title="Înregistrează revenirea"
+      >
+        <div className="dashboard-page__return-modal">
+          <TextInput label="Caută lucrare finalizată" placeholder="Cod, pacient, clinică, medic" value={returnSearch} onChange={(event) => setReturnSearch(event.target.value)} />
+          {returnQuery.isLoading ? <LoadingState text="Se încarcă lucrările finalizate" /> : null}
+          {returnQuery.isError ? <ErrorState title="Lista nu a putut fi încărcată" description="Nu am putut încărca lucrările finalizate." /> : null}
+          <div className="dashboard-page__return-list">
+            {(returnQuery.data?.items ?? []).map((row) => (
+              <button
+                aria-pressed={selectedReturnedWorkId === row.id}
+                className="dashboard-page__return-item"
+                key={row.id}
+                onClick={() => setSelectedReturnedWorkId(row.id)}
+                type="button"
+              >
+                <strong>{row.workCode}</strong>
+                <span>{row.patient.name}</span>
+                <span>{row.clinic.name} · {row.doctor.name}</span>
+                <span>{row.workType.name}</span>
+              </button>
+            ))}
+            {!returnQuery.isLoading && (returnQuery.data?.items ?? []).length === 0 ? <p className="dashboard-page__empty-note">Nu există lucrări finalizate pentru căutarea curentă.</p> : null}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -457,7 +541,6 @@ function ManagerDashboard({
   readonly counters: {
     readonly inProgress: number | undefined;
     readonly late: number | undefined;
-    readonly readyForDelivery: number | undefined;
     readonly registeredToday: number | undefined;
     readonly returned: number | undefined;
     readonly sheets: number | undefined;
@@ -480,7 +563,6 @@ function ManagerDashboard({
         </div>
         <div className="dashboard-page__actions">
           <DashboardAction label="Vezi statusul" to="/status" variant="primary" />
-          <DashboardAction label="Lucrări" to="/works" />
           {canReadBilling ? <DashboardAction label="Facturare" to="/billing" /> : null}
           {canReadBilling ? <DashboardAction label="Lucrări nefacturate" to="/billing" /> : null}
           {canRecordPayment ? <DashboardAction label="Înregistrează încasare" to="/billing" /> : null}
@@ -494,7 +576,6 @@ function ManagerDashboard({
         <SummaryMetricCard label="Întârziate" to="/status?tab=LATE" value={counters.late} />
         <SummaryMetricCard label="Revenite" to="/status?tab=RETURNED" value={counters.returned} />
         <SummaryMetricCard label="Fișe incomplete" to="/status?sheetStatus=IN_PROGRESS" value={counters.sheets} />
-        <SummaryMetricCard label="Gata de livrare" to="/logistics" value={counters.readyForDelivery} />
       </div>
       {canReadBilling ? (
         <div className="dashboard-page__metrics dashboard-page__metrics--five">

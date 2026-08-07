@@ -77,6 +77,36 @@ describe("BillingPage", () => {
           workValueMinor: 35000,
         }));
       }
+      if (url.includes("/billing/statements/clinic")) {
+        return Promise.resolve(createJsonResponse({
+          clinicId: "clinic_1",
+          clinicName: "Clinica Test",
+          currency: "RON",
+          dateFrom: "2026-07-01",
+          dateTo: "2026-07-31",
+          documents: [],
+          generatedAt: "2026-08-04T00:00:00.000Z",
+          paidMinor: 0,
+          totalMinor: 0,
+          uninvoicedMinor: 0,
+          uninvoicedWorks: [],
+        }));
+      }
+      if (url.includes("/billing/statements/doctor")) {
+        return Promise.resolve(createJsonResponse({
+          currency: "RON",
+          dateFrom: "2026-07-01",
+          dateTo: "2026-07-31",
+          doctorId: "doctor_1",
+          doctorName: "Dr. Ana Popescu",
+          documents: [],
+          generatedAt: "2026-08-04T00:00:00.000Z",
+          paidMinor: 0,
+          totalMinor: 0,
+          uninvoicedMinor: 0,
+          uninvoicedWorks: [],
+        }));
+      }
       if (url.includes("/billing/billable-works")) {
         return Promise.resolve(createJsonResponse({
           items: [{

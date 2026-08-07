@@ -16,6 +16,11 @@ export const workReadPermissions = ["works.read_all", "works.read_assigned"] as 
 export const operationalStatusReadPermissions = workReadPermissions;
 export const scanPermissions = ["scan.use"] as const;
 export const deliveryReadPermissions = ["delivery.read", "delivery.read_own"] as const;
+const managerWorkspacePermissions = ["finance.read", "invoice.read", "invoice.create", "pricing.read", "settings.read", "users.read"] as const;
+
+function isManagerWorkspace(permissionKeys: readonly string[]): boolean {
+  return managerWorkspacePermissions.some((permission) => permissionKeys.includes(permission));
+}
 
 export const appRoutes = [
   {
@@ -91,6 +96,15 @@ export const appRoutes = [
     showInNavigation: true,
   },
   {
+    icon: "BI",
+    label: "Note de plată",
+    navigationGroup: "Management",
+    path: "/billing/statements",
+    permissionMode: "any",
+    requiredPermissions: ["finance.read_reports"],
+    showInNavigation: false,
+  },
+  {
     icon: "PR",
     label: "Prețuri și termene",
     navigationGroup: "Management",
@@ -149,6 +163,18 @@ export const appRoutes = [
 function shouldShowInNavigation(permissionKeys: readonly string[], route: AppRouteConfig): boolean {
   if (!hasRouteAccess(permissionKeys, route)) {
     return false;
+  }
+
+  if (isManagerWorkspace(permissionKeys)) {
+    return route.path === "/dashboard"
+      || route.path === "/status"
+      || route.path === "/billing"
+      || route.path === "/pricing"
+      || route.path === "/patients"
+      || route.path === "/clinics"
+      || route.path === "/work-types"
+      || route.path === "/users"
+      || route.path === "/settings";
   }
 
   if (route.path === "/works") {

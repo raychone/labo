@@ -374,7 +374,8 @@ export function WorksPage(): ReactNode {
   const initialPatientId = searchParams.get("patientId");
   const initialClinicId = searchParams.get("clinicId");
   const initialDoctorId = searchParams.get("doctorId");
-  const [isCreateOpen, setIsCreateOpen] = useState(initialPatientId !== null || initialClinicId !== null || initialDoctorId !== null);
+  const initialCreateOpen = searchParams.get("create") === "1";
+  const [isCreateOpen, setIsCreateOpen] = useState(initialCreateOpen || initialPatientId !== null || initialClinicId !== null || initialDoctorId !== null);
   const [qrWorkId, setQrWorkId] = useState<string | null>(null);
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   const canRead = hasPermission(permissionsQuery.data, "works.read_all")

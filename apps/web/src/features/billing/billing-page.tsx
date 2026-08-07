@@ -23,13 +23,17 @@ import {
   type BillingDocumentSummary,
   type BillingListQuery,
   type BillingOverview,
+  type BillingStatementRow,
+  type BillingStatementWorkRow,
+  type ClinicBillingStatement,
+  type DoctorBillingStatement,
   type BillingReceivableRow,
   type DocumentPaymentFilter,
   type MonthEndRegistry,
   type PaymentMethod,
   type RecordPaymentInput,
 } from "@dental-lab/shared";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchPermissions } from "../auth/auth-api.js";
@@ -40,6 +44,7 @@ import {
   useBillingDocuments,
   useBillingOverview,
   useBillingSeries,
+  useClinicStatement,
   useCreateInvoice,
   useCreateProforma,
   useConvertProforma,
@@ -48,6 +53,7 @@ import {
   usePayments,
   useRecordPayment,
   useReceivables,
+  useDoctorStatement,
   useAmbiguousLegacyRecords,
   downloadMonthRegistryCsv,
   type BillingWorkspaceParams,
@@ -219,6 +225,9 @@ export function BillingPage(): ReactNode {
   const [paymentForm, setPaymentForm] = useState<ManualPaymentFormState>(createEmptyPaymentForm(range.dateTo));
   const [selectedWorkIds, setSelectedWorkIds] = useState<readonly string[]>([]);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+  const [statementScope, setStatementScope] = useState<"clinic" | "doctor">("clinic");
+  const [clinicStatementId, setClinicStatementId] = useState("");
+  const [doctorStatementId, setDoctorStatementId] = useState("");
   const overviewParams: BillingWorkspaceParams = { ...range, groupBy };
   const billableParams: BillingWorkspaceParams = { ...range, search, uninvoicedOnly: true, ...(patientFilter ? { patient: patientFilter } : {}), ...(workCodeFilter ? { workCode: workCodeFilter } : {}) };
   const baseDocumentParams: BillingListQuery = {
@@ -236,7 +245,7 @@ export function BillingPage(): ReactNode {
   const invoiceParams: BillingListQuery = { ...baseDocumentParams, type: "INVOICE" };
   const receivablesParams: BillingListQuery = { ...baseDocumentParams, paymentFilter: paymentFilter === "ALL" ? "OUTSTANDING" : paymentFilter, type: "INVOICE" };
   const overviewQuery = useBillingOverview(overviewParams, canReadFinance);
-  const billableWorksQuery = useBillableWorks(billableParams, canCreateInvoice);
+  const billableWorksQuery = useBillableWorks(billableParams, canCreateInvoice || canReadReports);
   const proformasQuery = useBillingDocuments(proformaParams, canReadInvoices);
   const invoicesQuery = useBillingDocuments(invoiceParams, canReadInvoices);
   const paymentsQuery = usePayments(canReadFinance);
@@ -244,6 +253,56 @@ export function BillingPage(): ReactNode {
   const monthRegistryQuery = useMonthRegistry(overviewParams, canReadReports);
   const ambiguousLegacyQuery = useAmbiguousLegacyRecords(canReadReports);
   const seriesQuery = useBillingSeries(canConfigureSeries);
+  const billableItemClinics = useMemo(() => {
+    const items = billableWorksQuery.data?.items ?? [];
+    const clinics = new Map<string, string>();
+    for (const item of items) {
+      clinics.set(item.clinicId, item.clinicName);
+    }
+    return Array.from(clinics.entries()).map(([value, label]) => ({ label, value }));
+  }, [billableWorksQuery.data?.items]);
+  const billableItemDoctors = useMemo(() => {
+    const items = billableWorksQuery.data?.items ?? [];
+    const doctors = new Map<string, string>();
+    for (const item of items) {
+      doctors.set(item.doctorId, item.doctorName);
+    }
+    return Array.from(doctors.entries()).map(([value, label]) => ({ label, value }));
+  }, [billableWorksQuery.data?.items]);
+  useEffect(() => {
+    if (statementScope === "clinic") {
+      if (billableItemClinics.length === 0) {
+        if (clinicStatementId !== "") {
+          setClinicStatementId("");
+        }
+        return;
+      }
+      const firstClinic = billableItemClinics[0];
+      if (firstClinic && (clinicStatementId === "" || !billableItemClinics.some((clinic) => clinic.value === clinicStatementId))) {
+        setClinicStatementId(firstClinic.value);
+      }
+    }
+    if (statementScope === "doctor") {
+      if (billableItemDoctors.length === 0) {
+        if (doctorStatementId !== "") {
+          setDoctorStatementId("");
+        }
+        return;
+      }
+      const firstDoctor = billableItemDoctors[0];
+      if (firstDoctor && (doctorStatementId === "" || !billableItemDoctors.some((doctor) => doctor.value === doctorStatementId))) {
+        setDoctorStatementId(firstDoctor.value);
+      }
+    }
+  }, [billableItemClinics, billableItemDoctors, clinicStatementId, doctorStatementId, statementScope]);
+  const clinicStatementParams = clinicStatementId
+    ? { clinicId: clinicStatementId, dateFrom: range.dateFrom, dateTo: range.dateTo }
+    : { dateFrom: range.dateFrom, dateTo: range.dateTo };
+  const doctorStatementParams = doctorStatementId
+    ? { dateFrom: range.dateFrom, dateTo: range.dateTo, doctorId: doctorStatementId }
+    : { dateFrom: range.dateFrom, dateTo: range.dateTo };
+  const clinicStatementQuery = useClinicStatement(clinicStatementParams, canReadReports && clinicStatementId !== "");
+  const doctorStatementQuery = useDoctorStatement(doctorStatementParams, canReadReports && doctorStatementId !== "");
   const createProformaMutation = useCreateProforma();
   const createInvoiceMutation = useCreateInvoice();
   const issueMutation = useIssueDocument();
@@ -519,6 +578,36 @@ export function BillingPage(): ReactNode {
             ),
           },
           {
+            id: "statements",
+            label: "Note de plată",
+            content: (
+              <StatementsTab
+                clinicOptions={billableItemClinics}
+                clinicStatement={clinicStatementQuery.data}
+                doctorOptions={billableItemDoctors}
+                doctorStatement={doctorStatementQuery.data}
+                isClinicLoading={clinicStatementQuery.isLoading}
+                isDoctorLoading={doctorStatementQuery.isLoading}
+                selectedClinicId={clinicStatementId}
+                selectedDoctorId={doctorStatementId}
+                onClinicChange={setClinicStatementId}
+                onDoctorChange={setDoctorStatementId}
+                onOpenPrint={(scope) => {
+                  const params = new URLSearchParams({ dateFrom: range.dateFrom, dateTo: range.dateTo });
+                  if (scope === "clinic" && clinicStatementId) {
+                    params.set("clinicId", clinicStatementId);
+                  }
+                  if (scope === "doctor" && doctorStatementId) {
+                    params.set("doctorId", doctorStatementId);
+                  }
+                  window.open(`/billing/statements/${scope}/print?${params.toString()}`, "_blank", "noopener,noreferrer");
+                }}
+                scope={statementScope}
+                setScope={setStatementScope}
+              />
+            ),
+          },
+          {
             id: "month-close",
             label: "Închidere lună",
             content: <MonthCloseTab
@@ -609,6 +698,156 @@ function OverviewTab({
       <DataTable columns={columns} emptyMessage="Nu există documente legacy ambigue pentru firma activă." getRowKey={(row) => row.documentId} rows={ambiguousLegacy} />
     </section>
   );
+}
+
+function StatementsTab({
+  clinicOptions,
+  clinicStatement,
+  doctorOptions,
+  doctorStatement,
+  isClinicLoading,
+  isDoctorLoading,
+  onClinicChange,
+  onDoctorChange,
+  onOpenPrint,
+  scope,
+  selectedClinicId,
+  selectedDoctorId,
+  setScope,
+}: {
+  readonly clinicOptions: readonly { readonly label: string; readonly value: string }[];
+  readonly clinicStatement: ClinicBillingStatement | undefined;
+  readonly doctorOptions: readonly { readonly label: string; readonly value: string }[];
+  readonly doctorStatement: DoctorBillingStatement | undefined;
+  readonly isClinicLoading: boolean;
+  readonly isDoctorLoading: boolean;
+  readonly onClinicChange: (value: string) => void;
+  readonly onDoctorChange: (value: string) => void;
+  readonly onOpenPrint: (scope: "clinic" | "doctor") => void;
+  readonly scope: "clinic" | "doctor";
+  readonly selectedClinicId: string;
+  readonly selectedDoctorId: string;
+  readonly setScope: (scope: "clinic" | "doctor") => void;
+}): ReactNode {
+  const statement = scope === "clinic" ? clinicStatement : doctorStatement;
+  const isLoading = scope === "clinic" ? isClinicLoading : isDoctorLoading;
+  const selectedValue = scope === "clinic" ? selectedClinicId : selectedDoctorId;
+  const emptyMessage = scope === "clinic" ? "Nu există clinică disponibilă pentru perioada curentă." : "Nu există medic disponibil pentru perioada curentă.";
+
+  return (
+    <section className="billing-page__tab">
+      <div className="billing-page__toolbar">
+        <Button onClick={() => setScope("clinic")} variant={scope === "clinic" ? "primary" : "secondary"}>Clinică</Button>
+        <Button onClick={() => setScope("doctor")} variant={scope === "doctor" ? "primary" : "secondary"}>Medic</Button>
+        <Button disabled={!statement} onClick={() => onOpenPrint(scope)} variant="outline">Print / PDF</Button>
+      </div>
+      <div className="billing-page__filters">
+        {scope === "clinic" ? (
+          <Select
+            label="Clinică"
+            options={clinicOptions}
+            placeholder="Alege clinica"
+            value={selectedValue}
+            onChange={(event) => onClinicChange(event.target.value)}
+          />
+        ) : (
+          <Select
+            label="Medic"
+            options={doctorOptions}
+            placeholder="Alege medicul"
+            value={selectedValue}
+            onChange={(event) => onDoctorChange(event.target.value)}
+          />
+        )}
+      </div>
+      {isLoading ? <LoadingState text="Se încarcă nota de plată" /> : null}
+      {!isLoading && !statement ? <ErrorState title="Nota de plată nu este disponibilă" description={emptyMessage} /> : null}
+      {statement ? (
+        <StatementPreview
+          statement={statement}
+          scope={scope}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+function StatementPreview({
+  scope,
+  statement,
+}: {
+  readonly scope: "clinic" | "doctor";
+  readonly statement: ClinicBillingStatement | DoctorBillingStatement;
+}): ReactNode {
+  const recipientName = scope === "clinic"
+    ? ("clinicName" in statement ? statement.clinicName : "")
+    : ("doctorName" in statement ? statement.doctorName : "");
+  const hasDocuments = statement.documents.length > 0;
+  const hasWorks = statement.uninvoicedWorks.length > 0;
+  return (
+    <div className="billing-page__statement">
+      <Card>
+        <CardHeader>
+          <CardTitle>{recipientName}</CardTitle>
+          <CardDescription>{formatDate(statement.dateFrom)} - {formatDate(statement.dateTo)}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="billing-page__registry-summary">
+            <span>Total: {formatMoneyMinor(statement.totalMinor, statement.currency, "ro-RO")}</span>
+            <span>Încasat: {formatMoneyMinor(statement.paidMinor, statement.currency, "ro-RO")}</span>
+            <span>Nefacturat: {formatMoneyMinor(statement.uninvoicedMinor, statement.currency, "ro-RO")}</span>
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Documente</CardTitle>
+          <CardDescription>{statement.documents.length} documente</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {hasDocuments ? <StatementDocumentsTable rows={statement.documents} currency={statement.currency} /> : <p className="billing-page__readonly">Nu există documente în perioada selectată.</p>}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Lucrări nefacturate</CardTitle>
+          <CardDescription>{statement.uninvoicedWorks.length} lucrări</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {hasWorks ? <StatementWorksTable rows={statement.uninvoicedWorks} currency={statement.currency} /> : <p className="billing-page__readonly">Nu există lucrări nefacturate în perioada selectată.</p>}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function StatementDocumentsTable({ currency, rows }: { readonly currency: string; readonly rows: readonly BillingStatementRow[] }): ReactNode {
+  const columns = useMemo<readonly DataTableColumn<BillingStatementRow>[]>(() => [
+    { id: "number", header: "Document", renderCell: (row) => row.documentNumber ?? "-" },
+    { id: "type", header: "Tip", renderCell: (row) => toDocumentTypeLabel(row.documentType) },
+    { id: "issue", header: "Emis", renderCell: (row) => formatDate(row.issueDate) },
+    { id: "due", header: "Scadență", renderCell: (row) => row.dueDate ? formatDate(row.dueDate) : "-" },
+    { id: "works", header: "Lucrări", renderCell: (row) => row.workCodes.join(", ") || "-" },
+    { id: "total", header: "Total", align: "right", renderCell: (row) => formatMoneyMinor(row.totalMinor, currency, "ro-RO") },
+    { id: "paid", header: "Încasat", align: "right", renderCell: (row) => formatMoneyMinor(row.paidMinor, currency, "ro-RO") },
+    { id: "balance", header: "Sold", align: "right", renderCell: (row) => formatMoneyMinor(row.balanceMinor, currency, "ro-RO") },
+  ], [currency]);
+
+  return <DataTable columns={columns} emptyMessage="Nu există documente." getRowKey={(row) => row.documentId} rows={rows} />;
+}
+
+function StatementWorksTable({ currency, rows }: { readonly currency: string; readonly rows: readonly BillingStatementWorkRow[] }): ReactNode {
+  const columns = useMemo<readonly DataTableColumn<BillingStatementWorkRow>[]>(() => [
+    { id: "code", header: "Cod", renderCell: (row) => row.code },
+    { id: "createdAt", header: "Creat", renderCell: (row) => formatDate(row.createdAt) },
+    { id: "patient", header: "Pacient", renderCell: (row) => row.patientName },
+    { id: "clinic", header: "Clinică", renderCell: (row) => row.clinicName },
+    { id: "doctor", header: "Medic", renderCell: (row) => row.doctorName },
+    { id: "type", header: "Tip", renderCell: (row) => row.workTypeName },
+    { id: "price", header: "Valoare", align: "right", renderCell: (row) => formatMoneyMinor(row.totalPriceMinor, currency, "ro-RO") },
+  ], [currency]);
+
+  return <DataTable columns={columns} emptyMessage="Nu există lucrări." getRowKey={(row) => row.code} rows={rows} />;
 }
 
 function BillableWorksTab({

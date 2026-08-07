@@ -77,6 +77,10 @@ const BillingPrintPage = lazy(async () => {
   const module = await import("../features/billing/billing-print-page.js");
   return { default: module.BillingPrintPage };
 });
+const BillingStatementPrintPage = lazy(async () => {
+  const module = await import("../features/billing/billing-statement-print-page.js");
+  return { default: module.BillingStatementPrintPage };
+});
 const PricingPage = lazy(async () => {
   const module = await import("../features/pricing/pricing-page.js");
   return { default: module.PricingPage };
@@ -134,6 +138,10 @@ const router = createBrowserRouter([
       {
         element: <PermissionRoute requiredPermissions={["invoice.download"]}><LazyRoute><BillingPrintPage /></LazyRoute></PermissionRoute>,
         path: "billing/documents/:id/print",
+      },
+      {
+        element: <PermissionRoute requiredPermissions={["finance.read_reports"]}><LazyRoute><BillingStatementPrintPage /></LazyRoute></PermissionRoute>,
+        path: "billing/statements/:scope/print",
       },
       {
         element: <PermissionRoute requiredPermissions={["clinics.read"]}><LazyRoute><ClinicsPage /></LazyRoute></PermissionRoute>,

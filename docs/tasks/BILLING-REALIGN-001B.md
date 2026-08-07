@@ -6,6 +6,19 @@ COMPLETED
 
 Implemented in the application. `BILLING-REALIGN-001C` remains planned and was not started.
 
+Delivered scope:
+
+- company-scoped manager billing workspace;
+- billing overview counters and tabs;
+- billable works filters and selection;
+- proformas, invoices, manual payment recording, receivables/restanțe;
+- clinic and doctor statements with printable browser views;
+- month-end registry;
+- company-scoped CSV/print exports;
+- read-only ambiguous legacy review;
+- RBAC and audit coverage;
+- test and documentation updates.
+
 ## Objective
 
 Finish the manager-facing billing workspace so `NC` and `NG` managers can quickly find, filter, issue, and track proformas, invoices, and manual receipts without mixing companies.

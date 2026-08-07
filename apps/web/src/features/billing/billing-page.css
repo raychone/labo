@@ -193,6 +193,96 @@
   }
 }
 
+.billing-page__statement {
+  display: grid;
+  gap: var(--dl-space-4);
+}
+
+.billing-statement {
+  background: var(--dl-color-surface);
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  display: grid;
+  gap: var(--dl-space-4);
+  padding: var(--dl-space-4);
+}
+
+.billing-statement__header,
+.billing-statement__summary,
+.billing-statement__section-header {
+  display: grid;
+  gap: var(--dl-space-2);
+}
+
+.billing-statement__header {
+  border-bottom: var(--dl-border-width) solid var(--dl-color-border);
+  padding-bottom: var(--dl-space-4);
+}
+
+.billing-statement__brand {
+  display: grid;
+  gap: var(--dl-space-1);
+}
+
+.billing-statement__brand strong {
+  font-size: var(--dl-font-size-section-title);
+}
+
+.billing-statement__recipient {
+  display: grid;
+  gap: var(--dl-space-1);
+}
+
+.billing-statement__recipient span,
+.billing-statement__recipient small,
+.billing-statement__summary span,
+.billing-statement__section-header span {
+  color: var(--dl-color-text-muted);
+}
+
+.billing-statement__summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-bottom: var(--dl-border-width) solid var(--dl-color-border);
+  padding-bottom: var(--dl-space-4);
+}
+
+.billing-statement__summary div {
+  display: grid;
+  gap: var(--dl-space-1);
+}
+
+.billing-statement__summary strong {
+  font-size: var(--dl-font-size-card-title);
+}
+
+.billing-statement__section {
+  display: grid;
+  gap: var(--dl-space-3);
+}
+
+.billing-statement__section-header {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.billing-statement__table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.billing-statement__table th,
+.billing-statement__table td {
+  border-bottom: var(--dl-border-width) solid var(--dl-color-border);
+  padding: var(--dl-space-2);
+  text-align: left;
+  vertical-align: top;
+}
+
+.billing-statement__table th {
+  font-size: var(--dl-font-size-small);
+  color: var(--dl-color-text-muted);
+}
+
 @media print {
   .app-shell__sidebar,
   .app-shell__topbar,
@@ -218,5 +308,10 @@
   .billing-page__print-preview,
   .billing-print {
     border: 0;
+  }
+
+  .billing-statement {
+    border: 0;
+    box-shadow: none;
   }
 }

@@ -46,7 +46,7 @@ const permissions = {
     "works.create",
     "works.read_all",
   ],
-  reception: ["patients.read", "clinics.read", "scan.use", "works.create", "works.read_all"],
+  reception: ["patients.read", "clinics.read", "cycles.create_next", "scan.use", "works.create", "works.read_all"],
   technician: ["scan.use", "technician.workbench.read", "works.claim.available.read", "works.claim.own.read", "works.read_assigned"],
 } as const;
 
@@ -285,7 +285,7 @@ describe("DashboardPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Recepție" })).toBeDefined();
     expect(screen.getAllByRole("link", { name: "Lucrare nouă" }).length).toBe(1);
-    expect(screen.getAllByRole("link", { name: "Înregistrează revenirea" }).length).toBe(1);
+    expect(screen.getByRole("button", { name: "Înregistrează revenirea" })).toBeDefined();
     expect(screen.getAllByRole("link", { name: "Scanează lucrare" }).length).toBe(1);
     expect(screen.queryByText("Situație financiară")).toBeNull();
     expect(screen.queryByRole("link", { name: "Lucrările mele" })).toBeNull();

@@ -42,7 +42,7 @@ import {
   type SelectOption,
 } from "@dental-lab/ui";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
@@ -353,7 +353,7 @@ export function StatusPage(): ReactNode {
   const [searchParams, setSearchParams] = useSearchParams();
   const query = useMemo(() => readQuery(searchParams), [searchParams]);
   const currentStageName = searchParams.get("currentStageName") ?? "";
-  const [filtersOpen, setFiltersOpen] = useState(query.tab === "IN_PROGRESS");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState<OperationalStatusRow | null>(null);
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   const canReadStatus = hasPermission(permissionsQuery.data, "works.read_all") || hasPermission(permissionsQuery.data, "works.read_assigned");
@@ -378,10 +378,6 @@ export function StatusPage(): ReactNode {
     ? (workTypesQuery.data ?? []).map((workType) => ({ label: `${workType.code} · ${workType.name}`, value: workType.id }))
     : currentRowWorkTypeOptions;
   const visibleRows = useMemo(() => getFilteredRows(rows, currentStageName), [currentStageName, rows]);
-
-  useEffect(() => {
-    setFiltersOpen(query.tab === "IN_PROGRESS");
-  }, [query.tab]);
 
   function patchQuery(patch: StatusQueryPatch): void {
     setSearchParams((current) => updateSearchParams(current, { ...patch, page: patch.page ?? 1 }));

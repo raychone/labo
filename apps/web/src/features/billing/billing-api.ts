@@ -237,6 +237,14 @@ export function useAmbiguousLegacyRecords(enabled: boolean) {
   return useQuery({ enabled, queryFn: fetchAmbiguousLegacyRecords, queryKey: ["billing", "ambiguous-legacy"], retry: false });
 }
 
+export function useClinicStatement(params: BillingStatementParams, enabled: boolean) {
+  return useQuery({ enabled, queryFn: () => fetchClinicStatement(params), queryKey: billingQueryKeys.statementClinic(params), retry: false });
+}
+
+export function useDoctorStatement(params: BillingStatementParams, enabled: boolean) {
+  return useQuery({ enabled, queryFn: () => fetchDoctorStatement(params), queryKey: billingQueryKeys.statementDoctor(params), retry: false });
+}
+
 function useBillingMutation<TVariables>(mutationFn: (variables: TVariables) => Promise<BillingDocumentDetail>) {
   const queryClient = useQueryClient();
   return useMutation({

@@ -107,15 +107,18 @@ describe("AuthenticatedAppShell", () => {
     renderWithProviders(
       <Routes>
         <Route element={<AuthenticatedAppShell />} path="/">
-          <Route element={<div>Works content</div>} path="works" />
+          <Route element={<div>Dashboard content</div>} path="dashboard" />
         </Route>
       </Routes>,
+      ["/dashboard"],
     );
 
     await waitFor(() => expect(screen.getAllByText("Laborator Test").length).toBeGreaterThan(0), { timeout: 5_000 });
-    await waitFor(() => expect(screen.getAllByText("Lucrări").length).toBeGreaterThan(0), { timeout: 5_000 });
-    expect(screen.queryByText("Utilizatori")).toBeNull();
-    expect(screen.getByRole("link", { name: /Lucrări/ }).getAttribute("aria-current")).toBe("page");
+    await waitFor(() => expect(screen.getAllByText("Status").length).toBeGreaterThan(0), { timeout: 5_000 });
+    expect(screen.getByRole("link", { name: /Status/ })).toBeDefined();
+    expect(screen.queryByText("Lucrări")).toBeNull();
+    expect(screen.queryByText("Scanare")).toBeNull();
+    expect(screen.queryByText("Centru operațional")).toBeNull();
   });
 
   it("renders technician navigation when permissions are scoped rather than ALL", async () => {
