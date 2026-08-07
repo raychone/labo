@@ -28,6 +28,14 @@
   justify-content: space-between;
 }
 
+.works-page__card-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-3);
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
 .works-page__header h1 {
   margin: 0;
 }
@@ -67,6 +75,11 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--dl-space-2);
+}
+
+.works-page__filters-collapsed {
+  color: var(--dl-color-text-muted);
+  margin: 0;
 }
 
 .works-page__filters,

@@ -341,6 +341,7 @@ export function WorksPage(): ReactNode {
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [params, setParams] = useState<WorksListParams>(defaultListParams);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [qrWorkId, setQrWorkId] = useState<string | null>(null);
@@ -523,73 +524,86 @@ export function WorksPage(): ReactNode {
 
         <Card>
           <CardHeader>
-            <CardTitle>Registru lucrări</CardTitle>
-            <CardDescription>Total: {worksQuery.data?.total ?? 0} · filtre pentru recepție, responsabilitate și companie de execuție.</CardDescription>
+            <div className="works-page__card-header-row">
+              <div>
+                <CardTitle>Registru lucrări</CardTitle>
+                <CardDescription>Total: {worksQuery.data?.total ?? 0} · filtre pentru recepție, responsabilitate și companie de execuție.</CardDescription>
+              </div>
+              <Button onClick={() => setFiltersOpen((current) => !current)} variant="secondary">
+                {filtersOpen ? "Ascunde filtrele" : "Afișează filtrele"}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="works-page__table-card">
-            <div className="works-page__quick-filters" aria-label="Filtre rapide lucrări">
-              <Button onClick={() => setParams((current) => ({ ...current, deadlineFilter: "TODAY", page: 1 }))} variant="outline">Astăzi</Button>
-              <Button onClick={() => setParams((current) => ({ ...current, deadlineFilter: "LATE", page: 1 }))} variant="outline">Întârziate</Button>
-              <Button onClick={() => setParams((current) => ({ ...current, claimStatus: "UNCLAIMED", page: 1 }))} variant="outline">Disponibile</Button>
-              <Button onClick={() => setParams(defaultListParams)} variant="ghost">Resetează</Button>
-            </div>
-            <div className="works-page__filters">
-              <TextInput
-                label="Căutare"
-                onChange={(event) => setParams((current) => ({ ...current, page: 1, search: event.target.value || undefined }))}
-                placeholder="Cod, pacient, referință"
-                type="search"
-                value={params.search ?? ""}
-              />
-              <Select
-                label="Cabinet"
-                onChange={(event) => setParams((current) => ({ ...current, clinicId: event.target.value || undefined, doctorId: undefined, page: 1 }))}
-                options={(clinicOptionsQuery.data ?? []).map((clinic) => ({ label: `${clinic.code} · ${clinic.name}`, value: clinic.id }))}
-                placeholder="Toate cabinetele"
-                value={params.clinicId ?? ""}
-              />
-              <Select
-                disabled={params.clinicId === undefined}
-                label="Medic"
-                onChange={(event) => setParams((current) => ({ ...current, doctorId: event.target.value || undefined, page: 1 }))}
-                options={(doctorOptionsQuery.data ?? []).map((doctor) => ({ label: doctor.displayName, value: doctor.id }))}
-                placeholder="Toți medicii"
-                value={params.doctorId ?? ""}
-              />
-              <Select
-                label="Prioritate"
-                onChange={(event) => setParams((current) => ({ ...current, page: 1, priority: event.target.value === "URGENT" ? "URGENT" : event.target.value === "NORMAL" ? "NORMAL" : undefined }))}
-                options={priorityFilterOptions}
-                value={params.priority ?? ""}
-              />
-              <Select
-                label="Termen"
-                onChange={(event) => setParams((current) => ({ ...current, deadlineFilter: event.target.value === "" ? undefined : event.target.value as NonNullable<WorksListParams["deadlineFilter"]>, page: 1 }))}
-                options={deadlineFilterOptions}
-                value={params.deadlineFilter ?? ""}
-              />
-              <Select
-                label="Responsabilitate"
-                onChange={(event) => setParams((current) => ({ ...current, claimStatus: event.target.value === "CLAIMED" || event.target.value === "UNCLAIMED" ? event.target.value : undefined, page: 1 }))}
-                options={claimStatusFilterOptions}
-                value={params.claimStatus ?? ""}
-              />
-              <Select
-                label="Companie execuție"
-                onChange={(event) => setParams((current) => ({ ...current, executionLegalEntityCode: event.target.value === "NC" || event.target.value === "NG" ? event.target.value : undefined, page: 1 }))}
-                options={legalEntityFilterOptions}
-                value={params.executionLegalEntityCode ?? ""}
-              />
-              {canReadTechnicianOptions ? (
-                <Select
-                  label="Tehnician"
-                  onChange={(event) => setParams((current) => ({ ...current, assignedTechnicianId: event.target.value || undefined, page: 1 }))}
-                  options={(techniciansQuery.data ?? []).map((technician) => ({ label: technician.displayName, value: technician.id }))}
-                  placeholder="Toți tehnicienii"
-                  value={params.assignedTechnicianId ?? ""}
-                />
-              ) : null}
-            </div>
+            {filtersOpen ? (
+              <>
+                <div className="works-page__quick-filters" aria-label="Filtre rapide lucrări">
+                  <Button onClick={() => setParams((current) => ({ ...current, deadlineFilter: "TODAY", page: 1 }))} variant="outline">Astăzi</Button>
+                  <Button onClick={() => setParams((current) => ({ ...current, deadlineFilter: "LATE", page: 1 }))} variant="outline">Întârziate</Button>
+                  <Button onClick={() => setParams((current) => ({ ...current, claimStatus: "UNCLAIMED", page: 1 }))} variant="outline">Disponibile</Button>
+                  <Button onClick={() => setParams(defaultListParams)} variant="ghost">Resetează</Button>
+                </div>
+                <div className="works-page__filters">
+                  <TextInput
+                    label="Căutare"
+                    onChange={(event) => setParams((current) => ({ ...current, page: 1, search: event.target.value || undefined }))}
+                    placeholder="Cod, pacient, referință"
+                    type="search"
+                    value={params.search ?? ""}
+                  />
+                  <Select
+                    label="Cabinet"
+                    onChange={(event) => setParams((current) => ({ ...current, clinicId: event.target.value || undefined, doctorId: undefined, page: 1 }))}
+                    options={(clinicOptionsQuery.data ?? []).map((clinic) => ({ label: `${clinic.code} · ${clinic.name}`, value: clinic.id }))}
+                    placeholder="Toate cabinetele"
+                    value={params.clinicId ?? ""}
+                  />
+                  <Select
+                    disabled={params.clinicId === undefined}
+                    label="Medic"
+                    onChange={(event) => setParams((current) => ({ ...current, doctorId: event.target.value || undefined, page: 1 }))}
+                    options={(doctorOptionsQuery.data ?? []).map((doctor) => ({ label: doctor.displayName, value: doctor.id }))}
+                    placeholder="Toți medicii"
+                    value={params.doctorId ?? ""}
+                  />
+                  <Select
+                    label="Prioritate"
+                    onChange={(event) => setParams((current) => ({ ...current, page: 1, priority: event.target.value === "URGENT" ? "URGENT" : event.target.value === "NORMAL" ? "NORMAL" : undefined }))}
+                    options={priorityFilterOptions}
+                    value={params.priority ?? ""}
+                  />
+                  <Select
+                    label="Termen"
+                    onChange={(event) => setParams((current) => ({ ...current, deadlineFilter: event.target.value === "" ? undefined : event.target.value as NonNullable<WorksListParams["deadlineFilter"]>, page: 1 }))}
+                    options={deadlineFilterOptions}
+                    value={params.deadlineFilter ?? ""}
+                  />
+                  <Select
+                    label="Responsabilitate"
+                    onChange={(event) => setParams((current) => ({ ...current, claimStatus: event.target.value === "CLAIMED" || event.target.value === "UNCLAIMED" ? event.target.value : undefined, page: 1 }))}
+                    options={claimStatusFilterOptions}
+                    value={params.claimStatus ?? ""}
+                  />
+                  <Select
+                    label="Companie execuție"
+                    onChange={(event) => setParams((current) => ({ ...current, executionLegalEntityCode: event.target.value === "NC" || event.target.value === "NG" ? event.target.value : undefined, page: 1 }))}
+                    options={legalEntityFilterOptions}
+                    value={params.executionLegalEntityCode ?? ""}
+                  />
+                  {canReadTechnicianOptions ? (
+                    <Select
+                      label="Tehnician"
+                      onChange={(event) => setParams((current) => ({ ...current, assignedTechnicianId: event.target.value || undefined, page: 1 }))}
+                      options={(techniciansQuery.data ?? []).map((technician) => ({ label: technician.displayName, value: technician.id }))}
+                      placeholder="Toți tehnicienii"
+                      value={params.assignedTechnicianId ?? ""}
+                    />
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <p className="works-page__filters-collapsed">Filtrele sunt ascunse. Deschide-le când ai nevoie de rafinare.</p>
+            )}
             <DataTable
               columns={columns}
               emptyMessage="Nu există lucrări pentru filtrele curente."

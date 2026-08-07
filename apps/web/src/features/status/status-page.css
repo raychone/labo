@@ -127,6 +127,7 @@
 }
 
 .status-page__badge-stack,
+.status-page__technician,
 .status-page__owner {
   display: grid;
   gap: var(--dl-space-1);
@@ -266,6 +267,17 @@
 
 .status-page__desktop-table {
   display: none;
+}
+
+.status-page__drawer-grid {
+  display: grid;
+  gap: var(--dl-space-3);
+}
+
+.status-page__drawer-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: var(--dl-space-2);
 }
 
 @media (min-width: 720px) {

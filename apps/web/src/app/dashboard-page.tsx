@@ -137,9 +137,6 @@ export function DashboardPage(): ReactNode {
           <p>{auth.user?.displayName ?? "Utilizator"} · dashboard compus după permisiunile contului.</p>
         </div>
         <div className="dashboard-page__actions">
-          {canCreateWork ? <DashboardAction label="Lucrare nouă" to="/works" variant="primary" /> : null}
-          {canCreateWork ? <DashboardAction label="Înregistrează revenirea" to="/works" /> : null}
-          {canScanWork ? <DashboardAction label="Scanează lucrare" to="/scan" /> : null}
           {canReadTechnician ? <DashboardAction label="Lucrările mele" to="/workbench" /> : null}
         </div>
       </div>

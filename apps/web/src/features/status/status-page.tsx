@@ -32,10 +32,10 @@ import {
   DataTable,
   EmptyState,
   ErrorState,
+  Drawer,
   LoadingState,
   PriorityBadge,
   Select,
-  StatusBadge,
   TextInput,
   type DataTableColumn,
   type DataTableSort,
@@ -43,7 +43,7 @@ import {
 } from "@dental-lab/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
 import { fetchClinicOptions, fetchDoctorOptions } from "../clinics/clinics-api.js";
@@ -351,10 +351,10 @@ const operationalStateOptions: readonly SelectOption[] = OPERATIONAL_STATUS_TABS
 
 export function StatusPage(): ReactNode {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
   const query = useMemo(() => readQuery(searchParams), [searchParams]);
   const currentStageName = searchParams.get("currentStageName") ?? "";
   const [filtersOpen, setFiltersOpen] = useState(query.tab === "IN_PROGRESS");
+  const [selectedRow, setSelectedRow] = useState<OperationalStatusRow | null>(null);
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   const canReadStatus = hasPermission(permissionsQuery.data, "works.read_all") || hasPermission(permissionsQuery.data, "works.read_assigned");
   const canReadPricingOptions = hasPermission(permissionsQuery.data, "pricing.read");
@@ -388,7 +388,22 @@ export function StatusPage(): ReactNode {
   }
 
   const columns = useMemo<readonly DataTableColumn<OperationalStatusRow>[]>(() => [
-    { header: "Cod", id: "workCode", isSortable: true, renderCell: (row) => <strong>{row.workCode}</strong> },
+    {
+      header: "Tehnician",
+      id: "technician",
+      renderCell: (row) => (
+        <div className="status-page__technician">
+          <div className="status-page__owner-line">
+            {row.workOwner?.preferredColor ? <span className="status-page__color-dot" style={{ backgroundColor: getSafeColor(row.workOwner.preferredColor) ?? "transparent" }} /> : null}
+            <strong>{row.workOwner?.displayName ?? "Fără tehnician"}</strong>
+          </div>
+          <span className="status-page__muted">{row.workOwner?.preferredColor ? "Culoare selectată" : "Fără culoare"}</span>
+          <Link className="status-page__open-link" to={`/works?workId=${encodeURIComponent(row.id)}`}>
+            Deschide
+          </Link>
+        </div>
+      ),
+    },
     {
       header: "Pacient",
       id: "patientName",
@@ -400,77 +415,32 @@ export function StatusPage(): ReactNode {
         </div>
       ),
     },
-    { header: "Cabinet", id: "clinicName", isSortable: true, renderCell: (row) => row.clinic.name },
-    { header: "Medic", id: "doctor", renderCell: (row) => row.doctor.name },
-    { header: "Tip", id: "workType", renderCell: (row) => <BadgePill label={row.workType.name} tone="neutral" /> },
     {
-      header: "Companie",
-      id: "company",
-      renderCell: (row) => row.executionCompany?.code ?? "Nefixată",
+      header: "Tip",
+      id: "workType",
+      renderCell: (row) => <BadgePill label={row.workType.name} tone="neutral" />,
     },
     {
       header: "Flux",
       id: "workflow",
       renderCell: (row) => (
         <div className="status-page__badge-stack">
-          <BadgePill label={row.workflow.currentStage?.name ?? (row.workflow.status === "COMPLETED" ? "Flux finalizat" : "Fără etapă")} tone={row.workflow.status === "COMPLETED" ? "success" : row.workflow.currentStage?.status === "IN_PROGRESS" ? "info" : "neutral"} />
+          <BadgePill
+            label={row.workflow.currentStage?.name ?? (row.workflow.status === "COMPLETED" ? "Flux finalizat" : "Fără etapă")}
+            tone={row.workflow.status === "COMPLETED" ? "success" : row.workflow.currentStage?.status === "IN_PROGRESS" ? "info" : "neutral"}
+          />
           <span className="status-page__muted">{row.workflow.progress ?? `${row.workflow.progressCompleted}/${row.workflow.progressTotal}`}</span>
         </div>
       ),
     },
     {
-      header: "Responsabili",
-      id: "owners",
-      renderCell: (row) => (
-        <div className="status-page__owner">
-          <div className="status-page__owner-line">
-            {row.workOwner?.preferredColor ? <span className="status-page__color-dot" style={{ backgroundColor: getSafeColor(row.workOwner.preferredColor) ?? "transparent" }} /> : null}
-            <strong>{row.workOwner?.displayName ?? "Fără owner"}</strong>
-          </div>
-          <span className="status-page__muted">
-            {row.currentStageTechnician?.preferredColor ? <span className="status-page__color-dot" style={{ backgroundColor: getSafeColor(row.currentStageTechnician.preferredColor) ?? "transparent" }} /> : null}
-            {row.currentStageTechnician?.displayName ?? "Fără tehnician etapă"}
-          </span>
-        </div>
-      ),
-    },
-    {
-      header: "Termen",
-      id: "effectiveDueAt",
-      isSortable: true,
-      renderCell: (row) => <DeadlineBadge row={row} />,
-    },
-    {
       header: "Stare",
       id: "state",
-      renderCell: (row) => <BadgePill label={toOperationalLabel(row)} tone={toStatusVariant(row) === "closed" ? "success" : toStatusVariant(row) === "production" ? "info" : toStatusVariant(row) === "rejected" ? "danger" : toStatusVariant(row) === "awaiting" ? "warning" : "neutral"} />,
-    },
-    {
-      header: "Logistică",
-      id: "logistics",
-      renderCell: (row) => row.logistics.status ? LOGISTICS_STATUS_LABELS[row.logistics.status] : "Fără status",
-    },
-    {
-      header: "Livrare",
-      id: "delivery",
-      renderCell: (row) => row.delivery.status ? DELIVERY_STATUS_LABELS[row.delivery.status] : "Fără livrare",
-    },
-    {
-      header: "Ciclu",
-      id: "cycle",
-      renderCell: (row) => row.currentCycle?.label ?? "-",
-    },
-    {
-      header: "Fișă",
-      id: "realLabSheet",
       renderCell: (row) => (
-        <div>
-          <StatusBadge
-            label={row.realLabSheet.label}
-            variant={row.realLabSheet.status === "FINALIZED" ? "closed" : row.realLabSheet.status === "COMPLETE" ? "production" : "awaiting"}
-          />
-          <span className="status-page__muted">{row.realLabSheet.cycleNumber ? `Ciclul ${row.realLabSheet.cycleNumber}` : "Fără ciclu"}</span>
-        </div>
+        <BadgePill
+          label={toOperationalLabel(row)}
+          tone={toStatusVariant(row) === "closed" ? "success" : toStatusVariant(row) === "production" ? "info" : toStatusVariant(row) === "rejected" ? "danger" : toStatusVariant(row) === "awaiting" ? "warning" : "neutral"}
+        />
       ),
     },
     {
@@ -665,44 +635,34 @@ export function StatusPage(): ReactNode {
                 error={statusQuery.isError ? getErrorMessage(statusQuery.error) : undefined}
                 getRowKey={(row) => row.id}
                 isLoading={statusQuery.isLoading}
-                onRowAction={(row) => navigate(`/works?workId=${encodeURIComponent(row.id)}`)}
+                onRowAction={(row) => setSelectedRow(row)}
                 onSortChange={(sort) => patchQuery(toApiSort(sort))}
                 pagination={{
                   onPageChange: (page) => patchQuery({ page }),
                   page: statusQuery.data?.meta.page ?? query.page,
                   pageCount: Math.max(statusQuery.data?.meta.totalPages ?? 1, 1),
                 }}
-                rowActionLabel="Deschide"
+                rowActionLabel="Detalii"
                 rows={visibleRows}
                 sort={toDataSort(query)}
               />
             </div>
 
             <StatusCards
+              onOpenDetails={(row) => setSelectedRow(row)}
               error={statusQuery.isError ? getErrorMessage(statusQuery.error) : undefined}
               isLoading={statusQuery.isLoading}
               rows={visibleRows}
             />
           </CardContent>
         </Card>
+        <StatusDetailDrawer onOpenChange={(open) => { if (!open) setSelectedRow(null); }} row={selectedRow} />
       </section>
     </main>
   );
 }
 
-function DeadlineBadge({ row }: { readonly row: OperationalStatusRow }): ReactNode {
-  return (
-    <div>
-      <span className={`status-page__deadline status-page__deadline--${row.deadline.state.toLowerCase()}`} title={row.deadline.tooltip}>
-        {row.deadline.badge}
-      </span>
-      <span className="status-page__muted">{formatDateTime(row.deadline.effectiveDueAt)}</span>
-      <span className="status-page__muted">{row.deadline.tooltip}</span>
-    </div>
-  );
-}
-
-function StatusCards({ error, isLoading, rows }: { readonly error: string | undefined; readonly isLoading: boolean; readonly rows: readonly OperationalStatusRow[] }): ReactNode {
+function StatusCards({ error, isLoading, onOpenDetails, rows }: { readonly error: string | undefined; readonly isLoading: boolean; readonly onOpenDetails: (row: OperationalStatusRow) => void; readonly rows: readonly OperationalStatusRow[] }): ReactNode {
   if (isLoading) {
     return <div className="status-page__mobile-cards"><LoadingState text="Se încarcă statusul" /></div>;
   }
@@ -718,53 +678,90 @@ function StatusCards({ error, isLoading, rows }: { readonly error: string | unde
         <article className="status-page__card" key={row.id}>
           <div className="status-page__card-header">
             <div>
-              <strong>{row.workCode}</strong>
+              <strong>{row.workOwner?.displayName ?? "Fără tehnician"}</strong>
               <span>{row.patient.name}</span>
             </div>
             <PriorityBadge label={toPriorityLabel(row.priority)} variant={row.priority === "URGENT" ? "urgent" : "normal"} />
           </div>
           <div className="status-page__card-grid">
-            <Metric label="Cabinet" value={row.clinic.name} />
-            <Metric label="Medic" value={row.doctor.name} />
-            <Metric label="Tip" value={row.workType.name} />
-            <Metric label="Companie" value={row.executionCompany?.code ?? "Nefixată"} />
-            <Metric label="Etapă" value={row.workflow.currentStage?.name ?? "Fără etapă"} />
-            <Metric label="Progress" value={row.workflow.progress ?? `${row.workflow.progressCompleted}/${row.workflow.progressTotal}`} />
-            <Metric
-              label="Owner"
-              value={row.workOwner
-                ? (
-                    <span className="status-page__metric-inline">
-                      {row.workOwner.preferredColor ? <span className="status-page__color-dot" style={{ backgroundColor: getSafeColor(row.workOwner.preferredColor) ?? "transparent" }} /> : null}
-                      {row.workOwner.displayName}
-                    </span>
-                  )
-                : "Fără owner"}
-            />
             <Metric
               label="Tehnician"
-              value={row.currentStageTechnician
+              value={row.workOwner
                 ? (
-                    <span className="status-page__metric-inline">
-                      {row.currentStageTechnician.preferredColor ? <span className="status-page__color-dot" style={{ backgroundColor: getSafeColor(row.currentStageTechnician.preferredColor) ?? "transparent" }} /> : null}
-                      {row.currentStageTechnician.displayName}
-                    </span>
-                  )
+                <span className="status-page__metric-inline">
+                  {row.workOwner.preferredColor ? <span className="status-page__color-dot" style={{ backgroundColor: getSafeColor(row.workOwner.preferredColor) ?? "transparent" }} /> : null}
+                  {row.workOwner.displayName}
+                </span>
+              )
                 : "Fără tehnician"}
             />
-            <Metric label="Logistică" value={row.logistics.status ? LOGISTICS_STATUS_LABELS[row.logistics.status] : "Fără status"} />
-            <Metric label="Livrare" value={row.delivery.status ? DELIVERY_STATUS_LABELS[row.delivery.status] : "Fără livrare"} />
-            <Metric label="Fișă" value={`${row.realLabSheet.label}${row.realLabSheet.cycleNumber ? ` · Ciclul ${row.realLabSheet.cycleNumber}` : ""}`} />
-            {row.currentCycle ? <Metric label="Ciclu" value={row.currentCycle.label} /> : null}
+            <Metric label="Tip" value={<BadgePill label={row.workType.name} tone="neutral" />} />
+            <Metric
+              label="Flux"
+              value={
+                <span className="status-page__metric-inline">
+                  <BadgePill label={row.workflow.currentStage?.name ?? "Fără etapă"} tone={row.workflow.status === "COMPLETED" ? "success" : row.workflow.currentStage?.status === "IN_PROGRESS" ? "info" : "neutral"} />
+                  <span>{row.workflow.progress ?? `${row.workflow.progressCompleted}/${row.workflow.progressTotal}`}</span>
+                </span>
+              }
+            />
+            <Metric label="Stare" value={<BadgePill label={toOperationalLabel(row)} tone={toStatusVariant(row) === "closed" ? "success" : toStatusVariant(row) === "production" ? "info" : toStatusVariant(row) === "rejected" ? "danger" : toStatusVariant(row) === "awaiting" ? "warning" : "neutral"} />} />
+            <Metric label="Prioritate" value={<PriorityBadge label={toPriorityLabel(row.priority)} variant={row.priority === "URGENT" ? "urgent" : "normal"} />} />
           </div>
-          <DeadlineBadge row={row} />
           <div className="status-page__card-actions">
-            <BadgePill label={toOperationalLabel(row)} tone={toStatusVariant(row) === "closed" ? "success" : toStatusVariant(row) === "production" ? "info" : toStatusVariant(row) === "rejected" ? "danger" : toStatusVariant(row) === "awaiting" ? "warning" : "neutral"} />
+            <Button onClick={() => onOpenDetails(row)} variant="outline">Detalii</Button>
             <Link className="status-page__open-link" to={`/works?workId=${encodeURIComponent(row.id)}`}>Deschide</Link>
           </div>
         </article>
       ))}
     </div>
+  );
+}
+
+function StatusDetailDrawer({ onOpenChange, row }: { readonly onOpenChange: (open: boolean) => void; readonly row: OperationalStatusRow | null }): ReactNode {
+  return (
+    <Drawer
+      description={row ? `${row.workCode} · ${row.patient.name}` : "Detalii lucrare"}
+      isOpen={row !== null}
+      onOpenChange={onOpenChange}
+      title="Detalii lucrare"
+    >
+      {row ? (
+        <div className="status-page__drawer-grid">
+          <Metric label="Cod" value={row.workCode} />
+          <Metric label="Pacient" value={row.patient.name} />
+          <Metric label="Cabinet" value={row.clinic.name} />
+          <Metric label="Medic" value={row.doctor.name} />
+          <Metric label="Tip" value={row.workType.name} />
+          <Metric
+            label="Tehnician"
+            value={row.workOwner
+              ? (
+                  <span className="status-page__metric-inline">
+                    {row.workOwner.preferredColor ? <span className="status-page__color-dot" style={{ backgroundColor: getSafeColor(row.workOwner.preferredColor) ?? "transparent" }} /> : null}
+                    {row.workOwner.displayName}
+                  </span>
+                )
+              : "Fără tehnician"}
+          />
+          <Metric label="Flux" value={`${row.workflow.currentStage?.name ?? "Fără etapă"} · ${row.workflow.progress ?? `${row.workflow.progressCompleted}/${row.workflow.progressTotal}`}`} />
+          <Metric label="Stare" value={toOperationalLabel(row)} />
+          <Metric label="Prioritate" value={toPriorityLabel(row.priority)} />
+          <Metric label="Companie" value={row.executionCompany?.code ?? "Nefixată"} />
+          <Metric label="Termen" value={row.deadline.tooltip} />
+          <Metric label="Termen efectiv" value={row.deadline.effectiveDueAt ? formatDateTime(row.deadline.effectiveDueAt) : "Fără termen"} />
+          <Metric label="Logistică" value={row.logistics.status ? LOGISTICS_STATUS_LABELS[row.logistics.status] : "Fără status"} />
+          <Metric label="Livrare" value={row.delivery.status ? DELIVERY_STATUS_LABELS[row.delivery.status] : "Fără livrare"} />
+          <Metric label="Fișă" value={`${row.realLabSheet.label}${row.realLabSheet.cycleNumber ? ` · Ciclul ${row.realLabSheet.cycleNumber}` : ""}`} />
+          <Metric label="Ciclu" value={row.currentCycle?.label ?? "Fără ciclu"} />
+          <Metric label="Creată" value={new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(row.createdAt))} />
+          <Metric label="Actualizată" value={new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(row.updatedAt))} />
+          <div className="status-page__drawer-actions">
+            <Link className="status-page__open-link" to={`/works?workId=${encodeURIComponent(row.id)}`}>Deschide lucrarea</Link>
+          </div>
+        </div>
+      ) : null}
+    </Drawer>
   );
 }
 

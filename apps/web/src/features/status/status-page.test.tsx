@@ -143,11 +143,11 @@ describe("StatusPage", () => {
     renderWithProviders(<StatusPage />);
 
     expect(await screen.findByRole("heading", { name: "Status" })).toBeDefined();
-    expect((await screen.findAllByText("WO-2026-000001")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("Tehnician Ana")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Maria Ionescu").length).toBeGreaterThan(0);
     expect(screen.getAllByText("1/4").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Ciclul 2").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Tehnician Ana").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Ceramică").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Urgent").length).toBeGreaterThan(0);
     expect(screen.getByText(/rezultate limitate la 1000/)).toBeDefined();
     expect(screen.queryByText(/120,00|RON|factură|preț/i)).toBeNull();
   });
@@ -158,7 +158,7 @@ describe("StatusPage", () => {
 
     renderWithProviders(<StatusPage />, ["/status?tab=LATE&search=Maria&sortBy=workCode&sortDirection=desc"]);
 
-    await screen.findAllByText("WO-2026-000001");
+    await screen.findAllByText("Tehnician Ana");
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/status/operational?"), expect.anything());
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("tab=LATE"), expect.anything());
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("search=Maria"), expect.anything());
@@ -175,7 +175,8 @@ describe("StatusPage", () => {
 
     renderWithProviders(<StatusPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
+    const openLink = (await screen.findAllByRole("link", { name: "Deschide" }))[0];
+    fireEvent.click(openLink!);
     expect(await screen.findByText("Works detail route")).toBeDefined();
   });
 });

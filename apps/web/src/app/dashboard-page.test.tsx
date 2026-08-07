@@ -284,9 +284,9 @@ describe("DashboardPage", () => {
     renderWithProviders(<DashboardPage />);
 
     expect(await screen.findByRole("heading", { name: "Recepție" })).toBeDefined();
-    expect(screen.getAllByRole("link", { name: "Lucrare nouă" }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: "Înregistrează revenirea" }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: "Scanează lucrare" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Lucrare nouă" }).length).toBe(1);
+    expect(screen.getAllByRole("link", { name: "Înregistrează revenirea" }).length).toBe(1);
+    expect(screen.getAllByRole("link", { name: "Scanează lucrare" }).length).toBe(1);
     expect(screen.queryByText("Situație financiară")).toBeNull();
     expect(screen.queryByRole("link", { name: "Lucrările mele" })).toBeNull();
   });
