@@ -577,6 +577,7 @@ async function seedDemoUsers(prisma: PrismaClient, dataset: DemoDataset, passwor
         isActive: true,
         mustChangePassword: false,
         passwordHash,
+        ...(user.preferredColor ? { preferredColor: user.preferredColor } : {}),
       },
     });
 

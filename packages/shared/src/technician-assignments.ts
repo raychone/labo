@@ -7,6 +7,7 @@ export type TechnicianQueueCategory = (typeof TECHNICIAN_QUEUE_CATEGORIES)[numbe
 
 export interface TechnicianOption {
   readonly activeAssignedStages: number;
+  readonly preferredColor: string | null;
   readonly displayName: string;
   readonly email: string;
   readonly id: string;

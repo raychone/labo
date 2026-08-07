@@ -5,7 +5,7 @@ import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
 import type { LegalEntityContext } from "../organization-context/organization-context.view.js";
 import { PatientsService } from "../patients/patients.service.js";
-import { AuthorizationService } from "../rbac/authorization.service.js";
+import { AuthorizationService, doesScopeSatisfy } from "../rbac/authorization.service.js";
 import type { PermissionKey } from "../rbac/permission-registry.js";
 import { DEFAULT_LABORATORY_SETTINGS, SETTINGS_SINGLETON_KEY } from "../settings/settings.constants.js";
 import { WorkQrTokenService } from "../qr/work-qr-token.service.js";
@@ -80,6 +80,7 @@ const WORK_ORDER_INCLUDE = {
     select: {
       displayName: true,
       id: true,
+      preferredColor: true,
     },
   },
   assignmentEvents: {
@@ -88,6 +89,7 @@ const WORK_ORDER_INCLUDE = {
         select: {
           displayName: true,
           id: true,
+          preferredColor: true,
         },
       },
       newLegalEntity: {
@@ -100,6 +102,7 @@ const WORK_ORDER_INCLUDE = {
         select: {
           displayName: true,
           id: true,
+          preferredColor: true,
         },
       },
       previousLegalEntity: {
@@ -112,6 +115,7 @@ const WORK_ORDER_INCLUDE = {
         select: {
           displayName: true,
           id: true,
+          preferredColor: true,
         },
       },
     },
@@ -143,6 +147,7 @@ const WORK_ORDER_INCLUDE = {
             select: {
               displayName: true,
               id: true,
+              preferredColor: true,
             },
           },
         },
@@ -160,6 +165,7 @@ const WORK_ORDER_INCLUDE = {
                 select: {
                   displayName: true,
                   id: true,
+                  preferredColor: true,
                 },
               },
             },
@@ -170,18 +176,21 @@ const WORK_ORDER_INCLUDE = {
                 select: {
                   displayName: true,
                   id: true,
+                  preferredColor: true,
                 },
               },
               startedBy: {
                 select: {
                   displayName: true,
                   id: true,
+                  preferredColor: true,
                 },
               },
               assignedBy: {
                 select: {
                   displayName: true,
                   id: true,
+                  preferredColor: true,
                 },
               },
               assignedUser: {
@@ -189,6 +198,7 @@ const WORK_ORDER_INCLUDE = {
                   displayName: true,
                   email: true,
                   id: true,
+                  preferredColor: true,
                 },
               },
             },
@@ -355,7 +365,7 @@ export class WorksService {
 
   public async listWorks(actorUserId: string, query: ListWorksQueryDto, includePricing: boolean): Promise<PaginatedWorksView> {
     const access = await this.createClaimAccess(actorUserId);
-    return this.listWorksWithWhere(query, includePricing, access, {});
+    return this.listWorksWithWhere(query, includePricing, access, await this.getVisibleWorkWhere(actorUserId), {});
   }
 
   public async listAvailableForClaim(actorUserId: string, query: ListClaimWorksQueryDto): Promise<PaginatedWorksView> {
@@ -365,7 +375,7 @@ export class WorksService {
       userId: actorUserId,
     });
     const access = await this.createClaimAccess(actorUserId);
-    return this.listWorksWithWhere(query, false, access, { claimStatus: "UNCLAIMED" });
+    return this.listWorksWithWhere(query, false, access, await this.getVisibleWorkWhere(actorUserId), { claimStatus: "UNCLAIMED" });
   }
 
   public async listMyClaimed(actorUserId: string, query: ListClaimWorksQueryDto): Promise<PaginatedWorksView> {
@@ -375,7 +385,7 @@ export class WorksService {
       userId: actorUserId,
     });
     const access = await this.createClaimAccess(actorUserId);
-    return this.listWorksWithWhere(query, false, access, {
+    return this.listWorksWithWhere(query, false, access, await this.getVisibleWorkWhere(actorUserId), {
       assignedTechnicianId: actorUserId,
       claimStatus: "CLAIMED",
     });
@@ -385,6 +395,7 @@ export class WorksService {
     query: ListWorksQueryDto,
     includePricing: boolean,
     access: WorkClaimAccessViewInput,
+    visibilityWhere: Prisma.WorkOrderWhereInput,
     enforcedWhere: Prisma.WorkOrderWhereInput,
   ): Promise<PaginatedWorksView> {
     const pageSize = Math.min(query.pageSize, 100);
@@ -418,16 +429,17 @@ export class WorksService {
             ],
           }
         : {}),
+      ...visibilityWhere,
       ...enforcedWhere,
     };
 
     const allMatchingWorkOrders = await this.prisma.workOrder.findMany({
-        include: WORK_ORDER_INCLUDE,
-        orderBy: {
-          [query.sortBy]: query.sortDirection,
-        },
-        where,
-      });
+      include: WORK_ORDER_INCLUDE,
+      orderBy: {
+        [query.sortBy]: query.sortDirection,
+      },
+      where,
+    });
     const filteredWorkOrders = query.deadlineFilter
       ? allMatchingWorkOrders.filter((workOrder) => isDeadlineInFilter({
           effectiveDueAt: workOrder.effectiveDueAt?.toISOString() ?? null,
@@ -457,6 +469,55 @@ export class WorksService {
     }, isCompletedOnTimeInWindow(workOrder, sevenDaysAgo)), createEmptyDeadlineDashboardSummary());
   }
 
+  private async getVisibleWorkWhere(userId: string): Promise<Prisma.WorkOrderWhereInput> {
+    const [readAll, readAssigned, readAvailable] = await Promise.all([
+      this.authorizationService.hasPermission({ permission: "works.read_all", requiredScope: "ALL", userId }),
+      this.authorizationService.hasPermission({ permission: "works.read_assigned", userId }),
+      this.authorizationService.hasPermission({ permission: "works.claim.available.read", requiredScope: "ALL", userId }),
+    ]);
+
+    if (readAll.allowed) {
+      return {};
+    }
+    if (!readAssigned.allowed) {
+      if (!readAvailable.allowed) {
+        throw new ForbiddenException("Permission denied.");
+      }
+    }
+
+    const scopes = readAssigned.effectiveScopes;
+    const canReadAssigned = scopes.some((scope) => doesScopeSatisfy(scope, "ASSIGNED") || doesScopeSatisfy(scope, "OWN_STAGE"));
+
+    if (!canReadAssigned && !readAvailable.allowed) {
+      return { id: "__no_visible_work__" };
+    }
+
+    return {
+      OR: [
+        { assignedTechnicianId: userId },
+        { claimedByUserId: userId },
+        ...(readAvailable.allowed ? [{ claimStatus: "UNCLAIMED" as const }] : []),
+        { activeCycle: { is: { workflowExecution: { is: { currentStage: { is: { assignedUserId: userId } } } } } } },
+        { activeCycle: { is: { workflowExecution: { is: { stages: { some: { assignedUserId: userId } } } } } } },
+      ],
+    };
+  }
+
+  private async findVisibleWorkOrderOrThrow(userId: string, workOrderId: string): Promise<WorkOrderRecord> {
+    const workOrder = await this.prisma.workOrder.findFirst({
+      include: WORK_ORDER_INCLUDE,
+      where: {
+        AND: [{ id: workOrderId }, await this.getVisibleWorkWhere(userId)],
+      },
+    });
+
+    if (!workOrder) {
+      throw new NotFoundException("Work order was not found.");
+    }
+
+    return workOrder;
+  }
+
   public async listWorkTypeFormOptions(): Promise<readonly WorkTypeFormOptionView[]> {
     const workTypes = await this.prisma.workType.findMany({
       orderBy: {
@@ -477,7 +538,7 @@ export class WorksService {
   }
 
   public async getWork(actorUserId: string, workOrderId: string, includePricing: boolean): Promise<WorkDetailView> {
-    const workOrder = await this.findWorkOrderOrThrow(workOrderId);
+    const workOrder = await this.findVisibleWorkOrderOrThrow(actorUserId, workOrderId);
     return toWorkDetailView(workOrder, includePricing, await this.createClaimAccess(actorUserId));
   }
 
@@ -487,9 +548,11 @@ export class WorksService {
       requiredScope: "ASSIGNED",
       userId: actorUserId,
     });
-    const workOrder = await this.prisma.workOrder.findUnique({
+    const workOrder = await this.prisma.workOrder.findFirst({
       include: workCycleHistoryInclude,
-      where: { id: workOrderId },
+      where: {
+        AND: [{ id: workOrderId }, await this.getVisibleWorkWhere(actorUserId)],
+      },
     });
     if (!workOrder) {
       throw new NotFoundException("Work order was not found.");

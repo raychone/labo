@@ -7,6 +7,7 @@ export interface AuthUserResponse {
     readonly email: string;
     readonly id: string;
     readonly mustChangePassword: boolean;
+    readonly preferredColor: string | null;
   };
 }
 
@@ -17,6 +18,7 @@ export function toAuthenticatedUser(user: User): AuthenticatedUser {
     id: user.id,
     isActive: user.isActive,
     mustChangePassword: user.mustChangePassword,
+    preferredColor: user.preferredColor ?? null,
   };
 }
 
@@ -27,6 +29,7 @@ export function toAuthUserResponse(user: AuthenticatedUser): AuthUserResponse {
       email: user.email,
       id: user.id,
       mustChangePassword: user.mustChangePassword,
+      preferredColor: user.preferredColor ?? null,
     },
   };
 }

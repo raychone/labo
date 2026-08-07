@@ -40,6 +40,7 @@ export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
       select: {
         displayName: true;
         id: true;
+        preferredColor: true;
       };
     };
     assignmentEvents: {
@@ -48,6 +49,7 @@ export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
           select: {
             displayName: true;
             id: true;
+            preferredColor: true;
           };
         };
         newLegalEntity: {
@@ -60,6 +62,7 @@ export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
           select: {
             displayName: true;
             id: true;
+            preferredColor: true;
           };
         };
         previousLegalEntity: {
@@ -72,6 +75,7 @@ export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
           select: {
             displayName: true;
             id: true;
+            preferredColor: true;
           };
         };
       };
@@ -103,6 +107,7 @@ export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
               select: {
                 displayName: true;
                 id: true;
+                preferredColor: true;
               };
             };
           };
@@ -120,6 +125,7 @@ export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
                   select: {
                     displayName: true;
                     id: true;
+                    preferredColor: true;
                   };
                 };
               };
@@ -130,18 +136,21 @@ export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
                   select: {
                     displayName: true;
                     id: true;
+                    preferredColor: true;
                   };
                 };
                 startedBy: {
                   select: {
                     displayName: true;
                     id: true;
+                    preferredColor: true;
                   };
                 };
                 assignedBy: {
                   select: {
                     displayName: true;
                     id: true;
+                    preferredColor: true;
                   };
                 };
                 assignedUser: {
@@ -149,6 +158,7 @@ export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
                     displayName: true;
                     email: true;
                     id: true;
+                    preferredColor: true;
                   };
                 };
               };
@@ -240,18 +250,18 @@ export interface WorkClaimView {
   readonly revision: number;
   readonly source: string | null;
   readonly status: string;
-  readonly technician: { readonly displayName: string; readonly publicId: string } | null;
+  readonly technician: { readonly displayName: string; readonly preferredColor: string | null; readonly publicId: string } | null;
 }
 
 export interface WorkAssignmentEventView {
-  readonly actor: { readonly displayName: string; readonly publicId: string };
+  readonly actor: { readonly displayName: string; readonly preferredColor: string | null; readonly publicId: string };
   readonly createdAt: string;
   readonly eventType: string;
   readonly id: string;
   readonly newLegalEntity: { readonly code: string; readonly displayName: string } | null;
-  readonly newTechnician: { readonly displayName: string; readonly publicId: string } | null;
+  readonly newTechnician: { readonly displayName: string; readonly preferredColor: string | null; readonly publicId: string } | null;
   readonly previousLegalEntity: { readonly code: string; readonly displayName: string } | null;
-  readonly previousTechnician: { readonly displayName: string; readonly publicId: string } | null;
+  readonly previousTechnician: { readonly displayName: string; readonly preferredColor: string | null; readonly publicId: string } | null;
   readonly reason: string | null;
   readonly revision: number;
   readonly executionSnapshot: {
@@ -420,9 +430,9 @@ export interface ExecutionDeadlineSnapshotView {
 }
 
 export interface ExecutionSnapshotView {
-  readonly currentTechnician: { readonly displayName: string; readonly publicId: string } | null;
+  readonly currentTechnician: { readonly displayName: string; readonly preferredColor: string | null; readonly publicId: string } | null;
   readonly deadline: ExecutionDeadlineSnapshotView | null;
-  readonly originalTechnician: { readonly displayName: string; readonly publicId: string } | null;
+  readonly originalTechnician: { readonly displayName: string; readonly preferredColor: string | null; readonly publicId: string } | null;
   readonly pricing: ExecutionPricingSnapshotView | null;
   readonly summary: ExecutionSnapshotSummaryView;
 }
@@ -521,6 +531,7 @@ function toWorkClaimView(workOrder: WorkOrderRecord, access: WorkClaimAccessView
     technician: workOrder.assignedTechnician
       ? {
           displayName: workOrder.assignedTechnician.displayName,
+          preferredColor: workOrder.assignedTechnician.preferredColor,
           publicId: workOrder.assignedTechnician.id,
         }
       : null,
@@ -531,15 +542,16 @@ export function toWorkAssignmentEventView(event: WorkOrderRecord["assignmentEven
   return {
     actor: {
       displayName: event.actor.displayName,
+      preferredColor: event.actor.preferredColor,
       publicId: event.actor.id,
     },
     createdAt: event.createdAt.toISOString(),
     eventType: event.eventType,
     id: event.id,
     newLegalEntity: event.newLegalEntity ? { code: event.newLegalEntity.code, displayName: event.newLegalEntity.displayName } : null,
-    newTechnician: event.newTechnician ? { displayName: event.newTechnician.displayName, publicId: event.newTechnician.id } : null,
+    newTechnician: event.newTechnician ? { displayName: event.newTechnician.displayName, preferredColor: event.newTechnician.preferredColor, publicId: event.newTechnician.id } : null,
     previousLegalEntity: event.previousLegalEntity ? { code: event.previousLegalEntity.code, displayName: event.previousLegalEntity.displayName } : null,
-    previousTechnician: event.previousTechnician ? { displayName: event.previousTechnician.displayName, publicId: event.previousTechnician.id } : null,
+    previousTechnician: event.previousTechnician ? { displayName: event.previousTechnician.displayName, preferredColor: event.previousTechnician.preferredColor, publicId: event.previousTechnician.id } : null,
     reason: event.reason,
     revision: event.revision,
     executionSnapshot: {
@@ -586,7 +598,7 @@ function toExecutionSnapshotView(workOrder: WorkOrderRecord, includePricing: boo
   if (!snapshot) {
     return {
       currentTechnician: workOrder.assignedTechnician
-        ? { displayName: workOrder.assignedTechnician.displayName, publicId: workOrder.assignedTechnician.id }
+        ? { displayName: workOrder.assignedTechnician.displayName, preferredColor: workOrder.assignedTechnician.preferredColor, publicId: workOrder.assignedTechnician.id }
         : null,
       deadline: null,
       originalTechnician: null,
@@ -604,7 +616,7 @@ function toExecutionSnapshotView(workOrder: WorkOrderRecord, includePricing: boo
 
   return {
     currentTechnician: workOrder.assignedTechnician
-      ? { displayName: workOrder.assignedTechnician.displayName, publicId: workOrder.assignedTechnician.id }
+      ? { displayName: workOrder.assignedTechnician.displayName, preferredColor: workOrder.assignedTechnician.preferredColor, publicId: workOrder.assignedTechnician.id }
       : null,
     deadline: {
       effectiveDueAt: snapshot.deadlineEffectiveDueAt?.toISOString() ?? null,
@@ -616,6 +628,7 @@ function toExecutionSnapshotView(workOrder: WorkOrderRecord, includePricing: boo
     },
     originalTechnician: {
       displayName: snapshot.technician.displayName,
+      preferredColor: null,
       publicId: snapshot.technician.id,
     },
     pricing: includePricing

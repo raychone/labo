@@ -4,6 +4,7 @@ type TechnicianQueueCategory = "ALL" | "DUE_TODAY" | "IN_PROGRESS" | "OVERDUE" |
 
 export interface TechnicianOption {
   readonly activeAssignedStages: number;
+  readonly preferredColor: string | null;
   readonly displayName: string;
   readonly email: string;
   readonly id: string;
@@ -137,6 +138,7 @@ export type TechnicianOptionRecord = {
   readonly displayName: string;
   readonly email: string;
   readonly id: string;
+  readonly preferredColor: string | null;
   readonly _count?: { readonly assignedWorkStages?: number };
 };
 
@@ -146,6 +148,7 @@ export function toTechnicianOption(user: TechnicianOptionRecord): TechnicianOpti
     displayName: user.displayName,
     email: user.email,
     id: user.id,
+    preferredColor: user.preferredColor,
   };
 }
 

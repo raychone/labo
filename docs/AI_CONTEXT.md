@@ -39,7 +39,7 @@ Implemented or substantially implemented:
 - work form templates and runtime submissions;
 - real laboratory sheet templates, cycle-scoped sheet submissions, operational draft/complete/final states, finalization, and work-detail/workbench/scan/status integrations;
 - workflow templates and stage execution;
-- technician workbench and workload;
+- technician workbench and workload, including technician color preferences used in `/status`;
 - pricing catalog, execution rules, clinic/doctor agreements, preview resolver;
 - logistics center and delivery preparation groups;
 - deliveries and internal proof/signature rendering;
@@ -63,7 +63,7 @@ Last completed functional task: `ROLE-DASHBOARDS-002`, which completed the permi
 
 Last completed documentation task: `WORKFORM-REAL-DISCOVERY-001`, which audited the real paper work sheet and produced [discovery/WORKFORM-REAL-FIELD-AUDIT.md](discovery/WORKFORM-REAL-FIELD-AUDIT.md) and [discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md). `DOCS-TOKEN-001` created the permanent token-efficient documentation system under `docs/`.
 
-`TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable.
+`TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable. Technicians can select a personal color that is surfaced in operational status and workbench views; role navigation is intentionally scoped so technicians stay focused on their own work queue.
 
 No task is currently in progress. `BILLING-REALIGN-001C` is deferred; ambiguous legacy billing remains read-only until explicitly resumed. `DEMO-POLISH-002` is planned only and must not be started unless explicitly approved.
 

@@ -4,6 +4,7 @@ export interface AuthUser {
   readonly displayName: string;
   readonly email: string;
   readonly id: string;
+  readonly preferredColor: string | null;
 }
 
 export interface AuthUserResponse {
@@ -79,6 +80,20 @@ export async function fetchPermissions(): Promise<PermissionSnapshot> {
   const response = await apiFetch("/auth/permissions");
 
   return parseApiResponse<PermissionSnapshot>(response);
+}
+
+export async function updateCurrentUserProfile(input: { readonly preferredColor: string }): Promise<AuthUserResponse> {
+  const csrfToken = await fetchCsrfToken();
+  const response = await apiFetch("/auth/me/profile", {
+    body: JSON.stringify(input),
+    headers: {
+      "Content-Type": "application/json",
+      "x-csrf-token": csrfToken,
+    },
+    method: "PATCH",
+  });
+
+  return parseApiResponse<AuthUserResponse>(response);
 }
 
 export async function logout(csrfToken: string): Promise<void> {

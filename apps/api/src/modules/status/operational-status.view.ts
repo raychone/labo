@@ -17,12 +17,14 @@ export const operationalStatusWorkInclude = {
     select: {
       displayName: true,
       id: true,
+      preferredColor: true,
     },
   },
   claimedBy: {
     select: {
       displayName: true,
       id: true,
+      preferredColor: true,
     },
   },
   clinic: {
@@ -98,12 +100,13 @@ export const operationalStatusWorkInclude = {
         include: {
           currentStage: {
             include: {
-              assignedUser: {
-                select: {
-                  displayName: true,
-                  id: true,
-                },
+            assignedUser: {
+              select: {
+                displayName: true,
+                id: true,
+                preferredColor: true,
               },
+            },
             },
           },
           stages: {
@@ -136,6 +139,7 @@ export type OperationalStatusWorkRecord = Prisma.WorkOrderGetPayload<{ include: 
 export interface OperationalStatusPersonView {
   readonly displayName: string;
   readonly publicId: string;
+  readonly preferredColor: string | null;
 }
 
 export interface OperationalStatusRowView {
@@ -390,9 +394,10 @@ function getLatestDelivery(work: OperationalStatusWorkRecord) {
     .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())[0] ?? null;
 }
 
-function toPerson(user: { readonly displayName: string; readonly id: string }): OperationalStatusPersonView {
+function toPerson(user: { readonly displayName: string; readonly id: string; readonly preferredColor: string | null }): OperationalStatusPersonView {
   return {
     displayName: user.displayName,
+    preferredColor: user.preferredColor,
     publicId: user.id,
   };
 }

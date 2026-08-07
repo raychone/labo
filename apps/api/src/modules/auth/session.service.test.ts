@@ -11,6 +11,7 @@ const activeUser: User = {
   id: "user_1",
   isActive: true,
   mustChangePassword: false,
+  preferredColor: null,
   passwordChangedAt: new Date("2026-01-01T00:00:00.000Z"),
   passwordHash: "hash",
   updatedAt: new Date("2026-01-01T00:00:00.000Z"),

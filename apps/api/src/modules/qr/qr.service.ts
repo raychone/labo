@@ -43,6 +43,7 @@ const WORK_DETAIL_INCLUDE = {
     select: {
       displayName: true,
       id: true,
+      preferredColor: true,
     },
   },
   assignmentEvents: {
@@ -51,6 +52,7 @@ const WORK_DETAIL_INCLUDE = {
         select: {
           displayName: true,
           id: true,
+          preferredColor: true,
         },
       },
       newLegalEntity: {
@@ -63,6 +65,7 @@ const WORK_DETAIL_INCLUDE = {
         select: {
           displayName: true,
           id: true,
+          preferredColor: true,
         },
       },
       previousLegalEntity: {
@@ -75,6 +78,7 @@ const WORK_DETAIL_INCLUDE = {
         select: {
           displayName: true,
           id: true,
+          preferredColor: true,
         },
       },
     },
@@ -106,6 +110,7 @@ const WORK_DETAIL_INCLUDE = {
             select: {
               displayName: true,
               id: true,
+              preferredColor: true,
             },
           },
         },
@@ -123,6 +128,7 @@ const WORK_DETAIL_INCLUDE = {
                 select: {
                   displayName: true,
                   id: true,
+                  preferredColor: true,
                 },
               },
             },
@@ -133,18 +139,21 @@ const WORK_DETAIL_INCLUDE = {
                 select: {
                   displayName: true,
                   id: true,
+                  preferredColor: true,
                 },
               },
               startedBy: {
                 select: {
                   displayName: true,
                   id: true,
+                  preferredColor: true,
                 },
               },
               assignedBy: {
                 select: {
                   displayName: true,
                   id: true,
+                  preferredColor: true,
                 },
               },
               assignedUser: {
@@ -152,6 +161,7 @@ const WORK_DETAIL_INCLUDE = {
                   displayName: true,
                   email: true,
                   id: true,
+                  preferredColor: true,
                 },
               },
             },

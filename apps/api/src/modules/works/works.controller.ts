@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, ForbiddenException, Get, Inject, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
 import type { Request } from "express";
 
 import { AuthGuard } from "../auth/auth.guard.js";
@@ -40,8 +40,8 @@ export class WorksController {
   ) {}
 
   @Get()
-  @RequirePermission("works.read_all", "ALL")
   public async listWorks(@CurrentUser() actor: AuthenticatedUser, @Query() query: ListWorksQueryDto) {
+    await this.ensureCanReadWorks(actor.id);
     return this.worksService.listWorks(actor.id, query, await this.canReadPricing(actor.id));
   }
 
@@ -75,8 +75,8 @@ export class WorksController {
   }
 
   @Get(":id")
-  @RequirePermission("works.read_all", "ALL")
   public async getWork(@CurrentUser() actor: AuthenticatedUser, @Param("id") workOrderId: string) {
+    await this.ensureCanReadWorks(actor.id);
     return this.worksService.getWork(actor.id, workOrderId, await this.canReadPricing(actor.id));
   }
 
@@ -224,5 +224,28 @@ export class WorksController {
     });
 
     return result.allowed;
+  }
+
+  private async ensureCanReadWorks(userId: string): Promise<void> {
+    const [readAll, readAssigned, readAvailable] = await Promise.all([
+      this.authorizationService.hasPermission({
+        permission: "works.read_all",
+        requiredScope: "ALL",
+        userId,
+      }),
+      this.authorizationService.hasPermission({
+        permission: "works.read_assigned",
+        userId,
+      }),
+      this.authorizationService.hasPermission({
+        permission: "works.claim.available.read",
+        requiredScope: "ALL",
+        userId,
+      }),
+    ]);
+
+    if (!readAll.allowed && !readAssigned.allowed && !readAvailable.allowed) {
+      throw new ForbiddenException("Permission denied.");
+    }
   }
 }

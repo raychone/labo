@@ -11,6 +11,7 @@ model User {
   email                               String                     @unique
   passwordHash                        String                     @map("password_hash")
   displayName                         String                     @map("display_name")
+  preferredColor                      String?                    @map("preferred_color") @db.Char(7)
   isActive                            Boolean                    @default(true) @map("is_active")
   mustChangePassword                  Boolean                    @default(false) @map("must_change_password")
   passwordChangedAt                   DateTime                   @default(now()) @map("password_changed_at")

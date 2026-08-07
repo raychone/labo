@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Inject, Post, Req, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Inject, Patch, Post, Req, Res, UseGuards } from "@nestjs/common";
 import type { Request, Response } from "express";
 
 import { loadServerEnvironment } from "../../config/environment.js";
@@ -15,6 +15,7 @@ import { CsrfGuard } from "./csrf.guard.js";
 import { CsrfService } from "./csrf.service.js";
 import { DemoLoginDto } from "./dto/demo-login.dto.js";
 import { LoginDto } from "./dto/login.dto.js";
+import { UpdateProfileDto } from "./dto/update-profile.dto.js";
 import { getRequestMetadata } from "./request-metadata.js";
 import { SessionService } from "./session.service.js";
 import { AuthorizationService, type EffectivePermissionSnapshot } from "../rbac/authorization.service.js";
@@ -105,6 +106,21 @@ export class AuthController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<EffectivePermissionSnapshot> {
     return this.authorizationService.getEffectivePermissions(user.id);
+  }
+
+  @Patch("me/profile")
+  @HttpCode(200)
+  @UseGuards(AuthGuard, CsrfGuard)
+  public async updateProfile(
+    @Body() dto: UpdateProfileDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Req() request: Request,
+  ): Promise<AuthUserResponse> {
+    return toAuthUserResponse(await this.authService.updatePreferredColor({
+      preferredColor: dto.preferredColor,
+      requestMetadata: getRequestMetadata(request),
+      userId: user.id,
+    }));
   }
 
   @Post("logout")

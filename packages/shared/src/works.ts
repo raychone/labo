@@ -83,6 +83,7 @@ export interface WorkDeadlineSummary {
 export interface WorkClaimUserSummary {
   readonly displayName: string;
   readonly publicId: string;
+  readonly preferredColor: string | null;
 }
 
 export interface WorkClaimLegalEntitySummary {

@@ -65,10 +65,86 @@
   font-size: var(--dl-font-size-xl);
 }
 
+.status-page__card-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-3);
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
 .status-page__filters {
   display: grid;
   gap: var(--dl-space-3);
   grid-template-columns: 1fr;
+}
+
+.status-page__filters-collapsed {
+  color: var(--dl-color-text-muted);
+  margin: 0;
+}
+
+.status-page__pill {
+  align-items: center;
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-sm);
+  display: inline-flex;
+  font-size: var(--dl-font-size-sm);
+  font-weight: var(--dl-font-weight-semibold);
+  line-height: 1;
+  min-height: 28px;
+  padding: var(--dl-space-1) var(--dl-space-2);
+  width: max-content;
+}
+
+.status-page__pill--neutral {
+  background: var(--dl-color-surface-muted);
+  color: var(--dl-color-text);
+}
+
+.status-page__pill--info {
+  background: var(--dl-color-info-background);
+  border-color: var(--dl-color-info-border);
+  color: var(--dl-color-info-foreground);
+}
+
+.status-page__pill--success {
+  background: var(--dl-color-success-background);
+  border-color: var(--dl-color-success-border);
+  color: var(--dl-color-success-foreground);
+}
+
+.status-page__pill--warning {
+  background: var(--dl-color-warning-background);
+  border-color: var(--dl-color-warning-border);
+  color: var(--dl-color-warning-foreground);
+}
+
+.status-page__pill--danger {
+  background: var(--dl-color-danger-background);
+  border-color: var(--dl-color-danger-border);
+  color: var(--dl-color-danger-foreground);
+}
+
+.status-page__badge-stack,
+.status-page__owner {
+  display: grid;
+  gap: var(--dl-space-1);
+}
+
+.status-page__owner-line {
+  display: inline-flex;
+  gap: var(--dl-space-2);
+  align-items: center;
+}
+
+.status-page__color-dot {
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--dl-color-border);
+  display: inline-block;
+  flex: 0 0 auto;
+  height: 12px;
+  width: 12px;
 }
 
 .status-page__deadline {
@@ -164,6 +240,12 @@
   color: var(--dl-color-text);
   font-size: var(--dl-font-size-sm);
   overflow-wrap: anywhere;
+}
+
+.status-page__metric-inline {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--dl-space-2);
 }
 
 .status-page__open-link {

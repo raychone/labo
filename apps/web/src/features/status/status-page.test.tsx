@@ -55,7 +55,7 @@ const operationalStatusResponse: OperationalStatusResponse = {
       clinic: { id: "clinic_1", name: "Clinica Test" },
       createdAt: "2026-08-04T07:00:00.000Z",
       currentCycle: { code: "CYCLE_2", id: "cycle_2", label: "Ciclul 2", number: 2, reason: "ADJUSTMENT", status: "ACTIVE" },
-      currentStageTechnician: { displayName: "Tehnician Ana", publicId: "tech_1" },
+      currentStageTechnician: { displayName: "Tehnician Ana", preferredColor: "#0f766e", publicId: "tech_1" },
       deadline: {
         badge: "Astăzi",
         effectiveDueAt: "2026-08-04T14:00:00.000Z",
@@ -78,7 +78,7 @@ const operationalStatusResponse: OperationalStatusResponse = {
       },
       updatedAt: "2026-08-04T08:00:00.000Z",
       workCode: "WO-2026-000001",
-      workOwner: { displayName: "Tehnician Ana", publicId: "tech_1" },
+      workOwner: { displayName: "Tehnician Ana", preferredColor: "#0f766e", publicId: "tech_1" },
       workflow: {
         currentStage: { key: "ceramica", name: "Ceramică", status: "IN_PROGRESS" },
         progress: "1/4",
@@ -123,7 +123,7 @@ function createFetchMock() {
       return Promise.resolve(createJsonResponse([{ fullName: "Maria Ionescu", id: "patient_1" }]));
     }
     if (url.includes("/technicians/options")) {
-      return Promise.resolve(createJsonResponse([{ displayName: "Tehnician Ana", id: "tech_1" }]));
+      return Promise.resolve(createJsonResponse([{ activeAssignedStages: 0, displayName: "Tehnician Ana", email: "ana@example.test", id: "tech_1", preferredColor: "#0f766e" }]));
     }
     if (url.includes("/work-types/options")) {
       return Promise.resolve(createJsonResponse([{ basePriceMinor: 120_00, code: "WT-1", id: "work_type_1", name: "Coroană zirconiu" }]));
@@ -165,6 +165,7 @@ describe("StatusPage", () => {
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("sortBy=workCode"), expect.anything());
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("sortDirection=desc"), expect.anything());
 
+    fireEvent.click(screen.getByRole("button", { name: "Afișează filtrele" }));
     fireEvent.change(screen.getByLabelText("NC / NG"), { target: { value: "NC" } });
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("executionLegalEntityCode=NC"), expect.anything()));
   });

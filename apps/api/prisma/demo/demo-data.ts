@@ -6,6 +6,7 @@ export interface DemoUserSeed {
   readonly displayName: string;
   readonly email: string;
   readonly id: string;
+  readonly preferredColor?: string;
   readonly roleKey: string;
 }
 
@@ -156,8 +157,8 @@ function buildUsers(): readonly DemoUserSeed[] {
     { displayName: "Demo Manager", email: "manager@demo.local", id: "demo_user_manager", roleKey: "MANAGER" },
     { displayName: "Demo Receptie", email: "receptie@demo.local", id: "demo_user_receptie", roleKey: "RECEPTIE" },
     { displayName: "Demo Logistica", email: "logistica@demo.local", id: "demo_user_logistica", roleKey: "LOGISTICA" },
-    { displayName: "Demo Tehnician 1", email: "tehnician1@demo.local", id: "demo_user_tehnician_1", roleKey: "TEHNICIAN" },
-    { displayName: "Demo Tehnician 2", email: "tehnician2@demo.local", id: "demo_user_tehnician_2", roleKey: "TEHNICIAN" },
+    { displayName: "Demo Tehnician 1", email: "tehnician1@demo.local", id: "demo_user_tehnician_1", roleKey: "TEHNICIAN", preferredColor: "#0f766e" },
+    { displayName: "Demo Tehnician 2", email: "tehnician2@demo.local", id: "demo_user_tehnician_2", roleKey: "TEHNICIAN", preferredColor: "#7c3aed" },
     { displayName: "Demo Curier", email: "curier@demo.local", id: "demo_user_curier", roleKey: "CURIER" },
     { displayName: "Demo Medic Portal", email: "medic@demo.local", id: "demo_user_medic", roleKey: "MEDIC" },
   ];

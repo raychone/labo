@@ -1,4 +1,4 @@
-import { ForbiddenException, INestApplication, ValidationPipe } from "@nestjs/common";
+import { INestApplication, ValidationPipe } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import cookieParser from "cookie-parser";
 import request from "supertest";
@@ -73,7 +73,19 @@ describe("WorksController", () => {
       effectiveScopes: ["ALL"],
       permission: "works.read_all",
     });
-    hasPermission.mockResolvedValue({ allowed: false, effectiveScopes: [], permission: "pricing.read" });
+    hasPermission.mockImplementation(async ({ permission }) => {
+      if (permission === "works.read_all") {
+        return { allowed: true, effectiveScopes: ["ALL"], permission };
+      }
+      if (permission === "works.read_assigned") {
+        return { allowed: false, effectiveScopes: [], permission };
+      }
+      if (permission === "pricing.read") {
+        return { allowed: false, effectiveScopes: [], permission };
+      }
+
+      return { allowed: false, effectiveScopes: [], permission };
+    });
     const legalEntityGuard = {
       canActivate: vi.fn().mockImplementation((context: { switchToHttp: () => { getRequest: () => { legalEntityContext?: unknown } } }) => {
         context.switchToHttp().getRequest().legalEntityContext = {
@@ -190,7 +202,8 @@ describe("WorksController", () => {
   });
 
   it("returns 403 without works.read_all", async () => {
-    requirePermission.mockRejectedValueOnce(new ForbiddenException("Permission denied."));
+    hasPermission.mockImplementationOnce(async ({ permission }) => ({ allowed: false, effectiveScopes: [], permission }))
+      .mockImplementationOnce(async ({ permission }) => ({ allowed: false, effectiveScopes: [], permission }));
 
     await request(app.getHttpServer() as App)
       .get("/works")

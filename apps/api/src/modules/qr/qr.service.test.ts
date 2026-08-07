@@ -124,6 +124,7 @@ describe("QrService", () => {
           id: "actor_1",
           isActive: true,
           mustChangePassword: false,
+          preferredColor: null,
         },
         requestMetadata: { ipAddress: "127.0.0.1", userAgent: "vitest" },
       },

@@ -76,6 +76,7 @@ export class TechnicianWorkbenchService {
         displayName: true,
         email: true,
         id: true,
+        preferredColor: true,
       },
       where: {
         isActive: true,

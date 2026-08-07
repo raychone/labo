@@ -4,6 +4,7 @@ export interface AuthenticatedUser {
   readonly id: string;
   readonly email: string;
   readonly displayName: string;
+  readonly preferredColor?: string | null;
   readonly isActive: boolean;
   readonly mustChangePassword: boolean;
 }

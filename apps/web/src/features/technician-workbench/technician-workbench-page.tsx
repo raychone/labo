@@ -31,9 +31,11 @@ import {
 } from "@dental-lab/shared";
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { authQueryKeys, useAuthState } from "../../app/auth-state.js";
 import { fetchPermissions } from "../auth/auth-api.js";
+import { updateCurrentUserProfile } from "../auth/auth-api.js";
 import { fetchOrganizationContext } from "../organization-context/organization-context-api.js";
 import { useAvailableWorksForClaim, useClaimWork, useReleaseWork, useStartWorkflowStage, useCompleteWorkflowStage, useMyClaimedWorks } from "../works/works-api.js";
 import { useTechnicianOptions, useTechnicianWorkbench, useTechnicianWorkload } from "./technician-workbench-api.js";
@@ -61,6 +63,8 @@ const defaultClaimFilters: ClaimWorksListParams = {
   workTypeId: undefined,
 };
 
+const technicianColorSwatches = ["#0f766e", "#2563eb", "#7c3aed", "#db2777", "#ea580c", "#15803d", "#334155", "#b45309"] as const;
+
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium" }).format(new Date(value));
 }
@@ -68,6 +72,8 @@ function formatDate(value: string): string {
 export function TechnicianWorkbenchPage(): ReactNode {
   const toast = useToast();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const authState = useAuthState();
   const [tab, setTab] = useState<WorkbenchTab>("AVAILABLE");
   const [filters, setFilters] = useState<TechnicianWorkbenchFilter>(defaultFilters);
   const [claimFilters, setClaimFilters] = useState<ClaimWorksListParams>(defaultClaimFilters);
@@ -89,6 +95,15 @@ export function TechnicianWorkbenchPage(): ReactNode {
   const completeMutation = useCompleteWorkflowStage();
   const claimMutation = useClaimWork();
   const releaseMutation = useReleaseWork();
+  const updateProfileMutation = useMutation({
+    mutationFn: updateCurrentUserProfile,
+    onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Culoarea nu a fost salvată", variant: "error" }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: authQueryKeys.currentUser });
+      await queryClient.invalidateQueries({ queryKey: authQueryKeys.permissions });
+      toast.showToast({ message: "Culoarea tehnicianului a fost salvată.", variant: "success" });
+    },
+  });
 
   function startStage(item: TechnicianWorkbenchItem): void {
     startMutation.mutate({
@@ -133,6 +148,48 @@ export function TechnicianWorkbenchPage(): ReactNode {
             <p>Lucrări disponibile, lucrările mele și coada de etape · {new Intl.DateTimeFormat("ro-RO", { dateStyle: "full" }).format(new Date())}</p>
           </div>
         </header>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Culoare tehnician</CardTitle>
+            <CardDescription>Alege o culoare care te identifică în status și în lista de lucrări.</CardDescription>
+          </CardHeader>
+          <CardContent className="technician-workbench__color-panel">
+            <div
+              className="technician-workbench__color-swatch"
+              aria-label="Culoare curentă"
+              style={{ backgroundColor: authState.user?.preferredColor ?? "#e5e7eb" }}
+            />
+            <div className="technician-workbench__color-swatches" role="list" aria-label="Culori disponibile">
+              {technicianColorSwatches.map((color) => (
+                <button
+                  aria-pressed={(authState.user?.preferredColor ?? "") === color}
+                  aria-label={`Alege culoarea ${color}`}
+                  key={color}
+                  onClick={() => updateProfileMutation.mutate({ preferredColor: color })}
+                  type="button"
+                  className="technician-workbench__color-button"
+                  style={{ backgroundColor: color }}
+                  title={color}
+                />
+              ))}
+            </div>
+            <label className="technician-workbench__custom-color">
+              <span>Culoare personalizată</span>
+              <input
+                aria-label="Culoare personalizată"
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (/^#[0-9a-fA-F]{6}$/.test(value)) {
+                    updateProfileMutation.mutate({ preferredColor: value });
+                  }
+                }}
+                type="color"
+                value={authState.user?.preferredColor ?? "#0f766e"}
+              />
+            </label>
+          </CardContent>
+        </Card>
 
         {workbenchQuery.data ? (
           <div className="technician-workbench__summary" aria-label="Rezumat atelier">

@@ -13,6 +13,7 @@ const actor = {
   id: "tech_1",
   isActive: true,
   mustChangePassword: false,
+  preferredColor: null,
 } satisfies AuthenticatedUser;
 
 function createWorkRecord(id: string, input: {
@@ -25,7 +26,7 @@ function createWorkRecord(id: string, input: {
     assignedTechnician: null,
     assignedTechnicianId: null,
     claimStatus: input.claimStatus ?? "UNCLAIMED",
-    claimedBy: input.claimedByUserId ? { displayName: "Tehnician", id: input.claimedByUserId } : null,
+    claimedBy: input.claimedByUserId ? { displayName: "Tehnician", id: input.claimedByUserId, preferredColor: null } : null,
     claimedByUserId: input.claimedByUserId ?? null,
     clinic: { id: "clinic_1", name: "Clinica Demo" },
     code: `WO-2026-${id}`,

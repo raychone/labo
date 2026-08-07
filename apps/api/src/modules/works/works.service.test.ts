@@ -205,7 +205,19 @@ function workOrder(overrides: Record<string, unknown> = {}) {
 function createService(
   prisma: unknown,
   authorizationService: unknown = {
-    hasPermission: vi.fn().mockResolvedValue({ allowed: false, effectiveScopes: [], permission: "pricing.read" }),
+    hasPermission: vi.fn().mockImplementation(async ({ permission }: { readonly permission: string }) => {
+      if (permission === "pricing.read") {
+        return { allowed: false, effectiveScopes: [], permission };
+      }
+      if (permission === "works.read_all") {
+        return { allowed: false, effectiveScopes: [], permission };
+      }
+      if (permission === "works.read_assigned" || permission === "works.claim.available.read") {
+        return { allowed: true, effectiveScopes: ["ASSIGNED"], permission };
+      }
+
+      return { allowed: false, effectiveScopes: [], permission };
+    }),
     requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ALL"], permission: "works.read_all" }),
   },
   patientsService: unknown = { findActivePatientOrThrow: vi.fn().mockResolvedValue(patient()) },

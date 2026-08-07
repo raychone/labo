@@ -42,7 +42,7 @@ import {
   type SelectOption,
 } from "@dental-lab/ui";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
@@ -172,6 +172,14 @@ function readQuery(searchParams: URLSearchParams): OperationalStatusQuery {
     ...(deliveryStatus && isDeliveryStatus(deliveryStatus) ? { deliveryStatus } : {}),
     ...(sheetStatus && isRealLabSheetStatus(sheetStatus) ? { sheetStatus } : {}),
   };
+}
+
+function getSafeColor(value: string | null | undefined): string | null {
+  return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : null;
+}
+
+function BadgePill({ label, tone = "neutral" }: { readonly label: string; readonly tone?: "neutral" | "info" | "success" | "warning" | "danger" }): ReactNode {
+  return <span className={`status-page__pill status-page__pill--${tone}`}>{label}</span>;
 }
 
 function formatDateTime(value: string | null): string {
@@ -346,6 +354,7 @@ export function StatusPage(): ReactNode {
   const navigate = useNavigate();
   const query = useMemo(() => readQuery(searchParams), [searchParams]);
   const currentStageName = searchParams.get("currentStageName") ?? "";
+  const [filtersOpen, setFiltersOpen] = useState(query.tab === "IN_PROGRESS");
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   const canReadStatus = hasPermission(permissionsQuery.data, "works.read_all") || hasPermission(permissionsQuery.data, "works.read_assigned");
   const canReadPricingOptions = hasPermission(permissionsQuery.data, "pricing.read");
@@ -370,6 +379,10 @@ export function StatusPage(): ReactNode {
     : currentRowWorkTypeOptions;
   const visibleRows = useMemo(() => getFilteredRows(rows, currentStageName), [currentStageName, rows]);
 
+  useEffect(() => {
+    setFiltersOpen(query.tab === "IN_PROGRESS");
+  }, [query.tab]);
+
   function patchQuery(patch: StatusQueryPatch): void {
     setSearchParams((current) => updateSearchParams(current, { ...patch, page: patch.page ?? 1 }));
   }
@@ -389,7 +402,7 @@ export function StatusPage(): ReactNode {
     },
     { header: "Cabinet", id: "clinicName", isSortable: true, renderCell: (row) => row.clinic.name },
     { header: "Medic", id: "doctor", renderCell: (row) => row.doctor.name },
-    { header: "Tip", id: "workType", renderCell: (row) => row.workType.name },
+    { header: "Tip", id: "workType", renderCell: (row) => <BadgePill label={row.workType.name} tone="neutral" /> },
     {
       header: "Companie",
       id: "company",
@@ -399,8 +412,8 @@ export function StatusPage(): ReactNode {
       header: "Flux",
       id: "workflow",
       renderCell: (row) => (
-        <div>
-          <strong>{row.workflow.currentStage?.name ?? (row.workflow.status === "COMPLETED" ? "Flux finalizat" : "Fără etapă")}</strong>
+        <div className="status-page__badge-stack">
+          <BadgePill label={row.workflow.currentStage?.name ?? (row.workflow.status === "COMPLETED" ? "Flux finalizat" : "Fără etapă")} tone={row.workflow.status === "COMPLETED" ? "success" : row.workflow.currentStage?.status === "IN_PROGRESS" ? "info" : "neutral"} />
           <span className="status-page__muted">{row.workflow.progress ?? `${row.workflow.progressCompleted}/${row.workflow.progressTotal}`}</span>
         </div>
       ),
@@ -409,9 +422,15 @@ export function StatusPage(): ReactNode {
       header: "Responsabili",
       id: "owners",
       renderCell: (row) => (
-        <div>
-          <strong>{row.workOwner?.displayName ?? "Fără owner"}</strong>
-          <span className="status-page__muted">{row.currentStageTechnician?.displayName ?? "Fără tehnician etapă"}</span>
+        <div className="status-page__owner">
+          <div className="status-page__owner-line">
+            {row.workOwner?.preferredColor ? <span className="status-page__color-dot" style={{ backgroundColor: getSafeColor(row.workOwner.preferredColor) ?? "transparent" }} /> : null}
+            <strong>{row.workOwner?.displayName ?? "Fără owner"}</strong>
+          </div>
+          <span className="status-page__muted">
+            {row.currentStageTechnician?.preferredColor ? <span className="status-page__color-dot" style={{ backgroundColor: getSafeColor(row.currentStageTechnician.preferredColor) ?? "transparent" }} /> : null}
+            {row.currentStageTechnician?.displayName ?? "Fără tehnician etapă"}
+          </span>
         </div>
       ),
     },
@@ -424,7 +443,7 @@ export function StatusPage(): ReactNode {
     {
       header: "Stare",
       id: "state",
-      renderCell: (row) => <StatusBadge label={toOperationalLabel(row)} variant={toStatusVariant(row)} />,
+      renderCell: (row) => <BadgePill label={toOperationalLabel(row)} tone={toStatusVariant(row) === "closed" ? "success" : toStatusVariant(row) === "production" ? "info" : toStatusVariant(row) === "rejected" ? "danger" : toStatusVariant(row) === "awaiting" ? "warning" : "neutral"} />,
     },
     {
       header: "Logistică",
@@ -500,15 +519,23 @@ export function StatusPage(): ReactNode {
 
         <Card>
           <CardHeader>
-            <CardTitle>Registru status</CardTitle>
-            <CardDescription>
-              Total: {statusQuery.data?.meta.total ?? 0}
-              {statusQuery.data?.meta.hasMore ? ` · rezultate limitate la ${OPERATIONAL_STATUS_MAX_SCANNED_ROWS}` : ""}
-              {" · filtrele nu expun date financiare"}
-            </CardDescription>
+            <div className="status-page__card-header-row">
+              <div>
+                <CardTitle>Registru status</CardTitle>
+                <CardDescription>
+                  Total: {statusQuery.data?.meta.total ?? 0}
+                  {statusQuery.data?.meta.hasMore ? ` · rezultate limitate la ${OPERATIONAL_STATUS_MAX_SCANNED_ROWS}` : ""}
+                  {" · filtrele nu expun date financiare"}
+                </CardDescription>
+              </div>
+              <Button onClick={() => setFiltersOpen((current) => !current)} variant="secondary">
+                {filtersOpen ? "Ascunde filtrele" : "Afișează filtrele"}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="status-page__content">
-            <div className="status-page__filters">
+            {filtersOpen ? (
+              <div className="status-page__filters">
               <TextInput
                 label="Căutare"
                 onChange={(event) => patchQuery({ search: event.target.value || null })}
@@ -620,7 +647,10 @@ export function StatusPage(): ReactNode {
                 value={query.sortDirection}
               />
               <Button onClick={() => setSearchParams(new URLSearchParams())} variant="secondary">Resetează</Button>
-            </div>
+              </div>
+            ) : (
+              <p className="status-page__filters-collapsed">Filtrele sunt ascunse. Deschide-le când ai nevoie de rafinare.</p>
+            )}
 
             {statusQuery.data?.meta.hasMore ? (
               <p className="status-page__bounded-note">
@@ -700,8 +730,28 @@ function StatusCards({ error, isLoading, rows }: { readonly error: string | unde
             <Metric label="Companie" value={row.executionCompany?.code ?? "Nefixată"} />
             <Metric label="Etapă" value={row.workflow.currentStage?.name ?? "Fără etapă"} />
             <Metric label="Progress" value={row.workflow.progress ?? `${row.workflow.progressCompleted}/${row.workflow.progressTotal}`} />
-            <Metric label="Owner" value={row.workOwner?.displayName ?? "Fără owner"} />
-            <Metric label="Tehnician" value={row.currentStageTechnician?.displayName ?? "Fără tehnician"} />
+            <Metric
+              label="Owner"
+              value={row.workOwner
+                ? (
+                    <span className="status-page__metric-inline">
+                      {row.workOwner.preferredColor ? <span className="status-page__color-dot" style={{ backgroundColor: getSafeColor(row.workOwner.preferredColor) ?? "transparent" }} /> : null}
+                      {row.workOwner.displayName}
+                    </span>
+                  )
+                : "Fără owner"}
+            />
+            <Metric
+              label="Tehnician"
+              value={row.currentStageTechnician
+                ? (
+                    <span className="status-page__metric-inline">
+                      {row.currentStageTechnician.preferredColor ? <span className="status-page__color-dot" style={{ backgroundColor: getSafeColor(row.currentStageTechnician.preferredColor) ?? "transparent" }} /> : null}
+                      {row.currentStageTechnician.displayName}
+                    </span>
+                  )
+                : "Fără tehnician"}
+            />
             <Metric label="Logistică" value={row.logistics.status ? LOGISTICS_STATUS_LABELS[row.logistics.status] : "Fără status"} />
             <Metric label="Livrare" value={row.delivery.status ? DELIVERY_STATUS_LABELS[row.delivery.status] : "Fără livrare"} />
             <Metric label="Fișă" value={`${row.realLabSheet.label}${row.realLabSheet.cycleNumber ? ` · Ciclul ${row.realLabSheet.cycleNumber}` : ""}`} />
@@ -709,7 +759,7 @@ function StatusCards({ error, isLoading, rows }: { readonly error: string | unde
           </div>
           <DeadlineBadge row={row} />
           <div className="status-page__card-actions">
-            <StatusBadge label={toOperationalLabel(row)} variant={toStatusVariant(row)} />
+            <BadgePill label={toOperationalLabel(row)} tone={toStatusVariant(row) === "closed" ? "success" : toStatusVariant(row) === "production" ? "info" : toStatusVariant(row) === "rejected" ? "danger" : toStatusVariant(row) === "awaiting" ? "warning" : "neutral"} />
             <Link className="status-page__open-link" to={`/works?workId=${encodeURIComponent(row.id)}`}>Deschide</Link>
           </div>
         </article>
@@ -718,7 +768,7 @@ function StatusCards({ error, isLoading, rows }: { readonly error: string | unde
   );
 }
 
-function Metric({ label, value }: { readonly label: string; readonly value: string }): ReactNode {
+function Metric({ label, value }: { readonly label: string; readonly value: ReactNode }): ReactNode {
   return (
     <div className="status-page__metric">
       <span>{label}</span>

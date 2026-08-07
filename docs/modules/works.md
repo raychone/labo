@@ -28,13 +28,13 @@ Each cycle can own one real laboratory sheet submission. Reception and permitted
 
 ## API
 
-`GET /works`, `GET /works/:id`, `POST /works`, `PATCH /works/:id`, `GET /works/work-type-options`, deadline, claim, release, reassign, assignment-history endpoints, `GET /works/:id/cycles`, `POST /works/:id/cycles/next`, `GET/PATCH /works/:id/cycles/:cycleId/real-lab-sheet`, and `POST /works/:id/cycles/:cycleId/real-lab-sheet/finalize`.
+`GET /works`, `GET /works/:id`, `POST /works`, `PATCH /works/:id`, `GET /works/work-type-options`, deadline, claim, release, reassign, assignment-history endpoints, `GET /works/:id/cycles`, `POST /works/:id/cycles/next`, `GET/PATCH /works/:id/cycles/:cycleId/real-lab-sheet`, and `POST /works/:id/cycles/:cycleId/real-lab-sheet/finalize`. Read access is permission-scoped: managers can read all works, technicians can read assigned and claimable work, and the shared status/workbench surfaces only the subset the current user may see.
 
 STATUS-001A adds `GET /status/operational` as a separate read-only aggregate over work orders, claim ownership, workflow, deadlines, logistics, and delivery. WORKFORM-REAL-001B extends that read model with compact real laboratory sheet status and filtering. It returns operational fields only and masks financial data server-side.
 
 ## UI
 
-`/works` registry with reception-oriented deadline counters, quick filters, compact filters, create modal, detail/edit drawer, QR modal, workflow section, `Cicluri` history section, `Fișă laborator` cycle sheet section with draft/complete/finalize UX, `Înregistrează revenirea` modal, deadline and execution context cards. `/workbench`, `/scan`, and `/status` surface sheet status and link into the existing `/works?workId=...` detail flow instead of duplicating work detail UI.
+`/works` registry with reception-oriented deadline counters, quick filters, compact filters, create modal, detail/edit drawer, QR modal, workflow section, `Cicluri` history section, `Fișă laborator` cycle sheet section with draft/complete/finalize UX, `Înregistrează revenirea` modal, deadline and execution context cards. `/workbench`, `/scan`, and `/status` surface sheet status and link into the existing `/works?workId=...` detail flow instead of duplicating work detail UI. Technicians may open visible work detail flows directly from the shared routes even when `/works` is not present in their primary navigation.
 
 ## Audit
 

@@ -5,6 +5,7 @@ export const AUTH_AUDIT_ACTIONS = {
   demoLoginFailed: "auth.demo_login_failed",
   demoLoginSucceeded: "auth.demo_login_success",
   logoutSucceeded: "auth.logout_succeeded",
+  profileUpdated: "auth.profile_updated",
 } as const;
 
 export const AUTH_RESOURCE_TYPES = {

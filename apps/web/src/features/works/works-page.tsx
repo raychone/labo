@@ -345,7 +345,10 @@ export function WorksPage(): ReactNode {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [qrWorkId, setQrWorkId] = useState<string | null>(null);
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
-  const canRead = hasPermission(permissionsQuery.data, "works.read_all");
+  const canRead = hasPermission(permissionsQuery.data, "works.read_all")
+    || hasPermission(permissionsQuery.data, "works.read_assigned")
+    || hasPermission(permissionsQuery.data, "works.claim.available.read")
+    || hasPermission(permissionsQuery.data, "works.claim.own.read");
   const canCreate = hasPermission(permissionsQuery.data, "works.create");
   const canUpdate = hasPermission(permissionsQuery.data, "works.update");
   const canReadCycles = hasPermission(permissionsQuery.data, "cycles.read") || hasPermission(permissionsQuery.data, "cycles.history.read");
@@ -495,7 +498,7 @@ export function WorksPage(): ReactNode {
   }
 
   if (!canRead) {
-    return <PageState><ErrorState title="Acces refuzat" description="Contul curent nu are permisiunea works.read_all." /></PageState>;
+    return <PageState><ErrorState title="Acces refuzat" description="Contul curent nu are permisiune de citire lucrări." /></PageState>;
   }
 
   return (

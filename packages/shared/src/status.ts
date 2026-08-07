@@ -41,6 +41,7 @@ export interface OperationalStatusQuery {
 export interface OperationalStatusPerson {
   readonly displayName: string;
   readonly publicId: string;
+  readonly preferredColor: string | null;
 }
 
 export interface OperationalStatusWorkflow {

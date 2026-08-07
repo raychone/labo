@@ -146,6 +146,22 @@ export const appRoutes = [
   },
 ] as const satisfies readonly AppRouteConfig[];
 
+function shouldShowInNavigation(permissionKeys: readonly string[], route: AppRouteConfig): boolean {
+  if (!hasRouteAccess(permissionKeys, route)) {
+    return false;
+  }
+
+  if (route.path === "/works") {
+    return permissionKeys.includes("works.read_all");
+  }
+
+  if (route.path === "/clinics" || route.path === "/doctors") {
+    return permissionKeys.includes("users.read");
+  }
+
+  return route.showInNavigation;
+}
+
 export function hasRouteAccess(
   permissionKeys: readonly string[],
   route: Pick<AppRouteConfig, "permissionMode" | "requiredPermissions">,
@@ -160,7 +176,7 @@ export function hasRouteAccess(
 }
 
 export function getNavigationRoutes(permissionKeys: readonly string[]): readonly AppRouteConfig[] {
-  return appRoutes.filter((route) => route.showInNavigation && hasRouteAccess(permissionKeys, route));
+  return appRoutes.filter((route) => shouldShowInNavigation(permissionKeys, route));
 }
 
 export function getRouteByPath(pathname: string): AppRouteConfig | undefined {

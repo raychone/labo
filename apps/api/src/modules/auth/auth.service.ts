@@ -135,4 +135,30 @@ export class AuthService {
       user: toAuthenticatedUser(user),
     };
   }
+
+  public async updatePreferredColor(input: {
+    readonly preferredColor: string;
+    readonly requestMetadata: RequestMetadata;
+    readonly userId: string;
+  }): Promise<ReturnType<typeof toAuthenticatedUser>> {
+    const user = await this.prisma.user.update({
+      data: {
+        preferredColor: input.preferredColor,
+      },
+      where: {
+        id: input.userId,
+      },
+    });
+
+    await this.auditService.record({
+      action: AUTH_AUDIT_ACTIONS.profileUpdated,
+      actorUserId: input.userId,
+      metadata: { preferredColor: input.preferredColor },
+      requestMetadata: input.requestMetadata,
+      resourceId: input.userId,
+      resourceType: AUTH_RESOURCE_TYPES.user,
+    });
+
+    return toAuthenticatedUser(user);
+  }
 }

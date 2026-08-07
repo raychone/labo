@@ -22,6 +22,7 @@ const testUser: AuthenticatedUser = {
   id: "user_1",
   isActive: true,
   mustChangePassword: false,
+  preferredColor: null,
 };
 
 function getSetCookieHeader(response: request.Response): string {
@@ -151,6 +152,7 @@ describe("AuthController", () => {
         email: testUser.email,
         id: testUser.id,
         mustChangePassword: testUser.mustChangePassword,
+        preferredColor: null,
       },
     });
     expect(getSetCookieHeader(response)).toContain("HttpOnly");
@@ -167,6 +169,7 @@ describe("AuthController", () => {
           email: testUser.email,
           id: testUser.id,
           mustChangePassword: testUser.mustChangePassword,
+          preferredColor: null,
         },
       });
   });

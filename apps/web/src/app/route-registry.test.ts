@@ -17,6 +17,13 @@ describe("route registry", () => {
     expect(labels).not.toContain("Utilizatori");
   });
 
+  it("keeps technician work routes out of navigation when access is scoped", () => {
+    const labels = getNavigationRoutes(["works.read_assigned", "technician.workbench.read"]).map((route) => route.label);
+
+    expect(labels).toContain("Lucrările mele");
+    expect(labels).not.toContain("Lucrări");
+  });
+
   it("allows any-of permissions for work routes", () => {
     expect(hasRouteAccess(["works.read_assigned"], {
       permissionMode: "any",
