@@ -98,9 +98,9 @@ describe("OperationalStatusService", () => {
 
   it("returns filtered counters, pagination metadata and no financial fields", async () => {
     const rows = [
-      createWorkRecord("000001", { effectiveDueAt: new Date("2026-08-04T10:00:00.000Z") }),
-      createWorkRecord("000002", { claimStatus: "CLAIMED", claimedByUserId: "tech_1", effectiveDueAt: new Date("2026-08-05T10:00:00.000Z") }),
-      createWorkRecord("000003", { deliveryStatus: "DELIVERED", effectiveDueAt: new Date("2026-08-06T10:00:00.000Z") }),
+      createWorkRecord("000001", { effectiveDueAt: new Date("2026-08-07T10:00:00.000Z") }),
+      createWorkRecord("000002", { claimStatus: "CLAIMED", claimedByUserId: "tech_1", effectiveDueAt: new Date("2026-08-08T10:00:00.000Z") }),
+      createWorkRecord("000003", { deliveryStatus: "DELIVERED", effectiveDueAt: new Date("2026-08-09T10:00:00.000Z") }),
     ];
     const { service } = createService({ findManyRows: rows, readAll: true });
 

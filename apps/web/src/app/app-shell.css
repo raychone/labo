@@ -502,6 +502,7 @@
   display: grid;
   gap: var(--dl-space-4);
   grid-template-columns: 1fr;
+  align-items: start;
 }
 
 .dashboard-page__metric--link {

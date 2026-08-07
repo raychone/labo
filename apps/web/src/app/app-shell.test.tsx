@@ -118,6 +118,45 @@ describe("AuthenticatedAppShell", () => {
     expect(screen.getByRole("link", { name: /Lucrări/ }).getAttribute("aria-current")).toBe("page");
   });
 
+  it("renders technician navigation when permissions are scoped rather than ALL", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/auth/me")) {
+        return Promise.resolve(createJsonResponse({
+          user: {
+            displayName: "Development Technician",
+            email: "tehnician.dev@example.test",
+            id: "user_2",
+          },
+        }));
+      }
+      if (url.endsWith("/auth/permissions")) {
+        return Promise.resolve(createJsonResponse({
+          permissions: [
+            { key: "scan.use", scopes: ["ASSIGNED"] },
+            { key: "technician.workbench.read", scopes: ["ASSIGNED"] },
+            { key: "works.read_assigned", scopes: ["OWN_STAGE"] },
+          ],
+        }));
+      }
+      return Promise.resolve(createJsonResponse({}, 404));
+    }));
+
+    renderWithProviders(
+      <Routes>
+        <Route element={<AuthenticatedAppShell />} path="/">
+          <Route element={<div>Dashboard content</div>} path="dashboard" />
+        </Route>
+      </Routes>,
+      ["/dashboard"],
+    );
+
+    await waitFor(() => expect(screen.getByRole("link", { name: /Status/ })).toBeDefined());
+    expect(screen.getByRole("link", { name: /Scanare/ })).toBeDefined();
+    expect(screen.getByRole("link", { name: /Lucrările mele/ })).toBeDefined();
+    expect(screen.queryByText("Utilizatori")).toBeNull();
+  });
+
   it("opens and closes the mobile drawer with Escape", async () => {
     vi.stubGlobal("fetch", createFetchMock(["works.read_all"]));
 

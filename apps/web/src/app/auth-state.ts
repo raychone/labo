@@ -33,9 +33,7 @@ export function useAuthState(): AuthState {
     retry: false,
   });
   const permissions = permissionsQuery.data;
-  const permissionKeys = permissions?.permissions
-    .filter((permission) => permission.scopes.includes("ALL"))
-    .map((permission) => permission.key) ?? [];
+  const permissionKeys = permissions?.permissions.map((permission) => permission.key) ?? [];
 
   async function refetch(): Promise<unknown> {
     const currentUserResult = await currentUserQuery.refetch();

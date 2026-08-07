@@ -87,9 +87,7 @@ export function LoginPage(): ReactNode {
           queryKey: authQueryKeys.permissions,
         })
         : undefined;
-      const permissionKeys = permissions?.permissions
-        .filter((permission) => permission.scopes.includes("ALL"))
-        .map((permission) => permission.key) ?? [];
+      const permissionKeys = permissions?.permissions.map((permission) => permission.key) ?? [];
 
       navigate(returnTo ?? getFirstAuthorizedRoute(permissionKeys), { replace: true });
   }
