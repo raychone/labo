@@ -86,7 +86,7 @@ export async function fetchPatients(params: PatientsListParams): Promise<Paginat
 }
 
 export async function fetchPatientOptions(search = ""): Promise<readonly PatientOption[]> {
-  const query = new URLSearchParams({ limit: "12" });
+  const query = new URLSearchParams({ limit: "50" });
   appendOptional(query, "search", search);
   const response = await apiFetch(`/patients/options?${query.toString()}`);
   return parseApiResponse<readonly PatientOption[]>(response);

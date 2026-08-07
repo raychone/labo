@@ -48,7 +48,7 @@ function createPngResponse(): Response {
   } as Response;
 }
 
-const workSummary = {
+  const workSummary = {
   clinic: { code: "CL-0001", id: "clinic_1", name: "Clinica Test" },
   claim: {
     canCurrentUserClaim: true,
@@ -300,7 +300,14 @@ const cycleHistoryResponse = {
     patientId: "patient_1",
     patientName: "Ion Pop",
   },
-};
+  };
+
+const patientOptionsResponse = [
+  { birthDate: null, fullName: "Ion Pop", id: "patient_1", workCount: 3 },
+  { birthDate: null, fullName: "Mara Ionescu", id: "patient_2", workCount: 1 },
+  { birthDate: null, fullName: "Maria Pop", id: "patient_3", workCount: 2 },
+  { birthDate: null, fullName: "Mihai Popescu", id: "patient_4", workCount: 0 },
+];
 
 const clinicOptionsResponse = [
   { code: "CL-0001", id: "clinic_1", name: "Clinica Test" },
@@ -313,6 +320,8 @@ const doctorOptionsResponse = [
 
 const workTypeOptionsResponse = [
   { code: "WT-0001", id: "work_type_1", name: "Coroana zirconiu", unit: "UNIT" },
+  { code: "WT-0002", id: "work_type_2", name: "Punte zirconiu", unit: "UNIT" },
+  { code: "WT-0003", id: "work_type_3", name: "Proteză totală", unit: "CASE" },
 ];
 
 const realLabSheetResponse = {
@@ -386,6 +395,9 @@ describe("WorksPage", () => {
       if (url.includes("/clinics/options")) {
         return Promise.resolve(createJsonResponse(clinicOptionsResponse));
       }
+      if (url.includes("/patients/options")) {
+        return Promise.resolve(createJsonResponse(patientOptionsResponse));
+      }
       if (url.includes("/works?")) {
         return Promise.resolve(createJsonResponse(worksListResponse));
       }
@@ -397,10 +409,12 @@ describe("WorksPage", () => {
     renderWithProviders(<WorksPage />);
 
     expect(await screen.findByRole("heading", { name: "Lucrări" })).toBeDefined();
-    expect(await screen.findByText("WO-2026-000001")).toBeDefined();
-    expect(await screen.findByText("4 zile")).toBeDefined();
-    expect(await screen.findByText("În termen")).toBeDefined();
-    expect(await screen.findByText("Restricționat")).toBeDefined();
+    expect(await screen.findByText("Ion Pop")).toBeDefined();
+    expect(await screen.findByText("Coroana zirconiu")).toBeDefined();
+    expect(await screen.findByText("În lucru")).toBeDefined();
+    expect(await screen.findByText("Normal")).toBeDefined();
+    expect(screen.getByRole("link", { name: "Deschide" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Detalii" })).toBeDefined();
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/work-types/options"), expect.anything());
   });
 
@@ -450,6 +464,63 @@ describe("WorksPage", () => {
 
     fireEvent.change(clinicSelect, { target: { value: "clinic_2" } });
     await waitFor(() => expect(doctorSelect.value).toBe(""));
+  });
+
+  it("shows a small searchable suggestion list for patients and work types in the create form", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/auth/permissions")) {
+        return Promise.resolve(createJsonResponse({
+          permissions: [
+            { key: "clinics.read", scopes: ["ALL"] },
+            { key: "doctors.read", scopes: ["ALL"] },
+            { key: "works.create", scopes: ["ALL"] },
+            { key: "works.read_all", scopes: ["ALL"] },
+          ],
+        }));
+      }
+      if (url.includes("/works/work-type-options")) {
+        return Promise.resolve(createJsonResponse(workTypeOptionsResponse));
+      }
+      if (url.includes("/clinics/options")) {
+        return Promise.resolve(createJsonResponse(clinicOptionsResponse));
+      }
+      if (url.includes("/patients/options")) {
+        return Promise.resolve(createJsonResponse(patientOptionsResponse));
+      }
+      if (url.includes("/works?")) {
+        return Promise.resolve(createJsonResponse(worksListResponse));
+      }
+
+      return Promise.resolve(createJsonResponse({}, 404));
+    }));
+
+    renderWithProviders(<WorksPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Adaugă lucrare" }));
+
+    const patientInput = await screen.findByLabelText("Pacient");
+    fireEvent.focus(patientInput);
+
+    const patientListbox = await screen.findByRole("listbox");
+    expect(within(patientListbox).getAllByRole("option")).toHaveLength(3);
+    expect(within(patientListbox).getByText("Ion Pop")).toBeDefined();
+
+    fireEvent.change(patientInput, { target: { value: "Maria" } });
+    await waitFor(() => expect(within(patientListbox).getAllByRole("option")).toHaveLength(1));
+    expect(within(patientListbox).getByText("Maria Pop")).toBeDefined();
+
+    fireEvent.click(within(patientListbox).getByRole("option", { name: /Maria Pop/ }));
+    expect((patientInput as HTMLInputElement).value).toBe("Maria Pop");
+
+    const workTypeInput = await screen.findByLabelText("Tip lucrare");
+    fireEvent.focus(workTypeInput);
+    const workTypeListbox = await screen.findByRole("listbox");
+    expect(within(workTypeListbox).getAllByRole("option")).toHaveLength(3);
+
+    fireEvent.change(workTypeInput, { target: { value: "punte" } });
+    await waitFor(() => expect(within(workTypeListbox).getAllByRole("option")).toHaveLength(1));
+    expect(within(workTypeListbox).getByText("WT-0002 · Punte zirconiu")).toBeDefined();
   });
 
   it("shows access denied without works.read_all", async () => {
@@ -502,7 +573,7 @@ describe("WorksPage", () => {
 
     renderWithProviders(<WorksPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Detalii" }));
     fireEvent.click(await screen.findByRole("button", { name: "Vezi QR" }));
 
     const dialog = await screen.findByRole("dialog", { name: "QR lucrare" });
@@ -563,7 +634,7 @@ describe("WorksPage", () => {
 
     renderWithProviders(<WorksPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Detalii" }));
     expect(await screen.findByRole("heading", { name: "Flux producție" })).toBeDefined();
     expect(await screen.findByText("Flux zirconiu · versiunea 3")).toBeDefined();
 
@@ -608,7 +679,7 @@ describe("WorksPage", () => {
 
     renderWithProviders(<WorksPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Detalii" }));
 
     expect(await screen.findByRole("heading", { name: "Cicluri" })).toBeDefined();
     expect((await screen.findAllByText("Ciclul 2")).length).toBeGreaterThan(0);
@@ -686,7 +757,7 @@ describe("WorksPage", () => {
 
     renderWithProviders(<WorksPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Detalii" }));
     fireEvent.click(await screen.findByRole("button", { name: "Înregistrează revenirea" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Înregistrează revenirea" });
@@ -759,7 +830,7 @@ describe("WorksPage", () => {
 
     renderWithProviders(<WorksPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Detalii" }));
     expect(await screen.findByRole("heading", { name: "Fișă laborator" })).toBeDefined();
     expect(await screen.findByLabelText("Observații")).toBeDefined();
     const saveDraftButton = await screen.findByRole("button", { name: "Salvează schița" });

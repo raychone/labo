@@ -31,7 +31,6 @@ import {
   WORK_CYCLE_REASONS,
   formatMoneyMinor,
   getLegalEntityDisplayName,
-  getWorkflowExecutionStatusLabel,
   type CreateNextWorkCycleInput,
   type CreateWorkInput,
   type LegalEntityCode,
@@ -206,6 +205,34 @@ function formatPrice(value: number | null, currency: string, locale: string): st
   return value === null ? "Restricționat" : formatMoneyMinor(value, currency, locale);
 }
 
+function getSafeColor(value: string | null | undefined): string | null {
+  return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : null;
+}
+
+function BadgePill({ label, tone = "neutral" }: { readonly label: string; readonly tone?: "neutral" | "info" | "success" | "warning" | "danger" }): ReactNode {
+  return <span className={`works-page__pill works-page__pill--${tone}`}>{label}</span>;
+}
+
+function toWorkOperationalLabel(work: WorkSummary): { readonly label: string; readonly tone: "neutral" | "info" | "success" | "warning" | "danger" } {
+  if (work.workflow?.status === "COMPLETED") {
+    return { label: "Finalizată", tone: "success" };
+  }
+  if (work.claim.status === "CLAIMED" || work.workflow?.currentStageName) {
+    return { label: "În lucru", tone: "info" };
+  }
+  return { label: "Înregistrată", tone: "warning" };
+}
+
+function toWorkFlowLabel(work: WorkSummary): { readonly label: string; readonly tone: "neutral" | "info" | "success" | "warning" } {
+  if (work.workflow?.status === "COMPLETED") {
+    return { label: "Flux finalizat", tone: "success" };
+  }
+  return {
+    label: work.workflow?.currentStageName ?? "Fără etapă",
+    tone: work.workflow?.currentStageName && work.workflow.currentStageName.length > 0 ? "info" : "neutral",
+  };
+}
+
 function hasMeaningfulDynamicValue(value: unknown): boolean {
   return value !== null && value !== undefined && value !== "" && (!Array.isArray(value) || value.length > 0);
 }
@@ -359,7 +386,6 @@ export function WorksPage(): ReactNode {
   const canReadCycles = hasPermission(permissionsQuery.data, "cycles.read") || hasPermission(permissionsQuery.data, "cycles.history.read");
   const canCreateNextCycle = hasPermission(permissionsQuery.data, "cycles.create_next");
   const canReadPricing = hasPermission(permissionsQuery.data, "pricing.read");
-  const canDownloadInvoices = hasPermission(permissionsQuery.data, "invoice.download");
   const canReadTechnicianOptions = hasPermission(permissionsQuery.data, "technician.workload.read");
   const worksQuery = useWorks(params, canRead);
   const selectedWorkQuery = useWork(selectedWorkId, canRead);
@@ -399,43 +425,43 @@ export function WorksPage(): ReactNode {
   }, [searchParams, setSearchParams]);
 
   const columns = useMemo<readonly DataTableColumn<WorkSummary>[]>(() => [
-    { header: "Cod", id: "code", isSortable: true, renderCell: (work) => <strong>{work.code}</strong> },
+    {
+      header: "Tehnician",
+      id: "technician",
+      renderCell: (work) => (
+        work.claim.technician?.preferredColor
+          ? <span className="works-page__technician-badge" aria-label={work.claim.technician.displayName} title={work.claim.technician.displayName} style={{ backgroundColor: getSafeColor(work.claim.technician.preferredColor) ?? "transparent" }} />
+          : <span className="works-page__technician-badge works-page__technician-badge--empty" title="Fără tehnician" />
+      ),
+    },
     {
       header: "Pacient",
       id: "patientName",
-      renderCell: (work) => (
-        <div>
-          <strong>{work.patientName}</strong>
-          <div className="works-page__muted">{work.patientReference ?? "Fără identificator"}</div>
-        </div>
-      ),
+      isSortable: true,
+      renderCell: (work) => <strong>{work.patientName}</strong>,
     },
-    { header: "Cabinet", id: "clinic", renderCell: (work) => work.clinic.name },
-    { header: "Medic", id: "doctor", renderCell: (work) => work.doctor.displayName },
-    { header: "Tip", id: "workType", renderCell: (work) => work.workType.name },
     {
-      header: "Responsabil",
-      id: "claim",
-      renderCell: (work) => (
-        <div>
-          <strong>{work.claim.technician?.displayName ?? "Nerevendicată"}</strong>
-          <div className="works-page__muted">
-            {work.executionSnapshot.summary.exists ? `Fixat · ${work.executionSnapshot.summary.legalEntity?.code ?? "-"}` : work.claim.executionLegalEntity?.code ?? "Nefixat"}
-          </div>
-        </div>
-      ),
+      header: "Tip",
+      id: "workType",
+      renderCell: (work) => <BadgePill label={work.workType.name} tone="neutral" />,
     },
     {
       header: "Flux",
       id: "workflow",
-      renderCell: (work) => work.workflow
-        ? (
-            <div>
-              <strong>{work.workflow.currentStageName ?? getWorkflowExecutionStatusLabel(work.workflow.status ?? "COMPLETED")}</strong>
-              <div className="works-page__muted">{work.workflow.progressCompleted}/{work.workflow.progressTotal} etape</div>
-            </div>
-          )
-        : "Fără flux",
+      renderCell: (work) => (
+        <div className="works-page__badge-stack">
+          <BadgePill label={toWorkFlowLabel(work).label} tone={toWorkFlowLabel(work).tone} />
+          <span className="works-page__muted">{work.workflow ? `${work.workflow.progressCompleted}/${work.workflow.progressTotal}` : "0/0"}</span>
+        </div>
+      ),
+    },
+    {
+      header: "Stare",
+      id: "status",
+      renderCell: (work) => {
+        const state = toWorkOperationalLabel(work);
+        return <BadgePill label={state.label} tone={state.tone} />;
+      },
     },
     {
       header: "Prioritate",
@@ -444,44 +470,16 @@ export function WorksPage(): ReactNode {
       renderCell: (work) => <PriorityBadge label={work.priority === "URGENT" ? "Urgent" : "Normal"} variant={work.priority === "URGENT" ? "urgent" : "normal"} />,
     },
     {
-      header: "Status",
-      id: "status",
-      isSortable: true,
-      renderCell: () => <StatusBadge label="Înregistrată" variant="registered" />,
+      header: "Acțiuni",
+      id: "actions",
+      renderCell: (work) => (
+        <div className="works-page__row-actions">
+          <Button onClick={() => setSelectedWorkId(work.id)} size="small" variant="outline">Detalii</Button>
+          <Link className="works-page__open-link" to={`/works?workId=${encodeURIComponent(work.id)}`}>Deschide</Link>
+        </div>
+      ),
     },
-    {
-      header: "Facturare",
-      id: "billing",
-      renderCell: (work) => work.invoicedDocumentId
-        ? canDownloadInvoices
-          ? <Link to={`/billing/documents/${work.invoicedDocumentId}/print`}>Vezi factura</Link>
-          : "Facturat"
-        : "Nefacturat",
-    },
-    {
-      align: "right",
-      header: "Total",
-      id: "totalPriceMinor",
-      isSortable: true,
-      renderCell: (work) => formatPrice(work.totalPriceMinor, work.currency ?? currency, locale),
-    },
-    {
-      header: "Termen",
-      id: "effectiveDueAt",
-      isSortable: true,
-      renderCell: (work) => work.deadline.effectiveDueAt ? formatDateTime(work.deadline.effectiveDueAt) : "Fără termen",
-    },
-    {
-      header: "Countdown",
-      id: "deadlineCountdown",
-      renderCell: (work) => work.deadline.countdown,
-    },
-    {
-      header: "Status termen",
-      id: "deadlineStatus",
-      renderCell: (work) => <DeadlineBadge deadline={work.deadline} />,
-    },
-  ], [canDownloadInvoices, currency, locale]);
+  ], []);
 
   function handleCreate(input: CreateWorkInput): void {
     createMutation.mutate(input, {
@@ -620,7 +618,6 @@ export function WorksPage(): ReactNode {
               error={worksQuery.isError ? getErrorMessage(worksQuery.error) : undefined}
               getRowKey={(work) => work.id}
               isLoading={worksQuery.isLoading}
-              onRowAction={(work) => setSelectedWorkId(work.id)}
               onSortChange={(sort) => setParams((current) => ({
                 ...current,
                 page: 1,
@@ -632,7 +629,6 @@ export function WorksPage(): ReactNode {
                 page: worksQuery.data?.page ?? params.page,
                 pageCount: worksQuery.data?.pageCount ?? 1,
               }}
-              rowActionLabel="Deschide"
               rows={worksQuery.data?.items ?? []}
               sort={fromApiSort(params.sortBy, params.sortDirection)}
             />

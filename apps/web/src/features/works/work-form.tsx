@@ -16,6 +16,7 @@ import {
 import type { ClinicOption, DoctorOption, PatientOption, WorkDeadlinePreview, WorkDetail, WorkFormTemplateDetail, WorkPriority, WorkTypeFormOption } from "@dental-lab/shared";
 import type { ReactNode } from "react";
 import type { UseFormReturn } from "react-hook-form";
+import { useEffect, useId, useMemo, useState } from "react";
 
 import type { WorkFormValues } from "./works-page.schema.js";
 import { WorkFormEmptyState, WorkFormFields, WorkFormLoadingState } from "./work-dynamic-form.js";
@@ -127,6 +128,35 @@ export function WorkForm({
   const summaryItems = form.formState.submitCount > 0
     ? getFormErrorSummaryItems(form.formState.errors, workFieldLabels)
     : [];
+  const [patientSearch, setPatientSearch] = useState("");
+  const [workTypeSearch, setWorkTypeSearch] = useState("");
+  const patientId = form.watch("patientId");
+  const workTypeId = form.watch("workTypeId");
+  const selectedPatient = useMemo(() => patientOptions.find((patient) => patient.id === patientId) ?? null, [patientId, patientOptions]);
+  const selectedWorkType = useMemo(() => workTypeOptions.find((workType) => workType.id === workTypeId) ?? null, [workTypeId, workTypeOptions]);
+
+  useEffect(() => {
+    if (patientId !== "" && selectedPatient) {
+      setPatientSearch(selectedPatient.fullName);
+    }
+  }, [patientId, selectedPatient]);
+
+  useEffect(() => {
+    if (workTypeId !== "" && selectedWorkType) {
+      setWorkTypeSearch(`${selectedWorkType.code} · ${selectedWorkType.name}`);
+    }
+  }, [selectedWorkType, workTypeId]);
+
+  const visiblePatientOptions = useMemo(() => filterSearchableOptions(patientOptions.map((patient) => ({
+    label: patient.fullName,
+    secondary: patient.birthDate ? formatSearchableDate(patient.birthDate) : undefined,
+    value: patient.id,
+  })), patientSearch), [patientOptions, patientSearch]);
+  const visibleWorkTypeOptions = useMemo(() => filterSearchableOptions(workTypeOptions.map((workType) => ({
+    label: `${workType.code} · ${workType.name}`,
+    secondary: formatWorkTypeUnit(workType.unit),
+    value: workType.id,
+  })), workTypeSearch), [workTypeOptions, workTypeSearch]);
 
   return (
     <FormLayout className="works-page__form" id={formId} onSubmit={(event) => void form.handleSubmit(onSubmit)(event)}>
@@ -163,15 +193,19 @@ export function WorkForm({
 
       <FormSection title="Pacient" description="Alege pacientul din registru sau creează rapid un pacient nou.">
         <FormGrid>
-          <Select
+          <SearchablePickerField
             disabled={isDisabled}
             error={form.formState.errors.patientId?.message}
             id="patientId"
             label="Pacient"
-            options={patientOptions.map((patient) => ({ label: `${patient.fullName}${patient.birthDate ? ` · ${patient.birthDate}` : ""}`, value: patient.id }))}
-            placeholder="Alege pacientul"
+            onSelect={(value) => form.setValue("patientId", value, { shouldDirty: true, shouldValidate: true })}
+            onSearchChange={setPatientSearch}
+            options={visiblePatientOptions}
+            placeholder="Caută pacientul"
             required
-            {...form.register("patientId")}
+            searchValue={patientSearch}
+            selectedValue={patientId}
+            emptyMessage="Nu există pacienți potriviți."
           />
           <div>
             <Button disabled={isDisabled} onClick={onCreatePatient} type="button" variant="secondary">Pacient nou</Button>
@@ -182,15 +216,19 @@ export function WorkForm({
 
       <FormSection title="Lucrare" description="Selectează tipul și volumul. Prețul este doar preview pentru utilizatorii autorizați.">
         <FormGrid>
-          <Select
+          <SearchablePickerField
             disabled={isDisabled}
             error={form.formState.errors.workTypeId?.message}
             id="workTypeId"
             label="Tip lucrare"
-            options={workTypeOptions.map((workType) => ({ label: `${workType.code} · ${workType.name}`, value: workType.id }))}
-            placeholder="Alege tipul lucrării"
+            onSelect={(value) => form.setValue("workTypeId", value, { shouldDirty: true, shouldValidate: true })}
+            onSearchChange={setWorkTypeSearch}
+            options={visibleWorkTypeOptions}
+            placeholder="Caută tipul lucrării"
             required
-            {...form.register("workTypeId")}
+            searchValue={workTypeSearch}
+            selectedValue={workTypeId}
+            emptyMessage="Nu există tipuri de lucrări potrivite."
           />
           <NumberInput
             disabled={isDisabled}
@@ -252,6 +290,136 @@ export function WorkForm({
         </FormGrid>
       </FormSection>
     </FormLayout>
+  );
+}
+
+function formatWorkTypeUnit(unit: WorkTypeFormOption["unit"]): string {
+  return unit === "ELEMENT"
+    ? "Element"
+    : unit === "UNIT"
+      ? "Bucată"
+      : unit === "ARCH"
+        ? "Arcadă"
+        : unit === "CASE"
+          ? "Lucrare"
+          : unit === "REPAIR"
+            ? "Reparație"
+            : "Altă unitate";
+}
+
+function formatSearchableDate(value: string): string {
+  return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium" }).format(new Date(value));
+}
+
+function normalizeSearchText(value: string): string {
+  return value.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+}
+
+function filterSearchableOptions(options: readonly SearchableOption[], searchValue: string): readonly SearchableOption[] {
+  const normalizedSearch = normalizeSearchText(searchValue.trim());
+  const matched = normalizedSearch === ""
+    ? options
+    : options.filter((option) => normalizeSearchText(`${option.label} ${option.secondary ?? ""}`).includes(normalizedSearch));
+
+  return normalizedSearch === "" ? matched.slice(0, 3) : matched;
+}
+
+interface SearchableOption {
+  readonly label: string;
+  readonly secondary: string | undefined;
+  readonly value: string;
+}
+
+function SearchablePickerField({
+  disabled,
+  emptyMessage,
+  error,
+  id,
+  label,
+  onSearchChange,
+  onSelect,
+  options,
+  placeholder,
+  required,
+  searchValue,
+  selectedValue,
+}: {
+  readonly disabled: boolean;
+  readonly emptyMessage: string;
+  readonly error: string | undefined;
+  readonly id: string;
+  readonly label: string;
+  readonly onSearchChange: (value: string) => void;
+  readonly onSelect: (value: string) => void;
+  readonly options: readonly SearchableOption[];
+  readonly placeholder: string;
+  readonly required: boolean;
+  readonly searchValue: string;
+  readonly selectedValue: string;
+}): ReactNode {
+  const [isOpen, setOpen] = useState(false);
+  const generatedId = useId();
+  const controlId = id ?? generatedId;
+  const listboxId = `${controlId}-listbox`;
+
+  const selectedOption = options.find((option) => option.value === selectedValue);
+  const hint = selectedOption
+    ? `Selectat: ${selectedOption.label}`
+    : "Apasă și tastează pentru căutare. Lista începe cu 3 variante.";
+
+  return (
+    <div className="works-page__search-field">
+      <TextInput
+        aria-activedescendant={isOpen && options.length > 0 ? `${controlId}-option-0` : undefined}
+        aria-controls={isOpen ? listboxId : undefined}
+        aria-expanded={isOpen}
+        autoComplete="off"
+        disabled={disabled}
+        error={error}
+        hint={hint}
+        id={controlId}
+        label={label}
+        onBlur={() => {
+          window.setTimeout(() => setOpen(false), 120);
+        }}
+        onChange={(event) => {
+          onSearchChange(event.target.value);
+          if (selectedValue !== "") {
+            onSelect("");
+          }
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        placeholder={placeholder}
+        required={required}
+        role="combobox"
+        type="search"
+        value={searchValue}
+      />
+      {isOpen ? (
+        <div className="works-page__search-listbox" id={listboxId} role="listbox">
+          {options.length > 0 ? options.map((option, index) => (
+            <button
+              aria-selected={option.value === selectedValue}
+              className="works-page__search-option"
+              id={`${controlId}-option-${index}`}
+              key={option.value}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onSelect(option.value);
+                onSearchChange(option.label);
+                setOpen(false);
+              }}
+              role="option"
+              type="button"
+            >
+              <strong>{option.label}</strong>
+              {option.secondary ? <span>{option.secondary}</span> : null}
+            </button>
+          )) : <div className="works-page__search-empty">{emptyMessage}</div>}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
