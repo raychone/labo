@@ -246,11 +246,13 @@
 
 .organization-context__header--switch {
   align-items: center;
+  flex-wrap: nowrap;
 }
 
 .organization-context__identity {
   display: grid;
   gap: var(--dl-space-1);
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -266,14 +268,15 @@
 
 .organization-context__segments {
   --active-index: 0;
-  background: color-mix(in srgb, var(--dl-color-surface) 78%, var(--app-brand-primary));
-  border: var(--dl-border-width) solid color-mix(in srgb, var(--app-brand-primary) 24%, var(--dl-color-border));
+  background: color-mix(in srgb, var(--dl-color-surface) 84%, var(--app-brand-primary));
+  border: var(--dl-border-width) solid color-mix(in srgb, var(--app-brand-primary) 20%, var(--dl-color-border));
   border-radius: 9999px;
   display: grid;
   gap: 0;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  min-inline-size: 10rem;
-  padding: var(--dl-space-1);
+  flex: 0 0 8.5rem;
+  min-inline-size: 8.5rem;
+  padding: 0.2rem;
   position: relative;
 }
 
@@ -285,14 +288,14 @@
 }
 
 .organization-context__track {
-  inset-inline: var(--dl-space-2);
+  inset-inline: 0.2rem;
 }
 
 .organization-context__thumb {
-  background: linear-gradient(180deg, var(--dl-color-surface), color-mix(in srgb, var(--dl-color-surface) 86%, var(--app-brand-primary)));
-  border: var(--dl-border-width) solid color-mix(in srgb, var(--app-brand-primary) 40%, var(--dl-color-border));
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--app-brand-primary) 12%, transparent);
-  inline-size: calc((100% - var(--dl-space-1) * 2) / 2);
+  background: linear-gradient(180deg, var(--dl-color-surface), color-mix(in srgb, var(--dl-color-surface) 92%, var(--app-brand-primary)));
+  border: var(--dl-border-width) solid color-mix(in srgb, var(--app-brand-primary) 30%, var(--dl-color-border));
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--app-brand-primary) 10%, transparent);
+  inline-size: calc(50% - 0.2rem);
   transform: translateX(calc(var(--active-index) * 100%));
   transition: transform var(--dl-duration-fast) var(--dl-easing-standard);
   z-index: 0;
@@ -310,15 +313,15 @@
   display: inline-flex;
   gap: var(--dl-space-2);
   justify-content: center;
-  min-height: 2.5rem;
+  min-height: 2.75rem;
   min-width: 0;
-  padding: 0 var(--dl-space-3);
+  padding: 0 var(--dl-space-2);
   text-align: center;
   z-index: 1;
 }
 
 .organization-context__segment span {
-  font-size: var(--dl-font-size-label);
+  font-size: var(--dl-font-size-small);
 }
 
 .organization-context__segment:hover:not(:disabled),

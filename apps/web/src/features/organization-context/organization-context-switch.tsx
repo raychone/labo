@@ -163,30 +163,30 @@ function DesktopOrganizationContext({
           <span>Firmă activă</span>
           {context.active ? <small>{context.active.code} · {context.active.displayName}</small> : <small>Neselectată</small>}
         </div>
-      {context.canSwitch ? (
-        <div className="organization-context__segments" aria-label="Schimbă firma" role="radiogroup" style={{ "--active-index": Math.max(0, orderedOptions.findIndex((option) => option.code === activeCode)) } as CSSProperties}>
-          <span aria-hidden="true" className="organization-context__track" />
-          <span aria-hidden="true" className="organization-context__thumb" />
-          {orderedOptions.map((option) => (
-            <Tooltip content={option.displayName} key={option.code}>
-              <button
-                aria-checked={activeCode === option.code}
-                aria-label={option.code}
-                className={`organization-context__segment${activeCode === option.code ? " organization-context__segment--active" : ""}`}
-                disabled={isPending || activeCode === option.code}
-                onClick={() => onSwitch(option.code)}
-                title={option.displayName}
-                role="radio"
-                type="button"
-              >
-                <span>{option.code}</span>
-              </button>
-            </Tooltip>
-          ))}
-        </div>
-      ) : (
-        <ContextReadOnly context={context} />
-      )}
+        {context.canSwitch ? (
+          <div className="organization-context__segments" aria-label="Schimbă firma" role="radiogroup" style={{ "--active-index": Math.max(0, orderedOptions.findIndex((option) => option.code === activeCode)) } as CSSProperties}>
+            <span aria-hidden="true" className="organization-context__track" />
+            <span aria-hidden="true" className="organization-context__thumb" />
+            {orderedOptions.map((option) => (
+              <Tooltip content={option.displayName} key={option.code}>
+                <button
+                  aria-checked={activeCode === option.code}
+                  aria-label={option.code}
+                  className={`organization-context__segment${activeCode === option.code ? " organization-context__segment--active" : ""}`}
+                  disabled={isPending || activeCode === option.code}
+                  onClick={() => onSwitch(option.code)}
+                  title={option.displayName}
+                  role="radio"
+                  type="button"
+                >
+                  <span>{option.code}</span>
+                </button>
+              </Tooltip>
+            ))}
+          </div>
+        ) : (
+          <ContextReadOnly context={context} />
+        )}
       </div>
     </section>
   );
