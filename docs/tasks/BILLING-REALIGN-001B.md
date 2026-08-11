@@ -12,9 +12,11 @@ Delivered scope:
 - manager dashboard KPI view with company-scoped billing entry points only;
 - billing overview counters and tabs;
 - billing filters collapsed by default behind an explicit toggle;
+- clickable KPI cards that jump into the matching billing section;
 - billable works filters and selection;
 - proformas, invoices, manual payment recording, receivables/restanțe;
 - clinic and doctor statements with printable browser views;
+- selectable statement documents for scoped note de plată printouts;
 - month-end registry;
 - company-scoped CSV/print exports;
 - read-only ambiguous legacy review;

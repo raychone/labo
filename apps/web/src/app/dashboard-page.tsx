@@ -85,13 +85,13 @@ export function DashboardPage(): ReactNode {
   const canReadOperational = canReadWorks || canReadAssignedWorks;
   const canScanWork = permissionKeys.includes("scan.use");
   const canReadBilling = permissionKeys.includes("finance.read") || permissionKeys.includes("invoice.read");
-  const canReadTechnician = permissionKeys.includes("technician.workbench.read");
+  const isManagerWorkspace = canReadBilling || permissionKeys.includes("pricing.read") || permissionKeys.includes("settings.read") || permissionKeys.includes("users.read");
+  const canReadTechnician = permissionKeys.includes("technician.workbench.read") && !isManagerWorkspace;
   const canReadAvailable = permissionKeys.includes("works.claim.available.read");
   const canReadOwnClaims = permissionKeys.includes("works.claim.own.read");
   const canReadOrganization = permissionKeys.includes("organization_context.read");
-  const isManagerWorkspace = canReadBilling || permissionKeys.includes("pricing.read") || permissionKeys.includes("settings.read") || permissionKeys.includes("users.read");
   const isReceptionWorkspace = canCreateWork || (canReadWorks && !canReadTechnician && !isManagerWorkspace);
-  const isTechnicianWorkspace = canReadTechnician || canReadAvailable || canReadOwnClaims;
+  const isTechnicianWorkspace = !isManagerWorkspace && (canReadTechnician || canReadAvailable || canReadOwnClaims);
   const settingsQuery = useSettings(permissionKeys.includes("settings.read"));
   const organizationQuery = useQuery({ enabled: canReadOrganization, queryFn: fetchOrganizationContext, queryKey: ["organization-context"], retry: false });
   const laboratoryName = settingsQuery.data?.laboratoryName ?? "Dental Lab Management";
@@ -269,8 +269,10 @@ function SummaryMetricCard({ label, to, value }: { readonly label: string; reado
 }
 
 function DashboardAction({ label, to, variant = "outline" }: { readonly label: string; readonly to: string; readonly variant?: "outline" | "primary" }): ReactNode {
-  const className = variant === "primary" ? "dl-button dl-button--primary dl-button--medium" : "dl-button dl-button--outline dl-button--medium";
-  return <Link className={className} style={{ color: "inherit", textDecoration: "none" }} to={to}><span className="dl-button__content"><span>{label}</span></span></Link>;
+  const className = variant === "primary"
+    ? "dashboard-page__action-link dashboard-page__action-link--primary"
+    : "dashboard-page__action-link dashboard-page__action-link--outline";
+  return <Link className={className} to={to}>{label}</Link>;
 }
 
 function DashboardEmptyState({ action, description, title }: { readonly action?: { readonly label: string; readonly to: string }; readonly description: string; readonly title: string }): ReactNode {

@@ -55,7 +55,7 @@ describe("OrganizationContextSwitch", () => {
     renderWithProviders();
 
     expect(await screen.findByText("NC")).toBeDefined();
-    expect(screen.getAllByText("Nicolaie Cristina")).toHaveLength(2);
+    expect(screen.getAllByText("Nicolaie Cristina")).toHaveLength(1);
     expect(screen.queryByRole("radio", { name: "NG" })).toBeNull();
   });
 

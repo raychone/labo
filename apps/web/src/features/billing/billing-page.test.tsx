@@ -225,7 +225,7 @@ describe("BillingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Vezi filtrele" }));
     expect(await screen.findByLabelText("Status încasare")).toBeDefined();
     expect((await screen.findAllByText("Nefacturat")).length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("tab", { name: "Lucrări nefacturate" }));
+    fireEvent.click(screen.getByRole("button", { name: /Lucrări nefacturate/ }));
     expect(await screen.findByRole("checkbox", { name: "Selectează WO-2026-000001" })).toBeDefined();
     fireEvent.click(screen.getByLabelText("Selectează WO-2026-000001"));
     expect(await screen.findByText(/1 lucrări selectate/)).toBeDefined();

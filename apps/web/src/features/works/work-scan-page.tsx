@@ -1,4 +1,4 @@
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, ErrorState, LoadingState, Modal, Select, StatusBadge, useToast } from "@dental-lab/ui";
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, ErrorState, LoadingState, Modal, Select, StatusBadge, TextInput, useToast } from "@dental-lab/ui";
 import {
   formatScanProgress,
   getWorkStageExecutionStatusLabel,
@@ -11,16 +11,17 @@ import {
   type ScanSource,
 } from "@dental-lab/shared";
 import { useQuery } from "@tanstack/react-query";
-import { useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
+import { fetchClinicOptions } from "../clinics/clinics-api.js";
 import { useTechnicianOptions, useAssignWorkflowStage } from "../technician-workbench/technician-workbench-api.js";
 import { hasPermission } from "../users/users-api.js";
 import { CameraScanner } from "./camera-scanner.js";
 import { ManualScanForm } from "./manual-scan-form.js";
 import { useRecordScanWorkOpened, useResolveOperationalScan } from "./scan-api.js";
-import { useCompleteWorkflowStage, useStartWorkflowStage } from "./works-api.js";
+import { useCompleteWorkflowStage, useStartWorkflowStage, useWorks } from "./works-api.js";
 import "./work-scan-page.css";
 
 function getErrorMessage(error: unknown): string {
@@ -32,6 +33,7 @@ export function WorkScanPage(): ReactNode {
   const toast = useToast();
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   const canScan = hasPermission(permissionsQuery.data, "scan.use");
+  const canSearchWorks = true;
   const resolveMutation = useResolveOperationalScan();
   const startMutation = useStartWorkflowStage();
   const completeMutation = useCompleteWorkflowStage();
@@ -40,10 +42,58 @@ export function WorkScanPage(): ReactNode {
   const [scanContext, setScanContext] = useState<ScanContextView | null>(null);
   const [pendingAction, setPendingAction] = useState<ScanActionType | null>(null);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState("");
+  const [manualClinicId, setManualClinicId] = useState("");
+  const [manualDoctorSearch, setManualDoctorSearch] = useState("");
+  const [manualPatientSearch, setManualPatientSearch] = useState("");
   const lastScanRef = useRef<{ readonly payload: string; readonly scannedAt: number; readonly source: ScanSource } | null>(null);
   const technicianOptionsQuery = useTechnicianOptions(
     (pendingAction === "ASSIGN_STAGE" || pendingAction === "REASSIGN_STAGE") && hasPermission(permissionsQuery.data, "technician.workload.read"),
   );
+  const clinicOptionsQuery = useQuery({
+    enabled: canSearchWorks,
+    queryFn: fetchClinicOptions,
+    queryKey: ["clinics", "options", "scan-manual"],
+    retry: false,
+  });
+  const manualLookupSearch = useMemo(() => {
+    const terms = [manualDoctorSearch.trim(), manualPatientSearch.trim()].filter((term) => term.length > 0);
+    return terms.length > 0 ? terms.join(" ") : undefined;
+  }, [manualDoctorSearch, manualPatientSearch]);
+  const manualLookupQuery = useWorks({
+    clinicId: manualClinicId.trim().length > 0 ? manualClinicId : undefined,
+    dateFrom: undefined,
+    dateTo: undefined,
+    deadlineFilter: undefined,
+    doctorId: undefined,
+    page: 1,
+    pageSize: 20,
+    priority: undefined,
+    search: manualLookupSearch,
+    sortBy: "createdAt",
+    sortDirection: "desc",
+    status: undefined,
+    workTypeId: undefined,
+  }, canSearchWorks);
+  const manualLookupItems = useMemo(() => {
+    const clinicSearch = manualClinicId.trim().toLowerCase();
+    const doctorSearch = manualDoctorSearch.trim().toLowerCase();
+    const patientSearch = manualPatientSearch.trim().toLowerCase();
+
+    return (manualLookupQuery.data?.items ?? []).filter((work) => {
+      if (clinicSearch.length > 0 && !work.clinic.id.toLowerCase().includes(clinicSearch) && !work.clinic.name.toLowerCase().includes(clinicSearch) && !work.clinic.code.toLowerCase().includes(clinicSearch)) {
+        return false;
+      }
+      if (doctorSearch.length > 0 && !work.doctor.displayName.toLowerCase().includes(doctorSearch)) {
+        return false;
+      }
+      if (patientSearch.length > 0 && !work.patientName.toLowerCase().includes(patientSearch)) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [manualClinicId, manualDoctorSearch, manualLookupQuery.data?.items, manualPatientSearch]);
+  const hasManualFilters = manualClinicId.trim().length > 0 || manualDoctorSearch.trim().length > 0 || manualPatientSearch.trim().length > 0;
 
   function resolvePayload(payload: string, source: ScanSource): void {
     if (resolveMutation.isPending) {
@@ -151,34 +201,103 @@ export function WorkScanPage(): ReactNode {
           </Link>
         </header>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Camera</CardTitle>
-            <CardDescription>Scanează un QR de lucrare cu browser compatibil.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <CameraScanner onDetected={(payload) => resolvePayload(payload, "camera")} />
-          </CardContent>
-        </Card>
+        <div className="work-scan-page__content">
+          <div className="work-scan-page__search-column">
+            <Card>
+              <CardHeader>
+                <CardTitle>Camera</CardTitle>
+                <CardDescription>Scanează un QR de lucrare cu browser compatibil.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <CameraScanner onDetected={(payload) => resolvePayload(payload, "camera")} />
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Căutare manuală</CardTitle>
-            <CardDescription>Fallback pentru desktop, cameră refuzată sau QR deteriorat.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ManualScanForm isLoading={resolveMutation.isPending} onSubmit={(payload) => resolvePayload(payload, "manual")} />
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Căutare manuală</CardTitle>
+                <CardDescription>Fallback pentru desktop, cameră refuzată sau QR deteriorat.</CardDescription>
+              </CardHeader>
+              <CardContent className="work-scan-page__manual-lookup">
+                <ManualScanForm isLoading={resolveMutation.isPending} onSubmit={(payload) => resolvePayload(payload, "manual")} />
+                {canSearchWorks ? (
+                  <section className="work-scan-page__manual-search" aria-label="Căutare manuală după câmpuri">
+                    <Select
+                      label="Clinică"
+                      options={[
+                        { label: "Toate clinicile", value: "" },
+                        ...(clinicOptionsQuery.data ?? []).map((clinic) => ({ label: `${clinic.code} · ${clinic.name}`, value: clinic.id })),
+                      ]}
+                      value={manualClinicId}
+                    onChange={(event) => {
+                      setManualClinicId(event.target.value);
+                    }}
+                    />
+                    <TextInput
+                      label="Medic"
+                      placeholder="Dr. Ana Popescu"
+                      value={manualDoctorSearch}
+                      onChange={(event) => setManualDoctorSearch(event.target.value)}
+                    />
+                    <TextInput
+                      label="Nume pacient"
+                      placeholder="Ion Pop"
+                      value={manualPatientSearch}
+                      onChange={(event) => setManualPatientSearch(event.target.value)}
+                    />
+                  </section>
+                ) : null}
+              </CardContent>
+            </Card>
+          </div>
 
-        {scanContext ? (
-          <ScanResult
-            context={scanContext}
-            isOpening={openedMutation.isPending}
-            onAction={setPendingAction}
-            onOpenWork={() => void openWork()}
-          />
-        ) : null}
+          <div className="work-scan-page__results-column">
+            {scanContext ? (
+              <ScanResult
+                context={scanContext}
+                isOpening={openedMutation.isPending}
+                onAction={setPendingAction}
+                onOpenWork={() => void openWork()}
+              />
+            ) : null}
+
+            {canSearchWorks ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Rezultate căutare</CardTitle>
+                  <CardDescription>Filtrează după clinică, medic și numele pacientului.</CardDescription>
+                </CardHeader>
+                <CardContent className="work-scan-page__lookup-results">
+                  {!hasManualFilters ? (
+                    <p className="work-scan-page__muted">Completează un filtru ca să vezi lucrările potrivite.</p>
+                  ) : null}
+                  {hasManualFilters && manualLookupQuery.isLoading ? <LoadingState text="Se caută lucrări" /> : null}
+                  {hasManualFilters && !manualLookupQuery.isLoading && manualLookupItems.length === 0 ? (
+                    <p className="work-scan-page__muted">Nu există rezultate pentru filtrele curente.</p>
+                  ) : null}
+                  {hasManualFilters ? manualLookupItems.map((work) => (
+                    <article className="work-scan-page__lookup-item" key={work.id}>
+                      <div>
+                        <strong>{work.code}</strong>
+                        <p>{work.patientName}</p>
+                        <p>{work.clinic.name} · {work.doctor.displayName}</p>
+                        <p>{work.workType.name}</p>
+                      </div>
+                      <div className="work-scan-page__lookup-actions">
+                        <StatusBadge label={work.status} variant="registered" />
+                        <Link className="dl-button dl-button--outline dl-button--medium" to={`/works?workId=${encodeURIComponent(work.id)}`}>
+                          <span className="dl-button__content">
+                            <span>Deschide lucrarea</span>
+                          </span>
+                        </Link>
+                      </div>
+                    </article>
+                  )) : null}
+                </CardContent>
+              </Card>
+            ) : null}
+          </div>
+        </div>
         <ActionModal
           actionType={pendingAction}
           context={scanContext}

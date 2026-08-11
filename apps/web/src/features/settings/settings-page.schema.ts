@@ -1,8 +1,6 @@
 import {
   SUPPORTED_CURRENCIES,
   SUPPORTED_COUNTRY_CODES,
-  SUPPORTED_LOCALES,
-  SUPPORTED_TIMEZONES,
 } from "@dental-lab/shared";
 import { z } from "zod";
 
@@ -29,12 +27,9 @@ export const settingsFormSchema = z.object({
   email: z.string().trim().toLowerCase().email("Introdu un email valid.").max(254).nullable().or(z.literal("").transform(() => null)),
   iban: nullableIban,
   legalName: z.string().trim().min(2, "Denumirea juridică este obligatorie.").max(160),
-  locale: z.enum(SUPPORTED_LOCALES),
   phone: z.string().trim().regex(/^[+()0-9 .-]{6,40}$/, "Telefonul poate contine cifre, spatii si prefix international.").nullable().or(z.literal("").transform(() => null)),
   postalCode: nullableTrimmedString(20),
-  primaryColor: z.string().trim().toLowerCase().regex(/^#[0-9a-f]{6}$/, "Foloseste o culoare hex valida."),
   taxId: z.string().trim().toUpperCase().regex(/^(RO)?[0-9]{2,13}$/, "Introdu un cod fiscal valid ca format.").nullable().or(z.literal("").transform(() => null)),
-  timezone: z.enum(SUPPORTED_TIMEZONES),
   website: z.string().trim().url("Introdu un URL valid.").refine((value) => value.startsWith("http://") || value.startsWith("https://"), "Website-ul trebuie să folosească http sau https.").nullable().or(z.literal("").transform(() => null)),
 });
 

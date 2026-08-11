@@ -4,7 +4,6 @@ import {
   FormActions,
   FormErrorSummary,
   FormGrid,
-  FormGridFull,
   FormLayout,
   FormSection,
   LoadingState,
@@ -39,12 +38,9 @@ function toFormValues(settings: LaboratorySettings): SettingsFormValues {
     email: settings.email,
     iban: settings.iban,
     legalName: settings.legalName ?? "",
-    locale: settings.locale,
     phone: settings.phone,
     postalCode: settings.postalCode,
-    primaryColor: settings.primaryColor,
     taxId: settings.taxId,
-    timezone: settings.timezone,
     website: settings.website,
   };
 }
@@ -62,12 +58,9 @@ const settingsFieldLabels: Record<keyof SettingsFormValues, string> = {
   email: "Email",
   iban: "IBAN",
   legalName: "Denumire legală",
-  locale: "Limbă și format",
   phone: "Telefon",
   postalCode: "Cod poștal",
-  primaryColor: "Culoare principală",
   taxId: "Cod fiscal",
-  timezone: "Fus orar",
   website: "Website",
 };
 
@@ -147,8 +140,6 @@ export function SettingsPage(): ReactNode {
       ...values,
       countryCode: "RO",
       currency: "RON",
-      locale: "ro-RO",
-      timezone: "Europe/Bucharest",
     }, {
       onError: (error) => {
         applyApiErrorsToForm(form, error);
@@ -216,22 +207,9 @@ export function SettingsPage(): ReactNode {
             </FormGrid>
           </FormSection>
 
-          <FormSection title="Setări regionale" description="Aplicația este configurată pentru laborator din România.">
+          <FormSection title="Documente" description="Elemente afișate pe antetul documentelor financiare.">
             <FormGrid>
-              <ReadOnlySetting label="Țară" value="România" />
-              <ReadOnlySetting label="Fus orar" value="Europe/Bucharest" />
-              <ReadOnlySetting label="Limbă și format" value="Română (ro-RO)" />
-              <ReadOnlySetting label="Monedă" value="RON" />
-            </FormGrid>
-          </FormSection>
-
-          <FormSection title="Branding" description="Culoarea este folosită în navigație și elementele principale.">
-            <FormGrid>
-              <TextInput error={form.formState.errors.primaryColor?.message} id="primaryColor" label="Culoare principală" required {...form.register("primaryColor")} />
-              <div className="settings-page__swatch" aria-label="Previzualizare culoare" style={{ background: form.watch("primaryColor") }} />
-              <FormGridFull>
-                <Textarea error={form.formState.errors.documentFooter?.message} id="documentFooter" label="Footer documente" rows={4} {...form.register("documentFooter")} />
-              </FormGridFull>
+              <Textarea error={form.formState.errors.documentFooter?.message} id="documentFooter" label="Footer documente" rows={4} {...form.register("documentFooter")} />
             </FormGrid>
           </FormSection>
 
@@ -248,14 +226,5 @@ export function SettingsPage(): ReactNode {
         </FormLayout>
       </section>
     </main>
-  );
-}
-
-function ReadOnlySetting({ label, value }: { readonly label: string; readonly value: string }): ReactNode {
-  return (
-    <div className="settings-page__readonly-field">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
   );
 }

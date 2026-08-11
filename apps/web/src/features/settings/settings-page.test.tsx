@@ -51,13 +51,10 @@ const settingsResponse = {
   legalEntityCode: "NC",
   legalEntityDisplayName: "Nicolaie Cristina",
   legalName: "NC Demo Tehnică Dentară",
-  locale: "ro-RO",
   logoFileKey: null,
   phone: "+40722111222",
   postalCode: "010101",
-  primaryColor: "#0f766e",
   taxId: "RO123456",
-  timezone: "Europe/Bucharest",
   updatedAt: "2026-01-01T00:00:00.000Z",
   website: "https://example.test/",
 };
@@ -83,7 +80,7 @@ describe("SettingsPage", () => {
     expect(await screen.findByText("NC — Nicolaie Cristina")).toBeDefined();
     expect(await screen.findByDisplayValue("NC Demo Tehnică Dentară")).toBeDefined();
     expect(await screen.findByDisplayValue("RO49AAAA1B31007593840000")).toBeDefined();
-    expect(await screen.findByText("Europe/Bucharest")).toBeDefined();
+    expect(await screen.findByDisplayValue("Mulțumim pentru colaborare.")).toBeDefined();
     expect(await screen.findByRole("button", { name: "Salvează" })).toBeDefined();
   });
 

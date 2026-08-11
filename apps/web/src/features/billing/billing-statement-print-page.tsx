@@ -8,6 +8,8 @@ import { fetchClinicStatement, fetchDoctorStatement, type BillingStatementParams
 import { getErrorMessage } from "../../lib/form-utils.js";
 import "./billing-page.css";
 
+const statementHeaderAsset = encodeURI("/assets/Nota Plata A5 2026.pdf");
+
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium" }).format(new Date(value));
 }
@@ -25,11 +27,17 @@ function readStatementParams(searchParams: URLSearchParams): BillingStatementPar
   };
 }
 
+function readSelectedDocumentIds(searchParams: URLSearchParams): readonly string[] {
+  const raw = searchParams.get("documentIds");
+  return raw ? raw.split(",").map((value) => value.trim()).filter(Boolean) : [];
+}
+
 export function BillingStatementPrintPage(): ReactNode {
   const params = useParams();
   const [searchParams] = useSearchParams();
   const scope = params.scope === "doctor" ? "doctor" : "clinic";
   const statementParams = readStatementParams(searchParams);
+  const selectedDocumentIds = readSelectedDocumentIds(searchParams);
   const query = useQuery<ClinicBillingStatement | DoctorBillingStatement>({
     enabled: scope === "clinic" ? Boolean(statementParams.clinicId) : Boolean(statementParams.doctorId),
     queryFn: () => scope === "clinic" ? fetchClinicStatement(statementParams) : fetchDoctorStatement(statementParams),
@@ -63,43 +71,67 @@ export function BillingStatementPrintPage(): ReactNode {
         <Button onClick={() => window.print()}>Printează / Salvează PDF</Button>
         <Link className="billing-print-page__back-link" to="/billing">Înapoi la facturare</Link>
       </div>
-      <StatementPrintView scope={scope} statement={query.data} />
+      <StatementPrintView scope={scope} selectedDocumentIds={selectedDocumentIds} statement={query.data} />
     </main>
   );
 }
 
-function StatementPrintView({ scope, statement }: { readonly scope: "clinic" | "doctor"; readonly statement: ClinicBillingStatement | DoctorBillingStatement }): ReactNode {
+function StatementPrintView({
+  scope,
+  selectedDocumentIds,
+  statement,
+}: {
+  readonly scope: "clinic" | "doctor";
+  readonly selectedDocumentIds: readonly string[];
+  readonly statement: ClinicBillingStatement | DoctorBillingStatement;
+}): ReactNode {
   const recipientName = scope === "clinic"
     ? ("clinicName" in statement ? statement.clinicName : "")
     : ("doctorName" in statement ? statement.doctorName : "");
+  const selectedDocuments = selectedDocumentIds.length > 0
+    ? statement.documents.filter((row) => selectedDocumentIds.includes(row.documentId))
+    : statement.documents;
+  const effectiveDocuments = selectedDocuments.length > 0 ? selectedDocuments : statement.documents;
+  const effectiveTotalMinor = effectiveDocuments.reduce((total, row) => total + row.totalMinor, 0);
+  const effectivePaidMinor = effectiveDocuments.reduce((total, row) => total + row.paidMinor, 0);
+  const effectiveBalanceMinor = effectiveDocuments.reduce((total, row) => total + row.balanceMinor, 0);
+  const showCustomSelection = selectedDocumentIds.length > 0;
   return (
     <article className="billing-statement">
+      <div className="billing-statement__header-art-wrap">
+        <object aria-label="Antet notă de plată" className="billing-statement__header-art" data={statementHeaderAsset} type="application/pdf">
+          <p>Antetul PDF nu poate fi afișat în browserul curent.</p>
+        </object>
+      </div>
       <header className="billing-statement__header">
         <div className="billing-statement__brand">
-          <strong>Dental Lab Management</strong>
-          <span>Notă de plată</span>
+          <strong>Notă de plată</strong>
+          <span>{scope === "clinic" ? "Clinică" : "Medic"} · {recipientName}</span>
+          {showCustomSelection ? <small>{effectiveDocuments.length} documente selectate din perioadă</small> : null}
         </div>
         <div className="billing-statement__recipient">
-          <span>{scope === "clinic" ? "Clinică" : "Medic"}</span>
-          <strong>{recipientName}</strong>
-          <small>{statement.dateFrom} - {statement.dateTo}</small>
+          <span>Perioadă</span>
+          <strong>{statement.dateFrom} - {statement.dateTo}</strong>
+          <small>Generat la {formatDate(statement.generatedAt)}</small>
         </div>
       </header>
 
       <section className="billing-statement__summary">
-        <div><span>Generat la</span><strong>{formatDate(statement.generatedAt)}</strong></div>
-        <div><span>Total</span><strong>{formatMoneyMinor(statement.totalMinor, statement.currency, "ro-RO")}</strong></div>
-        <div><span>Încasat</span><strong>{formatMoneyMinor(statement.paidMinor, statement.currency, "ro-RO")}</strong></div>
-        <div><span>Nefacturat</span><strong>{formatMoneyMinor(statement.uninvoicedMinor, statement.currency, "ro-RO")}</strong></div>
+        <div><span>{showCustomSelection ? "Total selectat" : "Total"}</span><strong>{formatMoneyMinor(effectiveTotalMinor, statement.currency, "ro-RO")}</strong></div>
+        <div><span>Încasat</span><strong>{formatMoneyMinor(effectivePaidMinor, statement.currency, "ro-RO")}</strong></div>
+        <div><span>Sold restant</span><strong>{formatMoneyMinor(effectiveBalanceMinor, statement.currency, "ro-RO")}</strong></div>
+        <div><span>Documente</span><strong>{effectiveDocuments.length}</strong></div>
       </section>
 
-      <StatementSection title="Documente" count={statement.documents.length}>
-        <StatementDocumentsTable currency={statement.currency} rows={statement.documents} />
+      <StatementSection title="Documente" count={effectiveDocuments.length}>
+        <StatementDocumentsTable currency={statement.currency} rows={effectiveDocuments} />
       </StatementSection>
 
-      <StatementSection title="Lucrări nefacturate" count={statement.uninvoicedWorks.length}>
-        <StatementWorksTable currency={statement.currency} rows={statement.uninvoicedWorks} />
-      </StatementSection>
+      {showCustomSelection ? null : (
+        <StatementSection title="Lucrări nefacturate" count={statement.uninvoicedWorks.length}>
+          <StatementWorksTable currency={statement.currency} rows={statement.uninvoicedWorks} />
+        </StatementSection>
+      )}
     </article>
   );
 }

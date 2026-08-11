@@ -1,7 +1,7 @@
 import { formatLegalEntityOption, type LegalEntityCode, type OrganizationContextView } from "@dental-lab/shared";
 import { Button, ConfirmActionModal, ErrorState, LoadingState, Select, Tooltip, useToast } from "@dental-lab/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useState } from "react";
 
 import { isForbiddenError } from "../../lib/api-client.js";
@@ -146,16 +146,27 @@ function DesktopOrganizationContext({
   readonly onSwitch: (code: LegalEntityCode) => void;
 }): ReactNode {
   const activeCode = context.active?.code ?? "";
+  const orderedOptions = [...context.available].sort((left, right) => {
+    if (left.code === activeCode) {
+      return -1;
+    }
+    if (right.code === activeCode) {
+      return 1;
+    }
+    return left.code.localeCompare(right.code);
+  });
 
   return (
-    <section className="organization-context" aria-label="Firmă activă">
+    <section className="organization-context organization-context--compact" aria-label="Firmă activă">
       <div className="organization-context__header">
         <span>Firmă activă</span>
-        {context.active ? <small>{context.active.displayName}</small> : <small>Neselectată</small>}
+        {context.active ? <small>{context.active.code} · {context.active.displayName}</small> : <small>Neselectată</small>}
       </div>
       {context.canSwitch ? (
-        <div className="organization-context__segments" aria-label="Schimbă firma" role="radiogroup">
-          {context.available.map((option) => (
+        <div className="organization-context__segments" aria-label="Schimbă firma" role="radiogroup" style={{ "--active-index": Math.max(0, orderedOptions.findIndex((option) => option.code === activeCode)) } as CSSProperties}>
+          <span aria-hidden="true" className="organization-context__track" />
+          <span aria-hidden="true" className="organization-context__thumb" />
+          {orderedOptions.map((option) => (
             <Tooltip content={option.displayName} key={option.code}>
               <button
                 aria-checked={activeCode === option.code}
@@ -168,7 +179,6 @@ function DesktopOrganizationContext({
                 type="button"
               >
                 <span>{option.code}</span>
-                <small>{option.displayName}</small>
               </button>
             </Tooltip>
           ))}
@@ -191,14 +201,14 @@ function MobileOrganizationContext({
 }): ReactNode {
   if (!context.canSwitch) {
     return (
-      <section className="organization-context organization-context--mobile" aria-label="Firmă activă">
+      <section className="organization-context organization-context--mobile organization-context--compact" aria-label="Firmă activă">
         <ContextReadOnly context={context} />
       </section>
     );
   }
 
   return (
-    <section className="organization-context organization-context--mobile" aria-label="Firmă activă">
+    <section className="organization-context organization-context--mobile organization-context--compact" aria-label="Firmă activă">
       <Select
         disabled={isPending}
         hint={context.active?.displayName ?? "Alege firma activă"}

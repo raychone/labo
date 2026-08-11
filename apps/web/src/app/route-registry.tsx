@@ -182,7 +182,9 @@ function shouldShowInNavigation(permissionKeys: readonly string[], route: AppRou
   }
 
   if (route.path === "/logistics") {
-    return !permissionKeys.includes("technician.workbench.read");
+    return permissionKeys.includes("logistics.center.read")
+      && !permissionKeys.includes("works.create")
+      && !permissionKeys.includes("technician.workbench.read");
   }
 
   if (route.path === "/clinics" || route.path === "/doctors") {

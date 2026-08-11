@@ -98,6 +98,27 @@ describe("WorkScanPage", () => {
           ],
         }));
       }
+      if (url.endsWith("/clinics/options")) {
+        return Promise.resolve(createJsonResponse([{ code: "NC", id: "clinic_1", name: "Clinica Test" }]));
+      }
+      if (url.startsWith("/works?")) {
+        return Promise.resolve(createJsonResponse({
+          items: [{
+            clinic: { code: "NC", id: "clinic_1", name: "Clinica Test" },
+            code: "WO-2026-000001",
+            doctor: { clinicId: "clinic_1", displayName: "Dr. Ana Popescu", id: "doctor_1" },
+            id: "work_order_1",
+            patientName: "Ion Pop",
+            priority: "NORMAL",
+            status: "REGISTERED",
+            workType: { code: "CZR", id: "work_type_1", name: "Coroana zirconiu", unit: "PIECE" },
+          }],
+          page: 1,
+          pageCount: 1,
+          pageSize: 5,
+          total: 1,
+        }));
+      }
       if (url.endsWith("/scan/resolve")) {
         expect(init?.method).toBe("POST");
         expect(init?.body).toBe(JSON.stringify({ payload: "WO-2026-000001", source: "manual" }));
@@ -120,6 +141,57 @@ describe("WorkScanPage", () => {
     expect(await screen.findByText("Necompletată")).toBeDefined();
     expect(await screen.findByRole("button", { name: "Completează fișa" })).toBeDefined();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/scan/resolve"), expect.anything()));
+  });
+
+  it("filters manual lookup by clinic, doctor and patient name", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/auth/permissions")) {
+        return Promise.resolve(createJsonResponse({
+          permissions: [
+            { key: "scan.use", scopes: ["ALL"] },
+            { key: "works.read_all", scopes: ["ALL"] },
+          ],
+        }));
+      }
+      if (url.endsWith("/clinics/options")) {
+        return Promise.resolve(createJsonResponse([{ code: "NC", id: "clinic_1", name: "Clinica Test" }]));
+      }
+      if (url.includes("/works?")) {
+        expect(url).toContain("clinicId=clinic_1");
+        expect(url).toContain("search=Dr.+Ana+Popescu+Ion+Pop");
+        return Promise.resolve(createJsonResponse({
+          items: [{
+            clinic: { code: "NC", id: "clinic_1", name: "Clinica Test" },
+            code: "WO-2026-000001",
+            doctor: { clinicId: "clinic_1", displayName: "Dr. Ana Popescu", id: "doctor_1" },
+            id: "work_order_1",
+            patientName: "Ion Pop",
+            priority: "NORMAL",
+            status: "REGISTERED",
+            workType: { code: "CZR", id: "work_type_1", name: "Coroana zirconiu", unit: "PIECE" },
+          }],
+          page: 1,
+          pageCount: 1,
+          pageSize: 5,
+          total: 1,
+        }));
+      }
+
+      return Promise.resolve(createJsonResponse({}, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(<WorkScanPage />);
+
+    fireEvent.change(await screen.findByLabelText("Clinică"), { target: { value: "clinic_1" } });
+    fireEvent.change(await screen.findByLabelText("Medic"), { target: { value: "Dr. Ana Popescu" } });
+    fireEvent.change(await screen.findByLabelText("Nume pacient"), { target: { value: "Ion Pop" } });
+
+    expect(await screen.findByText("Rezultate căutare")).toBeDefined();
+    expect(await screen.findByText("WO-2026-000001")).toBeDefined();
+    expect(await screen.findByRole("link", { name: "Deschide lucrarea" })).toBeDefined();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/works?"), expect.anything()));
   });
 
   it("shows access denied without scan.use", async () => {
