@@ -111,6 +111,11 @@
   padding: var(--dl-space-4);
 }
 
+.billing-page__toolbar--inline {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
 .billing-page__payment-form,
 .billing-print-page,
 .billing-print,
@@ -145,6 +150,7 @@
 .billing-print-page__actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--dl-space-3);
 }
 
@@ -203,36 +209,54 @@
   vertical-align: top;
 }
 
-.billing-page__month-close dl {
+.billing-page__month-close-panel {
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  display: grid;
+  gap: var(--dl-space-3);
+  padding: var(--dl-space-4);
+}
+
+.billing-page__month-close-panel-header {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--dl-space-2);
+}
+
+.billing-page__month-close-panel-header h2 {
+  font-size: var(--dl-font-size-section-title);
+  margin: 0;
+}
+
+.billing-page__month-close-panel-header span {
+  color: var(--dl-color-text-muted);
+}
+
+.billing-page__month-close-trigger {
+  display: grid;
+  gap: var(--dl-space-1);
+  text-align: left;
+}
+
+.billing-page__month-close-trigger strong {
+  font-size: var(--dl-font-size-label);
+}
+
+.billing-page__month-close-trigger small {
+  color: var(--dl-color-text-muted);
+}
+
+.billing-page__month-close-details {
   display: grid;
   gap: var(--dl-space-2);
   margin: 0;
 }
 
-.billing-page__month-close div {
+.billing-page__month-close-details div {
   display: flex;
   justify-content: space-between;
-}
-
-.billing-page__month-close-groups {
-  display: grid;
   gap: var(--dl-space-3);
-}
-
-.billing-page__month-close-group {
-  border: var(--dl-border-width) solid var(--dl-color-border);
-  border-radius: var(--dl-radius-md);
-  display: grid;
-  gap: var(--dl-space-2);
-  padding: var(--dl-space-3);
-}
-
-.billing-page__month-close-group strong {
-  font-size: var(--dl-font-size-label);
-}
-
-.billing-page__month-close-group span {
-  color: var(--dl-color-text-muted);
 }
 
 @media (min-width: 48rem) {
@@ -254,6 +278,10 @@
 
   .billing-page__payment-form {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .billing-page__toolbar--inline {
+    flex-wrap: nowrap;
   }
 
   .billing-page__payment-form > div:first-child {
@@ -427,6 +455,6 @@
   }
 
   .billing-statement__header-art {
-    block-size: 5rem;
+    block-size: 8rem;
   }
 }

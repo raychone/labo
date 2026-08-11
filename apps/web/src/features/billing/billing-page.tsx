@@ -1,4 +1,5 @@
 import {
+  Accordion,
   Button,
   Card,
   CardContent,
@@ -236,6 +237,7 @@ export function BillingPage(): ReactNode {
   const [selectedWorkIds, setSelectedWorkIds] = useState<readonly string[]>([]);
   const [selectedProformaIds, setSelectedProformaIds] = useState<readonly string[]>([]);
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<readonly string[]>([]);
+  const [selectedReceivableIds, setSelectedReceivableIds] = useState<readonly string[]>([]);
   const [selectedStatementDocumentIds, setSelectedStatementDocumentIds] = useState<readonly string[]>([]);
   const [statementScope, setStatementScope] = useState<"clinic" | "doctor">("clinic");
   const [clinicStatementId, setClinicStatementId] = useState("");
@@ -329,6 +331,10 @@ export function BillingPage(): ReactNode {
   const selectedWorks = useMemo(
     () => (billableWorksQuery.data?.items ?? []).filter((work) => selectedWorkIds.includes(work.id)),
     [billableWorksQuery.data?.items, selectedWorkIds],
+  );
+  const selectedReceivables = useMemo(
+    () => (receivablesQuery.data?.items ?? []).filter((item) => selectedReceivableIds.includes(item.documentId)),
+    [receivablesQuery.data?.items, selectedReceivableIds],
   );
   const selectedClinicId = selectedWorks[0]?.clinicId ?? null;
   const selectedTotal = selectedWorks.reduce((total, work) => total + (work.totalPriceMinor ?? 0), 0);
@@ -605,6 +611,7 @@ export function BillingPage(): ReactNode {
                 currency={currency}
                 error={receivablesQuery.error}
                 isLoading={receivablesQuery.isLoading}
+                isMutating={recordPaymentMutation.isPending}
                 items={receivablesQuery.data?.items ?? []}
                 locale={locale}
                 onExport={() => downloadCsv("restante.csv", toCsv((receivablesQuery.data?.items ?? []).map((item) => ({
@@ -619,6 +626,11 @@ export function BillingPage(): ReactNode {
                   "Sold": (item.balanceMinor / 100).toFixed(2),
                   "Monedă": item.currency,
                 }))))}
+                onOpenSelected={(documentId) => window.open(`/billing/documents/${documentId}/print`, "_blank", "noopener,noreferrer")}
+                onRecordPaymentSelected={recordPaymentForDocument}
+                onSelectionChange={setSelectedReceivableIds}
+                selectedDocumentIds={selectedReceivableIds}
+                selectedDocuments={selectedReceivables}
               />
             ),
           },
@@ -799,7 +811,7 @@ function StatementsTab({
 
   return (
     <section className="billing-page__tab">
-      <div className="billing-page__toolbar">
+      <div className="billing-page__toolbar billing-page__toolbar--inline">
         <Button onClick={() => setScope("clinic")} variant={scope === "clinic" ? "primary" : "secondary"}>Clinică</Button>
         <Button onClick={() => setScope("doctor")} variant={scope === "doctor" ? "primary" : "secondary"}>Medic</Button>
         <Button disabled={!statement} onClick={() => onOpenPrint(scope)} variant="outline">
@@ -1197,18 +1209,33 @@ function ReceivablesTab({
   currency,
   error,
   isLoading,
+  isMutating,
   items,
   locale,
   onExport,
+  onOpenSelected,
+  onRecordPaymentSelected,
+  onSelectionChange,
+  selectedDocumentIds,
+  selectedDocuments,
 }: {
   readonly currency: string;
   readonly error: unknown;
   readonly isLoading: boolean;
+  readonly isMutating: boolean;
   readonly items: readonly BillingReceivableRow[];
   readonly locale: string;
   readonly onExport: () => void;
+  readonly onOpenSelected: (documentId: string) => void;
+  readonly onRecordPaymentSelected: (documentId: string) => Promise<void>;
+  readonly onSelectionChange: (ids: readonly string[]) => void;
+  readonly selectedDocumentIds: readonly string[];
+  readonly selectedDocuments: readonly BillingReceivableRow[];
 }): ReactNode {
+  const selectedCount = selectedDocumentIds.length;
+  const selectedDocument = selectedDocuments[0] ?? null;
   const columns = useMemo<readonly DataTableColumn<BillingReceivableRow>[]>(() => [
+    { id: "select", header: "", renderCell: (item) => <input aria-label={`Selectează ${item.documentNumber ?? item.documentId}`} checked={selectedDocumentIds.includes(item.documentId)} onChange={() => onSelectionChange(toggleSelectedId(selectedDocumentIds, item.documentId))} type="checkbox" /> },
     { id: "number", header: "Factură", renderCell: (item) => item.documentNumber ?? "-" },
     { id: "clinic", header: "Clinică", renderCell: (item) => item.clinicName },
     { id: "doctor", header: "Medic", renderCell: (item) => item.doctorNames.join(", ") || "-" },
@@ -1218,12 +1245,23 @@ function ReceivablesTab({
     { id: "due", header: "Scadență", renderCell: (item) => item.dueDate ? formatDate(item.dueDate) : "-" },
     { id: "overdue", header: "Restanță", renderCell: (item) => item.daysOverdue > 0 ? `${item.daysOverdue} zile` : "În termen" },
     { id: "balance", header: "Sold", align: "right", renderCell: (item) => formatMoneyMinor(item.balanceMinor, item.currency ?? currency, locale) },
-  ], [currency, locale]);
+  ], [currency, locale, onSelectionChange, selectedDocumentIds]);
 
   return (
     <section className="billing-page__tab">
-      <div className="billing-page__toolbar"><Button onClick={onExport} variant="outline">Export CSV</Button></div>
+      <div className="billing-page__toolbar billing-page__toolbar--wrap">
+        <p>{selectedCount} restanțe selectate</p>
+        <Button onClick={onExport} variant="outline">Export CSV</Button>
+        <Button disabled={selectedCount !== 1 || isMutating} onClick={() => selectedDocument ? onOpenSelected(selectedDocument.documentId) : undefined} variant="secondary">Deschide documentul</Button>
+        <Button disabled={selectedCount !== 1 || isMutating} onClick={() => selectedDocument ? void onRecordPaymentSelected(selectedDocument.documentId) : undefined}>Înregistrează încasare</Button>
+      </div>
       <DataTable columns={columns} emptyMessage="Nu există facturi restante sau parțial achitate pentru filtrele curente." error={error ? getErrorMessage(error) : undefined} getRowKey={(item) => item.documentId} isLoading={isLoading} rows={items} />
+      {selectedDocument ? (
+        <section className="billing-page__print-preview" aria-label="Restanță selectată">
+          <h2>{selectedDocument.documentNumber ?? "-"}</h2>
+          <p>{selectedDocument.clinicName} · {selectedDocument.doctorNames.join(", ") || "-"} · {formatMoneyMinor(selectedDocument.balanceMinor, selectedDocument.currency ?? currency, locale)} restant</p>
+        </section>
+      ) : null}
     </section>
   );
 }
@@ -1265,14 +1303,14 @@ function MonthCloseTab({
         </div>
       ) : null}
       <div className="billing-page__month-close">
-        <MonthCloseGroupPanel title="Clinici" overview={clinicOverview ?? overview} currency={currency} locale={locale} />
-        <MonthCloseGroupPanel title="Medici" overview={doctorOverview ?? overview} currency={currency} locale={locale} />
+        <MonthCloseGroupAccordion title="Clinici" overview={clinicOverview ?? overview} currency={currency} locale={locale} />
+        <MonthCloseGroupAccordion title="Medici" overview={doctorOverview ?? overview} currency={currency} locale={locale} />
       </div>
     </section>
   );
 }
 
-function MonthCloseGroupPanel({
+function MonthCloseGroupAccordion({
   currency,
   locale,
   overview,
@@ -1284,28 +1322,32 @@ function MonthCloseGroupPanel({
   readonly title: string;
 }): ReactNode {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{overview.groups.length} grupuri</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="billing-page__month-close-groups">
-          {overview.groups.map((group) => (
-            <article className="billing-page__month-close-group" key={group.key}>
+    <section className="billing-page__month-close-panel" aria-label={title}>
+      <header className="billing-page__month-close-panel-header">
+        <h2>{title}</h2>
+        <span>{overview.groups.length} grupuri</span>
+      </header>
+      <Accordion
+        allowMultiple
+        items={overview.groups.map((group) => ({
+          id: group.key,
+          title: (
+            <span className="billing-page__month-close-trigger">
               <strong>{group.label}</strong>
-              <span>{group.count} lucrări</span>
-              <dl>
-                <div><dt>Nefacturat</dt><dd>{formatMoneyMinor(group.uninvoicedMinor, currency, locale)}</dd></div>
-                <div><dt>Facturat</dt><dd>{formatMoneyMinor(group.invoicedMinor, currency, locale)}</dd></div>
-                <div><dt>Încasat manual</dt><dd>{formatMoneyMinor(group.paidMinor, currency, locale)}</dd></div>
-                <div><dt>Sold restant</dt><dd>{formatMoneyMinor(group.balanceMinor, currency, locale)}</dd></div>
-              </dl>
-            </article>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+              <small>{group.count} lucrări · {formatMoneyMinor(group.balanceMinor, currency, locale)} restant</small>
+            </span>
+          ),
+          content: (
+            <dl className="billing-page__month-close-details">
+              <div><dt>Nefacturat</dt><dd>{formatMoneyMinor(group.uninvoicedMinor, currency, locale)}</dd></div>
+              <div><dt>Facturat</dt><dd>{formatMoneyMinor(group.invoicedMinor, currency, locale)}</dd></div>
+              <div><dt>Încasat manual</dt><dd>{formatMoneyMinor(group.paidMinor, currency, locale)}</dd></div>
+              <div><dt>Sold restant</dt><dd>{formatMoneyMinor(group.balanceMinor, currency, locale)}</dd></div>
+            </dl>
+          ),
+        }))}
+      />
+    </section>
   );
 }
 
@@ -1321,7 +1363,7 @@ function SeriesTab({ canConfigure, isLoading, series }: { readonly canConfigure:
 
   return (
     <section className="billing-page__tab">
-      {!canConfigure ? <p className="billing-page__readonly">Ai acces de citire, dar nu poți configura seriile.</p> : null}
+      <p className="billing-page__readonly">Seriile controlează numerotarea documentelor pe firmă. {canConfigure ? "Le poți configura." : "Ai acces de citire, dar nu poți configura seriile."}</p>
       <DataTable columns={columns} emptyMessage="Nu există serii configurate." getRowKey={(row) => row.id} isLoading={isLoading} rows={series} />
     </section>
   );

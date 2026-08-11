@@ -244,6 +244,16 @@
   justify-content: space-between;
 }
 
+.organization-context__header--switch {
+  align-items: center;
+}
+
+.organization-context__identity {
+  display: grid;
+  gap: var(--dl-space-1);
+  min-width: 0;
+}
+
 .organization-context__header span {
   font-size: var(--dl-font-size-label);
   font-weight: var(--dl-font-weight-bold);
@@ -256,13 +266,14 @@
 
 .organization-context__segments {
   --active-index: 0;
-  background: color-mix(in srgb, var(--dl-color-surface) 88%, var(--app-brand-primary));
+  background: color-mix(in srgb, var(--dl-color-surface) 78%, var(--app-brand-primary));
   border: var(--dl-border-width) solid color-mix(in srgb, var(--app-brand-primary) 24%, var(--dl-color-border));
   border-radius: 9999px;
   display: grid;
-  gap: var(--dl-space-2);
+  gap: 0;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: var(--dl-space-2);
+  min-inline-size: 10rem;
+  padding: var(--dl-space-1);
   position: relative;
 }
 
@@ -278,10 +289,10 @@
 }
 
 .organization-context__thumb {
-  background: var(--dl-color-surface);
-  border: var(--dl-border-width) solid color-mix(in srgb, var(--app-brand-primary) 38%, var(--dl-color-border));
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--app-brand-primary) 12%, transparent);
-  inline-size: calc((100% - var(--dl-space-2) * 3) / 2);
+  background: linear-gradient(180deg, var(--dl-color-surface), color-mix(in srgb, var(--dl-color-surface) 86%, var(--app-brand-primary)));
+  border: var(--dl-border-width) solid color-mix(in srgb, var(--app-brand-primary) 40%, var(--dl-color-border));
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--app-brand-primary) 12%, transparent);
+  inline-size: calc((100% - var(--dl-space-1) * 2) / 2);
   transform: translateX(calc(var(--active-index) * 100%));
   transition: transform var(--dl-duration-fast) var(--dl-easing-standard);
   z-index: 0;
@@ -299,7 +310,7 @@
   display: inline-flex;
   gap: var(--dl-space-2);
   justify-content: center;
-  min-height: 2.25rem;
+  min-height: 2.5rem;
   min-width: 0;
   padding: 0 var(--dl-space-3);
   text-align: center;

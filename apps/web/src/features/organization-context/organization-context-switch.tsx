@@ -158,10 +158,11 @@ function DesktopOrganizationContext({
 
   return (
     <section className="organization-context organization-context--compact" aria-label="Firmă activă">
-      <div className="organization-context__header">
-        <span>Firmă activă</span>
-        {context.active ? <small>{context.active.code} · {context.active.displayName}</small> : <small>Neselectată</small>}
-      </div>
+      <div className="organization-context__header organization-context__header--switch">
+        <div className="organization-context__identity">
+          <span>Firmă activă</span>
+          {context.active ? <small>{context.active.code} · {context.active.displayName}</small> : <small>Neselectată</small>}
+        </div>
       {context.canSwitch ? (
         <div className="organization-context__segments" aria-label="Schimbă firma" role="radiogroup" style={{ "--active-index": Math.max(0, orderedOptions.findIndex((option) => option.code === activeCode)) } as CSSProperties}>
           <span aria-hidden="true" className="organization-context__track" />
@@ -186,6 +187,7 @@ function DesktopOrganizationContext({
       ) : (
         <ContextReadOnly context={context} />
       )}
+      </div>
     </section>
   );
 }

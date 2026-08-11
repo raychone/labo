@@ -8,7 +8,7 @@ import { fetchClinicStatement, fetchDoctorStatement, type BillingStatementParams
 import { getErrorMessage } from "../../lib/form-utils.js";
 import "./billing-page.css";
 
-const statementHeaderAsset = encodeURI("/assets/Nota Plata A5 2026.pdf");
+const statementHeaderAsset = encodeURI("/assets/Nota Plata A5 2026.pdf#page=1&view=FitH&toolbar=0&navpanes=0");
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium" }).format(new Date(value));
@@ -99,9 +99,9 @@ function StatementPrintView({
   return (
     <article className="billing-statement">
       <div className="billing-statement__header-art-wrap">
-        <object aria-label="Antet notă de plată" className="billing-statement__header-art" data={statementHeaderAsset} type="application/pdf">
+        <iframe aria-label="Antet notă de plată" className="billing-statement__header-art" src={statementHeaderAsset} title="Antet notă de plată">
           <p>Antetul PDF nu poate fi afișat în browserul curent.</p>
-        </object>
+        </iframe>
       </div>
       <header className="billing-statement__header">
         <div className="billing-statement__brand">
