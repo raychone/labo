@@ -181,6 +181,8 @@ export interface WorkSummary {
     readonly fullName: string;
     readonly id: string;
     readonly lastName: string;
+    readonly sex?: import("./patients.js").PatientSex | null;
+    readonly birthDate?: string | null;
   } | null;
   readonly priority: WorkPriority;
   readonly quantity: number;

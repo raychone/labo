@@ -21,6 +21,7 @@ export interface UserSummary {
   readonly id: string;
   readonly isActive: boolean;
   readonly mustChangePassword: boolean;
+  readonly preferredColor: string | null;
   readonly roles: readonly UserRole[];
   readonly updatedAt: string;
 }
@@ -59,6 +60,7 @@ export interface CreateUserInput {
   readonly displayName: string;
   readonly email: string;
   readonly isActive: boolean;
+  readonly preferredColor?: string;
   readonly roleKeys: readonly string[];
   readonly temporaryPassword: string;
 }
@@ -66,6 +68,7 @@ export interface CreateUserInput {
 export interface UpdateUserInput {
   readonly displayName: string;
   readonly email: string;
+  readonly preferredColor?: string;
 }
 
 function toQueryString(params: UsersListParams): string {

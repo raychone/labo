@@ -78,60 +78,95 @@ const shadeOptions = [
   { label: "B1", value: "B1" },
 ] as const;
 
-const demoFormTemplates: readonly DemoFormTemplate[] = [
-  {
+const commonIntakeFields = () => [
+  field("teeth", "Dinți", "Selectează codurile FDI relevante.", "TOOTH", true, 1),
+  field("shade", "Culoare", null, "SHADE", true, 2, null, null, shadeOptions),
+  field("phase_1", "Faza 1", null, "TEXT", false, 3, "Ex. model, scanare, verificare"),
+  field("phase_1_due_date", "Termen faza 1", null, "DATE", false, 4),
+  field("phase_2", "Faza 2", null, "TEXT", false, 5, "Ex. CAD, frezare, montaj"),
+  field("phase_2_due_date", "Termen faza 2", null, "DATE", false, 6),
+  field("phase_3", "Faza 3", null, "TEXT", false, 7, "Ex. sinterizare, ceramizare"),
+  field("phase_3_due_date", "Termen faza 3", null, "DATE", false, 8),
+  field("phase_4", "Faza 4", null, "TEXT", false, 9, "Ex. finisare, livrare"),
+  field("phase_4_due_date", "Termen faza 4", null, "DATE", false, 10),
+  field("observations", "Observații", "Note pentru laborator.", "TEXTAREA", false, 11, "Observații pentru laborator", null, [], { maxLength: 5000 }),
+] as const;
+
+function buildDefaultFormTemplate(workTypeId: string, name: string): DemoFormTemplate {
+  return {
+    fields: [...commonIntakeFields()],
+    id: `demo_form_template_${workTypeId}_v1`,
+    name: `Formular ${name}`,
+    version: 1,
+    workTypeId,
+  };
+}
+
+function buildZirconiuFormTemplate(): DemoFormTemplate {
+  return {
     fields: [
-      field("teeth", "Dinți", "Selectează codurile FDI relevante.", "TOOTH", true, 1),
-      field("shade", "Nuanță", null, "SHADE", true, 2, null, null, shadeOptions),
-      field("zirconia_type", "Tip zirconiu", null, "SELECT", false, 3, null, null, [
+      ...commonIntakeFields(),
+      field("zirconia_type", "Tip zirconiu", null, "SELECT", false, 12, null, null, [
         { label: "Monolitic", value: "monolitic" },
         { label: "Multilayer", value: "multilayer" },
         { label: "Cut-back", value: "cut_back" },
       ]),
-      field("try_in_required", "Probă solicitată", null, "CHECKBOX", false, 4),
-      field("clinical_notes", "Observații specifice", "Text simplu, fără date medicale sensibile.", "TEXTAREA", false, 5, "Observații pentru laborator", null, [], { maxLength: 5000 }),
+      field("try_in_required", "Probă solicitată", null, "CHECKBOX", false, 13),
+      field("clinical_notes", "Observații specifice", "Text simplu, fără date medicale sensibile.", "TEXTAREA", false, 14, "Observații pentru laborator", null, [], { maxLength: 5000 }),
     ],
     id: "demo_form_template_zirconiu_v1",
     name: "Formular coroană zirconiu",
     version: 1,
     workTypeId: "demo_wt_zirconiu",
-  },
-  {
+  };
+}
+
+function buildProtezaTotalaFormTemplate(): DemoFormTemplate {
+  return {
     fields: [
-      field("arch", "Arcadă", null, "SELECT", true, 1, null, null, [
+      ...commonIntakeFields(),
+      field("arch", "Arcadă", null, "SELECT", true, 12, null, null, [
         { label: "Maxilar", value: "maxilar" },
         { label: "Mandibulă", value: "mandibula" },
         { label: "Ambele arcade", value: "ambele" },
       ]),
-      field("teeth_shade", "Nuanță dinți", null, "SHADE", false, 2, null, null, shadeOptions),
-      field("wax_try_in", "Probă machetă ceară", null, "CHECKBOX", false, 3),
-      field("occlusion_notes", "Observații ocluzie", null, "TEXTAREA", false, 4, "Observații de ocluzie", null, [], { maxLength: 5000 }),
+      field("wax_try_in", "Probă machetă ceară", null, "CHECKBOX", false, 13),
+      field("occlusion_notes", "Observații ocluzie", null, "TEXTAREA", false, 14, "Observații de ocluzie", null, [], { maxLength: 5000 }),
     ],
     id: "demo_form_template_proteza_totala_v1",
     name: "Formular proteză totală",
     version: 1,
     workTypeId: "demo_wt_proteza_totala",
-  },
-  {
+  };
+}
+
+function buildBontFormTemplate(): DemoFormTemplate {
+  return {
     fields: [
-      field("implant_system", "Sistem implant", null, "SELECT", true, 1, null, null, [
+      ...commonIntakeFields(),
+      field("implant_system", "Sistem implant", null, "SELECT", true, 12, null, null, [
         { label: "Straumann", value: "straumann" },
         { label: "Nobel Biocare", value: "nobel" },
         { label: "MegaGen", value: "megagen" },
       ]),
-      field("platform", "Platformă", null, "TEXT", true, 2, "Ex. NC, RC, WP"),
-      field("diameter", "Diametru", null, "NUMBER", false, 3, null, null, [], { min: 2, max: 8, step: 0.1 }),
-      field("restoration_type", "Tip restaurare", null, "RADIO", false, 4, null, null, [
+      field("platform", "Platformă", null, "TEXT", true, 13, "Ex. NC, RC, WP"),
+      field("diameter", "Diametru", null, "NUMBER", false, 14, null, null, [], { min: 2, max: 8, step: 0.1 }),
+      field("restoration_type", "Tip restaurare", null, "RADIO", false, 15, null, null, [
         { label: "Cimentată", value: "cimentata" },
         { label: "Înșurubată", value: "insurubata" },
       ]),
-      field("shade", "Nuanță", null, "SHADE", false, 5, null, null, shadeOptions),
     ],
     id: "demo_form_template_bont_v1",
     name: "Formular bont implant",
     version: 1,
     workTypeId: "demo_wt_bont",
-  },
+  };
+}
+
+const demoCustomFormTemplates: readonly DemoFormTemplate[] = [
+  buildZirconiuFormTemplate(),
+  buildProtezaTotalaFormTemplate(),
+  buildBontFormTemplate(),
 ];
 
 interface DemoWorkflowStageSeed {
@@ -237,11 +272,12 @@ const demoWorkflowTemplates: readonly DemoWorkflowTemplateSeed[] = [
 ];
 
 async function seedDemoWorkFormTemplates(prisma: PrismaClient): Promise<void> {
-  for (const template of demoFormTemplates) {
+  for (const template of demoCustomFormTemplates) {
     await prisma.workFormTemplate.create({
       data: {
         activatedAt: new Date("2026-07-01T09:00:00.000Z"),
         id: template.id,
+        kind: "GENERIC",
         name: template.name,
         status: "ACTIVE",
         version: template.version,
@@ -251,7 +287,6 @@ async function seedDemoWorkFormTemplates(prisma: PrismaClient): Promise<void> {
         },
       },
     });
-
   }
 
   const workTypes = await prisma.workType.findMany({
@@ -260,8 +295,30 @@ async function seedDemoWorkFormTemplates(prisma: PrismaClient): Promise<void> {
     },
     select: {
       id: true,
+      name: true,
     },
   });
+  for (const workType of workTypes) {
+    if (demoCustomFormTemplates.some((template) => template.workTypeId === workType.id)) {
+      continue;
+    }
+    const template = buildDefaultFormTemplate(workType.id, workType.name);
+    await prisma.workFormTemplate.create({
+      data: {
+        activatedAt: new Date("2026-07-01T09:05:00.000Z"),
+        id: template.id,
+        kind: "GENERIC",
+        name: template.name,
+        status: "ACTIVE",
+        version: 1,
+        workTypeId: template.workTypeId,
+        fields: {
+          create: template.fields.map(toDemoFieldCreateInput),
+        },
+      },
+    });
+  }
+
   for (const workType of workTypes) {
     await prisma.workFormTemplate.create({
       data: {
@@ -1801,10 +1858,7 @@ function getDemoStageActor(stageKey: string): string {
 }
 
 function toDemoWorkFormSubmission(work: DemoWorkSeed): Prisma.WorkFormSubmissionUncheckedCreateWithoutWorkOrderInput | null {
-  const template = demoFormTemplates.find((item) => item.workTypeId === work.workTypeId);
-  if (!template) {
-    return null;
-  }
+  const template = demoCustomFormTemplates.find((item) => item.workTypeId === work.workTypeId) ?? buildDefaultFormTemplate(work.workTypeId, "lucrare");
 
   return {
     createdAt: work.createdAt,

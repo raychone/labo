@@ -32,6 +32,11 @@ function normalizeName(name: string): string {
   return name.trim();
 }
 
+function normalizePreferredColor(color: string | null | undefined): string | null {
+  const normalized = color?.trim();
+  return normalized ? normalized : null;
+}
+
 function uniqueRoleKeys(roleKeys: readonly string[]): readonly string[] {
   return [...new Set(roleKeys.map((roleKey) => roleKey.trim()).filter(Boolean))].sort();
 }
@@ -114,6 +119,7 @@ export class UsersService {
     const email = normalizeEmail(dto.email);
     const displayName = normalizeName(dto.displayName);
     const roleKeys = uniqueRoleKeys(dto.roleKeys);
+    const preferredColor = normalizePreferredColor(dto.preferredColor);
     const passwordHash = await this.passwordService.hash(dto.temporaryPassword);
     const roles = await this.findActiveRolesOrThrow(roleKeys);
 
@@ -127,6 +133,7 @@ export class UsersService {
           isActive: dto.isActive,
           mustChangePassword: true,
           passwordHash,
+          preferredColor,
           roles: {
             create: roles.map((role) => ({
               assignedByUserId: context.actorUserId,
@@ -139,7 +146,7 @@ export class UsersService {
       await this.recordAudit(tx, {
         action: USERS_AUDIT_ACTIONS.created,
         actorUserId: context.actorUserId,
-        metadata: { email, isActive: dto.isActive, roleKeys },
+        metadata: { email, isActive: dto.isActive, preferredColor, roleKeys },
         requestMetadata: context.requestMetadata,
         resourceId: createdUser.id,
       });
@@ -154,7 +161,9 @@ export class UsersService {
     const existingUser = await this.findUserOrThrow(userId);
     const email = dto.email === undefined ? existingUser.email : normalizeEmail(dto.email);
     const displayName = dto.displayName === undefined ? existingUser.displayName : normalizeName(dto.displayName);
+    const preferredColor = dto.preferredColor === undefined ? existingUser.preferredColor : normalizePreferredColor(dto.preferredColor);
     const emailChanged = email !== existingUser.email;
+    const preferredColorChanged = preferredColor !== existingUser.preferredColor;
 
     await this.prisma.$transaction(async (tx) => {
       if (emailChanged) {
@@ -165,6 +174,7 @@ export class UsersService {
         data: {
           displayName,
           email,
+          preferredColor,
           version: {
             increment: 1,
           },
@@ -178,11 +188,16 @@ export class UsersService {
         action: USERS_AUDIT_ACTIONS.updated,
         actorUserId: context.actorUserId,
         metadata: {
-          after: { displayName, email },
-          before: { displayName: existingUser.displayName, email: existingUser.email },
+          after: { displayName, email, preferredColor },
+          before: {
+            displayName: existingUser.displayName,
+            email: existingUser.email,
+            preferredColor: existingUser.preferredColor,
+          },
           fieldsChanged: [
             ...(displayName !== existingUser.displayName ? ["displayName"] : []),
             ...(emailChanged ? ["email"] : []),
+            ...(preferredColorChanged ? ["preferredColor"] : []),
           ],
         },
         requestMetadata: context.requestMetadata,

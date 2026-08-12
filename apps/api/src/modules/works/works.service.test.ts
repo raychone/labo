@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException } from "@nestjs/common";
-import type { Clinic, Doctor, Patient, WorkType } from "@prisma/client";
+import type { Clinic, Doctor, Patient, Prisma, WorkType } from "@prisma/client";
 import { plainToInstance } from "class-transformer";
 import { validate } from "class-validator";
 import { describe, expect, it, vi } from "vitest";
@@ -348,6 +348,112 @@ describe("WorksService", () => {
     expect(result.totalPriceMinor).toBe(70000);
   });
 
+  it("persists intake values and reopens them unchanged on the created work detail", async () => {
+    const intakeValues = {
+      observations: "Ajustare minimă",
+      phase_1: "Scanare",
+      phase_1_due_date: "2026-08-01",
+      phase_2: "Modelare",
+      shade: "A2",
+      teeth: ["11", "12"],
+    };
+    const submission = {
+      finalizedAt: null,
+      realLabSheetStatus: "DRAFT",
+      revision: 1,
+      schemaSnapshot: {
+        fields: [
+          { key: "teeth", label: "Dinți", sortOrder: 1, type: "TOOTH" },
+          { key: "shade", label: "Culoare", sortOrder: 2, type: "SHADE" },
+          { key: "phase_1", label: "Faza 1", sortOrder: 3, type: "TEXT" },
+          { key: "phase_1_due_date", label: "Termen faza 1", sortOrder: 4, type: "DATE" },
+          { key: "phase_2", label: "Faza 2", sortOrder: 5, type: "TEXT" },
+          { key: "observations", label: "Observații", sortOrder: 6, type: "TEXTAREA" },
+        ],
+      },
+      submittedAt: new Date("2026-07-22T12:00:00.000Z"),
+      templateId: "template_1",
+      templateKind: "GENERIC",
+      templateNameSnapshot: "Formular recepție",
+      templateVersion: 1,
+      updatedAt: new Date("2026-07-22T12:10:00.000Z"),
+      values: intakeValues,
+    };
+    const createdWorkOrder = workOrder({
+      patient: patient({ sex: "FEMALE" }),
+      workFormSubmissions: [submission],
+    } as Record<string, unknown>);
+    const create = vi.fn().mockResolvedValue(createdWorkOrder);
+    const submissionValidationService = {
+      prepareCreate: vi.fn().mockResolvedValue({
+        audit: {
+          action: "work_forms.submission_created",
+          metadata: {
+            changedFieldKeys: Object.keys(intakeValues),
+            templateId: "template_1",
+            templateVersion: 1,
+            workCode: "WO-2026-000002",
+            workTypeId: "work_type_1",
+          },
+        },
+        data: {
+          schemaSnapshot: submission.schemaSnapshot as unknown as Prisma.InputJsonObject,
+          submittedByUserId: "actor_1",
+          templateId: "template_1",
+          templateKind: "GENERIC",
+          templateNameSnapshot: "Formular recepție",
+          templateVersion: 1,
+          updatedByUserId: "actor_1",
+          values: intakeValues,
+        },
+      }),
+      prepareReplaceForWorkTypeChange: vi.fn(),
+      prepareUpdateValues: vi.fn(),
+      recordSubmissionAudit: vi.fn(),
+    };
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          auditLog: { create: vi.fn().mockResolvedValue({}) },
+          clinic: { findUnique: vi.fn().mockResolvedValue({ isActive: true }) },
+          doctor: { findUnique: vi.fn().mockResolvedValue({ clinicId: "clinic_1", isActive: true }) },
+          laboratorySettings: {
+            upsert: vi.fn().mockResolvedValue({ currency: "RON" }),
+          },
+          workCycle: { create: vi.fn().mockResolvedValue({ id: "cycle_1" }) },
+          workOrder: { create, findUniqueOrThrow: vi.fn().mockResolvedValue(createdWorkOrder), update: vi.fn().mockResolvedValue(createdWorkOrder) },
+          workType: { findUnique: vi.fn().mockResolvedValue({ basePriceMinor: 35000, isActive: true }) },
+        }),
+      ),
+    }, undefined, undefined, { generate: vi.fn().mockResolvedValue("WO-2026-000002") }, { generate: vi.fn().mockResolvedValue("qr_token_2") }, submissionValidationService);
+
+    const result = await service.createWork(
+      { actorUserId: "actor_1", requestMetadata: {} },
+      legalEntity,
+      {
+        ...createDto,
+        workFormSubmission: {
+          templateId: "template_1",
+          templateVersion: 1,
+          values: intakeValues,
+        },
+      },
+      false,
+    );
+
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        workFormSubmissions: {
+          create: expect.objectContaining({
+            values: intakeValues,
+          }),
+        },
+      }),
+    }));
+    expect(result.patient?.sex).toBe("FEMALE");
+    expect(result.workForm?.values).toEqual(intakeValues);
+  });
+
   it("rejects a doctor from another clinic", async () => {
     const service = createService({
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
@@ -519,6 +625,162 @@ describe("WorksService", () => {
       }),
     });
     expect(result.claim.status).toBe("CLAIMED");
+  });
+
+  it("releases and reclaims a work without duplicating the execution snapshot", async () => {
+    const executionSnapshot = {
+      deadlineEffectiveDueAt: new Date("2026-08-01T14:00:00.000Z"),
+      deadlineMode: "CALCULATED",
+      deadlineExecutionDays: 3,
+      deadlineExplanation: "Termen calculat.",
+      deadlineStartAt: new Date("2026-07-22T12:00:00.000Z"),
+      deadlineTimezone: "Europe/Bucharest",
+      executionLegalEntityCode: "NC",
+      executionLegalEntity: { code: "NC", displayName: "Nicolaie Cristina", id: "legal_nc" },
+      pricingCurrency: "RON",
+      pricingQuantity: "2",
+      pricingSourceLabel: "Catalog NC",
+      pricingSourceType: "STANDARD",
+      pricingSnapshotJson: { explanation: "Preț de catalog" },
+      pricingTotalMinor: 70000,
+      pricingUnit: "UNIT",
+      pricingUnitPriceMinor: 35000,
+      snapshotCreatedAt: new Date("2026-07-22T12:00:00.000Z"),
+      snapshotLockedAt: new Date("2026-07-22T12:00:00.000Z"),
+      technician: {
+        displayName: "Actor",
+        id: "actor_1",
+      },
+      status: "LOCKED",
+      version: 1,
+    };
+    const createSnapshot = vi.fn().mockResolvedValue({});
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const pricingResolve = vi.fn().mockResolvedValue({
+      adjustment: {
+        basisPoints: null,
+        fixedAmountMinor: null,
+        overridePriceMinor: null,
+        type: null,
+      },
+      appliedAgreementId: null,
+      appliedAgreementType: null,
+      appliedRuleScope: null,
+      catalogItemId: "catalog_nc_1",
+      currency: "RON",
+      executionTimeRule: null,
+      executionTimeRules: [],
+      explanation: "Se folosește prețul standard al firmei active.",
+      finalUnitPriceMinor: 35000,
+      legalEntityCode: "NC",
+      quantity: 2,
+      resolutionTrace: [],
+      standardUnitPriceMinor: 35000,
+      totalPriceMinor: 70000,
+      workTypeId: "work_type_1",
+    });
+    const beforeClaim = workOrder({
+      activeCycle: {
+        ...workOrder().activeCycle,
+        executionSnapshot: null,
+      },
+      claimRevision: 0,
+      claimStatus: "UNCLAIMED",
+      claimedByUserId: null,
+      executionLegalEntityId: null,
+      assignedTechnicianId: null,
+    });
+    const afterClaim = workOrder({
+      activeCycle: {
+        ...workOrder().activeCycle,
+        executionSnapshot,
+      },
+      assignedTechnician: { displayName: "Actor", id: "actor_1", preferredColor: null },
+      assignedTechnicianId: "actor_1",
+      claimRevision: 1,
+      claimSource: "TECHNICIAN_CLAIM",
+      claimStatus: "CLAIMED",
+      claimedByUserId: "actor_1",
+      executionLegalEntityId: "legal_nc",
+      releasedAt: null,
+      releasedByUserId: null,
+      releaseReason: null,
+    });
+    const afterRelease = workOrder({
+      activeCycle: {
+        ...workOrder().activeCycle,
+        executionSnapshot,
+      },
+      assignedTechnicianId: null,
+      claimRevision: 2,
+      claimSource: "TECHNICIAN_RELEASE",
+      claimStatus: "UNCLAIMED",
+      claimedByUserId: null,
+      executionLegalEntityId: null,
+      releasedAt: new Date("2026-07-22T12:30:00.000Z"),
+      releasedByUserId: "actor_1",
+      releaseReason: "Transfer",
+    });
+    const afterReclaim = workOrder({
+      activeCycle: {
+        ...workOrder().activeCycle,
+        executionSnapshot,
+      },
+      assignedTechnician: { displayName: "Actor", id: "actor_1", preferredColor: null },
+      assignedTechnicianId: "actor_1",
+      claimRevision: 3,
+      claimSource: "TECHNICIAN_CLAIM",
+      claimStatus: "CLAIMED",
+      claimedByUserId: "actor_1",
+      executionLegalEntityId: "legal_nc",
+      releasedAt: null,
+      releasedByUserId: null,
+      releaseReason: null,
+    });
+    const findUniqueOrThrow = vi.fn()
+      .mockResolvedValueOnce(afterClaim)
+      .mockResolvedValueOnce(afterRelease)
+      .mockResolvedValueOnce(afterReclaim);
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          auditLog: { create: vi.fn().mockResolvedValue({}) },
+          user: { findUnique: vi.fn().mockResolvedValue({ displayName: "Actor", id: "actor_1" }) },
+          workAssignmentEvent: { create: vi.fn().mockResolvedValue({}) },
+          workCycle: { update: vi.fn().mockResolvedValue({}) },
+          workExecutionSnapshot: { create: createSnapshot },
+          workOrder: { findUniqueOrThrow, updateMany },
+        }),
+      ),
+      legalEntity: { findUnique: vi.fn().mockResolvedValue({ code: "NC", displayName: "Nicolaie Cristina", id: "legal_nc", isActive: true }) },
+      workOrder: { findUnique: vi.fn()
+        .mockResolvedValueOnce(beforeClaim)
+        .mockResolvedValueOnce(afterClaim)
+        .mockResolvedValueOnce(afterRelease) },
+    }, {
+      hasPermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ASSIGNED"], permission: "works.claim.create" }),
+      requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ASSIGNED"], permission: "works.claim.create" }),
+    }, undefined, undefined, undefined, undefined, undefined, undefined, { resolve: pricingResolve });
+
+    const claimResult = await service.claimWork({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {
+      executionLegalEntityCode: "NC",
+      expectedClaimRevision: 0,
+    });
+    const releaseResult = await service.releaseWork({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {
+      expectedClaimRevision: 1,
+      reason: "Transfer",
+    });
+    const reclaimResult = await service.claimWork({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {
+      executionLegalEntityCode: "NC",
+      expectedClaimRevision: 2,
+    });
+
+    expect(createSnapshot).toHaveBeenCalledTimes(1);
+    expect(claimResult.claim.status).toBe("CLAIMED");
+    expect(releaseResult.claim.status).toBe("UNCLAIMED");
+    expect(releaseResult.executionSnapshot.summary.exists).toBe(true);
+    expect(reclaimResult.claim.status).toBe("CLAIMED");
+    expect(reclaimResult.executionSnapshot.summary.exists).toBe(true);
   });
 
   it("returns a conflict when concurrent claim already changed the revision", async () => {

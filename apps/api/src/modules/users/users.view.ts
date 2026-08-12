@@ -12,6 +12,7 @@ export interface UserSummaryView {
   readonly id: string;
   readonly isActive: boolean;
   readonly mustChangePassword: boolean;
+  readonly preferredColor: string | null;
   readonly roles: readonly UserRoleView[];
   readonly updatedAt: string;
 }
@@ -45,6 +46,7 @@ interface UserWithRoles {
   readonly id: string;
   readonly isActive: boolean;
   readonly mustChangePassword: boolean;
+  readonly preferredColor: string | null;
   readonly roles: readonly {
     readonly role: {
       readonly key: string;
@@ -82,6 +84,7 @@ export function toUserSummaryView(user: UserWithRoles): UserSummaryView {
     id: user.id,
     isActive: user.isActive,
     mustChangePassword: user.mustChangePassword,
+    preferredColor: user.preferredColor,
     roles: user.roles.map((entry) => toRoleView(entry.role)).sort((left, right) => left.name.localeCompare(right.name)),
     updatedAt: user.updatedAt.toISOString(),
   };

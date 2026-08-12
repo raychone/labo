@@ -105,6 +105,46 @@ describe("UsersService", () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
+  it("updates and clears preferred colors through manager actions", async () => {
+    const update = vi.fn().mockResolvedValue(user);
+    const prisma = {
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          auditLog: { create: vi.fn().mockResolvedValue({}) },
+          user: {
+            findUnique: vi.fn().mockResolvedValue(userWithDetails),
+            update,
+          },
+        }),
+      ),
+      user: {
+        findUnique: vi.fn().mockResolvedValue(userWithDetails),
+      },
+    };
+    const service = createService({
+      prisma,
+      session: {
+        countActiveForUser: vi.fn().mockResolvedValue(0),
+        revokeAllForUser: vi.fn().mockResolvedValue(0),
+      },
+    });
+
+    await service.updateUser({ actorUserId: "actor_1", requestMetadata: {} }, user.id, { preferredColor: "#0f766e" });
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        preferredColor: "#0f766e",
+      }),
+    }));
+
+    update.mockClear();
+    await service.updateUser({ actorUserId: "actor_1", requestMetadata: {} }, user.id, { preferredColor: null });
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        preferredColor: null,
+      }),
+    }));
+  });
+
   it("protects the last active administrator from being disabled", async () => {
     const prisma = {
       user: {

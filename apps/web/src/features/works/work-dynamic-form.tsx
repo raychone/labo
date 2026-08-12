@@ -36,6 +36,43 @@ function isFullWidth(type: WorkFormFieldType): boolean {
   return type === "TEXTAREA" || type === "TOOTH" || type === "MULTISELECT";
 }
 
+function getFieldHint(field: WorkFormFieldDefinition): string | undefined {
+  const parts: string[] = [];
+  if (field.helpText) {
+    parts.push(field.helpText);
+  }
+
+  if (field.type === "NUMBER") {
+    const min = field.validation.min;
+    const max = field.validation.max;
+    const step = field.validation.step;
+    const constraints = [
+      typeof min === "number" ? `min ${min}` : null,
+      typeof max === "number" ? `max ${max}` : null,
+      typeof step === "number" ? `pas ${step}` : null,
+    ].filter((value): value is string => value !== null);
+
+    if (constraints.length > 0) {
+      parts.push(`Constrângeri: ${constraints.join(", ")}.`);
+    }
+  }
+
+  if (field.type === "DATE") {
+    const minDate = field.validation.minDate;
+    const maxDate = field.validation.maxDate;
+    const constraints = [
+      typeof minDate === "string" ? `de la ${minDate}` : null,
+      typeof maxDate === "string" ? `până la ${maxDate}` : null,
+    ].filter((value): value is string => value !== null);
+
+    if (constraints.length > 0) {
+      parts.push(`Constrângeri: ${constraints.join(", ")}.`);
+    }
+  }
+
+  return parts.length > 0 ? parts.join(" ") : undefined;
+}
+
 export function WorkFormLoadingState(): ReactNode {
   return <LoadingState text="Se încarcă formularul specific" />;
 }
@@ -79,7 +116,7 @@ export function WorkFormFieldRenderer({
   const common = {
     disabled: isDisabled,
     error,
-    hint: field.helpText ?? undefined,
+    hint: getFieldHint(field),
     id,
     label: field.label,
     required: field.required,

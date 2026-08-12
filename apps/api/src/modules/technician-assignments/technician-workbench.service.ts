@@ -45,18 +45,17 @@ export class TechnicianWorkbenchService {
       };
     }
     const where = this.createWorkbenchWhere(actor.id, hasAll, query, currentStageIds);
-    const orderBy = this.createOrderBy(query);
     const [total, stages] = await this.prisma.$transaction([
       this.prisma.workStageExecution.count({ where }),
       this.prisma.workStageExecution.findMany({
         include: workbenchStageInclude,
-        orderBy,
-        skip: (page - 1) * pageSize,
-        take: pageSize,
         where,
       }),
     ]);
-    const items = stages.map((stage) => toTechnicianWorkbenchItem(stage));
+    const items = stages
+      .sort((left, right) => compareWorkbenchStages(left, right, query))
+      .slice((page - 1) * pageSize, page * pageSize)
+      .map((stage) => toTechnicianWorkbenchItem(stage));
 
     return {
       items,
@@ -184,21 +183,71 @@ export class TechnicianWorkbenchService {
     return executions.flatMap((execution) => execution.currentStageExecutionId ? [execution.currentStageExecutionId] : []);
   }
 
-  private createOrderBy(query: TechnicianWorkbenchQueryDto): Prisma.WorkStageExecutionOrderByWithRelationInput {
-    if (query.sortBy === "priority") {
-      return { workflowExecution: { workOrder: { priority: query.sortOrder } } };
-    }
-    if (query.sortBy === "startedAt") {
-      return { startedAt: query.sortOrder };
-    }
-    return { workflowExecution: { workOrder: { requestedDeliveryDate: query.sortOrder } } };
-  }
 }
 
 function todayRange(now = new Date()): { readonly gte: Date; readonly lt: Date } {
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
   return { gte: start, lt: end };
+}
+
+function compareWorkbenchStages(
+  left: WorkbenchStage,
+  right: WorkbenchStage,
+  query: TechnicianWorkbenchQueryDto,
+): number {
+  if (query.sortBy === "priority") {
+    return compareByPriority(left, right);
+  }
+  if (query.sortBy === "startedAt") {
+    return compareByDateNullable(left.startedAt, right.startedAt) || compareByPriority(left, right) || compareByDueDate(left, right) || compareByCreatedAt(left, right);
+  }
+
+  return compareByOverdue(left, right)
+    || compareByPriority(left, right)
+    || compareByDueDate(left, right)
+    || compareByCreatedAt(left, right)
+    || left.workflowExecution.workOrder.code.localeCompare(right.workflowExecution.workOrder.code)
+    || left.id.localeCompare(right.id);
+}
+
+function compareByOverdue(left: WorkbenchStage, right: WorkbenchStage): number {
+  return Number(isOverdue(right.workflowExecution.workOrder.requestedDeliveryDate)) - Number(isOverdue(left.workflowExecution.workOrder.requestedDeliveryDate));
+}
+
+function compareByPriority(left: WorkbenchStage, right: WorkbenchStage): number {
+  return priorityRank(left.workflowExecution.workOrder.priority) - priorityRank(right.workflowExecution.workOrder.priority);
+}
+
+function compareByDueDate(left: WorkbenchStage, right: WorkbenchStage): number {
+  return left.workflowExecution.workOrder.requestedDeliveryDate.getTime() - right.workflowExecution.workOrder.requestedDeliveryDate.getTime();
+}
+
+function compareByCreatedAt(left: WorkbenchStage, right: WorkbenchStage): number {
+  return left.workflowExecution.workOrder.createdAt.getTime() - right.workflowExecution.workOrder.createdAt.getTime();
+}
+
+function compareByDateNullable(left: Date | null, right: Date | null): number {
+  if (left && right) {
+    return left.getTime() - right.getTime();
+  }
+  if (left) {
+    return -1;
+  }
+  if (right) {
+    return 1;
+  }
+  return 0;
+}
+
+function isOverdue(date: Date, now = new Date()): boolean {
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const due = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  return due < today;
+}
+
+function priorityRank(priority: WorkbenchStage["workflowExecution"]["workOrder"]["priority"]): number {
+  return priority === "URGENT" ? 0 : 1;
 }
 
 export const workbenchStageInclude = {
@@ -224,8 +273,6 @@ export const workbenchStageInclude = {
       },
       workOrder: {
         include: {
-          clinic: { select: { id: true, name: true } },
-          doctor: { select: { displayName: true, id: true } },
           activeCycle: {
             include: {
               workFormSubmissions: {
@@ -243,6 +290,8 @@ export const workbenchStageInclude = {
               },
             },
           },
+          clinic: { select: { id: true, name: true } },
+          doctor: { select: { displayName: true, id: true } },
           workType: { select: { id: true, name: true } },
         },
       },

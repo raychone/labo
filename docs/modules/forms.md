@@ -44,6 +44,8 @@ The MVP real sheet uses one common field set for all work types:
 - Faza 4 + termen
 - Observații
 
+The shade concept is stored canonically as `shade`; UI and templates may surface it as `Culoare`, and legacy sheets/tests may still label the same field `Nuanță`. This is one concept, not two separate business fields.
+
 ## Data Model
 
 `WorkFormTemplate`, `WorkFormFieldDefinition`, `WorkFormSubmission`.

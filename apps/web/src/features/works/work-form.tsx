@@ -187,7 +187,12 @@ export function WorkForm({
             placeholder="Alege medicul"
             required
             value={form.watch("doctorId")}
-            {...form.register("doctorId")}
+            {...form.register("doctorId", {
+              onChange: (event) => {
+                const value = (event.target as HTMLSelectElement).value;
+                form.setValue("doctorId", value, { shouldDirty: true, shouldValidate: true });
+              },
+            })}
           />
         </FormGrid>
       </FormSection>

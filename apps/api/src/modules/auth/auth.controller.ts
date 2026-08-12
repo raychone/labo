@@ -19,6 +19,8 @@ import { UpdateProfileDto } from "./dto/update-profile.dto.js";
 import { getRequestMetadata } from "./request-metadata.js";
 import { SessionService } from "./session.service.js";
 import { AuthorizationService, type EffectivePermissionSnapshot } from "../rbac/authorization.service.js";
+import { PermissionsGuard } from "../rbac/permissions.guard.js";
+import { RequirePermission } from "../rbac/require-permission.decorator.js";
 
 interface CsrfResponse {
   readonly csrfToken: string;
@@ -110,7 +112,8 @@ export class AuthController {
 
   @Patch("me/profile")
   @HttpCode(200)
-  @UseGuards(AuthGuard, CsrfGuard)
+  @UseGuards(AuthGuard, CsrfGuard, PermissionsGuard)
+  @RequirePermission("users.update", "ALL")
   public async updateProfile(
     @Body() dto: UpdateProfileDto,
     @CurrentUser() user: AuthenticatedUser,

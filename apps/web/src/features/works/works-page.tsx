@@ -30,6 +30,7 @@ import {
   LEGAL_ENTITY_CODES,
   WORK_CYCLE_REASONS,
   formatMoneyMinor,
+  formatPatientSex,
   getLegalEntityDisplayName,
   getWorkStageExecutionStatusLabel,
   type CreateNextWorkCycleInput,
@@ -52,7 +53,7 @@ import {
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
 import { fetchClinicOptions, fetchDoctorOptions } from "../clinics/clinics-api.js";
@@ -480,8 +481,7 @@ export function WorksPage(): ReactNode {
       id: "actions",
       renderCell: (work) => (
         <div className="works-page__row-actions">
-          <Button onClick={() => setSelectedWorkId(work.id)} size="small" variant="outline">Detalii</Button>
-          <Link className="works-page__open-link" to={`/works?workId=${encodeURIComponent(work.id)}`}>Deschide</Link>
+          <Button onClick={() => setSelectedWorkId(work.id)} size="small" variant="outline">Deschide</Button>
         </div>
       ),
     },
@@ -981,6 +981,7 @@ function WorkDetailsDrawer({
         {work ? (
           <div className="works-page__drawer">
             <ExecutionNowCard activeCycleNumber={activeCycleNumber} work={work} />
+            <WorkPatientCard work={work} />
             <WorkWorkflowSection isOpen={isOpen} workId={work.id} />
             {canReadCycles ? (
               <RealLabSheetSection
@@ -1271,6 +1272,25 @@ function ExecutionNowCard({ activeCycleNumber, work }: { readonly activeCycleNum
           <MetricCell label="Termen" value={formatOptionalDateTime(work.executionSnapshot.deadline?.effectiveDueAt ?? work.deadline.effectiveDueAt)} />
         </div>
         <p className="works-page__muted">Acțiunile de etapă și fișa reală sunt mai jos în același drawer.</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function WorkPatientCard({ work }: { readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Pacient</CardTitle>
+        <CardDescription>Datele pacientului salvate pe lucrare.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="works-page__patient-grid">
+          <MetricCell label="Nume" value={work.patientName} />
+          <MetricCell label="Sex" value={work.patient?.sex ? formatPatientSex(work.patient.sex) : "Nespecificat"} />
+          <MetricCell label="Cod pacient" value={work.patientReference ?? "Fără cod"} />
+          <MetricCell label="Data nașterii" value={work.patient?.birthDate ? formatDate(work.patient.birthDate) : "Fără dată"} />
+        </div>
       </CardContent>
     </Card>
   );

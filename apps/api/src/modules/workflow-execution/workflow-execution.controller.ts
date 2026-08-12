@@ -20,7 +20,7 @@ export class WorkflowExecutionController {
   ) {}
 
   @Get()
-  @RequirePermission("works.read_all", "ALL")
+  @RequirePermission("workflow.read", "ASSIGNED")
   public getWorkflow(@CurrentUser() actor: AuthenticatedUser, @Param("workId") workOrderId: string) {
     return this.workflowExecutionService.getWorkflowForWork({ actor, requestMetadata: {} }, workOrderId);
   }

@@ -8,6 +8,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   Min,
   MinLength,
@@ -104,6 +105,10 @@ export class CreateUserDto {
   @IsOptional()
   @IsBoolean()
   public readonly isActive: boolean = true;
+
+  @IsOptional()
+  @Matches(/^#[0-9a-fA-F]{6}$/)
+  public readonly preferredColor?: string | null;
 }
 
 export class UpdateUserDto {
@@ -117,6 +122,10 @@ export class UpdateUserDto {
   @MinLength(2)
   @MaxLength(120)
   public readonly displayName?: string;
+
+  @IsOptional()
+  @Matches(/^#[0-9a-fA-F]{6}$/)
+  public readonly preferredColor?: string | null;
 }
 
 export class ReplaceUserRolesDto {

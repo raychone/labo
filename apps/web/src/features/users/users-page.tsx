@@ -39,9 +39,11 @@ import {
   replaceUserRoles,
   resetUserPassword,
   updateUser,
+  type CreateUserInput,
   type RoleOption,
   type UserDetail,
   type UserSummary,
+  type UpdateUserInput,
   type UsersListParams,
 } from "./users-api.js";
 import {
@@ -86,15 +88,27 @@ function roleKeysFromUser(user: UserSummary | UserDetail | undefined): readonly 
   return user?.roles.map((role) => role.key).sort() ?? [];
 }
 
+function toCreateUserInput(values: CreateUserFormValues): CreateUserInput {
+  const { preferredColor, ...rest } = values;
+  return preferredColor === undefined || preferredColor === "" ? rest : { ...rest, preferredColor };
+}
+
+function toUpdateUserInput(values: UserBaseFormValues): UpdateUserInput {
+  const { preferredColor, ...rest } = values;
+  return preferredColor === undefined || preferredColor === "" ? rest : { ...rest, preferredColor };
+}
+
 const userFieldLabels: Record<keyof UserBaseFormValues, string> = {
   displayName: "Nume",
   email: "Email",
+  preferredColor: "Culoare",
 };
 
 const createUserFieldLabels: Record<keyof CreateUserFormValues, string> = {
   displayName: "Nume",
   email: "Email",
   isActive: "Cont activ",
+  preferredColor: "Culoare",
   roleKeys: "Roluri",
   temporaryPassword: "Parola temporara",
 };
@@ -147,7 +161,7 @@ export function UsersPage(): ReactNode {
   }
 
   const createMutation = useMutation({
-    mutationFn: createUser,
+    mutationFn: (input: CreateUserFormValues) => createUser(toCreateUserInput(input)),
     onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Utilizatorul nu a fost creat", variant: "error" }),
     onSuccess: async () => {
       setCreateOpen(false);
@@ -156,7 +170,7 @@ export function UsersPage(): ReactNode {
     },
   });
   const updateMutation = useMutation({
-    mutationFn: (input: UserBaseFormValues) => updateUser(selectedUserId ?? "", input),
+    mutationFn: (input: UserBaseFormValues) => updateUser(selectedUserId ?? "", toUpdateUserInput(input)),
     onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Datele nu au fost salvate", variant: "error" }),
     onSuccess: async () => {
       toast.showToast({ durationMs: 3500, message: "Utilizator actualizat.", variant: "success" });
@@ -383,6 +397,7 @@ function CreateUserModal({
       displayName: "",
       email: "",
       isActive: true,
+      preferredColor: "",
       roleKeys: [],
       temporaryPassword: "",
     },
@@ -416,6 +431,14 @@ function CreateUserModal({
           <FormErrorSummary errors={summaryItems} ref={summaryRef} />
           <TextInput error={form.formState.errors.displayName?.message} id="displayName" label="Nume" required {...form.register("displayName")} />
           <TextInput error={form.formState.errors.email?.message} id="email" label="Email" required type="email" {...form.register("email")} />
+          <TextInput
+            error={form.formState.errors.preferredColor?.message}
+            hint="Opțional. Cod hex, de exemplu #0f766e."
+            id="preferredColor"
+            label="Culoare"
+            placeholder="#0f766e"
+            {...form.register("preferredColor")}
+          />
           <TextInput
             error={form.formState.errors.temporaryPassword?.message}
             id="temporaryPassword"
@@ -481,11 +504,13 @@ function UserDetailsDrawer({
     defaultValues: {
       displayName: user?.displayName ?? "",
       email: user?.email ?? "",
+      preferredColor: user?.preferredColor ?? "",
     },
     resolver: zodResolver(userBaseSchema),
     values: {
       displayName: user?.displayName ?? "",
       email: user?.email ?? "",
+      preferredColor: user?.preferredColor ?? "",
     },
   });
   const rolesForm = useForm<{ readonly roleKeys: readonly string[] }>({
@@ -518,6 +543,7 @@ function UserDetailsDrawer({
               <div><dt>Status</dt><dd>{user.isActive ? "Activ" : "Dezactivat"}</dd></div>
               <div><dt>Sesiuni active</dt><dd>{user.activeSessionCount}</dd></div>
               <div><dt>Parola</dt><dd>{user.mustChangePassword ? "Schimbare necesară" : "OK"}</dd></div>
+              <div><dt>Culoare</dt><dd>{user.preferredColor ? <span className="users-page__color-swatch" style={{ backgroundColor: user.preferredColor }} /> : "Nesetată"}</dd></div>
             </dl>
 
             {canUpdate ? (
@@ -531,7 +557,21 @@ function UserDetailsDrawer({
                 <FormErrorSummary errors={summaryItems} ref={summaryRef} />
                 <TextInput error={form.formState.errors.displayName?.message} id="displayName" label="Nume" required {...form.register("displayName")} />
                 <TextInput error={form.formState.errors.email?.message} id="email" label="Email" required type="email" {...form.register("email")} />
-                <FormActions canReset={form.formState.isDirty} isSubmitting={isSubmitting} onReset={() => form.reset({ displayName: user.displayName, email: user.email })} submitDisabled={!form.formState.isDirty} submitLabel="Salvează datele" />
+                <TextInput
+                  error={form.formState.errors.preferredColor?.message}
+                  hint="Opțional. Cod hex, de exemplu #0f766e."
+                  id="preferredColor"
+                  label="Culoare"
+                  placeholder="#0f766e"
+                  {...form.register("preferredColor")}
+                />
+                <FormActions
+                  canReset={form.formState.isDirty}
+                  isSubmitting={isSubmitting}
+                  onReset={() => form.reset({ displayName: user.displayName, email: user.email, preferredColor: user.preferredColor ?? "" })}
+                  submitDisabled={!form.formState.isDirty}
+                  submitLabel="Salvează datele"
+                />
               </FormLayout>
             ) : null}
 

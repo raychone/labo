@@ -293,7 +293,7 @@ Validated after the real laboratory visit:
 - A new cycle defaults clinic and doctor from the previous cycle for reception confirmation only.
 - Editable technical values are not copied automatically into a new cycle.
 - Existing tooth selector is sufficient for MVP; no per-tooth repeating details.
-- One `Culoare` value per cycle is enough for this MVP; material capture is not a standalone implemented field in `WORKFORM-REAL-001A`.
+- One canonical `shade` value per cycle is enough for this MVP; the UI may show it as `Culoare` and older templates/tests may still use `Nuanță` for the same field. Material capture is not a standalone implemented field in `WORKFORM-REAL-001A`.
 - Every cycle keeps its own doctor instructions and observations.
 - Clinic/doctor correction after technician claim happens when reception registers a returned work before the new cycle is created.
 - Signatures belong only to delivery/invoice documents, not the laboratory sheet in MVP.

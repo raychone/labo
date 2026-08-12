@@ -1,4 +1,4 @@
-import { INestApplication, ValidationPipe } from "@nestjs/common";
+import { ForbiddenException, INestApplication, ValidationPipe } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import cookieParser from "cookie-parser";
 import request from "supertest";
@@ -62,6 +62,12 @@ describe("AuthController", () => {
                 },
               ],
             } satisfies EffectivePermissionSnapshot),
+            hasPermission: vi.fn().mockResolvedValue({
+              allowed: false,
+              effectiveScopes: [],
+              permission: "users.update",
+            }),
+            requirePermission: vi.fn().mockRejectedValue(new ForbiddenException("Permission denied.")),
           },
         },
         {
@@ -203,5 +209,14 @@ describe("AuthController", () => {
       .set("Cookie", ["dl_session=session-token", "dl_csrf=csrf-token"])
       .set("x-csrf-token", "csrf-token")
       .expect(204);
+  });
+
+  it("rejects self-service profile color updates without users.update", async () => {
+    await request(app.getHttpServer() as App)
+      .patch("/auth/me/profile")
+      .set("Cookie", ["dl_session=session-token", "dl_csrf=csrf-token"])
+      .set("x-csrf-token", "csrf-token")
+      .send({ preferredColor: "#0f766e" })
+      .expect(403);
   });
 });

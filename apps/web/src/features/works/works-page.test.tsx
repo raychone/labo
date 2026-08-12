@@ -110,6 +110,14 @@ function createPngResponse(): Response {
   id: "work_order_1",
   invoicedDocumentId: null,
   patientName: "Ion Pop",
+  patient: {
+    birthDate: "1990-01-15T00:00:00.000Z",
+    firstName: "Ion",
+    fullName: "Ion Pop",
+    id: "patient_1",
+    lastName: "Pop",
+    sex: "MALE",
+  },
   patientReference: "P-100",
   priority: "NORMAL",
   quantity: 1,
@@ -466,8 +474,7 @@ describe("WorksPage", () => {
     expect(await screen.findByText("Coroana zirconiu")).toBeDefined();
     expect(await screen.findByText("În lucru")).toBeDefined();
     expect(await screen.findByText("Normal")).toBeDefined();
-    expect(screen.getByRole("link", { name: "Deschide" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "Detalii" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Deschide" })).toBeDefined();
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/work-types/options"), expect.anything());
   });
 
@@ -697,7 +704,7 @@ describe("WorksPage", () => {
 
     renderWithProviders(<WorksPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Detalii" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
     fireEvent.click(await screen.findByRole("button", { name: "Vezi QR" }));
 
     const dialog = await screen.findByRole("dialog", { name: "QR lucrare" });
@@ -758,7 +765,7 @@ describe("WorksPage", () => {
 
     renderWithProviders(<WorksPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Detalii" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
     expect(await screen.findByText("Acțiunea mea acum")).toBeDefined();
     expect(await screen.findByRole("heading", { name: "Flux producție" })).toBeDefined();
     expect(await screen.findByText("Flux zirconiu · versiunea 3")).toBeDefined();
@@ -804,7 +811,7 @@ describe("WorksPage", () => {
 
     renderWithProviders(<WorksPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Detalii" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
 
     expect(await screen.findByRole("heading", { name: "Cicluri" })).toBeDefined();
     expect((await screen.findAllByText("Ciclul 2")).length).toBeGreaterThan(0);
@@ -882,7 +889,7 @@ describe("WorksPage", () => {
 
     renderWithProviders(<WorksPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Detalii" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
     fireEvent.click(await screen.findByRole("button", { name: "Înregistrează revenirea" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Înregistrează revenirea" });
@@ -955,7 +962,7 @@ describe("WorksPage", () => {
 
     renderWithProviders(<WorksPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Detalii" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
     expect(await screen.findByRole("heading", { name: "Fișă laborator" })).toBeDefined();
     expect(await screen.findByLabelText("Observații")).toBeDefined();
     const saveDraftButton = await screen.findByRole("button", { name: "Salvează schița" });

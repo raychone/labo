@@ -98,6 +98,15 @@
   text-align: right;
 }
 
+.users-page__color-swatch {
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: 999px;
+  display: inline-block;
+  height: 1rem;
+  vertical-align: middle;
+  width: 1rem;
+}
+
 .users-page__badges {
   display: flex;
   flex-wrap: wrap;

@@ -1,8 +1,14 @@
 import { z } from "zod";
 
+const hexColorSchema = z.union([
+  z.literal(""),
+  z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, "Culoarea trebuie să fie un cod hex valid (#RRGGBB)."),
+]).optional();
+
 export const userBaseSchema = z.object({
   displayName: z.string().trim().min(2, "Numele trebuie sa aiba cel putin 2 caractere.").max(120),
   email: z.string().trim().email("Introdu o adresa de email valida.").max(254),
+  preferredColor: hexColorSchema,
 });
 
 export const createUserSchema = userBaseSchema.extend({
@@ -19,6 +25,6 @@ export const resetPasswordSchema = z.object({
   path: ["confirmTemporaryPassword"],
 });
 
-export type CreateUserFormValues = z.infer<typeof createUserSchema>;
 export type ResetPasswordFormValues = z.infer<typeof resetPasswordSchema>;
-export type UserBaseFormValues = z.infer<typeof userBaseSchema>;
+export type UserBaseFormValues = z.input<typeof userBaseSchema>;
+export type CreateUserFormValues = z.input<typeof createUserSchema>;

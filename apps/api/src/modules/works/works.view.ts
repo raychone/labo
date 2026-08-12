@@ -220,9 +220,11 @@ export interface WorkSummaryView {
   readonly patientReference: string | null;
   readonly patient: {
     readonly firstName: string;
+    readonly birthDate: string | null;
     readonly fullName: string;
     readonly id: string;
     readonly lastName: string;
+    readonly sex: import("@prisma/client").PatientSex | null;
   } | null;
   readonly priority: string;
   readonly quantity: number;
@@ -488,9 +490,11 @@ export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: bo
     patient: workOrder.patient
       ? {
           firstName: workOrder.patient.firstName,
+          birthDate: workOrder.patient.birthDate?.toISOString() ?? null,
           fullName: `${workOrder.patient.firstName} ${workOrder.patient.lastName}`.trim(),
           id: workOrder.patient.id,
           lastName: workOrder.patient.lastName,
+          sex: workOrder.patient.sex,
         }
       : null,
     priority: workOrder.priority,

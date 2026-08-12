@@ -31,11 +31,9 @@ import {
 } from "@dental-lab/shared";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
-import { authQueryKeys, useAuthState } from "../../app/auth-state.js";
 import { fetchPermissions } from "../auth/auth-api.js";
-import { updateCurrentUserProfile } from "../auth/auth-api.js";
 import { fetchOrganizationContext } from "../organization-context/organization-context-api.js";
 import { useAvailableWorksForClaim, useClaimWork, useReleaseWork, useStartWorkflowStage, useCompleteWorkflowStage, useMyClaimedWorks } from "../works/works-api.js";
 import { useTechnicianOptions, useTechnicianWorkbench, useTechnicianWorkload } from "./technician-workbench-api.js";
@@ -63,8 +61,6 @@ const defaultClaimFilters: ClaimWorksListParams = {
   workTypeId: undefined,
 };
 
-const technicianColorSwatches = ["#0f766e", "#2563eb", "#7c3aed", "#db2777", "#ea580c", "#15803d", "#334155", "#b45309"] as const;
-
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium" }).format(new Date(value));
 }
@@ -72,8 +68,6 @@ function formatDate(value: string): string {
 export function TechnicianWorkbenchPage(): ReactNode {
   const toast = useToast();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const authState = useAuthState();
   const [tab, setTab] = useState<WorkbenchTab>("AVAILABLE");
   const [filters, setFilters] = useState<TechnicianWorkbenchFilter>(defaultFilters);
   const [claimFilters, setClaimFilters] = useState<ClaimWorksListParams>(defaultClaimFilters);
@@ -95,15 +89,6 @@ export function TechnicianWorkbenchPage(): ReactNode {
   const completeMutation = useCompleteWorkflowStage();
   const claimMutation = useClaimWork();
   const releaseMutation = useReleaseWork();
-  const updateProfileMutation = useMutation({
-    mutationFn: updateCurrentUserProfile,
-    onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Culoarea nu a fost salvată", variant: "error" }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: authQueryKeys.currentUser });
-      await queryClient.invalidateQueries({ queryKey: authQueryKeys.permissions });
-      toast.showToast({ message: "Culoarea tehnicianului a fost salvată.", variant: "success" });
-    },
-  });
   const visibleAvailableWorks = useMemo(
     () => pickSingleWorkbenchMatch(availableQuery.data?.items ?? [], claimFilters.search),
     [availableQuery.data?.items, claimFilters.search],
@@ -157,48 +142,6 @@ export function TechnicianWorkbenchPage(): ReactNode {
           </div>
         </header>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Culoare tehnician</CardTitle>
-            <CardDescription>Alege o culoare care te identifică în status și în lista de lucrări.</CardDescription>
-          </CardHeader>
-          <CardContent className="technician-workbench__color-panel">
-            <div
-              className="technician-workbench__color-swatch"
-              aria-label="Culoare curentă"
-              style={{ backgroundColor: authState.user?.preferredColor ?? "#e5e7eb" }}
-            />
-            <div className="technician-workbench__color-swatches" role="list" aria-label="Culori disponibile">
-              {technicianColorSwatches.map((color) => (
-                <button
-                  aria-pressed={(authState.user?.preferredColor ?? "") === color}
-                  aria-label={`Alege culoarea ${color}`}
-                  key={color}
-                  onClick={() => updateProfileMutation.mutate({ preferredColor: color })}
-                  type="button"
-                  className="technician-workbench__color-button"
-                  style={{ backgroundColor: color }}
-                  title={color}
-                />
-              ))}
-            </div>
-            <label className="technician-workbench__custom-color">
-              <span>Culoare personalizată</span>
-              <input
-                aria-label="Culoare personalizată"
-                onChange={(event) => {
-                  const value = event.target.value;
-                  if (/^#[0-9a-fA-F]{6}$/.test(value)) {
-                    updateProfileMutation.mutate({ preferredColor: value });
-                  }
-                }}
-                type="color"
-                value={authState.user?.preferredColor ?? "#0f766e"}
-              />
-            </label>
-          </CardContent>
-        </Card>
-
         {workbenchQuery.data ? (
           <div className="technician-workbench__summary" aria-label="Rezumat atelier">
             <Metric label="Total activ" value={workbenchQuery.data.summary.totalActive} />
@@ -242,30 +185,30 @@ export function TechnicianWorkbenchPage(): ReactNode {
             </div>
 
             {tab === "AVAILABLE" ? (
-              <ClaimList
-                emptyDescription="Nu există lucrări disponibile pentru revendicare."
-                isLoading={availableQuery.isLoading}
-                error={availableQuery.error}
-                items={visibleAvailableWorks}
-                actionLabel="Preia"
-                onAction={setClaimTarget}
-                onOpen={(work) => navigate(`/works?workId=${work.id}`)}
-                showRelease={false}
-              />
-            ) : (
-              <ClaimList
-                emptyDescription="Nu ai lucrări revendicate."
-                isLoading={myClaimedQuery.isLoading}
-                error={myClaimedQuery.error}
-                items={visibleClaimedWorks}
-                actionLabel="Eliberează"
-                onAction={setReleaseTarget}
-                onOpen={(work) => navigate(`/works?workId=${work.id}`)}
-                showRelease
-              />
-            )}
-          </CardContent>
-        </Card>
+            <ClaimList
+              emptyDescription="Nu există lucrări disponibile pentru revendicare."
+              isLoading={availableQuery.isLoading}
+              error={availableQuery.error}
+              items={visibleAvailableWorks}
+              actionLabel="Preia"
+              onAction={setClaimTarget}
+              onOpen={(work) => navigate(`/works?workId=${work.id}`)}
+            />
+          ) : (
+            <ClaimList
+              emptyDescription="Nu ai lucrări revendicate."
+              isLoading={myClaimedQuery.isLoading}
+              error={myClaimedQuery.error}
+              items={visibleClaimedWorks}
+              actionLabel="Continuă"
+              onAction={(work) => navigate(`/works?workId=${work.id}`)}
+              onSecondaryAction={setReleaseTarget}
+              onOpen={(work) => navigate(`/works?workId=${work.id}`)}
+              secondaryActionLabel="Eliberează"
+            />
+          )}
+        </CardContent>
+      </Card>
 
         {tab === "MINE" ? (
           <Card>
@@ -483,7 +426,8 @@ function ClaimList({
   items,
   onAction,
   onOpen,
-  showRelease,
+  onSecondaryAction,
+  secondaryActionLabel,
 }: {
   readonly actionLabel: string;
   readonly emptyDescription: string;
@@ -492,7 +436,8 @@ function ClaimList({
   readonly items: readonly WorkSummary[];
   readonly onAction: (work: WorkSummary) => void;
   readonly onOpen: (work: WorkSummary) => void;
-  readonly showRelease: boolean;
+  readonly onSecondaryAction?: (work: WorkSummary) => void;
+  readonly secondaryActionLabel?: string;
 }): ReactNode {
   if (isLoading) {
     return <LoadingState text="Se încarcă lucrările" />;
@@ -527,9 +472,17 @@ function ClaimList({
           <div className="technician-workbench__actions">
             <StatusBadge label={work.claim.status === "CLAIMED" ? "Revendicată" : "Disponibilă"} variant={work.claim.status === "CLAIMED" ? "production" : "awaiting"} />
             <Button onClick={() => onOpen(work)} variant="outline">Deschide</Button>
-            <Button disabled={showRelease ? !work.claim.canCurrentUserRelease : !work.claim.canCurrentUserClaim} onClick={() => onAction(work)}>
+            <Button
+              disabled={work.claim.status === "CLAIMED" ? !work.claim.canCurrentUserRelease : !work.claim.canCurrentUserClaim}
+              onClick={() => onAction(work)}
+            >
               {actionLabel}
             </Button>
+            {onSecondaryAction && secondaryActionLabel ? (
+              <Button disabled={!work.claim.canCurrentUserRelease} onClick={() => onSecondaryAction(work)} variant="outline">
+                {secondaryActionLabel}
+              </Button>
+            ) : null}
           </div>
         </article>
       ))}
