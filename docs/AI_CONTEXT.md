@@ -40,6 +40,7 @@ Implemented or substantially implemented:
 - real laboratory sheet templates, cycle-scoped sheet submissions, operational draft/complete/final states, finalization, and work-detail/workbench/scan/status integrations;
 - workflow templates and stage execution;
 - technician workbench and workload, including technician color preferences surfaced as badges in `/status`;
+- technician execution lifecycle with execution-first work drawer ordering, stage action labeling, and search-based workbench narrowing;
 - pricing catalog, execution rules, clinic/doctor agreements, preview resolver;
 - logistics center and delivery preparation groups;
 - deliveries and internal proof/signature rendering;
@@ -63,7 +64,7 @@ Planned or partial:
 
 ## Current Status
 
-Last completed functional task: `RECEPTION-TO-TECH-001`, which auto-assigns the initial workflow stage to the creating eligible receptionist so a new work can move through the intended reception handoff and only becomes technician-visible after the workflow advances.
+Last completed functional task: `TECH-EXECUTION-001`, which surfaces the live technician execution context first in the work drawer, narrows workbench search results to the best match, and keeps current stage actions aligned to live runtime state.
 
 Last completed documentation task: `WORKFORM-REAL-DISCOVERY-001`, which audited the real paper work sheet and produced [discovery/WORKFORM-REAL-FIELD-AUDIT.md](discovery/WORKFORM-REAL-FIELD-AUDIT.md) and [discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md). `DOCS-TOKEN-001` created the permanent token-efficient documentation system under `docs/`.
 

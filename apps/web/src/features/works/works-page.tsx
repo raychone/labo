@@ -31,6 +31,7 @@ import {
   WORK_CYCLE_REASONS,
   formatMoneyMinor,
   getLegalEntityDisplayName,
+  getWorkStageExecutionStatusLabel,
   type CreateNextWorkCycleInput,
   type CreateWorkInput,
   type LegalEntityCode,
@@ -195,6 +196,10 @@ function formatDate(value: string): string {
 
 function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+function formatOptionalDateTime(value: string | null): string {
+  return value ? formatDateTime(value) : "Nerezolvat";
 }
 
 function formatTime(value: string): string {
@@ -928,6 +933,7 @@ function WorkDetailsDrawer({
   const createNextCycleMutation = useCreateNextWorkCycle();
   const cyclesQuery = useWorkCycles(work?.id ?? null, isOpen && canReadCycles && work !== undefined);
   const techniciansQuery = useTechnicianOptions(Boolean(work?.claim.canCurrentUserReassign));
+  const activeCycleNumber = cyclesQuery.data?.cycles.find((cycle) => cycle.id === cyclesQuery.data?.activeCycleId)?.cycleNumber ?? null;
 
   useEffect(() => {
     form.reset(toWorkFormValues(work));
@@ -974,6 +980,15 @@ function WorkDetailsDrawer({
         {workError ? <ErrorState title="Lucrarea nu a fost încărcată" description={getErrorMessage(workError)} /> : null}
         {work ? (
           <div className="works-page__drawer">
+            <ExecutionNowCard activeCycleNumber={activeCycleNumber} work={work} />
+            <WorkWorkflowSection isOpen={isOpen} workId={work.id} />
+            {canReadCycles ? (
+              <RealLabSheetSection
+                history={cyclesQuery.data}
+                isCyclesLoading={cyclesQuery.isLoading}
+                work={work}
+              />
+            ) : null}
             <div className="works-page__meta">
               <StatusBadge label="Înregistrată" variant="registered" />
               <PriorityBadge label={work.priority === "URGENT" ? "Urgent" : "Normal"} variant={work.priority === "URGENT" ? "urgent" : "normal"} />
@@ -1001,14 +1016,6 @@ function WorkDetailsDrawer({
                 work={work}
               />
             ) : null}
-            {canReadCycles ? (
-              <RealLabSheetSection
-                history={cyclesQuery.data}
-                isCyclesLoading={cyclesQuery.isLoading}
-                work={work}
-              />
-            ) : null}
-            <WorkWorkflowSection isOpen={isOpen} workId={work.id} />
             {workTypeOptionsError ? <ErrorState title="Opțiunile nu au fost încărcate" description={getErrorMessage(workTypeOptionsError)} /> : null}
             <WorkForm
               clinicOptions={clinicOptions}
@@ -1232,6 +1239,40 @@ function MetricCell({ label, value }: { readonly label: string; readonly value: 
       <span className="works-page__muted">{label}</span>
       <strong>{value}</strong>
     </div>
+  );
+}
+
+function ExecutionNowCard({ activeCycleNumber, work }: { readonly activeCycleNumber: number | null; readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
+  const currentStage = work.workflow?.currentStage ?? null;
+  const progress = work.workflow ? `${work.workflow.progress.completed}/${work.workflow.progress.total}` : "0/0";
+  const currentTechnician = work.executionSnapshot.currentTechnician ?? work.claim.technician;
+  const executionCompany = work.executionSnapshot.summary.legalEntity?.code ?? "Nefixată";
+  const currentCycleLabel = activeCycleNumber ? `Ciclul ${activeCycleNumber}` : "Fără ciclu activ";
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Acțiunea mea acum</CardTitle>
+        <CardDescription>{work.code} · {work.patientName} · {work.workType.name}</CardDescription>
+      </CardHeader>
+      <CardContent className="works-page__execution-now">
+        <div className="works-page__execution-now-grid">
+          <MetricCell label="Lucrare" value={work.code} />
+          <MetricCell label="Pacient" value={work.patientName} />
+          <MetricCell label="Tip lucrare" value={work.workType.name} />
+          <MetricCell label="Ciclu curent" value={currentCycleLabel} />
+          <MetricCell label="Etapă curentă" value={currentStage?.name ?? "Fără etapă curentă"} />
+          <MetricCell label="Poziție etapă" value={currentStage ? `Etapa ${currentStage.sortOrder} din ${work.workflow?.progress.total ?? 0}` : "N/A"} />
+          <MetricCell label="Status etapă" value={currentStage ? getWorkStageExecutionStatusLabel(currentStage.status) : "Nedefinit"} />
+          <MetricCell label="Prioritate" value={work.priority === "URGENT" ? "Urgent" : "Normal"} />
+          <MetricCell label="Tehnician curent" value={currentTechnician?.displayName ?? "Nerevendicată"} />
+          <MetricCell label="Companie execuție" value={executionCompany} />
+          <MetricCell label="Progres" value={progress} />
+          <MetricCell label="Termen" value={formatOptionalDateTime(work.executionSnapshot.deadline?.effectiveDueAt ?? work.deadline.effectiveDueAt)} />
+        </div>
+        <p className="works-page__muted">Acțiunile de etapă și fișa reală sunt mai jos în același drawer.</p>
+      </CardContent>
+    </Card>
   );
 }
 

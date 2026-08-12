@@ -759,10 +759,11 @@ describe("WorksPage", () => {
     renderWithProviders(<WorksPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Detalii" }));
+    expect(await screen.findByText("Acțiunea mea acum")).toBeDefined();
     expect(await screen.findByRole("heading", { name: "Flux producție" })).toBeDefined();
     expect(await screen.findByText("Flux zirconiu · versiunea 3")).toBeDefined();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Pornește etapa" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Începe etapa" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/workflow/stages/stage_exec_1/start"), expect.objectContaining({ method: "POST" })));
   });

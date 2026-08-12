@@ -30,7 +30,7 @@ Template endpoints under work types and `/workflow-templates/:id`. Runtime endpo
 
 ## UI
 
-`/work-types/:workTypeId/workflow`, workflow section in work detail, technician workbench integration, and reception-to-technician handoff after the initial eligible stage is completed.
+`/work-types/:workTypeId/workflow`, workflow section in work detail, technician workbench integration, and reception-to-technician handoff after the initial eligible stage is completed. Work detail drawers surface the current runtime execution summary before the historical workflow sections so technicians and managers can see the active stage context without scrolling.
 
 ## Audit
 
@@ -46,7 +46,7 @@ Archived template, existing runtime from older template, stage already started/c
 
 ## Implemented Tasks
 
-WORKFLOW-001, WORKFLOW-002, TECH-001, STATUS-001A read-model integration, WORK-CYCLES-001A, WORK-CYCLES-001B.
+WORKFLOW-001, WORKFLOW-002, TECH-001, STATUS-001A read-model integration, WORK-CYCLES-001A, WORK-CYCLES-001B, TECH-EXECUTION-001.
 
 ## Planned Tasks
 

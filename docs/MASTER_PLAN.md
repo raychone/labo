@@ -11,9 +11,9 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | Current task | DEMO-POLISH-002 |
 | Status | PLANNED |
 | Blocker | none |
-| Last completed task | RECEPTION-TO-TECH-001 |
-| Last completed functional task | RECEPTION-TO-TECH-001 |
-| Last completed functional commit | RECEPTION-TO-TECH-001 commit |
+| Last completed task | TECH-EXECUTION-001 |
+| Last completed functional task | TECH-EXECUTION-001 |
+| Last completed functional commit | TECH-EXECUTION-001 commit |
 | Next approved task | none |
 
 ## Roadmap
@@ -55,6 +55,7 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | workflow | WORKFLOW-001 | COMPLETED | WORKTYPES-001 | workflow templates | [modules/workflow.md](modules/workflow.md) |
 | workflow | WORKFLOW-002 | COMPLETED | WORKFLOW-001, WORKS-001 | workflow execution | [modules/workflow.md](modules/workflow.md) |
 | technician execution | TECH-001 | COMPLETED | WORKFLOW-002 | assignment/workbench base | [modules/technician-execution.md](modules/technician-execution.md) |
+| technician execution | TECH-EXECUTION-001 | COMPLETED | TECH-001, RECEPTION-TO-TECH-001, WORKFORM-REAL-001B, WORK-CYCLES-001B, STATUS-001B | technician execution lifecycle and workbench/drawer alignment | [tasks/TECH-EXECUTION-001.md](tasks/TECH-EXECUTION-001.md) |
 | scan | SCAN-002 | COMPLETED | QR-001, WORKFLOW-002 | operational scan actions | [modules/qr.md](modules/qr.md) |
 | logistics | LOGISTICS-001 | COMPLETED | WORKS-001, WORKFLOW-002 | operational logistics center | [modules/logistics.md](modules/logistics.md) |
 | delivery | DELIVERY-001 | COMPLETED | LOGISTICS-001 | courier planning/execution | [modules/delivery.md](modules/delivery.md) |

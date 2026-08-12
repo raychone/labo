@@ -29,7 +29,7 @@ import {
   type TechnicianWorkbenchItem,
   type WorkSummary,
 } from "@dental-lab/shared";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -104,6 +104,14 @@ export function TechnicianWorkbenchPage(): ReactNode {
       toast.showToast({ message: "Culoarea tehnicianului a fost salvată.", variant: "success" });
     },
   });
+  const visibleAvailableWorks = useMemo(
+    () => pickSingleWorkbenchMatch(availableQuery.data?.items ?? [], claimFilters.search),
+    [availableQuery.data?.items, claimFilters.search],
+  );
+  const visibleClaimedWorks = useMemo(
+    () => pickSingleWorkbenchMatch(myClaimedQuery.data?.items ?? [], claimFilters.search),
+    [claimFilters.search, myClaimedQuery.data?.items],
+  );
 
   function startStage(item: TechnicianWorkbenchItem): void {
     startMutation.mutate({
@@ -238,7 +246,7 @@ export function TechnicianWorkbenchPage(): ReactNode {
                 emptyDescription="Nu există lucrări disponibile pentru revendicare."
                 isLoading={availableQuery.isLoading}
                 error={availableQuery.error}
-                items={availableQuery.data?.items ?? []}
+                items={visibleAvailableWorks}
                 actionLabel="Preia"
                 onAction={setClaimTarget}
                 onOpen={(work) => navigate(`/works?workId=${work.id}`)}
@@ -249,7 +257,7 @@ export function TechnicianWorkbenchPage(): ReactNode {
                 emptyDescription="Nu ai lucrări revendicate."
                 isLoading={myClaimedQuery.isLoading}
                 error={myClaimedQuery.error}
-                items={myClaimedQuery.data?.items ?? []}
+                items={visibleClaimedWorks}
                 actionLabel="Eliberează"
                 onAction={setReleaseTarget}
                 onOpen={(work) => navigate(`/works?workId=${work.id}`)}
@@ -425,6 +433,48 @@ function Metric({ label, value }: { readonly label: string; readonly value: numb
   );
 }
 
+function pickSingleWorkbenchMatch(items: readonly WorkSummary[], search: string | undefined): readonly WorkSummary[] {
+  const normalizedSearch = normalizeWorkbenchSearch(search);
+  if (normalizedSearch === "") {
+    return items;
+  }
+
+  const exactMatches = items.filter((work) => {
+    const normalizedCode = normalizeWorkbenchSearch(work.code);
+    const normalizedPatient = normalizeWorkbenchSearch(work.patientName);
+    const normalizedClinic = normalizeWorkbenchSearch(work.clinic.name);
+    const normalizedDoctor = normalizeWorkbenchSearch(work.doctor.displayName);
+    const normalizedWorkType = normalizeWorkbenchSearch(work.workType.name);
+
+    return normalizedCode === normalizedSearch
+      || normalizedPatient === normalizedSearch
+      || normalizedClinic === normalizedSearch
+      || normalizedDoctor === normalizedSearch
+      || normalizedWorkType === normalizedSearch;
+  });
+  if (exactMatches.length > 0) {
+    const [firstExactMatch] = exactMatches;
+    return firstExactMatch ? [firstExactMatch] : [];
+  }
+
+  const partialMatch = items.find((work) => {
+    const haystack = normalizeWorkbenchSearch([
+      work.code,
+      work.patientName,
+      work.clinic.name,
+      work.doctor.displayName,
+      work.workType.name,
+    ].join(" "));
+    return haystack.includes(normalizedSearch);
+  });
+
+  return partialMatch ? [partialMatch] : [];
+}
+
+function normalizeWorkbenchSearch(value: string | undefined): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
 function ClaimList({
   actionLabel,
   emptyDescription,
@@ -597,6 +647,7 @@ function WorkbenchItemCard({
   readonly onOpen: () => void;
   readonly onStart: () => void;
 }): ReactNode {
+  const isInProgress = item.stage.status === "IN_PROGRESS";
   return (
     <article className="technician-workbench__item">
       <div className="technician-workbench__item-main">
@@ -620,8 +671,15 @@ function WorkbenchItemCard({
         <StatusBadge label={item.realLabSheet.label} variant={item.realLabSheet.status === "FINALIZED" ? "closed" : item.realLabSheet.status === "COMPLETE" ? "production" : "awaiting"} />
         <Button onClick={onOpen} variant="outline">Deschide</Button>
         <Button onClick={onOpen} variant="outline">{item.realLabSheet.status === "NOT_STARTED" ? "Completează fișa" : "Continuă fișa"}</Button>
-        <Button disabled={item.stage.status !== "PENDING"} isLoading={isStarting} onClick={onStart} variant="outline">Începe etapa</Button>
-        <Button disabled={item.stage.status !== "IN_PROGRESS"} isLoading={isCompleting} onClick={onComplete}>Finalizează etapa</Button>
+        <Button
+          disabled={(!isInProgress && item.stage.status !== "PENDING") || (item.stage.status === "IN_PROGRESS" && isStarting)}
+          isLoading={isStarting}
+          onClick={isInProgress ? onOpen : onStart}
+          variant="outline"
+        >
+          {isInProgress ? "Continuă" : "Începe etapa"}
+        </Button>
+        {isInProgress ? <Button disabled={isCompleting} isLoading={isCompleting} onClick={onComplete}>Finalizează etapa</Button> : null}
       </div>
     </article>
   );

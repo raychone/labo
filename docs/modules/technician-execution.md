@@ -2,7 +2,7 @@
 
 ## Status
 
-Partially implemented.
+Implemented for the current MVP execution lifecycle.
 
 ## Purpose
 
@@ -18,7 +18,7 @@ Available work, claimed work, workload, current technician, stage assignment, re
 
 ## Business Rules
 
-Technicians can claim available works, view own claimed works, release own work where permitted, execute workflow actions exposed by current endpoints, and open the real laboratory sheet for visible/owned work where sheet permissions allow it. A work only enters the technician-visible pool after the current workflow stage becomes technician-eligible; receptionist-created works remain hidden until the reception handoff completes. Each technician may also choose a preferred color that is surfaced as a badge in operational status and technician selection views when the work is assigned.
+Technicians can claim available works, view own claimed works, release own work where permitted, execute workflow actions exposed by current endpoints, and open the real laboratory sheet for visible/owned work where sheet permissions allow it. A work only enters the technician-visible pool after the current workflow stage becomes technician-eligible; receptionist-created works remain hidden until the reception handoff completes. Each technician may also choose a preferred color that is surfaced as a badge in operational status and technician selection views when the work is assigned. The workbench narrows search results to the best matching work when a search term is present, and the work drawer surfaces the live execution context first for the currently owned work.
 
 ## Data Model
 
@@ -30,7 +30,7 @@ Technicians can claim available works, view own claimed works, release own work 
 
 ## UI
 
-`/workbench` is labelled as the technician workspace and groups available work, owned work, stage queue filters and workload summary. Claim copy uses `Preia` while keeping the existing `NC`/`NG` execution company selector in the claim modal. Sheet status badges and `Completează fișa`/`Continuă fișa` actions open the existing work detail sheet flow. Technician navigation is intentionally limited to the workbench and owned-work paths; operational status remains the shared read view for work discovery and shows only the technician color badge, not the technician name.
+`/workbench` is labelled as the technician workspace and groups available work, owned work, stage queue filters and workload summary. Claim copy uses `Preia` while keeping the existing `NC`/`NG` execution company selector in the claim modal. Sheet status badges and `Completează fișa`/`Continuă fișa` actions open the existing work detail sheet flow. Technician navigation is intentionally limited to the workbench and owned-work paths; operational status remains the shared read view for work discovery and shows only the technician color badge, not the technician name. Owned work detail drawers now place the live execution summary, workflow section, and real sheet section before the historical dossier sections so the current action is always visible first.
 
 ## Audit
 
@@ -46,7 +46,7 @@ Stale claims, abandoned assignments, conflicting stage actions. These are planne
 
 ## Implemented Tasks
 
-TECH-001, TECH-CLAIM-001A, TECH-CLAIM-001B, WORKFORM-REAL-001B workbench integration, CORE-ROLE-UX-001.
+TECH-001, TECH-CLAIM-001A, TECH-CLAIM-001B, WORKFORM-REAL-001B workbench integration, CORE-ROLE-UX-001, TECH-EXECUTION-001.
 
 ## Planned Tasks
 

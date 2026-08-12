@@ -178,7 +178,7 @@ export function WorkWorkflowSection({ isOpen, workId }: { readonly isOpen: boole
             onClick={startCurrentStage}
             variant="outline"
           >
-            Pornește etapa
+            {currentStage.status === "IN_PROGRESS" ? "Continuă" : "Începe etapa"}
           </Button>
           <Button
             disabled={!workflow.actions.canCompleteCurrentStage}
