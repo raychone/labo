@@ -73,6 +73,7 @@ function PrintableDeliveryProof({ proof }: { readonly proof: DeliveryProofPrintV
             <th>Pacient</th>
             <th>Medic</th>
             <th>Tip lucrare</th>
+            <th>Ciclu</th>
             <th>Cantitate</th>
           </tr>
         </thead>
@@ -83,6 +84,7 @@ function PrintableDeliveryProof({ proof }: { readonly proof: DeliveryProofPrintV
               <td>{work.patientName}</td>
               <td>{work.doctorName}</td>
               <td>{work.workTypeName}</td>
+              <td>{work.cycleNumber ? `Ciclul ${work.cycleNumber}` : "-"}</td>
               <td>{work.quantity}</td>
             </tr>
           ))}

@@ -92,6 +92,11 @@ export class DeliveryProofService {
           include: {
             items: {
               include: {
+                workCycle: {
+                  select: {
+                    cycleNumber: true,
+                  },
+                },
                 workOrder: {
                   include: {
                     doctor: { select: { displayName: true } },

@@ -18,7 +18,7 @@ Delivery, courier, assignment, pickup, transit, completion, failure, reschedule,
 
 ## Business Rules
 
-Delivery actions follow controlled transitions against delivery preparation items tied to the active work cycle. Couriers see own deliveries where permitted.
+Delivery actions follow controlled transitions against delivery preparation items tied to the active work cycle. Couriers see own deliveries where permitted. Delivery detail and proof print views preserve the cycle number recorded on each preparation item so repeated returns remain distinguishable in history.
 
 ## Data Model
 
@@ -46,7 +46,7 @@ Already assigned, failed delivery, reschedule, cancelled delivery, proof require
 
 ## Implemented Tasks
 
-DELIVERY-001, STATUS-001A read-model integration, WORK-CYCLES-001A cycle scoping.
+DELIVERY-001, STATUS-001A read-model integration, WORK-CYCLES-001A cycle scoping, RECEPTION-TO-DELIVERY-001 cycle-aware delivery detail and proof rendering.
 
 ## Planned Tasks
 

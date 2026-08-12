@@ -1,0 +1,221 @@
+import type { LaboratorySettings } from "@prisma/client";
+import { describe, expect, it } from "vitest";
+
+import { DeliveryProofRenderService } from "../delivery-proof/delivery-proof-render.service.js";
+import { toDeliveryDetail, type DeliveryRecord } from "./delivery.view.js";
+
+function createDeliveryRecord(includeProof = false): DeliveryRecord {
+  return {
+    assignedAt: new Date("2026-08-01T08:00:00.000Z"),
+    cancelledAt: null,
+    cancelledBy: null,
+    cancelledByUserId: null,
+    clinic: {
+      addressLine1: "Strada Exemplu 1",
+      addressLine2: null,
+      archivedAt: null,
+      archivedBy: null,
+      archivedByUserId: null,
+      billingAddressLine1: null,
+      billingAddressLine2: null,
+      billingCity: null,
+      billingCountryCode: "RO",
+      billingCountyOrRegion: null,
+      billingName: null,
+      billingPostalCode: null,
+      billingRegistrationNumber: null,
+      billingTaxId: null,
+      city: "București",
+      code: "CL-1",
+      contactPersonEmail: null,
+      contactPersonName: "Dr. Popescu",
+      contactPersonPhone: null,
+      contactPersonRole: null,
+      countryCode: "RO",
+      createdAt: new Date("2026-08-01T08:00:00.000Z"),
+      createdBy: null,
+      createdByUserId: null,
+      deliveries: [],
+      doctors: [],
+      email: null,
+      id: "clinic_1",
+      internalNotes: null,
+      isActive: true,
+      name: "Clinica Demo",
+      phone: null,
+      postalCode: null,
+      registrationNumber: null,
+      taxId: null,
+      updatedAt: new Date("2026-08-01T08:00:00.000Z"),
+      updatedBy: null,
+      updatedByUserId: null,
+      version: 1,
+      website: null,
+      workCycles: [],
+      workOrders: [],
+      billingDocuments: [],
+      payments: [],
+      pricingAgreements: [],
+      deliveryPreparationGroups: [],
+      patients: [],
+    },
+    code: "DL-2026-000001",
+    courier: { displayName: "Curier Demo", id: "courier_1" },
+    courierUserId: "courier_1",
+    createdAt: new Date("2026-08-01T08:00:00.000Z"),
+    createdBy: null,
+    createdByUserId: null,
+    deliveredAt: new Date("2026-08-03T08:00:00.000Z"),
+    deliveredBy: null,
+    deliveredByUserId: null,
+    deliveryNotes: null,
+    events: [],
+    failedAt: null,
+    failureDetails: null,
+    failureReasonCode: null,
+    id: "delivery_1",
+    inTransitAt: new Date("2026-08-02T08:00:00.000Z"),
+    isActive: true,
+    pickedUpAt: new Date("2026-08-02T07:00:00.000Z"),
+    pickedUpBy: null,
+    pickedUpByUserId: null,
+    plannedDate: new Date("2026-08-02T06:00:00.000Z"),
+    preparationGroup: {
+      clinic: {
+        id: "clinic_1",
+        name: "Clinica Demo",
+      },
+      deliveries: [],
+      items: [
+        {
+          addedAt: new Date("2026-08-01T09:00:00.000Z"),
+          addedBy: null,
+          addedByUserId: null,
+          group: null,
+          groupId: "group_1",
+          id: "prep_item_1",
+          isActive: true,
+          removedAt: null,
+          removedBy: null,
+          removedByUserId: null,
+          workCycle: { cycleNumber: 1 },
+          workOrder: {
+            code: "WO-2026-000001",
+            doctor: { displayName: "Dr. Ionescu" },
+            id: "work_1",
+            activeCycle: { logisticsState: { status: "DELIVERED" } },
+            patientName: "Ion Pop",
+            priority: "NORMAL",
+            requestedDeliveryDate: new Date("2026-08-04T08:00:00.000Z"),
+            workType: { name: "Coroană zirconiu" },
+          },
+        },
+      ],
+      plannedDate: null,
+      code: "PG-2026-000001",
+      createdAt: new Date("2026-08-01T09:00:00.000Z"),
+      createdBy: null,
+      createdByUserId: null,
+      id: "group_1",
+      notes: null,
+      status: "READY",
+      updatedAt: new Date("2026-08-01T09:00:00.000Z"),
+      updatedBy: null,
+      updatedByUserId: null,
+      version: 1,
+    },
+    preparationGroupId: "group_1",
+    proof: includeProof
+      ? {
+          confirmedAt: new Date("2026-08-03T08:30:00.000Z"),
+          confirmedBy: { displayName: "Curier Demo" },
+          confirmedByUserId: "courier_1",
+          deliveryId: "delivery_1",
+          id: "proof_1",
+          recipientName: "Clinica Demo",
+          recipientNotes: null,
+          recipientRole: null,
+          signatureCapturedAt: null,
+          signatureHash: null,
+          signatureOverrideDetails: null,
+          signatureOverrideReasonCode: null,
+          signatureStrokes: null,
+          signed: true,
+          updatedAt: new Date("2026-08-03T08:30:00.000Z"),
+        }
+      : null,
+    recipientName: "Clinica Demo",
+    recipientRole: null,
+    rescheduledFor: null,
+    sequenceOrder: 1,
+    status: "DELIVERED",
+    updatedAt: new Date("2026-08-03T09:00:00.000Z"),
+    version: 1,
+  } as unknown as DeliveryRecord;
+}
+
+describe("delivery cycle visibility", () => {
+  it("keeps the original cycle number in delivery details", () => {
+    const delivery = createDeliveryRecord();
+
+    const detail = toDeliveryDetail(delivery, {
+      canAssign: false,
+      canCancel: false,
+      canComplete: false,
+      canFail: false,
+      canPickup: false,
+      canPrintProof: false,
+      canReadBilling: false,
+      canReadProof: false,
+      canReschedule: false,
+      canSignatureOverride: false,
+      canStartTransit: false,
+      canUpdatePlan: false,
+      canUnassign: false,
+      userId: "user_1",
+    }, new Date("2026-08-03T10:00:00.000Z"));
+
+    expect(detail.works).toEqual([
+      expect.objectContaining({
+        cycleNumber: 1,
+        workCode: "WO-2026-000001",
+      }),
+    ]);
+  });
+
+  it("keeps the original cycle number in the proof print view", () => {
+    const service = new DeliveryProofRenderService();
+    const delivery = createDeliveryRecord(true);
+    const printView = service.toPrintView(delivery as unknown as Parameters<DeliveryProofRenderService["toPrintView"]>[0], {
+      addressLine1: "Strada Exemplu 2",
+      addressLine2: null,
+      city: "București",
+      countryCode: "RO",
+      countyOrRegion: null,
+      createdAt: new Date("2026-08-01T08:00:00.000Z"),
+      createdBy: null,
+      createdByUserId: null,
+      email: "lab@example.test",
+      iban: null,
+      id: "laboratory_1",
+      legalName: "Laborator Demo SRL",
+      locale: "ro-RO",
+      logoFileKey: null,
+      name: "Laborator Demo",
+      phone: "0210000000",
+      primaryColor: "#0f766e",
+      taxId: "RO123456",
+      timezone: "Europe/Bucharest",
+      updatedAt: new Date("2026-08-01T08:00:00.000Z"),
+      updatedBy: null,
+      updatedByUserId: null,
+    } as unknown as LaboratorySettings);
+
+    expect(printView.works).toEqual([
+      expect.objectContaining({
+        cycleNumber: 1,
+        workCode: "WO-2026-000001",
+      }),
+    ]);
+  });
+});

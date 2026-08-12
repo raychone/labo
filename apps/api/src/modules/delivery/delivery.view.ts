@@ -54,6 +54,7 @@ export interface DeliveryDetail extends DeliverySummary {
   readonly rescheduledFor: string | null;
   readonly works: readonly {
     readonly doctorName: string;
+    readonly cycleNumber: number | null;
     readonly id: string;
     readonly logisticsStatus: string;
     readonly patientName: string;
@@ -106,6 +107,11 @@ export const deliveryInclude = {
     include: {
       items: {
         include: {
+          workCycle: {
+            select: {
+              cycleNumber: true,
+            },
+          },
           workOrder: {
             include: {
               doctor: {
@@ -217,6 +223,7 @@ export function toDeliveryDetail(delivery: DeliveryRecord, context: DeliveryAcce
     rescheduledFor: delivery.rescheduledFor?.toISOString() ?? null,
     works: delivery.preparationGroup.items.map((item) => ({
       doctorName: item.workOrder.doctor.displayName,
+      cycleNumber: item.workCycle?.cycleNumber ?? null,
       id: item.workOrder.id,
       logisticsStatus: item.workOrder.activeCycle?.logisticsState?.status ?? "RECEIVED",
       patientName: item.workOrder.patientName,

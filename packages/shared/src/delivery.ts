@@ -93,6 +93,7 @@ export interface DeliveryWorkItem {
   readonly logisticsStatus: string;
   readonly patientName: string;
   readonly priority: WorkPriority;
+  readonly cycleNumber: number | null;
   readonly requestedDeliveryDate: string;
   readonly workCode: string;
   readonly workTypeName: string;
@@ -150,6 +151,7 @@ export interface DeliveryProofView extends DeliveryProofSummary {
 
 export interface DeliveryProofPrintWorkItem {
   readonly doctorName: string;
+  readonly cycleNumber: number | null;
   readonly patientName: string;
   readonly quantity: number;
   readonly workCode: string;

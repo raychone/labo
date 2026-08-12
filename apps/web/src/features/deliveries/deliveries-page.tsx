@@ -298,6 +298,7 @@ function DeliveryDrawer({ delivery, onAction }: { readonly delivery: DeliveryDet
           <div className="deliveries-page__work" key={work.id}>
             <strong>{work.workCode}</strong>
             <span>{work.patientName} · {work.doctorName} · {work.workTypeName}</span>
+            <span>{work.cycleNumber ? `Ciclul ${work.cycleNumber}` : "Ciclu nedeterminat"} · {work.logisticsStatus}</span>
           </div>
         ))}
       </section>
@@ -391,7 +392,7 @@ function CompleteDeliveryModal({
         </section>
         <section>
           <h3>Lucrări predate</h3>
-          {delivery.works.map((work) => <div className="deliveries-page__work" key={work.id}><strong>{work.workCode}</strong><span>{work.patientName} · {work.doctorName} · {work.workTypeName}</span></div>)}
+          {delivery.works.map((work) => <div className="deliveries-page__work" key={work.id}><strong>{work.workCode}</strong><span>{work.patientName} · {work.doctorName} · {work.workTypeName}</span><span>{work.cycleNumber ? `Ciclul ${work.cycleNumber}` : "Ciclu nedeterminat"}</span></div>)}
         </section>
         <section>
           <h3>Semnătură</h3>

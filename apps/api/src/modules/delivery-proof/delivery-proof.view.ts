@@ -34,6 +34,7 @@ export interface DeliveryProofView extends DeliveryProofSummary {
 
 interface DeliveryProofPrintWorkItem {
   readonly doctorName: string;
+  readonly cycleNumber: number | null;
   readonly patientName: string;
   readonly quantity: number;
   readonly workCode: string;

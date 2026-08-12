@@ -12,6 +12,11 @@ type DeliveryProofPrintRecord = Prisma.DeliveryGetPayload<{
       include: {
         items: {
           include: {
+            workCycle: {
+              select: {
+                cycleNumber: true,
+              },
+            },
             workOrder: {
               include: {
                 doctor: { select: { displayName: true } };
@@ -59,6 +64,7 @@ export class DeliveryProofRenderService {
       statusLabel: statusLabels[delivery.status],
       works: delivery.preparationGroup.items.map((item) => ({
         doctorName: item.workOrder.doctor.displayName,
+        cycleNumber: item.workCycle?.cycleNumber ?? null,
         patientName: item.workOrder.patientName,
         quantity: item.workOrder.quantity,
         workCode: item.workOrder.code,

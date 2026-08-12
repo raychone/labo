@@ -8,12 +8,12 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 
 | Field | Value |
 |---|---|
-| Current task | DEMO-POLISH-002 |
-| Status | PLANNED |
+| Current task | none |
+| Status | COMPLETED |
 | Blocker | none |
-| Last completed task | TECH-EXECUTION-001 |
-| Last completed functional task | TECH-EXECUTION-001 |
-| Last completed functional commit | TECH-EXECUTION-001 commit |
+| Last completed task | RECEPTION-TO-DELIVERY-001 |
+| Last completed functional task | RECEPTION-TO-DELIVERY-001 |
+| Last completed functional commit | RECEPTION-TO-DELIVERY-001 commit |
 | Next approved task | none |
 
 ## Roadmap
@@ -72,6 +72,7 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | status | STATUS-001B | COMPLETED | STATUS-001A, SHELL-001 | operational status page and internal role visibility | [tasks/STATUS-001B.md](tasks/STATUS-001B.md) |
 | work cycles | WORK-CYCLES-001A | COMPLETED | STATUS-001B, WORKFLOW-002, LOGISTICS-001, DELIVERY-001 | work cycle model and lifecycle foundation | [tasks/WORK-CYCLES-001A.md](tasks/WORK-CYCLES-001A.md) |
 | work cycles | WORK-CYCLES-001B | COMPLETED | WORK-CYCLES-001A | cycle returns, frontend lifecycle and operational integration | [tasks/WORK-CYCLES-001B.md](tasks/WORK-CYCLES-001B.md) |
+| workflow / cycles | RECEPTION-TO-DELIVERY-001 | IN PROGRESS | RECEPTION-WORK-CREATE-001, RECEPTION-TO-TECH-001, TECH-EXECUTION-001, WORK-CYCLES-001B, STATUS-001B, LOGISTICS-001, DELIVERY-001, BILLING-REALIGN-001A, BILLING-REALIGN-001B | multi-cycle lifecycle hardening across reception, technicians, logistics, delivery and billing | [tasks/RECEPTION-TO-DELIVERY-001.md](tasks/RECEPTION-TO-DELIVERY-001.md) |
 | materials | MATERIALS-001 | PLANNED | STATUS-001B | material catalog/selection | [modules/materials.md](modules/materials.md) |
 | inventory | INVENTORY-001 | PLANNED | MATERIALS-001 | stock, NIR, consumption | [modules/inventory.md](modules/inventory.md) |
 | dashboard | DASHBOARD-001 | DEFERRED | SHELL-001 | legacy operational dashboard | [modules/dashboard.md](modules/dashboard.md) |
