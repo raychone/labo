@@ -688,6 +688,128 @@ describe("WorksService", () => {
     expect(result.activeCycleId).toBe("cycle_2");
   });
 
+  it("creates repeated return cycles generically and preserves the full history", async () => {
+    const beforeCycle1 = workOrder({
+      activeCycle: {
+        cycleNumber: 1,
+        executionSnapshot: null,
+        id: "cycle_1",
+        logisticsState: { status: "DELIVERED" },
+        reason: "INITIAL",
+        status: "ACTIVE",
+        workflowExecution: null,
+      },
+      assignedTechnicianId: "tech_1",
+      claimRevision: 2,
+      claimStatus: "CLAIMED",
+      claimedByUserId: "tech_1",
+      executionLegalEntityId: "legal_nc",
+    });
+    const beforeCycle2 = workOrder({
+      activeCycle: {
+        cycleNumber: 2,
+        executionSnapshot: null,
+        id: "cycle_2",
+        logisticsState: { status: "DELIVERED" },
+        reason: "REPAIR",
+        status: "ACTIVE",
+        workflowExecution: null,
+      },
+      assignedTechnicianId: "tech_2",
+      claimRevision: 3,
+      claimStatus: "CLAIMED",
+      claimedByUserId: "tech_2",
+      executionLegalEntityId: "legal_nc",
+    });
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      auditLog: { create: vi.fn().mockResolvedValue({}) },
+      clinic: { findUnique: vi.fn().mockResolvedValue({ isActive: true }) },
+      doctor: { findUnique: vi.fn().mockResolvedValue({ clinicId: "clinic_1", isActive: true }) },
+      logisticsEvent: { create: vi.fn().mockResolvedValue({}) },
+      workCycle: {
+        create: vi.fn()
+          .mockResolvedValueOnce({ cycleNumber: 2, id: "cycle_2" })
+          .mockResolvedValueOnce({ cycleNumber: 3, id: "cycle_3" }),
+        findFirst: vi.fn()
+          .mockResolvedValueOnce({ cycleNumber: 1 })
+          .mockResolvedValueOnce({ cycleNumber: 2 }),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      workLogisticsState: { create: vi.fn().mockResolvedValue({ id: "logistics_2" }) },
+      workOrder: {
+        findUnique: vi.fn()
+          .mockResolvedValueOnce(beforeCycle1)
+          .mockResolvedValueOnce(beforeCycle2),
+        update: vi.fn().mockResolvedValue({}),
+        findUniqueOrThrow: vi.fn()
+          .mockResolvedValueOnce({
+            activeCycle: { id: "cycle_2" },
+            activeCycleId: "cycle_2",
+            clinicId: "clinic_1",
+            code: "WO-2026-000001",
+            cycles: [
+              { id: "cycle_1", cycleNumber: 1, reason: "INITIAL", reasonNotes: null, status: "CLOSED", openedAt: new Date(), closedAt: new Date(), clinic: clinic(), doctor: doctor(), executionLegalEntityCodeSnapshot: "NC", executionLegalEntityNameSnapshot: "Nicolaie Cristina", workflowExecution: null, logisticsState: null, deliveryPreparationItems: [], deadlineEffectiveDueAtSnapshot: null, deadlineModeSnapshot: "CALCULATED", deadlineSnapshotJson: null, executionSnapshotJson: null, executionSnapshotStatus: null, executionSnapshotVersion: null, pricingSnapshotJson: null, createdBy: null },
+              { id: "cycle_2", cycleNumber: 2, reason: "REPAIR", reasonNotes: "Retur medic", status: "ACTIVE", openedAt: new Date(), closedAt: null, clinic: clinic(), doctor: doctor(), executionLegalEntityCodeSnapshot: "NC", executionLegalEntityNameSnapshot: "Nicolaie Cristina", workflowExecution: null, logisticsState: null, deliveryPreparationItems: [], deadlineEffectiveDueAtSnapshot: null, deadlineModeSnapshot: "CALCULATED", deadlineSnapshotJson: null, executionSnapshotJson: null, executionSnapshotStatus: null, executionSnapshotVersion: null, pricingSnapshotJson: null, createdBy: null },
+            ],
+            doctorId: "doctor_1",
+            id: "work_order_1",
+            patientId: "patient_1",
+            patientName: "Ion Pop",
+          })
+          .mockResolvedValueOnce({
+            activeCycle: { id: "cycle_3" },
+            activeCycleId: "cycle_3",
+            clinicId: "clinic_1",
+            code: "WO-2026-000001",
+            cycles: [
+              { id: "cycle_1", cycleNumber: 1, reason: "INITIAL", reasonNotes: null, status: "CLOSED", openedAt: new Date(), closedAt: new Date(), clinic: clinic(), doctor: doctor(), executionLegalEntityCodeSnapshot: "NC", executionLegalEntityNameSnapshot: "Nicolaia Cristina", workflowExecution: null, logisticsState: null, deliveryPreparationItems: [], deadlineEffectiveDueAtSnapshot: null, deadlineModeSnapshot: "CALCULATED", deadlineSnapshotJson: null, executionSnapshotJson: null, executionSnapshotStatus: null, executionSnapshotVersion: null, pricingSnapshotJson: null, createdBy: null },
+              { id: "cycle_2", cycleNumber: 2, reason: "REPAIR", reasonNotes: "Retur medic", status: "CLOSED", openedAt: new Date(), closedAt: new Date(), clinic: clinic(), doctor: doctor(), executionLegalEntityCodeSnapshot: "NC", executionLegalEntityNameSnapshot: "Nicolaia Cristina", workflowExecution: null, logisticsState: null, deliveryPreparationItems: [], deadlineEffectiveDueAtSnapshot: null, deadlineModeSnapshot: "CALCULATED", deadlineSnapshotJson: null, executionSnapshotJson: null, executionSnapshotStatus: null, executionSnapshotVersion: null, pricingSnapshotJson: null, createdBy: null },
+              { id: "cycle_3", cycleNumber: 3, reason: "REPAIR", reasonNotes: "Retur 2", status: "ACTIVE", openedAt: new Date(), closedAt: null, clinic: clinic(), doctor: doctor(), executionLegalEntityCodeSnapshot: "NC", executionLegalEntityNameSnapshot: "Nicolaia Cristina", workflowExecution: null, logisticsState: null, deliveryPreparationItems: [], deadlineEffectiveDueAtSnapshot: null, deadlineModeSnapshot: "CALCULATED", deadlineSnapshotJson: null, executionSnapshotJson: null, executionSnapshotStatus: null, executionSnapshotVersion: null, pricingSnapshotJson: null, createdBy: null },
+            ],
+            doctorId: "doctor_1",
+            id: "work_order_1",
+            patientId: "patient_1",
+            patientName: "Ion Pop",
+          }),
+      },
+    };
+    const workflowCreate = vi.fn().mockResolvedValue("workflow_cycle");
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback(tx)),
+      clinic: { findUnique: vi.fn().mockResolvedValue({ isActive: true }) },
+      doctor: { findUnique: vi.fn().mockResolvedValue({ clinicId: "clinic_1", isActive: true }) },
+      workOrder: {
+        findUnique: vi.fn()
+          .mockResolvedValueOnce(beforeCycle1)
+          .mockResolvedValueOnce(beforeCycle2),
+      },
+    }, {
+      hasPermission: vi.fn().mockResolvedValue({ allowed: false, effectiveScopes: [], permission: "pricing.read" }),
+      requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ALL"], permission: "cycles.create_next" }),
+    }, undefined, undefined, undefined, undefined, { createSnapshotForWork: workflowCreate });
+
+    const first = await service.createNextCycle(
+      { actorUserId: "actor_1", requestMetadata: {} },
+      legalEntity,
+      "work_order_1",
+      { clinicId: "clinic_1", doctorId: "doctor_1", expectedActiveCycleId: "cycle_1", notes: "Retur medic", reason: "REPAIR" },
+      false,
+    );
+    const second = await service.createNextCycle(
+      { actorUserId: "actor_1", requestMetadata: {} },
+      legalEntity,
+      "work_order_1",
+      { clinicId: "clinic_1", doctorId: "doctor_1", expectedActiveCycleId: "cycle_2", notes: "Retur 2", reason: "REPAIR" },
+      false,
+    );
+
+    expect(first.activeCycleId).toBe("cycle_2");
+    expect(second.activeCycleId).toBe("cycle_3");
+    expect(second.cycles.map((cycle) => cycle.cycleNumber)).toEqual([1, 2, 3]);
+    expect(workflowCreate).toHaveBeenCalledTimes(2);
+  });
+
   it("requires notes for OTHER return reason before creating a new cycle", async () => {
     const service = createService({
       workOrder: { findUnique: vi.fn().mockResolvedValue(workOrder()) },

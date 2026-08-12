@@ -71,7 +71,7 @@ Last completed documentation task: `WORKFORM-REAL-DISCOVERY-001`, which audited 
 
 `TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable. Technicians can select a personal color that is surfaced as a badge in operational status and workbench views; status filters stay collapsed by default; patient dossiers can carry clinic/doctor referral metadata; manager-only financial tabs stay hidden from non-managers; role navigation is intentionally scoped so technicians stay focused on their own work queue and managers see only manager-facing navigation plus status.
 
-`RECEPTION-TO-DELIVERY-001` is completed and hardens cycle-scoped history across delivery and proof rendering for repeated returns. `BILLING-REALIGN-001C` is deferred; ambiguous legacy billing remains read-only until explicitly resumed. `DEMO-POLISH-002` is planned only and must not be started unless explicitly approved.
+`RECEPTION-TO-DELIVERY-001` is in progress and hardens cycle-scoped history across delivery and proof rendering for repeated returns. `BILLING-REALIGN-001C` is deferred; ambiguous legacy billing remains read-only until explicitly resumed. `DEMO-POLISH-002` is planned only and must not be started unless explicitly approved.
 
 ## Source Of Truth
 

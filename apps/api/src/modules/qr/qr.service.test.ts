@@ -145,4 +145,144 @@ describe("QrService", () => {
     });
     expect(JSON.stringify(auditCreate.mock.calls)).not.toContain("secure_token_12345678901234567890");
   });
+
+  it("keeps resolving the same QR payload against the current active cycle", async () => {
+    const activeCycle = (version: number, cycleId: string) => ({
+      executionSnapshot: {
+        deadlineEffectiveDueAt: new Date("2026-07-29T14:00:00.000Z"),
+        deadlineExplanation: "Termen calculat.",
+        deadlineExecutionDays: 3,
+        deadlineMode: "CALCULATED",
+        deadlineStartAt: new Date("2026-07-22T12:00:00.000Z"),
+        deadlineTimezone: "Europe/Bucharest",
+        executionLegalEntity: { code: "NC", displayName: "Nicolaie Cristina", id: "legal_nc" },
+        pricingCurrency: "RON",
+        pricingQuantity: 1,
+        pricingSnapshotJson: null,
+        pricingSourceLabel: "Catalog standard",
+        pricingSourceType: "STANDARD",
+        pricingTotalMinor: 35000,
+        pricingUnit: "UNIT",
+        pricingUnitPriceMinor: 35000,
+        snapshotCreatedAt: new Date("2026-07-22T12:00:00.000Z"),
+        snapshotLockedAt: new Date("2026-07-22T12:00:00.000Z"),
+        status: "LOCKED",
+        technician: { displayName: `Tehnician ${version}`, id: `tech_${version}`, preferredColor: "#0f766e" },
+        version,
+      },
+      id: cycleId,
+      logisticsState: null,
+      workflowExecution: null,
+    });
+    const cycle1 = {
+      ...qrWork(),
+      activeCycle: activeCycle(1, "cycle_1"),
+      assignedTechnician: null,
+      assignedTechnicianId: null,
+      assignmentEvents: [],
+      assignmentUpdatedAt: null,
+      baseUnitPriceMinor: 35000,
+      calculatedDueAt: new Date("2026-07-27T14:00:00.000Z"),
+      claimRevision: 0,
+      claimSource: null,
+      claimStatus: "UNCLAIMED",
+      clinic: { code: "CL-0001", id: "clinic_1", name: "Clinica Test" },
+      clinicId: "clinic_1",
+      createdAt: new Date("2026-07-22T12:00:00.000Z"),
+      createdByUserId: "actor_1",
+      currency: "RON",
+      deadlineCalculatedAt: new Date("2026-07-22T12:00:00.000Z"),
+      deadlineDueHour: 17,
+      deadlineDueMinute: 0,
+      deadlineExecutionDays: 3,
+      deadlineExplanation: "Termen calculat.",
+      deadlineIncludeStartDay: false,
+      deadlineLockedAt: null,
+      deadlineLockedReason: null,
+      deadlineMode: "CALCULATED",
+      deadlineReasonCode: null,
+      deadlineRevision: 1,
+      deadlineRuleSnapshot: {},
+      deadlineSource: "CREATION",
+      deadlineStartAt: new Date("2026-07-22T12:00:00.000Z"),
+      deadlineTimezone: "Europe/Bucharest",
+      doctor: { displayName: "Dr. Ana Popescu", id: "doctor_1" },
+      doctorId: "doctor_1",
+      effectiveDueAt: new Date("2026-07-27T14:00:00.000Z"),
+      executionLegalEntity: null,
+      executionLegalEntityId: null,
+      externalReference: null,
+      id: "work_order_1",
+      internalNotes: null,
+      invoicedDocumentId: null,
+      logisticsState: null,
+      patient: null,
+      patientId: "patient_1",
+      patientName: "Ion Popescu",
+      patientReference: "P-100",
+      priority: "NORMAL",
+      qrCreatedAt: new Date("2026-07-22T12:00:00.000Z"),
+      qrToken: "secure_token_12345678901234567890",
+      quantity: 1,
+      releaseReason: null,
+      releasedAt: null,
+      releasedByUserId: null,
+      requestedDeliveryDate: new Date("2026-08-01T00:00:00.000Z"),
+      status: "REGISTERED",
+      totalPriceMinor: 35000,
+      updatedAt: new Date("2026-07-22T12:00:00.000Z"),
+      updatedByUserId: "actor_1",
+      version: 1,
+      workType: { code: "WT-0001", id: "work_type_1", name: "Coroana zirconiu" },
+      workTypeId: "work_type_1",
+    };
+    const cycle2 = {
+      ...cycle1,
+      activeCycle: activeCycle(2, "cycle_2"),
+    };
+    const service = new QrService(
+      { hasPermission: vi.fn().mockResolvedValue({ allowed: false }) } as never,
+      {
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+        workOrder: {
+          findUnique: vi.fn()
+            .mockResolvedValueOnce(cycle1)
+            .mockResolvedValueOnce(cycle2),
+        },
+      } as never,
+      { assertAllowed: vi.fn() } as never,
+    );
+
+    const first = await service.resolveQr(
+      {
+        actor: {
+          displayName: "Receptie",
+          email: "receptie@example.test",
+          id: "actor_1",
+          isActive: true,
+          mustChangePassword: false,
+          preferredColor: null,
+        },
+        requestMetadata: { ipAddress: "127.0.0.1", userAgent: "vitest" },
+      },
+      { payload: "dl-work:secure_token_12345678901234567890", source: "manual" },
+    );
+    const second = await service.resolveQr(
+      {
+        actor: {
+          displayName: "Receptie",
+          email: "receptie@example.test",
+          id: "actor_1",
+          isActive: true,
+          mustChangePassword: false,
+          preferredColor: null,
+        },
+        requestMetadata: { ipAddress: "127.0.0.1", userAgent: "vitest" },
+      },
+      { payload: "dl-work:secure_token_12345678901234567890", source: "manual" },
+    );
+
+    expect(first.work.executionSnapshot.summary.version).toBe(1);
+    expect(second.work.executionSnapshot.summary.version).toBe(2);
+  });
 });

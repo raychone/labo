@@ -8,12 +8,12 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 
 | Field | Value |
 |---|---|
-| Current task | none |
-| Status | COMPLETED |
+| Current task | RECEPTION-TO-DELIVERY-001 |
+| Status | IN PROGRESS |
 | Blocker | none |
-| Last completed task | RECEPTION-TO-DELIVERY-001 |
-| Last completed functional task | RECEPTION-TO-DELIVERY-001 |
-| Last completed functional commit | RECEPTION-TO-DELIVERY-001 commit |
+| Last completed task | TECH-EXECUTION-001 |
+| Last completed functional task | TECH-EXECUTION-001 |
+| Last completed functional commit | TECH-EXECUTION-001 commit |
 | Next approved task | none |
 
 ## Roadmap

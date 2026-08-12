@@ -2,11 +2,34 @@
 
 ## Status
 
-COMPLETED
+IN PROGRESS
 
 ## Objective
 
 Harden the real laboratory lifecycle so repeated return/rework cycles stay cycle-scoped across reception, technician execution, logistics, courier delivery, proof, billing and manager history views without overwriting prior cycles or losing the active-cycle identity.
+
+## Gap Audit
+
+| Requirement | Status | Notes |
+|---|---|---|
+| WorkOrder 1→N WorkCycles | ALREADY WORKING | The model and return path already create distinct cycles under one work order. |
+| Exactly one active WorkCycle at a time | ALREADY WORKING | Active cycle is switched on return and previous cycle is closed. |
+| Historical cycles remain immutable | ALREADY WORKING | Prior cycle data is kept as history and read-only rules already exist. |
+| Return creates the next cycle transactionally | PARTIAL | The return transaction exists, but the reopened task needs an explicit end-to-end regression across the full chain. |
+| Same QR follows the active cycle after return | ALREADY WORKING | The QR resolver follows the current active cycle and is covered by regression. |
+| Cycle 2 returns to reception | ALREADY WORKING | The new active cycle is initialized back into reception/logistics state. |
+| Technician can work Cycle 2 | ALREADY WORKING | The same workflow/claim model applies to the active cycle. |
+| Multiple technicians can work inside one cycle | ALREADY WORKING | Stage assignment history and ownership already support handoff. |
+| Final technician completion advances to logistics | ALREADY WORKING | Workflow completion already drives the logistics transition. |
+| Logistics processes the current cycle | ALREADY WORKING | Logistics state is attached to the active work cycle, not stale history. |
+| Courier delivers Cycle 2 | ALREADY WORKING | Delivery records are cycle-linked; cycle-aware proof/history visibility is already in place. |
+| Cycle 3+ uses the same generic path | ALREADY WORKING | Repeated return regression now proves 1→2 and 2→3 cycle creation. |
+| Work drawer and history distinguish current vs historical cycles | ALREADY WORKING | Cycle history views exist and preserve per-cycle execution/logistics/delivery data. |
+| Status page reflects the active cycle only | ALREADY WORKING | The operational status view is active-cycle scoped. |
+| Manager can inspect the full lifecycle across returns | PARTIAL | Manager history exists, but the reopened task still needs explicit proof across multiple returns. |
+| Billing remains cycle-scoped and safe | BLOCKED BY BUSINESS RULE | Technical cycle separation exists; automatic re-billing of Cycle 2 depends on unresolved billing policy. |
+| Real automated service/integration regression exists | PARTIAL | Focused service regressions now prove the active-cycle chain, but the full cross-module e2e path is still not exercised in one test. |
+| Manual verification notes are captured if the app is exercised locally | MISSING | Not yet rerun for the reopened scope. |
 
 ## Dependencies
 
