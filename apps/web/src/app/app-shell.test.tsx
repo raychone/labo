@@ -190,7 +190,7 @@ describe("AuthenticatedAppShell", () => {
       </Routes>,
     );
 
-    expect(await screen.findByText("Firmă activă")).toBeDefined();
+    expect(await screen.findByRole("radio", { name: "NC" })).toBeDefined();
     expect((await screen.findByRole("radio", { name: "NC" })).getAttribute("aria-checked")).toBe("true");
     fireEvent.click(screen.getByRole("radio", { name: "NG" }));
 
