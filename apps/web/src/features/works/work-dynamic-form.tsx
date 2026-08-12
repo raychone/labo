@@ -19,7 +19,7 @@ import {
   type WorkFormValue,
 } from "@dental-lab/shared";
 import type { ReactNode } from "react";
-import type { UseFormReturn } from "react-hook-form";
+import { Controller, type UseFormReturn } from "react-hook-form";
 
 import type { WorkFormValues } from "./works-page.schema.js";
 
@@ -98,11 +98,36 @@ export function WorkFormFieldRenderer({
   }
 
   if (field.type === "CHECKBOX") {
-    return <Checkbox {...common} checked={Boolean(getFieldValue(form, field.key))} {...form.register(`workFormValues.${field.key}`)} />;
+    return (
+      <Controller
+        control={form.control}
+        name={`workFormValues.${field.key}`}
+        render={({ field: controllerField }) => (
+          <Checkbox
+            {...common}
+            checked={Boolean(controllerField.value)}
+            onChange={(event) => controllerField.onChange(event.target.checked)}
+          />
+        )}
+      />
+    );
   }
 
   if (field.type === "RADIO") {
-    return <RadioGroup {...common} options={field.options} {...form.register(`workFormValues.${field.key}`)} />;
+    return (
+      <Controller
+        control={form.control}
+        name={`workFormValues.${field.key}`}
+        render={({ field: controllerField }) => (
+          <RadioGroup
+            {...common}
+            onValueChange={controllerField.onChange}
+            options={field.options}
+            value={typeof controllerField.value === "string" ? controllerField.value : ""}
+          />
+        )}
+      />
+    );
   }
 
   if (field.type === "SELECT" || field.type === "SHADE") {

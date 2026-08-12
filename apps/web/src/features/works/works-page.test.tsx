@@ -1,10 +1,15 @@
 import { ToastProvider } from "@dental-lab/ui";
+import type { WorkFormFieldDefinition } from "@dental-lab/shared";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useForm } from "react-hook-form";
 
+import { WorkFormFields } from "./work-dynamic-form.js";
+import { defaultWorkFormValues } from "./work-form.js";
+import type { WorkFormValues } from "./works-page.schema.js";
 import { WorksPage } from "./works-page.js";
 
 function renderWithProviders(component: ReactNode, initialEntries = ["/works"]): void {
@@ -324,6 +329,54 @@ const workTypeOptionsResponse = [
   { code: "WT-0003", id: "work_type_3", name: "Proteză totală", unit: "CASE" },
 ];
 
+const dynamicFieldTestDefinitions: readonly WorkFormFieldDefinition[] = [
+  {
+    copyToNextCyclePolicy: "NEVER",
+    cycleScope: "WORK",
+    defaultValue: false,
+    editableUntil: "NEVER",
+    helpText: null,
+    id: "field_checkbox",
+    isActive: true,
+    key: "confirm",
+    label: "Confirmă",
+    options: [],
+    placeholder: null,
+    printable: true,
+    required: true,
+    roleOwner: "SHARED",
+    sectionLabel: "Secțiune test",
+    sortOrder: 1,
+    sourceKind: "USER_ENTERED",
+    type: "CHECKBOX",
+    validation: {},
+  },
+  {
+    copyToNextCyclePolicy: "NEVER",
+    cycleScope: "WORK",
+    defaultValue: null,
+    editableUntil: "NEVER",
+    helpText: null,
+    id: "field_radio",
+    isActive: true,
+    key: "choice",
+    label: "Alege",
+    options: [
+      { label: "Prima", value: "FIRST" },
+      { label: "A doua", value: "SECOND" },
+    ],
+    placeholder: null,
+    printable: true,
+    required: true,
+    roleOwner: "SHARED",
+    sectionLabel: "Secțiune test",
+    sortOrder: 2,
+    sourceKind: "USER_ENTERED",
+    type: "RADIO",
+    validation: {},
+  },
+];
+
 const realLabSheetResponse = {
   canEdit: true,
   canFinalize: false,
@@ -506,11 +559,17 @@ describe("WorksPage", () => {
     expect(within(patientListbox).getAllByRole("option")).toHaveLength(3);
     expect(within(patientListbox).getByText("Ion Pop")).toBeDefined();
 
-    fireEvent.change(patientInput, { target: { value: "Maria" } });
-    await waitFor(() => expect(within(patientListbox).getAllByRole("option")).toHaveLength(1));
-    expect(within(patientListbox).getByText("Maria Pop")).toBeDefined();
+    fireEvent.keyDown(patientInput, { key: "ArrowDown" });
+    fireEvent.keyDown(patientInput, { key: "Enter" });
+    expect((patientInput as HTMLInputElement).value).toBe("Mara Ionescu");
 
-    fireEvent.click(within(patientListbox).getByRole("option", { name: /Maria Pop/ }));
+    fireEvent.focus(patientInput);
+    fireEvent.change(patientInput, { target: { value: "Maria" } });
+    const filteredPatientListbox = await screen.findByRole("listbox");
+    await waitFor(() => expect(within(filteredPatientListbox).getAllByRole("option")).toHaveLength(1));
+    expect(within(filteredPatientListbox).getByText("Maria Pop")).toBeDefined();
+
+    fireEvent.click(within(filteredPatientListbox).getByRole("option", { name: /Maria Pop/ }));
     expect((patientInput as HTMLInputElement).value).toBe("Maria Pop");
 
     const workTypeInput = await screen.findByLabelText("Tip lucrare");
@@ -521,6 +580,37 @@ describe("WorksPage", () => {
     fireEvent.change(workTypeInput, { target: { value: "punte" } });
     await waitFor(() => expect(within(workTypeListbox).getAllByRole("option")).toHaveLength(1));
     expect(within(workTypeListbox).getByText("WT-0002 · Punte zirconiu")).toBeDefined();
+  });
+
+  it("submits boolean and radio dynamic fields through the create form contract", async () => {
+    function Harness({ onSubmit }: { readonly onSubmit: (values: WorkFormValues) => void }): ReactNode {
+      const form = useForm<WorkFormValues>({
+        defaultValues: {
+          ...defaultWorkFormValues,
+          workFormValues: {},
+        },
+      });
+
+      return (
+        <form onSubmit={(event) => void form.handleSubmit(onSubmit)(event)}>
+          <WorkFormFields fields={dynamicFieldTestDefinitions} form={form} isDisabled={false} />
+          <button type="submit">Salvează</button>
+        </form>
+      );
+    }
+
+    const onSubmit = vi.fn();
+    render(<Harness onSubmit={onSubmit} />);
+
+    fireEvent.click(screen.getByLabelText("Confirmă"));
+    fireEvent.click(screen.getByRole("radio", { name: "Prima" }));
+    fireEvent.click(screen.getByRole("button", { name: "Salvează" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0]?.[0].workFormValues).toEqual({
+      choice: "FIRST",
+      confirm: true,
+    });
   });
 
   it("opens the create modal from the dashboard query flag", async () => {

@@ -47,6 +47,7 @@ Implemented or substantially implemented:
 - manager dashboard is KPI-only and keeps billing entry points company-scoped;
 - billing filters stay collapsed by default and expand on demand;
 - billing overview cards are clickable shortcuts into the related tabs, and the note de plată print view can be scoped to selected documents from the current clinic or doctor statement;
+- reception work creation uses searchable patient/work-type pickers, quick patient creation, keyboard navigation, and controlled dynamic checkbox/radio fields;
 - operational status read-model API and frontend `/status` workspace;
 - backend work-cycle model, active-cycle lifecycle APIs, cycle-scoped workflow/logistics/delivery history, and returned-work registration UI;
 - demo seed.
@@ -62,7 +63,7 @@ Planned or partial:
 
 ## Current Status
 
-Last completed functional task: `BILLING-REALIGN-001B`, which completed the company-scoped manager billing workspace, receivables/restanțe, month-end registry, clinic/doctor statements, printable browser views, and read-only ambiguous legacy review without starting correction workflows.
+Last completed functional task: `RECEPTION-WORK-CREATE-001`, which hardened the reception create modal with searchable patient and work-type pickers, keyboard navigation, controlled clinic/doctor selection, dynamic checkbox/radio submission, and a safe handoff into the existing work-detail/QR flow without changing unrelated business modules.
 
 Last completed documentation task: `WORKFORM-REAL-DISCOVERY-001`, which audited the real paper work sheet and produced [discovery/WORKFORM-REAL-FIELD-AUDIT.md](discovery/WORKFORM-REAL-FIELD-AUDIT.md) and [discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md). `DOCS-TOKEN-001` created the permanent token-efficient documentation system under `docs/`.
 

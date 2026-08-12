@@ -208,6 +208,12 @@
   background: var(--dl-color-primary-soft);
 }
 
+.works-page__search-option--active {
+  border-color: var(--dl-color-primary);
+  background: var(--dl-color-primary-soft);
+  box-shadow: 0 0 0 1px var(--dl-color-primary-border);
+}
+
 .works-page__search-empty {
   color: var(--dl-color-text-muted);
   padding: var(--dl-space-2) var(--dl-space-1);

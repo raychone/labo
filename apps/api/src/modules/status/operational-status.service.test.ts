@@ -98,27 +98,34 @@ describe("OperationalStatusService", () => {
   });
 
   it("returns filtered counters, pagination metadata and no financial fields", async () => {
-    const rows = [
-      createWorkRecord("000001", { effectiveDueAt: new Date("2026-08-07T10:00:00.000Z") }),
-      createWorkRecord("000002", { claimStatus: "CLAIMED", claimedByUserId: "tech_1", effectiveDueAt: new Date("2026-08-08T10:00:00.000Z") }),
-      createWorkRecord("000003", { deliveryStatus: "DELIVERED", effectiveDueAt: new Date("2026-08-09T10:00:00.000Z") }),
-    ];
-    const { service } = createService({ findManyRows: rows, readAll: true });
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-08T08:00:00.000Z"));
 
-    const response = await service.getOperationalStatus(actor, {
-      page: 1,
-      pageSize: 1,
-      sortBy: "workCode",
-      sortDirection: "asc",
-      tab: "TODAY",
-    });
+    try {
+      const rows = [
+        createWorkRecord("000001", { effectiveDueAt: new Date("2026-08-07T10:00:00.000Z") }),
+        createWorkRecord("000002", { claimStatus: "CLAIMED", claimedByUserId: "tech_1", effectiveDueAt: new Date("2026-08-08T10:00:00.000Z") }),
+        createWorkRecord("000003", { deliveryStatus: "DELIVERED", effectiveDueAt: new Date("2026-08-09T10:00:00.000Z") }),
+      ];
+      const { service } = createService({ findManyRows: rows, readAll: true });
 
-    expect(response.items).toHaveLength(1);
-    expect(response.meta.total).toBe(1);
-    expect(response.meta.hasMore).toBe(false);
-    expect(response.counters.find((counter) => counter.tab === "IN_PROGRESS")?.count).toBe(1);
-    expect(response.counters.find((counter) => counter.tab === "COMPLETED")?.count).toBe(1);
-    expect(JSON.stringify(response)).not.toContain("PriceMinor");
+      const response = await service.getOperationalStatus(actor, {
+        page: 1,
+        pageSize: 1,
+        sortBy: "workCode",
+        sortDirection: "asc",
+        tab: "TODAY",
+      });
+
+      expect(response.items).toHaveLength(1);
+      expect(response.meta.total).toBe(1);
+      expect(response.meta.hasMore).toBe(false);
+      expect(response.counters.find((counter) => counter.tab === "IN_PROGRESS")?.count).toBe(1);
+      expect(response.counters.find((counter) => counter.tab === "COMPLETED")?.count).toBe(1);
+      expect(JSON.stringify(response)).not.toContain("PriceMinor");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("marks the response as bounded when base rows exceed the scan cap", async () => {

@@ -34,7 +34,7 @@ STATUS-001A adds `GET /status/operational` as a separate read-only aggregate ove
 
 ## UI
 
-`/works` registry with reception-oriented deadline counters, quick filters, compact filters, create modal, detail/edit drawer, QR modal, workflow section, `Cicluri` history section, `Fișă laborator` cycle sheet section with draft/complete/finalize UX, `Înregistrează revenirea` modal, deadline and execution context cards. `/workbench`, `/scan`, and `/status` surface sheet status and link into the existing `/works?workId=...` detail flow instead of duplicating work detail UI. `/status` keeps filters collapsed by default and shows compact rows with only the technician color badge, patient name, work type, flux/current stage, state, priority, and stacked `Detalii`/`Deschide` actions. Returned works are registered through the receptionist flow, and the same work can reappear in the patient record after a new cycle is opened. Technicians may open visible work detail flows directly from the shared routes even when `/works` is not present in their primary navigation.
+`/works` registry with reception-oriented deadline counters, quick filters, compact filters, create modal, detail/edit drawer, QR modal, workflow section, `Cicluri` history section, `Fișă laborator` cycle sheet section with draft/complete/finalize UX, `Înregistrează revenirea` modal, deadline and execution context cards. The reception create modal uses searchable patient and work-type pickers with capped empty-focus suggestions, keyboard navigation, quick patient creation, and controlled dynamic checkbox/radio fields. `/workbench`, `/scan`, and `/status` surface sheet status and link into the existing `/works?workId=...` detail flow instead of duplicating work detail UI. `/status` keeps filters collapsed by default and shows compact rows with only the technician color badge, patient name, work type, flux/current stage, state, priority, and stacked `Detalii`/`Deschide` actions. Returned works are registered through the receptionist flow, and the same work can reappear in the patient record after a new cycle is opened. Technicians may open visible work detail flows directly from the shared routes even when `/works` is not present in their primary navigation.
 
 ## Audit
 
@@ -50,7 +50,7 @@ Inactive clinic/doctor/work type, doctor outside selected clinic, missing `OTHER
 
 ## Implemented Tasks
 
-WORKS-001, QR-001, WORK-DEADLINES-001A/B/C, TECH-CLAIM-001A/B, WORKFORMS-002, WORKFORM-REAL-001A/B, WORKFLOW-002, STATUS-001A, STATUS-001B, WORK-CYCLES-001A, WORK-CYCLES-001B, CORE-ROLE-UX-001.
+WORKS-001, QR-001, WORK-DEADLINES-001A/B/C, TECH-CLAIM-001A/B, WORKFORMS-002, WORKFORM-REAL-001A/B, WORKFLOW-002, STATUS-001A, STATUS-001B, WORK-CYCLES-001A, WORK-CYCLES-001B, CORE-ROLE-UX-001, RECEPTION-WORK-CREATE-001.
 
 ## Planned Tasks
 

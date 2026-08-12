@@ -186,6 +186,7 @@ export function WorkForm({
             options={doctorOptions.map((doctor) => ({ label: doctor.displayName, value: doctor.id }))}
             placeholder="Alege medicul"
             required
+            value={form.watch("doctorId")}
             {...form.register("doctorId")}
           />
         </FormGrid>
@@ -358,6 +359,7 @@ function SearchablePickerField({
   readonly selectedValue: string;
 }): ReactNode {
   const [isOpen, setOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
   const generatedId = useId();
   const controlId = id ?? generatedId;
   const listboxId = `${controlId}-listbox`;
@@ -367,10 +369,36 @@ function SearchablePickerField({
     ? `Selectat: ${selectedOption.label}`
     : "Apasă și tastează pentru căutare. Lista începe cu 3 variante.";
 
+  useEffect(() => {
+    if (!isOpen) {
+      setHighlightedIndex(0);
+      return;
+    }
+
+    if (options.length === 0) {
+      setHighlightedIndex(-1);
+      return;
+    }
+
+    setHighlightedIndex((current) => {
+      if (current < 0) {
+        return 0;
+      }
+      return Math.min(current, options.length - 1);
+    });
+  }, [isOpen, options.length]);
+
+  function selectOption(option: SearchableOption): void {
+    onSelect(option.value);
+    onSearchChange(option.label);
+    setOpen(false);
+    setHighlightedIndex(0);
+  }
+
   return (
     <div className="works-page__search-field">
       <TextInput
-        aria-activedescendant={isOpen && options.length > 0 ? `${controlId}-option-0` : undefined}
+        aria-activedescendant={isOpen && highlightedIndex >= 0 && options[highlightedIndex] ? `${controlId}-option-${highlightedIndex}` : undefined}
         aria-controls={isOpen ? listboxId : undefined}
         aria-expanded={isOpen}
         autoComplete="off"
@@ -388,6 +416,44 @@ function SearchablePickerField({
             onSelect("");
           }
           setOpen(true);
+          setHighlightedIndex(0);
+        }}
+        onKeyDown={(event) => {
+          if (disabled) {
+            return;
+          }
+
+          if (event.key === "ArrowDown") {
+            if (!isOpen) {
+              setOpen(true);
+            }
+            event.preventDefault();
+            setHighlightedIndex((current) => options.length === 0 ? -1 : Math.min(current + 1, options.length - 1));
+            return;
+          }
+
+          if (event.key === "ArrowUp") {
+            if (!isOpen) {
+              setOpen(true);
+            }
+            event.preventDefault();
+            setHighlightedIndex((current) => options.length === 0 ? -1 : Math.max(current - 1, 0));
+            return;
+          }
+
+          if (event.key === "Enter" && isOpen && highlightedIndex >= 0) {
+            const option = options[highlightedIndex];
+            if (option) {
+              event.preventDefault();
+              selectOption(option);
+            }
+            return;
+          }
+
+          if (event.key === "Escape") {
+            event.preventDefault();
+            setOpen(false);
+          }
         }}
         onFocus={() => setOpen(true)}
         placeholder={placeholder}
@@ -401,15 +467,12 @@ function SearchablePickerField({
           {options.length > 0 ? options.map((option, index) => (
             <button
               aria-selected={option.value === selectedValue}
-              className="works-page__search-option"
+              className={index === highlightedIndex ? "works-page__search-option works-page__search-option--active" : "works-page__search-option"}
               id={`${controlId}-option-${index}`}
               key={option.value}
+              onMouseEnter={() => setHighlightedIndex(index)}
               onMouseDown={(event) => event.preventDefault()}
-              onClick={() => {
-                onSelect(option.value);
-                onSearchChange(option.label);
-                setOpen(false);
-              }}
+              onClick={() => selectOption(option)}
               role="option"
               type="button"
             >
