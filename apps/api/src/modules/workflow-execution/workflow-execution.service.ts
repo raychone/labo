@@ -121,6 +121,7 @@ export class WorkflowExecutionService {
     if (template.stages.length === 0) {
       throw new BadRequestException("Workflow-ul activ nu are etape configurate.");
     }
+    const initialStageDefinition = template.stages[0]!;
 
     const execution = await tx.workWorkflowExecution.create({
       data: {
@@ -161,6 +162,48 @@ export class WorkflowExecutionService {
         id: execution.id,
       },
     });
+
+    if (await this.shouldAutoAssignInitialStage(tx, input.actorUserId, initialStageDefinition.allowedRoleCodes)) {
+      const now = new Date();
+      await tx.workStageExecution.update({
+        data: {
+          assignedAt: now,
+          assignedByUserId: input.actorUserId,
+          assignedUserId: input.actorUserId,
+          version: {
+            increment: 1,
+          },
+        },
+        where: {
+          id: firstStage.id,
+        },
+      });
+      await tx.workWorkflowExecution.update({
+        data: {
+          version: {
+            increment: 1,
+          },
+        },
+        where: {
+          id: execution.id,
+        },
+      });
+
+      const assignmentMetadata = this.createStageAssignmentMetadata(execution, firstStage, {
+        assignedByUserId: input.actorUserId,
+        assignedUserId: input.actorUserId,
+        workCode: input.workCode,
+        workId: input.workOrderId,
+      });
+      await this.createEvent(tx, {
+        actorUserId: input.actorUserId,
+        metadata: assignmentMetadata,
+        stageExecutionId: firstStage.id,
+        type: WorkStageEventType.STAGE_ASSIGNED,
+        workflowExecutionId: execution.id,
+      });
+      await this.recordAudit(tx, input.actorUserId, input.requestMetadata, WORKFLOW_EXECUTION_AUDIT_ACTIONS.stageAssigned, input.workOrderId, assignmentMetadata);
+    }
 
     await this.createEvent(tx, {
       actorUserId: input.actorUserId,
@@ -490,7 +533,7 @@ export class WorkflowExecutionService {
       throw new ForbiddenException("Permission denied.");
     }
 
-    const actorRoleCodes = await this.getActorRoleCodes(actor.id);
+    const actorRoleCodes = await this.getActorRoleCodes(this.prisma, actor.id);
     const allowedRoleCodes = this.getAllowedRoleCodes(stage.allowedRoleCodesSnapshot);
     const hasAllowedRole = actorRoleCodes.some((roleCode) => allowedRoleCodes.includes(roleCode));
     const hasAllScope = permissionResult.effectiveScopes.includes("ALL");
@@ -508,8 +551,8 @@ export class WorkflowExecutionService {
     };
   }
 
-  private async getActorRoleCodes(userId: string): Promise<readonly string[]> {
-    const user = await this.prisma.user.findUnique({
+  private async getActorRoleCodes(client: any, userId: string): Promise<readonly string[]> {
+    const user = await client.user.findUnique({
       select: {
         roles: {
           select: {
@@ -525,9 +568,24 @@ export class WorkflowExecutionService {
       where: {
         id: userId,
       },
-    });
+    }) as { readonly roles?: readonly { readonly role: { readonly isActive: boolean; readonly key: string } }[] } | null;
 
-    return user?.roles.filter((role) => role.role.isActive).map((role) => role.role.key) ?? [];
+    return (user?.roles ?? []).filter((role) => role.role.isActive).map((role) => role.role.key);
+  }
+
+  private async shouldAutoAssignInitialStage(tx: WorkflowTx, actorUserId: string, allowedRoleCodesSnapshot: Prisma.JsonValue): Promise<boolean> {
+    const managerOverride = await this.authorizationService.hasPermission({
+      permission: "workflow.start_stage",
+      requiredScope: "ALL",
+      userId: actorUserId,
+    });
+    if (managerOverride.allowed) {
+      return false;
+    }
+
+    const actorRoleCodes = await this.getActorRoleCodes(tx, actorUserId);
+    const allowedRoleCodes = this.getAllowedRoleCodes(allowedRoleCodesSnapshot);
+    return actorRoleCodes.some((roleCode) => allowedRoleCodes.includes(roleCode));
   }
 
   private async getActionAvailability(actor: AuthenticatedUser, execution: WorkflowExecutionRecord) {
@@ -539,7 +597,7 @@ export class WorkflowExecutionService {
     const [canStart, canComplete, roleCodes] = await Promise.all([
       this.authorizationService.hasPermission({ permission: "workflow.start_stage", requiredScope: "OWN_STAGE", userId: actor.id }),
       this.authorizationService.hasPermission({ permission: "workflow.complete_stage", requiredScope: "OWN_STAGE", userId: actor.id }),
-      this.getActorRoleCodes(actor.id),
+      this.getActorRoleCodes(this.prisma, actor.id),
     ]);
     const allowedRoleCodes = this.getAllowedRoleCodes(currentStage.allowedRoleCodesSnapshot);
     const hasAllowedRole = roleCodes.some((roleCode) => allowedRoleCodes.includes(roleCode));
@@ -558,6 +616,30 @@ export class WorkflowExecutionService {
 
   private getAllowedRoleCodes(value: Prisma.JsonValue): readonly string[] {
     return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  }
+
+  private createStageAssignmentMetadata(
+    execution: Pick<WorkflowExecutionRecord, "id" | "workflowTemplateId" | "workflowTemplateVersion">,
+    stage: Pick<WorkflowExecutionRecord["stages"][number], "id" | "sortOrder" | "stageKeySnapshot">,
+    options: {
+      readonly assignedByUserId: string;
+      readonly assignedUserId: string;
+      readonly workCode: string;
+      readonly workId: string;
+    },
+  ): Prisma.InputJsonObject {
+    return {
+      assignedByUserId: options.assignedByUserId,
+      assignedUserId: options.assignedUserId,
+      stageExecutionId: stage.id,
+      stageKey: stage.stageKeySnapshot,
+      stageOrder: stage.sortOrder,
+      workCode: options.workCode,
+      workId: options.workId,
+      workflowExecutionId: execution.id,
+      workflowTemplateId: execution.workflowTemplateId,
+      workflowTemplateVersion: execution.workflowTemplateVersion,
+    };
   }
 
   private createStageMetadata(

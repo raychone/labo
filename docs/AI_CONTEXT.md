@@ -63,7 +63,7 @@ Planned or partial:
 
 ## Current Status
 
-Last completed functional task: `RECEPTION-WORK-CREATE-001`, which hardened the reception create modal with searchable patient and work-type pickers, keyboard navigation, controlled clinic/doctor selection, dynamic checkbox/radio submission, and a safe handoff into the existing work-detail/QR flow without changing unrelated business modules.
+Last completed functional task: `RECEPTION-TO-TECH-001`, which auto-assigns the initial workflow stage to the creating eligible receptionist so a new work can move through the intended reception handoff and only becomes technician-visible after the workflow advances.
 
 Last completed documentation task: `WORKFORM-REAL-DISCOVERY-001`, which audited the real paper work sheet and produced [discovery/WORKFORM-REAL-FIELD-AUDIT.md](discovery/WORKFORM-REAL-FIELD-AUDIT.md) and [discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md). `DOCS-TOKEN-001` created the permanent token-efficient documentation system under `docs/`.
 

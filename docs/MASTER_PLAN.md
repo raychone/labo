@@ -11,9 +11,9 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | Current task | DEMO-POLISH-002 |
 | Status | PLANNED |
 | Blocker | none |
-| Last completed task | RECEPTION-WORK-CREATE-001 |
-| Last completed functional task | RECEPTION-WORK-CREATE-001 |
-| Last completed functional commit | RECEPTION-WORK-CREATE-001 commit |
+| Last completed task | RECEPTION-TO-TECH-001 |
+| Last completed functional task | RECEPTION-TO-TECH-001 |
+| Last completed functional commit | RECEPTION-TO-TECH-001 commit |
 | Next approved task | none |
 
 ## Roadmap
@@ -35,6 +35,7 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | work types | WORKTYPES-001 | COMPLETED | RBAC-001 | work type registry | [modules/work-types.md](modules/work-types.md) |
 | works | WORKS-001 | COMPLETED | WORKTYPES-001, CLINICS-001 | work order creation | [modules/works.md](modules/works.md) |
 | works | RECEPTION-WORK-CREATE-001 | COMPLETED | WORKS-001, WORKFORMS-002, WORKFORM-REAL-001B, QR-001, WORK-DEADLINES-001C | reception work creation modal hardening | [tasks/RECEPTION-WORK-CREATE-001.md](tasks/RECEPTION-WORK-CREATE-001.md) |
+| workflow | RECEPTION-TO-TECH-001 | COMPLETED | WORKFLOW-002, TECH-001, RECEPTION-WORK-CREATE-001 | reception handoff to technician queue | [tasks/RECEPTION-TO-TECH-001.md](tasks/RECEPTION-TO-TECH-001.md) |
 | QR | QR-001 | COMPLETED | WORKS-001 | QR generation/scan base | [modules/qr.md](modules/qr.md) |
 | shell | SHELL-001 | COMPLETED | AUTH-001, RBAC-001 | authenticated navigation | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | forms | FORMS-001 | COMPLETED | UI-002 | form UX patterns | [modules/forms.md](modules/forms.md) |

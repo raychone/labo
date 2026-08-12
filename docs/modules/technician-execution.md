@@ -18,7 +18,7 @@ Available work, claimed work, workload, current technician, stage assignment, re
 
 ## Business Rules
 
-Technicians can claim available works, view own claimed works, release own work where permitted, execute workflow actions exposed by current endpoints, and open the real laboratory sheet for visible/owned work where sheet permissions allow it. Each technician may also choose a preferred color that is surfaced as a badge in operational status and technician selection views when the work is assigned.
+Technicians can claim available works, view own claimed works, release own work where permitted, execute workflow actions exposed by current endpoints, and open the real laboratory sheet for visible/owned work where sheet permissions allow it. A work only enters the technician-visible pool after the current workflow stage becomes technician-eligible; receptionist-created works remain hidden until the reception handoff completes. Each technician may also choose a preferred color that is surfaced as a badge in operational status and technician selection views when the work is assigned.
 
 ## Data Model
 

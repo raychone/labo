@@ -18,7 +18,7 @@ Template, ordered stages, optional stage, cycle-scoped runtime execution, stage 
 
 ## Business Rules
 
-Only confirmed behavior should be used: templates have ordered stages and runtime work execution supports stage start/complete and assignment on the active work cycle. Registering a returned work opens a new active cycle with a new runtime workflow execution; previous cycle workflow executions remain historical. Pause/resume/skip/reopen are permission concepts and future/partial behavior unless confirmed by task code.
+Only confirmed behavior should be used: templates have ordered stages and runtime work execution supports stage start/complete and assignment on the active work cycle. When a new runtime workflow is created from an eligible creator, the initial stage is auto-assigned to that creator so ownership-based start/complete permissions can be exercised without introducing a parallel lifecycle. Registering a returned work opens a new active cycle with a new runtime workflow execution; previous cycle workflow executions remain historical. Pause/resume/skip/reopen are permission concepts and future/partial behavior unless confirmed by task code.
 
 ## Data Model
 
@@ -30,7 +30,7 @@ Template endpoints under work types and `/workflow-templates/:id`. Runtime endpo
 
 ## UI
 
-`/work-types/:workTypeId/workflow`, workflow section in work detail, technician workbench integration.
+`/work-types/:workTypeId/workflow`, workflow section in work detail, technician workbench integration, and reception-to-technician handoff after the initial eligible stage is completed.
 
 ## Audit
 

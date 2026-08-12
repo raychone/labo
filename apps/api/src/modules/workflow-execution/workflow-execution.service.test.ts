@@ -7,13 +7,23 @@ import { WORKFLOW_STALE_TEMPLATE_MESSAGE } from "./workflow-execution.constants.
 import { WorkflowExecutionService } from "./workflow-execution.service.js";
 
 function createService(): WorkflowExecutionService {
-  return new WorkflowExecutionService({} as PrismaService, {} as AuthorizationService);
+  return new WorkflowExecutionService(
+    {} as PrismaService,
+    {
+      hasPermission: vi.fn().mockResolvedValue({ allowed: false, effectiveScopes: ["OWN_STAGE"], permission: "workflow.start_stage" }),
+    } as unknown as AuthorizationService,
+  );
 }
 
 function createTx(overrides: Partial<Prisma.TransactionClient> = {}): Prisma.TransactionClient {
   return {
     auditLog: {
       create: vi.fn().mockResolvedValue({}),
+    },
+    user: {
+      findUnique: vi.fn().mockResolvedValue({
+        roles: [],
+      }),
     },
     workStageEvent: {
       create: vi.fn().mockResolvedValue({}),
@@ -86,6 +96,56 @@ describe("WorkflowExecutionService", () => {
     expect(tx.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         action: "workflow.execution_created",
+        resourceId: "work_1",
+        resourceType: "work_workflow_execution",
+      }),
+    });
+  });
+
+  it("auto-assigns the initial stage to an eligible non-manager creator", async () => {
+    const service = createService();
+    const tx = createTx({
+      user: {
+        findUnique: vi.fn().mockResolvedValue({
+          roles: [{ role: { isActive: true, key: "RECEPTIE" } }],
+        }),
+      },
+      workStageExecution: {
+        create: vi.fn()
+          .mockResolvedValueOnce({ id: "stage_exec_1", sortOrder: 1, stageKeySnapshot: "receptie" })
+          .mockResolvedValueOnce({ id: "stage_exec_2", sortOrder: 2, stageKeySnapshot: "modelaj" }),
+        update: vi.fn().mockResolvedValue({ id: "stage_exec_1" }),
+      },
+      workWorkflowExecution: {
+        create: vi.fn().mockResolvedValue({ id: "workflow_exec_1" }),
+        update: vi.fn().mockResolvedValue({}),
+      },
+    } as unknown as Prisma.TransactionClient);
+
+    await service.createSnapshotForWork(tx, {
+      actorUserId: "user_1",
+      expectedWorkflowTemplateId: "template_1",
+      expectedWorkflowTemplateVersion: 3,
+      requestMetadata: { ipAddress: "127.0.0.1" },
+      workCode: "WO-2026-000001",
+      workCycleId: "cycle_1",
+      workOrderId: "work_1",
+      workTypeId: "work_type_1",
+    });
+
+    expect(tx.workStageExecution.update).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        assignedByUserId: "user_1",
+        assignedUserId: "user_1",
+      }),
+      where: { id: "stage_exec_1" },
+    });
+    expect(tx.workStageEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ stageExecutionId: "stage_exec_1", type: "STAGE_ASSIGNED" }),
+    });
+    expect(tx.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: "workflow.stage_assigned",
         resourceId: "work_1",
         resourceType: "work_workflow_execution",
       }),

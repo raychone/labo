@@ -3,6 +3,7 @@ export const WORKFLOW_EXECUTION_RESOURCE_TYPE = "work_workflow_execution";
 export const WORKFLOW_EXECUTION_AUDIT_ACTIONS = {
   executionCompleted: "workflow.execution_completed",
   executionCreated: "workflow.execution_created",
+  stageAssigned: "workflow.stage_assigned",
   stageCompleted: "workflow.stage_completed",
   stageStarted: "workflow.stage_started",
 } as const;
