@@ -73,6 +73,7 @@ describe("ClinicsPage", () => {
           permissions: [
             { key: "clinics.create", scopes: ["ALL"] },
             { key: "clinics.read", scopes: ["ALL"] },
+            { key: "doctors.create", scopes: ["ALL"] },
             { key: "doctors.read", scopes: ["ALL"] },
           ],
         }));
@@ -94,6 +95,7 @@ describe("ClinicsPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Clinici și medici" })).toBeDefined();
     expect(await screen.findByText("Clinica Test")).toBeDefined();
+    expect(await screen.findByRole("button", { name: "Adaugă medic" })).toBeDefined();
 
     const clinicSelect = await screen.findByLabelText("Clinică");
     const doctorSelect = await screen.findByLabelText("Medic");
@@ -105,6 +107,9 @@ describe("ClinicsPage", () => {
 
     fireEvent.change(clinicSelect, { target: { value: "clinic_2" } });
     await waitFor(() => expect(doctorSelect).toHaveProperty("value", ""));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Adaugă medic" }));
+    expect(await screen.findByRole("dialog", { name: "Medic nou" })).toBeDefined();
   });
 
   it("shows an access error without clinics.read", async () => {

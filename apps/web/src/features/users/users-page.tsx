@@ -14,6 +14,10 @@ import {
   FormActions,
   FormErrorSummary,
   FormLayout,
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
   LoadingState,
   Modal,
   Select,
@@ -431,14 +435,18 @@ function CreateUserModal({
           <FormErrorSummary errors={summaryItems} ref={summaryRef} />
           <TextInput error={form.formState.errors.displayName?.message} id="displayName" label="Nume" required {...form.register("displayName")} />
           <TextInput error={form.formState.errors.email?.message} id="email" label="Email" required type="email" {...form.register("email")} />
-          <TextInput
-            error={form.formState.errors.preferredColor?.message}
-            hint="Opțional. Cod hex, de exemplu #0f766e."
-            id="preferredColor"
-            label="Culoare"
-            placeholder="#0f766e"
-            {...form.register("preferredColor")}
-          />
+          <Field className="users-page__color-field">
+            <FieldLabel htmlFor="preferredColor">Culoare</FieldLabel>
+            <FieldDescription>Opțional. Alege o culoare pentru badge-uri și etichete.</FieldDescription>
+            <input
+              aria-invalid={form.formState.errors.preferredColor ? true : undefined}
+              className="dl-control users-page__color-input"
+              id="preferredColor"
+              type="color"
+              {...form.register("preferredColor")}
+            />
+            {form.formState.errors.preferredColor?.message ? <FieldError>{form.formState.errors.preferredColor.message}</FieldError> : null}
+          </Field>
           <TextInput
             error={form.formState.errors.temporaryPassword?.message}
             id="temporaryPassword"
@@ -557,14 +565,18 @@ function UserDetailsDrawer({
                 <FormErrorSummary errors={summaryItems} ref={summaryRef} />
                 <TextInput error={form.formState.errors.displayName?.message} id="displayName" label="Nume" required {...form.register("displayName")} />
                 <TextInput error={form.formState.errors.email?.message} id="email" label="Email" required type="email" {...form.register("email")} />
-                <TextInput
-                  error={form.formState.errors.preferredColor?.message}
-                  hint="Opțional. Cod hex, de exemplu #0f766e."
-                  id="preferredColor"
-                  label="Culoare"
-                  placeholder="#0f766e"
-                  {...form.register("preferredColor")}
-                />
+                <Field className="users-page__color-field">
+                  <FieldLabel htmlFor="preferredColor">Culoare</FieldLabel>
+                  <FieldDescription>Opțional. Alege o culoare pentru badge-uri și etichete.</FieldDescription>
+                  <input
+                    aria-invalid={form.formState.errors.preferredColor ? true : undefined}
+                    className="dl-control users-page__color-input"
+                    id="preferredColor"
+                    type="color"
+                    {...form.register("preferredColor")}
+                  />
+                  {form.formState.errors.preferredColor?.message ? <FieldError>{form.formState.errors.preferredColor.message}</FieldError> : null}
+                </Field>
                 <FormActions
                   canReset={form.formState.isDirty}
                   isSubmitting={isSubmitting}

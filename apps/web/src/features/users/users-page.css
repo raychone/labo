@@ -107,6 +107,13 @@
   width: 1rem;
 }
 
+.users-page__form input[type="color"] {
+  cursor: pointer;
+  min-height: 2.75rem;
+  padding: 0.25rem;
+  width: 6rem;
+}
+
 .users-page__badges {
   display: flex;
   flex-wrap: wrap;

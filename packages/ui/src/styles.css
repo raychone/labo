@@ -992,7 +992,7 @@ th {
   bottom: 0;
   right: 0;
   top: 0;
-  width: min(100%, 28rem);
+  width: min(100vw - 1rem, 44rem);
 }
 
 .dl-drawer--bottom {

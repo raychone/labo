@@ -381,23 +381,6 @@ export function BillingPage(): ReactNode {
     }
   }
 
-  async function convertDocumentsById(documentsToConvert: readonly BillingDocumentSummary[]): Promise<void> {
-    const proformas = documentsToConvert.filter((document) => document.type === "PROFORMA");
-    if (proformas.length === 0) {
-      return;
-    }
-
-    try {
-      for (const document of proformas) {
-        const readyDocument = document.status === "DRAFT" ? await issueMutation.mutateAsync(document.id) : document;
-        await convertMutation.mutateAsync(readyDocument.id);
-      }
-      toast.showToast({ message: "Proformele selectate au fost transformate în facturi.", variant: "success" });
-    } catch (error) {
-      toast.showToast({ message: getErrorMessage(error), variant: "error" });
-    }
-  }
-
   async function recordPaymentForDocument(documentId: string): Promise<void> {
     const input = toRecordPaymentInput(paymentForm);
     if (!input) {
@@ -516,7 +499,6 @@ export function BillingPage(): ReactNode {
                 isCreating={createProformaMutation.isPending || createInvoiceMutation.isPending}
                 locale={locale}
                 onCreateInvoice={() => void createDocument("invoice")}
-                onCreateProforma={() => void createDocument("proforma")}
                 onExport={() => downloadCsv("lucrari-nefacturate.csv", toCsv((billableWorksQuery.data?.items ?? []).map((work) => ({
                   "Cod lucrare": work.code,
                   "Clinică": work.clinicName,
@@ -544,7 +526,6 @@ export function BillingPage(): ReactNode {
                 isLoading={proformasQuery.isLoading}
                 isMutating={issueMutation.isPending || convertMutation.isPending || recordPaymentMutation.isPending}
                 locale={locale}
-                onConvertSelected={convertDocumentsById}
                 onExport={() => downloadCsv("proforme.csv", toCsv((proformasQuery.data?.items ?? []).map((document) => toDocumentCsvRow(document, currency))))}
                 onIssueSelected={issueDocumentsById}
                 onPrint={(documentId) => window.open(`/billing/documents/${documentId}/print`, "_blank", "noopener,noreferrer")}
@@ -569,7 +550,6 @@ export function BillingPage(): ReactNode {
                 isLoading={invoicesQuery.isLoading}
                 isMutating={issueMutation.isPending || convertMutation.isPending || recordPaymentMutation.isPending}
                 locale={locale}
-                onConvertSelected={convertDocumentsById}
                 onExport={() => downloadCsv("facturi.csv", toCsv((invoicesQuery.data?.items ?? []).map((document) => toDocumentCsvRow(document, currency))))}
                 onIssueSelected={issueDocumentsById}
                 onPrint={(documentId) => window.open(`/billing/documents/${documentId}/print`, "_blank", "noopener,noreferrer")}
@@ -760,7 +740,7 @@ function OverviewTab({
     <section className="billing-page__tab">
       <div className="billing-page__toolbar">
         <p>Documentele legacy sunt doar pentru revizuire read-only. {overview.ambiguousLegacyCount} înregistrări necesită verificare.</p>
-        <Button onClick={onPrint} variant="outline">Print prezentare</Button>
+        <Button onClick={onPrint} variant="outline">Export PDF</Button>
       </div>
       <DataTable columns={columns} emptyMessage="Nu există documente legacy ambigue pentru firma activă." getRowKey={(row) => row.documentId} rows={ambiguousLegacy} />
     </section>
@@ -815,7 +795,7 @@ function StatementsTab({
         <Button onClick={() => setScope("clinic")} variant={scope === "clinic" ? "primary" : "secondary"}>Clinică</Button>
         <Button onClick={() => setScope("doctor")} variant={scope === "doctor" ? "primary" : "secondary"}>Medic</Button>
         <Button disabled={!statement} onClick={() => onOpenPrint(scope)} variant="outline">
-          {hasSelection ? "Printează selecția" : "Print / PDF"}
+          {hasSelection ? "Exportă selecția PDF" : "Export PDF"}
         </Button>
         {hasSelection ? <Button onClick={() => onSelectionChange([])} variant="secondary">Golește selecția</Button> : null}
       </div>
@@ -986,7 +966,6 @@ function BillableWorksTab({
   isCreating,
   locale,
   onCreateInvoice,
-  onCreateProforma,
   onExport,
   onToggleWork,
   query,
@@ -998,7 +977,6 @@ function BillableWorksTab({
   readonly isCreating: boolean;
   readonly locale: string;
   readonly onCreateInvoice: () => void;
-  readonly onCreateProforma: () => void;
   readonly onExport: () => void;
   readonly onToggleWork: (work: BillableWork) => void;
   readonly query: ReturnType<typeof useBillableWorks>;
@@ -1025,7 +1003,6 @@ function BillableWorksTab({
       <div className="billing-page__toolbar">
         <p>{selectedWorkIds.length} lucrări selectate · {formatMoneyMinor(selectedTotal, currency, locale)}</p>
         <Button onClick={onExport} variant="outline">Export CSV</Button>
-        {canCreateInvoice ? <Button disabled={selectedWorkIds.length === 0 || isCreating} onClick={onCreateProforma}>Creează proformă</Button> : null}
         {canCreateInvoice ? <Button disabled={selectedWorkIds.length === 0 || isCreating} onClick={onCreateInvoice} variant="secondary">Creează factură</Button> : null}
       </div>
       <DataTable columns={columns} emptyMessage="Nu există lucrări nefacturate în perioada selectată." error={query.error ? getErrorMessage(query.error) : undefined} getRowKey={(work) => work.id} isLoading={query.isLoading} rows={query.data?.items ?? []} />
@@ -1041,7 +1018,6 @@ function DocumentsTab({
   isLoading,
   isMutating,
   locale,
-  onConvertSelected,
   onExport,
   onIssueSelected,
   onPrint,
@@ -1059,7 +1035,6 @@ function DocumentsTab({
   readonly isLoading: boolean;
   readonly isMutating: boolean;
   readonly locale: string;
-  readonly onConvertSelected: (documents: readonly BillingDocumentSummary[]) => Promise<void>;
   readonly onExport: () => void;
   readonly onIssueSelected: (documents: readonly BillingDocumentSummary[]) => Promise<void>;
   readonly onPrint: (documentId: string) => void;
@@ -1097,13 +1072,6 @@ function DocumentsTab({
     await onIssueSelected(selectedDocuments);
   }
 
-  async function convertSelected(): Promise<void> {
-    if (selectedDocuments.length === 0) {
-      return;
-    }
-    await onConvertSelected(selectedDocuments);
-  }
-
   async function recordSelectedPayment(): Promise<void> {
     if (!selectedDocument) {
       return;
@@ -1117,9 +1085,8 @@ function DocumentsTab({
         <p>{selectedCount} {selectionLabel} selectate · {formatMoneyMinor(selectedTotalMinor, currency, locale)}</p>
         <Button onClick={onExport} variant="outline">Export CSV</Button>
         <Button disabled={selectedCount === 0 || isMutating} onClick={() => void issueSelected()} variant="secondary">Emite selectate</Button>
-        <Button disabled={selectedCount === 0 || isMutating} onClick={() => void convertSelected()}>Transformă în facturi</Button>
         {canRecordPayment ? <Button disabled={!canUsePaymentForm || selectedCount !== 1 || isMutating} onClick={() => setIsPaymentOpen(true)} variant="secondary">Înregistrează încasare</Button> : null}
-        <Button disabled={selectedCount === 0} onClick={() => onPrint(selectedDocument ? selectedDocument.id : "")} variant="outline">Print / PDF</Button>
+        <Button disabled={selectedCount === 0} onClick={() => onPrint(selectedDocument ? selectedDocument.id : "")} variant="outline">Export PDF</Button>
       </div>
       <DataTable
         columns={columns}
@@ -1291,7 +1258,7 @@ function MonthCloseTab({
     <section className="billing-page__tab">
       <div className="billing-page__toolbar">
         <Button onClick={onExportRegistry} variant="outline">Export registru lunar CSV</Button>
-        <Button onClick={() => window.print()} variant="outline">Print registru</Button>
+        <Button onClick={() => window.print()} variant="outline">Export PDF</Button>
       </div>
       {registry ? (
         <div className="billing-page__registry-summary">

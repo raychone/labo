@@ -138,9 +138,9 @@ function toClinicFormValues(clinic: ClinicDetail | undefined): ClinicFormValues 
   };
 }
 
-function toDoctorFormValues(doctor: DoctorDetail | undefined, clinicId: string): DoctorFormValues {
+function toDoctorFormValues(doctor: DoctorDetail | undefined, clinicId: string | null): DoctorFormValues {
   return {
-    clinicId: doctor?.clinicId ?? clinicId,
+    clinicId: doctor?.clinicId ?? clinicId ?? "",
     email: doctor?.email ?? null,
     firstName: doctor?.firstName ?? "",
     internalNotes: doctor?.internalNotes ?? null,
@@ -217,7 +217,7 @@ export function ClinicsPage(): ReactNode {
   });
   const [selectedClinicId, setSelectedClinicId] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [doctorModal, setDoctorModal] = useState<{ readonly doctorId: string | null; readonly mode: "create" | "edit" } | null>(null);
+  const [doctorModal, setDoctorModal] = useState<{ readonly clinicId: string | null; readonly doctorId: string | null; readonly mode: "create" | "edit" } | null>(null);
   const [selectorClinicId, setSelectorClinicId] = useState("");
   const [selectorDoctorId, setSelectorDoctorId] = useState("");
 
@@ -344,9 +344,14 @@ export function ClinicsPage(): ReactNode {
             <h1 id="clinics-title">Clinici și medici</h1>
             <p>Cabinete partenere, contacte, date de facturare și medici externi pentru selecție operațională.</p>
           </div>
-          <Button disabled={!canCreateClinics} onClick={() => setIsCreateOpen(true)}>
-            Adaugă clinică
-          </Button>
+          <div className="clinics-page__header-actions">
+            <Button disabled={!canCreateDoctors && !canCreateClinics} onClick={() => setDoctorModal({ clinicId: selectorClinicId || null, doctorId: null, mode: "create" })} variant="outline">
+              Adaugă medic
+            </Button>
+            <Button disabled={!canCreateClinics} onClick={() => setIsCreateOpen(true)}>
+              Adaugă clinică
+            </Button>
+          </div>
         </header>
 
         <Card>
@@ -450,19 +455,20 @@ export function ClinicsPage(): ReactNode {
         isOpen={selectedClinicId !== null}
         onArchive={(clinicId) => archiveClinicMutation.mutate(clinicId, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Clinica nu a fost arhivată", variant: "error" }) })}
         onDoctorArchive={(doctorId) => archiveDoctorMutation.mutate(doctorId, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Medicul nu a fost arhivat", variant: "error" }) })}
-        onDoctorEdit={(doctorId) => setDoctorModal({ doctorId, mode: "edit" })}
+        onDoctorEdit={(doctorId) => setDoctorModal({ clinicId: selectedClinicQuery.data?.id ?? null, doctorId, mode: "edit" })}
         onDoctorRestore={(doctorId) => restoreDoctorMutation.mutate(doctorId, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Medicul nu a fost reactivat", variant: "error" }) })}
         onOpenChange={(isOpen) => setSelectedClinicId(isOpen ? selectedClinicId : null)}
         onRestore={(clinicId) => restoreClinicMutation.mutate(clinicId, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Clinica nu a fost reactivată", variant: "error" }) })}
         onSubmit={(clinicId, values) => updateClinicMutation.mutate({ clinicId, input: values }, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Clinica nu a fost salvată", variant: "error" }) })}
-        onCreateDoctor={() => setDoctorModal({ doctorId: null, mode: "create" })}
+        onCreateDoctor={() => setDoctorModal({ clinicId: selectedClinicId ?? null, doctorId: null, mode: "create" })}
         restoreMutationPending={restoreClinicMutation.isPending}
         submitError={updateClinicMutation.error}
         updateMutationPending={updateClinicMutation.isPending}
       />
 
       <DoctorModal
-        clinicId={selectedClinicId ?? ""}
+        clinicId={doctorModal?.clinicId ?? null}
+        clinicOptions={clinicOptionsQuery.data ?? []}
         doctorId={doctorModal?.doctorId ?? null}
         isOpen={doctorModal !== null}
         isSaving={createDoctorMutation.isPending || updateDoctorMutation.isPending}
@@ -877,6 +883,7 @@ function DoctorsSection({
 
 function DoctorModal({
   clinicId,
+  clinicOptions,
   doctorId,
   isOpen,
   isSaving,
@@ -885,7 +892,8 @@ function DoctorModal({
   onSubmit,
   submitError,
 }: {
-  readonly clinicId: string;
+  readonly clinicId: string | null;
+  readonly clinicOptions: readonly ClinicOption[];
   readonly doctorId: string | null;
   readonly isOpen: boolean;
   readonly isSaving: boolean;
@@ -939,7 +947,17 @@ function DoctorModal({
           })(event)}
         >
           <FormErrorSummary errors={summaryItems} ref={summaryRef} />
-          <input type="hidden" {...form.register("clinicId")} />
+          {clinicId ? <input type="hidden" {...form.register("clinicId")} /> : (
+            <Select
+              label="Clinică"
+              onChange={(event) => form.setValue("clinicId", event.target.value, { shouldDirty: true, shouldValidate: true })}
+              options={toClinicSelectOptions(clinicOptions)}
+              placeholder="Alege clinica"
+              value={form.watch("clinicId")}
+              required
+              error={form.formState.errors.clinicId?.message}
+            />
+          )}
           <div className="clinics-page__form-grid">
             <TextInput disabled={isSaving} error={form.formState.errors.firstName?.message} id="firstName" label="Prenume" required {...form.register("firstName")} />
             <TextInput disabled={isSaving} error={form.formState.errors.lastName?.message} id="lastName" label="Nume" required {...form.register("lastName")} />

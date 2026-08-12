@@ -68,7 +68,7 @@ export function BillingStatementPrintPage(): ReactNode {
   return (
     <main className="billing-print-page">
       <div className="billing-print-page__actions">
-        <Button onClick={() => window.print()}>Printează / Salvează PDF</Button>
+        <Button onClick={() => window.print()}>Export PDF</Button>
         <Link className="billing-print-page__back-link" to="/billing">Înapoi la facturare</Link>
       </div>
       <StatementPrintView scope={scope} selectedDocumentIds={selectedDocumentIds} statement={query.data} />

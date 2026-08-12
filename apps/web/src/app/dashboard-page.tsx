@@ -92,6 +92,9 @@ export function DashboardPage(): ReactNode {
   const canReadOrganization = permissionKeys.includes("organization_context.read");
   const isReceptionWorkspace = canCreateWork || (canReadWorks && !canReadTechnician && !isManagerWorkspace);
   const isTechnicianWorkspace = !isManagerWorkspace && (canReadTechnician || canReadAvailable || canReadOwnClaims);
+  const showTechnicianWorkspace = isTechnicianWorkspace && !isManagerWorkspace;
+  const showReceptionWorkspace = isReceptionWorkspace && !isManagerWorkspace;
+  const showManagerWorkspace = isManagerWorkspace;
   const settingsQuery = useSettings(permissionKeys.includes("settings.read"));
   const organizationQuery = useQuery({ enabled: canReadOrganization, queryFn: fetchOrganizationContext, queryKey: ["organization-context"], retry: false });
   const laboratoryName = settingsQuery.data?.laboratoryName ?? "Dental Lab Management";
@@ -149,18 +152,18 @@ export function DashboardPage(): ReactNode {
 
   return (
     <section className="dashboard-page dashboard-page--role" aria-labelledby="dashboard-title">
-      <div className="dashboard-page__header">
-        <div>
-          <p className="dashboard-page__eyebrow">{laboratoryName}</p>
-          <h1 id="dashboard-title">Acasă</h1>
-          <p>{auth.user?.displayName ?? "Utilizator"} · dashboard compus după permisiunile contului.</p>
-        </div>
+        <div className="dashboard-page__header">
+          <div>
+            <p className="dashboard-page__eyebrow">{laboratoryName}</p>
+            <h1 id="dashboard-title">Acasă</h1>
+            <p>{auth.user?.displayName ?? "Utilizator"} · dashboard compus după permisiunile contului.</p>
+          </div>
         <div className="dashboard-page__actions">
-          {canReadTechnician ? <DashboardAction label="Lucrările mele" to="/workbench" /> : null}
+          {showTechnicianWorkspace ? <DashboardAction label="Lucrările mele" to="/workbench" /> : null}
         </div>
       </div>
 
-      {isTechnicianWorkspace ? (
+      {showTechnicianWorkspace ? (
         <TechnicianDashboard
           availableWorks={availableWorksQuery.data?.items ?? []}
           availableTotal={availableWorksQuery.data?.total}
@@ -179,7 +182,7 @@ export function DashboardPage(): ReactNode {
         />
       ) : null}
 
-      {isReceptionWorkspace ? (
+      {showReceptionWorkspace ? (
         <ReceptionDashboard
           canCreateWork={canCreateWork}
           canCreateNextCycle={canCreateNextCycle}
@@ -201,7 +204,7 @@ export function DashboardPage(): ReactNode {
         />
       ) : null}
 
-      {isManagerWorkspace ? (
+      {showManagerWorkspace ? (
         <ManagerDashboard
           activeCompanyLabel={activeCompanyLabel}
           allWorksTotal={allWorksQuery.data?.total}

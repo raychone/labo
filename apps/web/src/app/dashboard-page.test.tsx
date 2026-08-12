@@ -301,6 +301,7 @@ describe("DashboardPage", () => {
     expect(await screen.findByText("Situație financiară")).toBeDefined();
     expect(await screen.findByText("Lucrări")).toBeDefined();
     expect(screen.getAllByText("Lucrări nefacturate").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("heading", { name: "Recepție" })).toBeNull();
     expect(screen.queryByText("Activitate operațională")).toBeNull();
   });
 

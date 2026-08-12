@@ -24,6 +24,13 @@
   justify-content: space-between;
 }
 
+.clinics-page__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-3);
+  justify-content: flex-end;
+}
+
 .clinics-page__header h1,
 .clinics-page__subheader h3 {
   margin: 0;
