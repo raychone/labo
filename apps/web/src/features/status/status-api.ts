@@ -45,11 +45,24 @@ export async function fetchOperationalStatus(params: OperationalStatusQuery): Pr
   return parseApiResponse<OperationalStatusResponse>(response);
 }
 
-export function useOperationalStatus(params: OperationalStatusQuery, enabled: boolean) {
-  return useQuery({
+export function useOperationalStatus(
+  params: OperationalStatusQuery,
+  enabled: boolean,
+  options?: {
+    readonly refetchIntervalMs?: number;
+  },
+) {
+  return useQuery<OperationalStatusResponse, Error>({
     enabled,
     queryFn: () => fetchOperationalStatus(params),
     queryKey: statusQueryKeys.operational(params),
+    refetchOnWindowFocus: false,
     retry: false,
+    ...(options?.refetchIntervalMs !== undefined
+      ? {
+          refetchInterval: options.refetchIntervalMs,
+          refetchIntervalInBackground: true,
+        }
+      : {}),
   });
 }

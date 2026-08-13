@@ -51,6 +51,7 @@ Implemented or substantially implemented:
 - billing overview cards are clickable shortcuts into the related tabs, and the note de plată print view can be scoped to selected documents from the current clinic or doctor statement;
 - reception work creation uses searchable patient/work-type pickers, quick patient creation, keyboard navigation, and controlled dynamic checkbox/radio fields;
 - operational status read-model API and frontend `/status` workspace;
+- dedicated `/status/tv` fullscreen operational status mode for a physical laboratory display, authenticated and read-only, with polling-based refresh and no shell/navigation chrome;
 - backend work-cycle model, active-cycle lifecycle APIs, cycle-scoped workflow/logistics/delivery history, and returned-work registration UI;
 - demo seed.
 
@@ -71,7 +72,7 @@ Last completed documentation task: `WORKFORM-REAL-DISCOVERY-001`, which audited 
 
 `TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable. Technicians can select a personal color that is surfaced as a badge in operational status and workbench views; status filters stay collapsed by default; patient dossiers can carry clinic/doctor referral metadata; manager-only financial tabs stay hidden from non-managers; role navigation is intentionally scoped so technicians stay focused on their own work queue and managers see only manager-facing navigation plus status.
 
-`RECEPTION-TO-DELIVERY-001` is in progress and hardens cycle-scoped history across delivery and proof rendering for repeated returns. `BILLING-REALIGN-001C` is deferred; ambiguous legacy billing remains read-only until explicitly resumed. `DEMO-POLISH-002` is planned only and must not be started unless explicitly approved.
+`RECEPTION-TO-DELIVERY-001` is in progress and hardens cycle-scoped history across delivery and proof rendering for repeated returns. `STATUS-TV-001` is completed and adds a dedicated authenticated fullscreen TV mode for the operational status read model; it remains read-only, shows no financial data, and uses polling only. `BILLING-REALIGN-001C` is deferred; ambiguous legacy billing remains read-only until explicitly resumed. `DEMO-POLISH-002` is planned only and must not be started unless explicitly approved.
 
 ## Source Of Truth
 
