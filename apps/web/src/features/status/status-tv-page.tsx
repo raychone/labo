@@ -4,10 +4,8 @@ import {
   DELIVERY_STATUSES,
   LOGISTICS_STATUS_LABELS,
   LOGISTICS_STATUSES,
-  OPERATIONAL_STATUS_DEFAULT_PAGE_SIZE,
   OPERATIONAL_STATUS_MAX_PAGE_SIZE,
   OPERATIONAL_STATUS_SORT_FIELDS,
-  OPERATIONAL_STATUS_TABS,
   type DeadlineVisualState,
   type DeliveryStatus,
   type LogisticsStatus,
@@ -46,11 +44,14 @@ import "./status-tv-page.css";
 
 const defaultQuery: OperationalStatusQuery = {
   page: 1,
-  pageSize: OPERATIONAL_STATUS_DEFAULT_PAGE_SIZE,
+  pageSize: 12,
   sortBy: "effectiveDueAt",
   sortDirection: "asc",
   tab: "IN_PROGRESS",
 };
+
+const tvVisibleTabs: readonly OperationalStatusTab[] = ["IN_PROGRESS", "LATE", "RETURNED"];
+const tvAutoRotateIntervalMs = 12_000;
 
 type StatusQueryPatch = {
   readonly [K in keyof OperationalStatusQuery]?: OperationalStatusQuery[K] | null | undefined;
@@ -81,7 +82,7 @@ function isDeliveryStatus(value: string | null): value is DeliveryStatus {
 }
 
 function isOperationalTab(value: string | null): value is OperationalStatusTab {
-  return OPERATIONAL_STATUS_TABS.includes(value as OperationalStatusTab);
+  return tvVisibleTabs.includes(value as OperationalStatusTab);
 }
 
 function readPositiveInt(value: string | null, fallback: number, max?: number): number {
@@ -161,7 +162,7 @@ function updateSearchParams(current: URLSearchParams, patch: StatusQueryPatch): 
   if (next.get("page") === "1") {
     next.delete("page");
   }
-  if (next.get("pageSize") === String(OPERATIONAL_STATUS_DEFAULT_PAGE_SIZE)) {
+  if (next.get("pageSize") === String(defaultQuery.pageSize)) {
     next.delete("pageSize");
   }
 
@@ -170,10 +171,6 @@ function updateSearchParams(current: URLSearchParams, patch: StatusQueryPatch): 
 
 function getSafeColor(value: string | null | undefined): string | null {
   return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : null;
-}
-
-function formatDateTime(value: string | null): string {
-  return value ? new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "Fără termen";
 }
 
 function toPriorityLabel(priority: WorkPriority): string {
@@ -201,12 +198,53 @@ function BadgePill({ label, tone = "neutral" }: { readonly label: string; readon
   return <span className={`status-tv-page__pill status-tv-page__pill--${tone}`}>{label}</span>;
 }
 
-function getDeadlineLabel(row: OperationalStatusRow): string {
-  if (row.deadline.badge) {
-    return row.deadline.badge;
+function getCompactDeadlineLabel(row: OperationalStatusRow): string {
+  if (!row.deadline.effectiveDueAt) {
+    return row.deadline.badge ?? "Fără termen";
   }
 
-  return row.deadline.effectiveDueAt ? formatDateTime(row.deadline.effectiveDueAt) : "Fără termen";
+  const dueAt = new Date(row.deadline.effectiveDueAt);
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const startOfDue = new Date(dueAt.getFullYear(), dueAt.getMonth(), dueAt.getDate());
+  const daysUntilDue = Math.round((startOfDue.getTime() - startOfToday.getTime()) / 86_400_000);
+
+  if (daysUntilDue === 0) {
+    return "Azi";
+  }
+  if (daysUntilDue === 1) {
+    return "Mâine";
+  }
+  if (daysUntilDue > 1) {
+    return `+${daysUntilDue} zile`;
+  }
+
+  return `${daysUntilDue} zile`;
+}
+
+function getTvRowScore(row: OperationalStatusRow): number {
+  const priorityScore = row.priority === "URGENT" ? 0 : 100;
+  const deadlineScore = row.deadline.state === "LATE" ? 0 : row.deadline.state === "DUE_TODAY" ? 1 : row.deadline.state === "DUE_TOMORROW" ? 2 : 3;
+  const workflowScore = row.workflow.currentStage?.status === "IN_PROGRESS" || row.claimStatus === "CLAIMED" ? 0 : row.claimStatus === "UNCLAIMED" ? 1 : 2;
+
+  return priorityScore + deadlineScore + workflowScore;
+}
+
+function sortRowsForTv(rows: readonly OperationalStatusRow[]): OperationalStatusRow[] {
+  return [...rows].sort((left, right) => {
+    const scoreDelta = getTvRowScore(left) - getTvRowScore(right);
+    if (scoreDelta !== 0) {
+      return scoreDelta;
+    }
+
+    const leftDueAt = left.deadline.effectiveDueAt ? new Date(left.deadline.effectiveDueAt).getTime() : Number.POSITIVE_INFINITY;
+    const rightDueAt = right.deadline.effectiveDueAt ? new Date(right.deadline.effectiveDueAt).getTime() : Number.POSITIVE_INFINITY;
+    if (leftDueAt !== rightDueAt) {
+      return leftDueAt - rightDueAt;
+    }
+
+    return left.patient.name.localeCompare(right.patient.name, "ro");
+  });
 }
 
 function useMediaQuery(query: string, fallback = true): boolean {
@@ -239,15 +277,16 @@ export function StatusTvPage(): ReactNode {
   const query = useMemo(() => readQuery(searchParams), [searchParams]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [clock, setClock] = useState(() => new Date());
-  const statusQuery = useOperationalStatus(query, true, { refetchIntervalMs: 15_000 });
+  const statusQuery = useOperationalStatus(query, true, { refetchIntervalMs: 10_000 });
   const clinicsQuery = useQuery({ queryFn: fetchClinicOptions, queryKey: ["clinics", "options", "status-tv"], retry: false });
   const doctorsQuery = useQuery({ queryFn: () => fetchDoctorOptions(query.clinicId ?? undefined), queryKey: ["doctors", "options", "status-tv", query.clinicId], retry: false });
   const patientsQuery = useQuery({ queryFn: () => fetchPatientOptions(query.search ?? ""), queryKey: ["patients", "options", "status-tv", query.search ?? ""], retry: false });
   const techniciansQuery = useTechnicianOptions(true);
   const workTypesQuery = useWorkTypeOptions(true);
-  const rows = statusQuery.data?.items ?? [];
+  const rows = useMemo(() => sortRowsForTv(statusQuery.data?.items ?? []), [statusQuery.data?.items]);
   const isLargeScreen = useMediaQuery("(min-width: 980px)");
   const nowLabel = new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "medium" }).format(clock);
+  const totalPages = Math.max(1, statusQuery.data?.meta.totalPages ?? 1);
   const lastUpdatedLabel = statusQuery.dataUpdatedAt > 0
     ? new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "medium" }).format(new Date(statusQuery.dataUpdatedAt))
     : "—";
@@ -269,14 +308,35 @@ export function StatusTvPage(): ReactNode {
     ...DELIVERY_STATUSES.map((status) => ({ label: DELIVERY_STATUS_LABELS[status], value: status })),
   ];
   const sortOptions: readonly SelectOption[] = OPERATIONAL_STATUS_SORT_FIELDS.map((field) => ({ label: field === "effectiveDueAt" ? "Termen" : field === "priority" ? "Prioritate" : field === "createdAt" ? "Creată" : field === "updatedAt" ? "Actualizată" : field === "workCode" ? "Cod lucrare" : field === "clinicName" ? "Cabinet" : "Pacient", value: field }));
-  const operationalStateOptions: readonly SelectOption[] = OPERATIONAL_STATUS_TABS.map((tab) => ({ label: tab === "TODAY" ? "Astăzi" : tab === "IN_PROGRESS" ? "În lucru" : tab === "AVAILABLE" ? "Disponibile" : tab === "LATE" ? "Întârziate" : tab === "AT_CLINIC" ? "Plecate la medic" : tab === "RETURNED" ? "Revenite" : "Finalizate", value: tab }));
+  const operationalStateOptions: readonly SelectOption[] = tvVisibleTabs.map((tab) => ({ label: tab === "IN_PROGRESS" ? "În lucru" : tab === "LATE" ? "Întârziate" : "Revenite", value: tab }));
   const rowsHaveData = rows.length > 0;
-  const summaryCounters = statusQuery.data?.counters ?? [];
+  const summaryCounters = useMemo(
+    () => (statusQuery.data?.counters ?? []).filter((counter) => tvVisibleTabs.includes(counter.tab)),
+    [statusQuery.data?.counters],
+  );
+  const pageLabel = `${query.page}/${totalPages}`;
+  const visibleRowsLabel = `${rows.length}/${statusQuery.data?.meta.total ?? rows.length}`;
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (totalPages < 2) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setSearchParams((current) => {
+        const currentQuery = readQuery(current);
+        const nextPage = currentQuery.page >= totalPages ? 1 : currentQuery.page + 1;
+        return updateSearchParams(current, { page: nextPage });
+      }, { replace: true });
+    }, tvAutoRotateIntervalMs);
+
+    return () => window.clearInterval(timer);
+  }, [setSearchParams, totalPages]);
 
   function patchQuery(patch: StatusQueryPatch): void {
     setSearchParams((current) => updateSearchParams(current, { ...patch, page: patch.page ?? 1 }));
@@ -294,7 +354,6 @@ export function StatusTvPage(): ReactNode {
         />
         <span className="status-tv-page__stack">
           <strong>{row.workOwner?.displayName ?? "Fără tehnician"}</strong>
-          <span className="status-tv-page__muted">{row.executionCompany?.code ?? "Fără firmă"}</span>
         </span>
       </span>
     );
@@ -318,21 +377,18 @@ export function StatusTvPage(): ReactNode {
           <table className="status-tv-page__table">
             <thead>
               <tr>
-                <th>Tehnician</th>
                 <th>Pacient</th>
                 <th>Lucrare</th>
-                <th>Ciclu</th>
                 <th>Flux</th>
-                <th>Stare</th>
-                <th>Prioritate</th>
+                <th>Tehnician</th>
                 <th>Termen</th>
+                <th>Stare</th>
                 <th>Livrare</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id}>
-                  <td>{renderTechnician(row)}</td>
                   <td>
                     <span className="status-tv-page__stack">
                       <strong>{row.patient.name}</strong>
@@ -342,13 +398,6 @@ export function StatusTvPage(): ReactNode {
                   <td>
                     <span className="status-tv-page__stack">
                       <BadgePill label={row.workType.name} tone="neutral" />
-                      <span className="status-tv-page__muted">{row.workCode}</span>
-                    </span>
-                  </td>
-                  <td>
-                    <span className="status-tv-page__stack">
-                      <strong>{row.currentCycle?.label ?? "Fără ciclu"}</strong>
-                      <span className="status-tv-page__muted">{row.executionCompany?.code ?? "Nefixată"}</span>
                     </span>
                   </td>
                   <td>
@@ -361,25 +410,26 @@ export function StatusTvPage(): ReactNode {
                     </span>
                   </td>
                   <td>
+                    <span className="status-tv-page__stack">
+                      {renderTechnician(row)}
+                    </span>
+                  </td>
+                  <td>
                     <BadgePill
-                      label={toOperationalLabel(row)}
-                      tone={row.deadline.state === "LATE" ? "danger" : row.workflow.currentStage?.status === "IN_PROGRESS" || row.claimStatus === "CLAIMED" ? "info" : row.claimStatus === "UNCLAIMED" ? "warning" : row.workflow.status === "COMPLETED" ? "success" : "neutral"}
+                      label={getCompactDeadlineLabel(row)}
+                      tone={row.deadline.state === "LATE" ? "danger" : row.deadline.state === "DUE_TODAY" ? "warning" : "info"}
                     />
                   </td>
                   <td>
-                    <BadgePill label={toPriorityLabel(row.priority)} tone={row.priority === "URGENT" ? "warning" : "neutral"} />
-                  </td>
-                  <td>
                     <span className="status-tv-page__stack">
-                      <strong>{getDeadlineLabel(row)}</strong>
-                      <span className="status-tv-page__muted">{row.deadline.tooltip}</span>
+                      <BadgePill
+                        label={toOperationalLabel(row)}
+                        tone={row.deadline.state === "LATE" ? "danger" : row.workflow.currentStage?.status === "IN_PROGRESS" || row.claimStatus === "CLAIMED" ? "info" : row.claimStatus === "UNCLAIMED" ? "warning" : row.workflow.status === "COMPLETED" ? "success" : "neutral"}
+                      />
                     </span>
                   </td>
                   <td>
-                    <span className="status-tv-page__stack">
-                      <BadgePill label={row.logistics.status ? LOGISTICS_STATUS_LABELS[row.logistics.status] : "Fără logistică"} tone={row.logistics.status === "DELIVERED" ? "success" : row.logistics.status === "READY_FOR_DELIVERY" ? "info" : "neutral"} />
-                      <BadgePill label={row.delivery.status ? DELIVERY_STATUS_LABELS[row.delivery.status] : "Fără livrare"} tone={row.delivery.status === "DELIVERED" ? "success" : row.delivery.status ? "info" : "neutral"} />
-                    </span>
+                    <BadgePill label={row.delivery.status ? DELIVERY_STATUS_LABELS[row.delivery.status] : row.logistics.status ? LOGISTICS_STATUS_LABELS[row.logistics.status] : "Fără livrare"} tone={row.delivery.status === "DELIVERED" || row.logistics.status === "DELIVERED" ? "success" : row.delivery.status || row.logistics.status ? "info" : "neutral"} />
                   </td>
                 </tr>
               ))}
@@ -393,12 +443,11 @@ export function StatusTvPage(): ReactNode {
               <div className="status-tv-page__card-header">
                 <div className="status-tv-page__stack">
                   <strong>{row.patient.name}</strong>
-                  <span className="status-tv-page__muted">{row.workCode} · {row.currentCycle?.label ?? "Fără ciclu"}</span>
+                  <span className="status-tv-page__muted">{row.doctor.name}</span>
                 </div>
                 <BadgePill label={toPriorityLabel(row.priority)} tone={row.priority === "URGENT" ? "warning" : "neutral"} />
               </div>
               <div className="status-tv-page__card-grid">
-                <div className="status-tv-page__card-field">{renderTechnician(row)}</div>
                 <div className="status-tv-page__card-field"><BadgePill label={row.workType.name} tone="neutral" /></div>
                 <div className="status-tv-page__card-field">
                   <BadgePill
@@ -407,18 +456,21 @@ export function StatusTvPage(): ReactNode {
                   />
                 </div>
                 <div className="status-tv-page__card-field">
+                  {renderTechnician(row)}
+                </div>
+                <div className="status-tv-page__card-field">
+                  <strong>Termen</strong>
+                  <span>{getCompactDeadlineLabel(row)}</span>
+                </div>
+                <div className="status-tv-page__card-field">
                   <BadgePill
                     label={toOperationalLabel(row)}
                     tone={row.deadline.state === "LATE" ? "danger" : row.workflow.currentStage?.status === "IN_PROGRESS" || row.claimStatus === "CLAIMED" ? "info" : row.claimStatus === "UNCLAIMED" ? "warning" : row.workflow.status === "COMPLETED" ? "success" : "neutral"}
                   />
                 </div>
                 <div className="status-tv-page__card-field">
-                  <strong>Termen</strong>
-                  <span>{getDeadlineLabel(row)}</span>
-                </div>
-                <div className="status-tv-page__card-field">
                   <strong>Livrare</strong>
-                  <span>{row.delivery.status ? DELIVERY_STATUS_LABELS[row.delivery.status] : "Fără livrare"}</span>
+                  <span>{row.delivery.status ? DELIVERY_STATUS_LABELS[row.delivery.status] : row.logistics.status ? LOGISTICS_STATUS_LABELS[row.logistics.status] : "Fără livrare"}</span>
                 </div>
               </div>
             </article>
@@ -445,6 +497,10 @@ export function StatusTvPage(): ReactNode {
               <span>Ultima actualizare</span>
               <strong>{lastUpdatedLabel}</strong>
             </div>
+            <div className="status-tv-page__meta-card">
+              <span>Pagină</span>
+              <strong>{pageLabel}</strong>
+            </div>
             <Button onClick={() => setFiltersOpen((value) => !value)} variant="secondary">
               {filtersOpen ? "Ascunde filtrele" : "Afișează filtrele"}
             </Button>
@@ -463,6 +519,7 @@ export function StatusTvPage(): ReactNode {
         <Card className="status-tv-page__panel">
           <CardHeader className="status-tv-page__panel-header">
             <CardTitle>Registru live</CardTitle>
+            <span className="status-tv-page__header-copy">{visibleRowsLabel} pe pagină</span>
           </CardHeader>
           <CardContent className="status-tv-page__panel-content">
             {filtersOpen ? (

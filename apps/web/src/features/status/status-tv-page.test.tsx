@@ -111,10 +111,10 @@ const statusTvResponse = {
   meta: {
     hasMore: true,
     page: 1,
-    pageSize: 25,
-    scannedRows: 1001,
-    total: 1,
-    totalPages: 1,
+    pageSize: 12,
+    scannedRows: 24,
+    total: 24,
+    totalPages: 2,
   },
 } as const;
 
@@ -178,10 +178,18 @@ describe("StatusTvPage", () => {
     await waitFor(() => expect(screen.getByText("Maria Ionescu")).toBeDefined());
     expect(screen.getByText("Coroană zirconiu")).toBeDefined();
     expect(screen.getByLabelText("Tehnician Ana").getAttribute("style")).toContain("background-color");
+    expect(screen.getByText("Azi")).toBeDefined();
+    expect(screen.queryByText("WO-2026-000001")).toBeNull();
+    expect(screen.queryByText("Ciclul 2")).toBeNull();
     expect(screen.queryByText("Deschide navigația")).toBeNull();
     expect(screen.queryByText("Deconectare")).toBeNull();
     expect(screen.queryByRole("button", { name: /Preia|Continuă|Finalizează|Salvează/i })).toBeNull();
     expect(screen.queryByText(/RON|factură|preț/i)).toBeNull();
+    expect(screen.getAllByText("În lucru").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Întârziate").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Revenite").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Disponibile")).toBeNull();
+    expect(screen.queryByText("Finalizate")).toBeNull();
   });
 
   it("polls the live read model without requiring interaction", async () => {
@@ -201,6 +209,19 @@ describe("StatusTvPage", () => {
     });
 
     expect(fetchMock.mock.calls.filter(([input]) => String(input).includes("/status/operational")).length).toBeGreaterThan(initialStatusCalls);
+  });
+
+  it("rotates to the next page automatically when there are multiple pages", async () => {
+    vi.useFakeTimers();
+    const fetchMock = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    renderProtectedRoute(createAuthState("authenticated", ["works.read_all"]));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(12_000);
+    });
+
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/status/operational") && String(input).includes("page=2"))).toBe(true);
   });
 
   it("redirects anonymous users to login", async () => {
