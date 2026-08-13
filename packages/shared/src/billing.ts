@@ -1,3 +1,5 @@
+import type { WorkTypeUnit } from "./work-types.js";
+
 export const BILLING_DOCUMENT_TYPES = ["PROFORMA", "INVOICE"] as const;
 export const BILLING_DOCUMENT_STATUSES = ["DRAFT", "ISSUED", "PARTIALLY_PAID", "PAID", "CANCELLED"] as const;
 export const PAYMENT_METHODS = ["CASH", "BANK_TRANSFER", "CARD", "OTHER"] as const;
@@ -35,6 +37,7 @@ export interface BillingDocumentLineView {
   readonly sortOrder: number;
   readonly toothPositionSnapshot: string | null;
   readonly unitPriceMinor: number;
+  readonly workTypeUnitSnapshot: WorkTypeUnit;
   readonly workCode: string;
   readonly workCycleId: string | null;
   readonly workCreatedAtSnapshot: string;

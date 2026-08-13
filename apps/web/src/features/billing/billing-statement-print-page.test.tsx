@@ -39,7 +39,7 @@ describe("BillingStatementPrintPage", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders the A5 statement header asset and selected documents", async () => {
+  it("renders the A4 statement header asset and selected documents by default", async () => {
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("/billing/statements/clinic")) {
@@ -92,9 +92,40 @@ describe("BillingStatementPrintPage", () => {
     );
 
     expect(await screen.findByText("Notă de plată")).toBeDefined();
-    expect(screen.getByTitle("Antet notă de plată")).toBeDefined();
+    expect(screen.getByTitle("Antet notă de plată A4")).toBeDefined();
     expect(screen.getAllByText((_, element) => element?.textContent?.includes("Smile Avenue") ?? false).length).toBeGreaterThan(0);
     expect(screen.getByText("2 documente selectate din perioadă")).toBeDefined();
     expect(screen.getByRole("button", { name: "Export PDF" })).toBeDefined();
+  });
+
+  it("keeps the A5 statement asset available when requested explicitly", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/billing/statements/clinic")) {
+        return Promise.resolve(createJsonResponse({
+          clinicId: "clinic_1",
+          clinicName: "Smile Avenue",
+          currency: "RON",
+          dateFrom: "2026-08-01",
+          dateTo: "2026-08-31",
+          documents: [],
+          generatedAt: "2026-08-13T12:00:00.000Z",
+          paidMinor: 0,
+          totalMinor: 0,
+          uninvoicedMinor: 0,
+          uninvoicedWorks: [],
+        }));
+      }
+
+      return Promise.resolve(createJsonResponse({}, 404));
+    }));
+
+    renderWithProviders(
+      <BillingStatementPrintPage />,
+      "/billing/statements/clinic/print?clinicId=clinic_1&dateFrom=2026-08-01&dateTo=2026-08-31&format=a5",
+    );
+
+    expect(await screen.findByText("Notă de plată")).toBeDefined();
+    expect(screen.getByTitle("Antet notă de plată A5")).toBeDefined();
   });
 });

@@ -399,6 +399,7 @@ export function BillingPage(): ReactNode {
 
   function openStatementPrint(scope: "clinic" | "doctor"): void {
     const params = new URLSearchParams({ dateFrom: range.dateFrom, dateTo: range.dateTo });
+    params.set("format", "a4");
     if (scope === "clinic" && clinicStatementId) {
       params.set("clinicId", clinicStatementId);
     }

@@ -60,6 +60,12 @@ Full document-center management for all assets/templates outside the billing pri
 
 Final legal document templates require business/legal confirmation.
 
+## Printable Documents
+
+- Billing print views use the issuing company settings as legal data.
+- The note de plată print stack defaults to the A4 Creative Dental template and can render the A5 variant when requested explicitly.
+- The invoice print stack uses the same active legal entity settings and does not allow cross-company overrides from the UI.
+
 ## Related Documents
 
 [organizations.md](organizations.md), [billing.md](billing.md).

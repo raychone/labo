@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented, with the real Creative Dental source list reconciled into the seeded catalog.
+Implemented, with the real Creative Dental source list reconciled into the seeded catalog and previewed through manager-facing agreement and billing paths.
 
 ## Purpose
 
@@ -32,7 +32,7 @@ The current catalog source is the real client price list in `assets/WhatsApp Ima
 
 ## UI
 
-`/pricing`.
+`/pricing`, with manager-oriented catalog and agreement management that feeds billing preview, statements, and cycle pricing snapshots.
 
 ## Audit
 

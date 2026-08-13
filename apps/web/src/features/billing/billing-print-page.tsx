@@ -1,5 +1,5 @@
 import { Button, ErrorState, LoadingState, Tabs } from "@dental-lab/ui";
-import { formatMoneyMinor, type BillingDocumentAttachment, type BillingDocumentLineView, type PrintableBillingDocument } from "@dental-lab/shared";
+import { formatMoneyMinor, formatWorkTypeUnit, type BillingDocumentAttachment, type BillingDocumentLineView, type PrintableBillingDocument } from "@dental-lab/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router";
 import type { ReactNode } from "react";
@@ -62,12 +62,20 @@ export function BillingPrintPage(): ReactNode {
 
 function PrintableDocumentView({ document }: { readonly document: PrintableBillingDocument }): ReactNode {
   return (
-    <article className="billing-print">
-      <PrintHeader complianceNotice={document.complianceNotice} customer={document.customer} generatedAt={document.generatedAt} supplier={document.supplier} title={`${document.documentTitle} ${document.formattedNumber ?? "Draft"}`} />
-      <dl className="billing-print__meta">
+    <article className="billing-print billing-print--invoice">
+      <PrintHeader
+        complianceNotice={document.complianceNotice}
+        customer={document.customer}
+        generatedAt={document.generatedAt}
+        supplier={document.supplier}
+        subtitle={`Serie / număr: ${document.formattedNumber ?? "Draft"}`}
+        title={`${document.documentTitle} ${document.formattedNumber ?? "Draft"}`}
+      />
+      <dl className="billing-print__meta billing-print__meta--document">
         <div><dt>Data emiterii</dt><dd>{formatDate(document.issueDate)}</dd></div>
         <div><dt>Scadență</dt><dd>{document.dueDate ? formatDate(document.dueDate) : "-"}</dd></div>
         <div><dt>Status</dt><dd>{document.status}</dd></div>
+        <div><dt>Lucrări</dt><dd>{document.workCodes.join(", ") || "-"}</dd></div>
       </dl>
       <LinesTable currency={document.currency} lines={document.lines} />
       <Totals currency={document.currency} paidMinor={document.paidMinor} totalMinor={document.totalMinor} balanceMinor={document.balanceMinor} />
@@ -78,8 +86,15 @@ function PrintableDocumentView({ document }: { readonly document: PrintableBilli
 
 function AttachmentView({ attachment }: { readonly attachment: BillingDocumentAttachment }): ReactNode {
   return (
-    <article className="billing-print">
-      <PrintHeader complianceNotice={attachment.complianceNotice} customer={attachment.customer} generatedAt={attachment.generatedAt} supplier={attachment.supplier} title={`${attachment.documentTitle} ${attachment.documentNumber ?? "Draft"}`} />
+    <article className="billing-print billing-print--invoice">
+      <PrintHeader
+        complianceNotice={attachment.complianceNotice}
+        customer={attachment.customer}
+        generatedAt={attachment.generatedAt}
+        supplier={attachment.supplier}
+        subtitle={`Număr: ${attachment.documentNumber ?? "Draft"}`}
+        title={`${attachment.documentTitle} ${attachment.documentNumber ?? "Draft"}`}
+      />
       <LinesTable currency={attachment.currency} lines={attachment.lines} />
       <Totals currency={attachment.currency} paidMinor={0} totalMinor={attachment.totalMinor} balanceMinor={attachment.totalMinor} />
     </article>
@@ -91,24 +106,28 @@ function PrintHeader({
   customer,
   generatedAt,
   supplier,
+  subtitle,
   title,
 }: {
   readonly complianceNotice: string;
   readonly customer: PrintableBillingDocument["customer"];
   readonly generatedAt: string;
   readonly supplier: PrintableBillingDocument["supplier"];
+  readonly subtitle: string;
   readonly title: string;
 }): ReactNode {
   return (
-    <header className="billing-print__header">
-      <div>
+    <header className="billing-print__header billing-print__header--invoice">
+      <div className="billing-print__title-block">
+        <p className="billing-print__eyebrow">Document de facturare</p>
         <h1>{title}</h1>
-        <p>{complianceNotice}</p>
+        <p className="billing-print__subtitle">{subtitle}</p>
+        <p className="billing-print__compliance">{complianceNotice}</p>
         <small>Generat la {formatDate(generatedAt)}</small>
       </div>
-      <div className="billing-print__parties">
+      <div className="billing-print__header-parties">
         <PartyBlock label="Furnizor" party={supplier} />
-        <PartyBlock label="Client" party={customer} />
+        <PartyBlock label="Cumpărător" party={customer} />
       </div>
     </header>
   );
@@ -116,39 +135,44 @@ function PrintHeader({
 
 function PartyBlock({ label, party }: { readonly label: string; readonly party: PrintableBillingDocument["supplier"] }): ReactNode {
   return (
-    <section>
+    <section className="billing-print__party">
       <h2>{label}</h2>
       <strong>{party.legalName ?? party.name}</strong>
+      <p>{party.name}</p>
       <p>{party.address ?? "-"}</p>
-      <p>CUI: {party.taxId ?? "-"} · Reg: {party.registrationNumber ?? "-"}</p>
-      <p>{party.email ?? "-"} · {party.phone ?? "-"}</p>
+      <p>CUI: {party.taxId ?? "-"}</p>
+      <p>Reg: {party.registrationNumber ?? "-"}</p>
+      <p>{party.email ?? "-"}</p>
+      <p>{party.phone ?? "-"}</p>
+      {party.website ? <p>{party.website}</p> : null}
     </section>
   );
 }
 
 function LinesTable({ currency, lines }: { readonly currency: string; readonly lines: readonly BillingDocumentLineView[] }): ReactNode {
   return (
-    <table className="billing-print__table">
+    <table className="billing-print__table billing-print__table--invoice">
       <thead>
         <tr>
-          <th>Cod lucrare</th>
-          <th>Data intrării</th>
-          <th>Pacient</th>
-          <th>Medic</th>
-          <th>Tip lucrare</th>
-          <th>Elemente</th>
+          <th>Nr.</th>
+          <th>Denumirea produselor sau serviciilor</th>
+          <th>U.M.</th>
+          <th>Cantitate</th>
+          <th>Preț unitar</th>
           <th>Valoare</th>
         </tr>
       </thead>
       <tbody>
-        {lines.map((line) => (
+        {lines.map((line, index) => (
           <tr key={line.id}>
-            <td>{line.workCode}</td>
-            <td>{formatDate(line.workCreatedAtSnapshot)}</td>
-            <td>{line.patientNameSnapshot}</td>
-            <td>{line.doctorNameSnapshot}</td>
-            <td>{line.workTypeNameSnapshot}</td>
+            <td>{index + 1}</td>
+            <td>
+              <strong>{line.description}</strong>
+              <small>{line.workCode} · {line.patientNameSnapshot}</small>
+            </td>
+            <td>{formatWorkTypeUnit(line.workTypeUnitSnapshot)}</td>
             <td>{line.quantity}</td>
+            <td>{formatMoneyMinor(line.unitPriceMinor, currency, "ro-RO")}</td>
             <td>{formatMoneyMinor(line.lineTotalMinor, currency, "ro-RO")}</td>
           </tr>
         ))}

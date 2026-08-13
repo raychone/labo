@@ -86,6 +86,7 @@ describe("BillingPrintPage", () => {
             sortOrder: 1,
             toothPositionSnapshot: null,
             unitPriceMinor: 10000,
+            workTypeUnitSnapshot: "UNIT",
             workCode: "WO-2026-000001",
             workCycleId: "cycle_1",
             workCreatedAtSnapshot: "2026-08-12T00:00:00.000Z",
@@ -145,6 +146,7 @@ describe("BillingPrintPage", () => {
             sortOrder: 1,
             toothPositionSnapshot: null,
             unitPriceMinor: 10000,
+            workTypeUnitSnapshot: "UNIT",
             workCode: "WO-2026-000001",
             workCycleId: "cycle_1",
             workCreatedAtSnapshot: "2026-08-12T00:00:00.000Z",
@@ -175,6 +177,7 @@ describe("BillingPrintPage", () => {
     expect(screen.getAllByText("Cabinet Stomatologic Central").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Export PDF" })).toBeDefined();
     expect(screen.getAllByText("Document intern neintegrat cu RO e-Factura.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("bucată").length).toBeGreaterThan(0);
     expect(screen.queryByText("Nicolaie Gabriel")).toBeNull();
   });
 });

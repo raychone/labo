@@ -1,4 +1,5 @@
 import type { BillingDocumentStatus, BillingDocumentType, PaymentMethod, Prisma } from "@prisma/client";
+import type { WorkTypeUnit } from "@prisma/client";
 
 type PaymentStatus = "UNPAID" | "PARTIALLY_PAID" | "PAID";
 
@@ -23,6 +24,7 @@ export interface BillingDocumentLineView {
   readonly sortOrder: number;
   readonly toothPositionSnapshot: string | null;
   readonly unitPriceMinor: number;
+  readonly workTypeUnitSnapshot: WorkTypeUnit;
   readonly workCode: string;
   readonly workCycleId: string | null;
   readonly workCreatedAtSnapshot: string;
@@ -153,6 +155,11 @@ export type BillingDocumentRecord = Prisma.BillingDocumentGetPayload<{
       include: {
         legalEntity: true;
         workCycle: true;
+        workOrder: {
+          include: {
+            workType: true;
+          };
+        };
       };
     };
     payments: true;
@@ -268,6 +275,7 @@ export function toBillingDocumentLineView(line: BillingDocumentRecord["lines"][n
     sortOrder: line.sortOrder,
     toothPositionSnapshot: line.toothPositionSnapshot,
     unitPriceMinor: line.unitPriceMinor,
+    workTypeUnitSnapshot: line.workOrder.workType.unit,
     workCode: line.workCode,
     workCycleId: line.workCycleId,
     workCreatedAtSnapshot: line.workCreatedAtSnapshot.toISOString(),

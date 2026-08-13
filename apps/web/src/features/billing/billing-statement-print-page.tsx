@@ -8,7 +8,10 @@ import { fetchClinicStatement, fetchDoctorStatement, type BillingStatementParams
 import { getErrorMessage } from "../../lib/form-utils.js";
 import "./billing-page.css";
 
-const statementHeaderAsset = encodeURI("/assets/Nota Plata A5 2026.pdf#page=1&view=FitH&toolbar=0&navpanes=0");
+const STATEMENT_HEADER_ASSETS = {
+  a4: encodeURI("/assets/Nota Plata 2026.pdf#page=1&view=FitH&toolbar=0&navpanes=0"),
+  a5: encodeURI("/assets/Nota Plata A5 2026.pdf#page=1&view=FitH&toolbar=0&navpanes=0"),
+} as const;
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium" }).format(new Date(value));
@@ -32,10 +35,15 @@ function readSelectedDocumentIds(searchParams: URLSearchParams): readonly string
   return raw ? raw.split(",").map((value) => value.trim()).filter(Boolean) : [];
 }
 
+function readStatementFormat(searchParams: URLSearchParams): keyof typeof STATEMENT_HEADER_ASSETS {
+  return searchParams.get("format") === "a5" ? "a5" : "a4";
+}
+
 export function BillingStatementPrintPage(): ReactNode {
   const params = useParams();
   const [searchParams] = useSearchParams();
   const scope = params.scope === "doctor" ? "doctor" : "clinic";
+  const format = readStatementFormat(searchParams);
   const statementParams = readStatementParams(searchParams);
   const selectedDocumentIds = readSelectedDocumentIds(searchParams);
   const query = useQuery<ClinicBillingStatement | DoctorBillingStatement>({
@@ -69,18 +77,21 @@ export function BillingStatementPrintPage(): ReactNode {
     <main className="billing-print-page">
       <div className="billing-print-page__actions">
         <Button onClick={() => window.print()}>Export PDF</Button>
+        <span className="billing-print-page__format-badge">Format {format.toUpperCase()}</span>
         <Link className="billing-print-page__back-link" to="/billing">Înapoi la facturare</Link>
       </div>
-      <StatementPrintView scope={scope} selectedDocumentIds={selectedDocumentIds} statement={query.data} />
+      <StatementPrintView format={format} scope={scope} selectedDocumentIds={selectedDocumentIds} statement={query.data} />
     </main>
   );
 }
 
 function StatementPrintView({
+  format,
   scope,
   selectedDocumentIds,
   statement,
 }: {
+  readonly format: keyof typeof STATEMENT_HEADER_ASSETS;
   readonly scope: "clinic" | "doctor";
   readonly selectedDocumentIds: readonly string[];
   readonly statement: ClinicBillingStatement | DoctorBillingStatement;
@@ -99,7 +110,7 @@ function StatementPrintView({
   return (
     <article className="billing-statement">
       <div className="billing-statement__header-art-wrap">
-        <iframe aria-label="Antet notă de plată" className="billing-statement__header-art" src={statementHeaderAsset} title="Antet notă de plată">
+        <iframe aria-label={`Antet notă de plată ${format.toUpperCase()}`} className="billing-statement__header-art" src={STATEMENT_HEADER_ASSETS[format]} title={`Antet notă de plată ${format.toUpperCase()}`}>
           <p>Antetul PDF nu poate fi afișat în browserul curent.</p>
         </iframe>
       </div>

@@ -33,6 +33,11 @@ type PrintableDocumentRecord = Prisma.BillingDocumentGetPayload<{
       include: {
         legalEntity: true;
         workCycle: true;
+        workOrder: {
+          include: {
+            workType: true;
+          };
+        };
       };
     };
     payments: true;
@@ -46,6 +51,11 @@ const PRINT_DOCUMENT_INCLUDE = {
     include: {
       legalEntity: true,
       workCycle: true,
+      workOrder: {
+        include: {
+          workType: true,
+        },
+      },
     },
   },
   payments: true,

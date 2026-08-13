@@ -2,7 +2,7 @@
 
 ## Status
 
-IN PROGRESS
+COMPLETED
 
 ## Objective
 
@@ -47,7 +47,9 @@ Align the application with the client-provided source assets under `assets/` for
 
 - `docs/discovery/ASSETS-DOCS-AUDIT.md`
 - `docs/discovery/ASSETS-PRICE-RECONCILIATION.md`
-- asset-backed document notes in pricing/billing docs
+- asset-backed document notes in pricing/billing/settings docs
+- printable payment-note support with A4 primary and A5 optional formatting
+- invoice print layout alignment with the supplied historical invoice reference
 - printer-facing copy alignment for the pricing audit note
 
 ## Confirmed mappings
@@ -56,7 +58,8 @@ Align the application with the client-provided source assets under `assets/` for
 - Blank laboratory sheet -> real cycle-scoped work sheet.
 - Collaboration terms -> operational guidance and validation reference.
 - Historical invoice photo -> billing print structure reference.
-- A4/A5 payment-note PDFs -> note de plată / statement branding shells.
+- A4 payment-note PDF -> primary note de plată / statement branding shell.
+- A5 payment-note PDF -> optional compact note de plată / statement branding shell.
 
 ## Confirmation gaps
 
