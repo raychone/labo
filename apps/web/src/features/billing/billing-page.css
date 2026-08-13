@@ -540,7 +540,21 @@
   color: var(--dl-color-text-muted);
 }
 
+@page {
+  size: A4 portrait;
+  margin: 10mm 12mm 12mm;
+}
+
 @media print {
+  html,
+  body {
+    background: #ffffff;
+    margin: 0;
+    min-height: auto;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
   .app-shell__sidebar,
   .app-shell__topbar,
   .app-shell__header,
@@ -562,9 +576,18 @@
     padding: 0;
   }
 
+  .billing-print-page .dl-tabs {
+    display: block;
+  }
+
+  .billing-print-page .dl-tabs__panel {
+    display: block;
+  }
+
   .billing-page__print-preview,
   .billing-print {
     border: 0;
+    padding: 0;
   }
 
   .billing-statement {
@@ -585,5 +608,54 @@
   .billing-print__party-grid,
   .billing-print__meta--document {
     grid-template-columns: 1fr;
+  }
+
+  .billing-print__header,
+  .billing-print__header--invoice,
+  .billing-print__header-parties,
+  .billing-print__party,
+  .billing-print__meta,
+  .billing-print__meta--document,
+  .billing-print__totals,
+  .billing-print__table,
+  .billing-statement,
+  .billing-statement__header,
+  .billing-statement__summary,
+  .billing-statement__section,
+  .billing-statement__header-art-wrap {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .billing-print__header--invoice {
+    gap: var(--dl-space-2);
+  }
+
+  .billing-print__party {
+    padding: var(--dl-space-2);
+  }
+
+  .billing-print__title-block h1 {
+    font-size: var(--dl-font-size-section-title);
+  }
+
+  .billing-print__title-block small,
+  .billing-print__eyebrow,
+  .billing-print__subtitle,
+  .billing-print__compliance,
+  .billing-print__party p,
+  .billing-print__party strong,
+  .billing-print__meta,
+  .billing-print__totals,
+  .billing-statement__brand,
+  .billing-statement__recipient,
+  .billing-statement__summary,
+  .billing-statement__section-header,
+  .billing-statement__table {
+    font-size: var(--dl-font-size-small);
+  }
+
+  .billing-statement__header-art {
+    block-size: 7rem;
   }
 }

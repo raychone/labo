@@ -9,8 +9,8 @@ import { getErrorMessage } from "../../lib/form-utils.js";
 import "./billing-page.css";
 
 const STATEMENT_HEADER_ASSETS = {
-  a4: encodeURI("/assets/Nota Plata 2026.pdf#page=1&view=FitH&toolbar=0&navpanes=0"),
-  a5: encodeURI("/assets/Nota Plata A5 2026.pdf#page=1&view=FitH&toolbar=0&navpanes=0"),
+  a4: encodeURI("/Nota Plata 2026.pdf#page=1&view=FitH&toolbar=0&navpanes=0"),
+  a5: encodeURI("/Nota Plata A5 2026.pdf#page=1&view=FitH&toolbar=0&navpanes=0"),
 } as const;
 
 function formatDate(value: string): string {
