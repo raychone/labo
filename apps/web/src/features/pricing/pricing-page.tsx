@@ -648,7 +648,7 @@ function AuditSourceTab(): ReactNode {
         <CardDescription>Istoricul operațional complet se păstrează server-side prin audit log.</CardDescription>
       </CardHeader>
       <CardContent className="pricing-page__stack">
-        <p className="pricing-page__muted">Catalogul demo a fost transcris manual numai din imaginea clară de prețuri Creative Dental. Materialele de facturare, formularele pacientului și documentele fiscale din `assets/` nu au fost procesate.</p>
+        <p className="pricing-page__muted">Catalogul Creative Dental a fost transcris manual din imaginea de prețuri clară și reconciliat cu catalogul real al aplicației. Materialele de facturare, formularele pacientului și documentele fiscale din `assets/` sunt folosite acum ca referințe pentru tipărire și documentație, iar valorile ambigue rămân marcate separat.</p>
         <p className="pricing-page__muted">Valorile ambigue sunt marcate în notele produsului și trebuie validate cu clienta înainte de folosire reală.</p>
       </CardContent>
     </Card>

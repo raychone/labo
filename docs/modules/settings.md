@@ -54,7 +54,7 @@ Company-aware document center.
 
 ## Deferred
 
-Direct use of assets headers/templates in production documents.
+Full document-center management for all assets/templates outside the billing print stack.
 
 ## Open Decisions
 

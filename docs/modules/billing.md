@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented, including company-aware `NC`/`NG` realignment in BILLING-REALIGN-001A and the manager-facing financial workspace, receivables, month-end registry, and read-only ambiguous legacy review in BILLING-REALIGN-001B.
+Implemented, including company-aware `NC`/`NG` realignment in BILLING-REALIGN-001A and the manager-facing financial workspace, receivables, month-end registry, read-only ambiguous legacy review in BILLING-REALIGN-001B, and asset-aligned printable note/invoice layouts.
 
 ## Purpose
 
@@ -36,7 +36,7 @@ A work cycle without an unambiguous locked execution snapshot cannot be invoiced
 
 ## UI
 
-`/billing`, with tabs for overview, billable works, proformas, invoices, payments, receivables/restanțe, month-end, statements, and series. Filters start collapsed behind an explicit toggle so the page stays usable by default. Manual payment recording is presented in a modal for a selected invoice or proforma with outstanding balance; proformas are converted to invoices before payment is recorded. Print views remain under `/billing/documents/:id/print`, and company-scoped clinic/doctor statement print views live under `/billing/statements/:scope/print`.
+`/billing`, with tabs for overview, billable works, proformas, invoices, payments, receivables/restanțe, month-end, statements, and series. Filters start collapsed behind an explicit toggle so the page stays usable by default. Manual payment recording is presented in a modal for a selected invoice or proforma with outstanding balance; proformas are converted to invoices before payment is recorded. Print views remain under `/billing/documents/:id/print`, and company-scoped clinic/doctor statement print views live under `/billing/statements/:scope/print`. The statement print view uses the supplied A5 payment-note asset as a header reference, while the billing document print view keeps the A4 invoice-style layout and company-specific legal snapshots.
 
 ## Audit
 

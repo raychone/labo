@@ -8,7 +8,7 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 
 | Field | Value |
 |---|---|
-| Current task | RECEPTION-TO-DELIVERY-001 |
+| Current task | ASSETS-DOCS-001 |
 | Status | IN PROGRESS |
 | Blocker | none |
 | Last completed task | STATUS-TV-001B |
@@ -45,6 +45,7 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | forms | WORKFORM-REAL-001A | COMPLETED | WORKFORMS-002, WORK-CYCLES-001B, WORKFORM-REAL-DISCOVERY-001 | real laboratory work sheet schema, cycle submissions, finalization, RBAC, and work-detail UI | [tasks/WORKFORM-REAL-001A.md](tasks/WORKFORM-REAL-001A.md) |
 | forms | WORKFORM-REAL-001B | COMPLETED | WORKFORM-REAL-001A | operational laboratory sheet completion and workflow integration | [tasks/WORKFORM-REAL-001B.md](tasks/WORKFORM-REAL-001B.md) |
 | pricing | PRICING-002 | COMPLETED | ORG-DATA-MIGRATION-001, WORKTYPES-001 | company pricing and agreements | [modules/pricing.md](modules/pricing.md) |
+| documentation | ASSETS-DOCS-001 | IN PROGRESS | WORKFORM-REAL-001A, WORKFORM-REAL-001B, BILLING-REALIGN-001B, PRICING-002 | real client assets integrated into pricing and printable documents | [tasks/ASSETS-DOCS-001.md](tasks/ASSETS-DOCS-001.md) |
 | deadlines | WORK-DEADLINES-001A | COMPLETED | PRICING-002 | deadline engine/calendar | [modules/deadlines.md](modules/deadlines.md) |
 | deadlines | WORK-DEADLINES-001B | COMPLETED | WORK-DEADLINES-001A | persisted deadlines | [modules/deadlines.md](modules/deadlines.md) |
 | deadlines | WORK-DEADLINES-001C | COMPLETED | WORK-DEADLINES-001B | operational deadline UI | [modules/deadlines.md](modules/deadlines.md) |

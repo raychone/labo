@@ -42,6 +42,7 @@ Implemented or substantially implemented:
 - technician workbench and workload, including technician color preferences surfaced as badges in `/status`;
 - technician execution lifecycle with execution-first work drawer ordering, stage action labeling, and search-based workbench narrowing;
 - pricing catalog, execution rules, clinic/doctor agreements, preview resolver;
+- real Creative Dental price list reconciliation and asset-backed printable document alignment;
 - logistics center and delivery preparation groups;
 - deliveries and internal proof/signature rendering;
 - deliveries and internal proof/signature rendering with cycle-aware delivery item history;
@@ -70,6 +71,8 @@ Planned or partial:
 Last completed functional task: `TECH-EXECUTION-001`, which surfaces the live technician execution context first in the work drawer, narrows workbench search results to the best match, and keeps current stage actions aligned to live runtime state.
 
 Last completed documentation task: `WORKFORM-REAL-DISCOVERY-001`, which audited the real paper work sheet and produced [discovery/WORKFORM-REAL-FIELD-AUDIT.md](discovery/WORKFORM-REAL-FIELD-AUDIT.md) and [discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md). `DOCS-TOKEN-001` created the permanent token-efficient documentation system under `docs/`.
+
+`ASSETS-DOCS-001` is in progress and is documenting the real client assets under `assets/`, reconciling the Creative Dental price list against the seeded catalog, and aligning the printable payment-note / invoice templates with the existing company-aware document stack.
 
 `TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable. Technicians can select a personal color that is surfaced as a badge in operational status and workbench views; status filters stay collapsed by default; patient dossiers can carry clinic/doctor referral metadata; manager-only financial tabs stay hidden from non-managers; role navigation is intentionally scoped so technicians stay focused on their own work queue and managers see only manager-facing navigation plus status.
 
