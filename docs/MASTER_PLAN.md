@@ -11,9 +11,9 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | Current task | RECEPTION-TO-DELIVERY-001 |
 | Status | IN PROGRESS |
 | Blocker | none |
-| Last completed task | STATUS-TV-001 |
-| Last completed functional task | STATUS-TV-001 |
-| Last completed functional commit | STATUS-TV-001 commit |
+| Last completed task | TECH-EXECUTION-001 |
+| Last completed functional task | TECH-EXECUTION-001 |
+| Last completed functional commit | TECH-EXECUTION-001 commit |
 | Next approved task | none |
 
 ## Roadmap
@@ -70,7 +70,6 @@ Allowed statuses: `COMPLETED`, `IN PROGRESS`, `APPROVED`, `AWAITING APPROVAL`, `
 | demo | DEMO-POLISH-002 | PLANNED | CORE-ROLE-UX-001 | demo polish after core role UX simplification | [modules/demo.md](modules/demo.md) |
 | status | STATUS-001A | COMPLETED | TECH-CLAIM-001B, WORKFLOW-002, LOGISTICS-001, DELIVERY-001 | operational status read model and API | [tasks/STATUS-001A.md](tasks/STATUS-001A.md) |
 | status | STATUS-001B | COMPLETED | STATUS-001A, SHELL-001 | operational status page and internal role visibility | [tasks/STATUS-001B.md](tasks/STATUS-001B.md) |
-| status | STATUS-TV-001 | COMPLETED | STATUS-001A, STATUS-001B, SHELL-001 | dedicated fullscreen laboratory TV status mode | [tasks/STATUS-TV-001.md](tasks/STATUS-TV-001.md) |
 | work cycles | WORK-CYCLES-001A | COMPLETED | STATUS-001B, WORKFLOW-002, LOGISTICS-001, DELIVERY-001 | work cycle model and lifecycle foundation | [tasks/WORK-CYCLES-001A.md](tasks/WORK-CYCLES-001A.md) |
 | work cycles | WORK-CYCLES-001B | COMPLETED | WORK-CYCLES-001A | cycle returns, frontend lifecycle and operational integration | [tasks/WORK-CYCLES-001B.md](tasks/WORK-CYCLES-001B.md) |
 | workflow / cycles | RECEPTION-TO-DELIVERY-001 | IN PROGRESS | RECEPTION-WORK-CREATE-001, RECEPTION-TO-TECH-001, TECH-EXECUTION-001, WORK-CYCLES-001B, STATUS-001B, LOGISTICS-001, DELIVERY-001, BILLING-REALIGN-001A, BILLING-REALIGN-001B | multi-cycle lifecycle hardening across reception, technicians, logistics, delivery and billing | [tasks/RECEPTION-TO-DELIVERY-001.md](tasks/RECEPTION-TO-DELIVERY-001.md) |

@@ -60,15 +60,6 @@ export const appRoutes = [
     showInNavigation: true,
   },
   {
-    icon: "OS",
-    label: "Status TV",
-    navigationGroup: "Operațional",
-    path: "/status/tv",
-    permissionMode: "any",
-    requiredPermissions: operationalStatusReadPermissions,
-    showInNavigation: false,
-  },
-  {
     icon: "QR",
     label: "Scanare",
     navigationGroup: "Operațional",
@@ -222,9 +213,7 @@ export function getNavigationRoutes(permissionKeys: readonly string[]): readonly
 
 export function getRouteByPath(pathname: string): AppRouteConfig | undefined {
   const normalizedPathname = pathname === "/" ? "/dashboard" : pathname;
-  return appRoutes
-    .filter((route) => normalizedPathname === route.path || normalizedPathname.startsWith(`${route.path}/`))
-    .sort((left, right) => right.path.length - left.path.length)[0];
+  return appRoutes.find((route) => normalizedPathname === route.path || normalizedPathname.startsWith(`${route.path}/`));
 }
 
 export function getDefaultAuthorizedRoute(): string {

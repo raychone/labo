@@ -45,10 +45,6 @@ const StatusPage = lazy(async () => {
   const module = await import("../features/status/status-page.js");
   return { default: module.StatusPage };
 });
-const StatusTvPage = lazy(async () => {
-  const module = await import("../features/status/status-tv-page.js");
-  return { default: module.StatusTvPage };
-});
 const WorkScanPage = lazy(async () => {
   const module = await import("../features/works/work-scan-page.js");
   return { default: module.WorkScanPage };
@@ -102,10 +98,6 @@ const router = createBrowserRouter([
   {
     element: <PublicOnlyRoute><LoginPage /></PublicOnlyRoute>,
     path: "/login",
-  },
-  {
-    element: <AuthenticatedRoute><PermissionRoute requiredPermissions={operationalStatusReadPermissions}><LazyRoute><StatusTvPage /></LazyRoute></PermissionRoute></AuthenticatedRoute>,
-    path: "/status/tv",
   },
   {
     children: [

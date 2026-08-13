@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getNavigationRoutes, getRouteByPath, getSafeReturnTo, hasRouteAccess, operationalStatusReadPermissions, scanPermissions, workReadPermissions } from "./route-registry.js";
+import { getNavigationRoutes, getSafeReturnTo, hasRouteAccess, operationalStatusReadPermissions, scanPermissions, workReadPermissions } from "./route-registry.js";
 
 describe("route registry", () => {
   it("filters navigation by permission snapshot", () => {
@@ -30,7 +30,6 @@ describe("route registry", () => {
     expect(labels).not.toContain("Scanare");
     expect(labels).not.toContain("Centru operațional");
     expect(labels).not.toContain("Livrările mele");
-    expect(labels).not.toContain("Status TV");
   });
 
   it("keeps technician work routes out of navigation when access is scoped", () => {
@@ -60,10 +59,5 @@ describe("route registry", () => {
     expect(getSafeReturnTo("https://evil.example")).toBeNull();
     expect(getSafeReturnTo("//evil.example/works")).toBeNull();
     expect(getSafeReturnTo("/works?search=abc")).toBe("/works?search=abc");
-  });
-
-  it("resolves the dedicated TV status route without shadowing /status", () => {
-    expect(getRouteByPath("/status/tv")?.path).toBe("/status/tv");
-    expect(getRouteByPath("/status")?.path).toBe("/status");
   });
 });
