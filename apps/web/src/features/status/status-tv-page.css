@@ -1,0 +1,278 @@
+.status-tv-page {
+  min-height: 100vh;
+  background: var(--dl-color-background);
+}
+
+.status-tv-page__shell {
+  display: grid;
+  gap: var(--dl-space-4);
+  padding: var(--dl-space-5);
+}
+
+.status-tv-page__header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-4);
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.status-tv-page__heading {
+  display: grid;
+  gap: var(--dl-space-1);
+}
+
+.status-tv-page__eyebrow,
+.status-tv-page__heading p,
+.status-tv-page__muted,
+.status-tv-page__note,
+.status-tv-page__meta-card span {
+  color: var(--dl-color-text-muted);
+}
+
+.status-tv-page__eyebrow {
+  margin: 0;
+  font-size: var(--dl-font-size-sm);
+  font-weight: var(--dl-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.status-tv-page__heading h1 {
+  margin: 0;
+  font-size: clamp(2rem, 3vw, 3rem);
+  line-height: 1.05;
+}
+
+.status-tv-page__heading p {
+  margin: 0;
+  max-width: 64rem;
+}
+
+.status-tv-page__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-2);
+  align-items: stretch;
+}
+
+.status-tv-page__meta-card,
+.status-tv-page__summary-card {
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  background: var(--dl-color-surface);
+}
+
+.status-tv-page__meta-card {
+  display: grid;
+  gap: var(--dl-space-1);
+  min-width: 12rem;
+  padding: var(--dl-space-3) var(--dl-space-4);
+}
+
+.status-tv-page__meta-card strong,
+.status-tv-page__summary-card strong {
+  color: var(--dl-color-text);
+  font-size: var(--dl-font-size-lg);
+}
+
+.status-tv-page__summary {
+  display: grid;
+  gap: var(--dl-space-3);
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.status-tv-page__summary-card {
+  display: grid;
+  gap: var(--dl-space-1);
+  min-height: 6rem;
+  padding: var(--dl-space-3) var(--dl-space-4);
+}
+
+.status-tv-page__panel {
+  border-radius: var(--dl-radius-md);
+}
+
+.status-tv-page__panel-header {
+  padding-bottom: 0;
+}
+
+.status-tv-page__panel-content {
+  display: grid;
+  gap: var(--dl-space-4);
+}
+
+.status-tv-page__filters {
+  display: grid;
+  gap: var(--dl-space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.status-tv-page__note {
+  margin: 0;
+}
+
+.status-tv-page__content {
+  display: grid;
+  gap: var(--dl-space-3);
+}
+
+.status-tv-page__table-wrap {
+  overflow: auto;
+}
+
+.status-tv-page__table {
+  border-collapse: collapse;
+  min-width: 1180px;
+  width: 100%;
+}
+
+.status-tv-page__table thead th {
+  background: var(--dl-color-surface);
+  border-bottom: 1px solid var(--dl-color-border);
+  color: var(--dl-color-text-muted);
+  font-size: var(--dl-font-size-sm);
+  font-weight: var(--dl-font-weight-semibold);
+  padding: var(--dl-space-3) var(--dl-space-3);
+  text-align: left;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.status-tv-page__table tbody td {
+  border-bottom: 1px solid var(--dl-color-border);
+  font-size: var(--dl-font-size-base);
+  padding: var(--dl-space-4) var(--dl-space-3);
+  vertical-align: middle;
+}
+
+.status-tv-page__table tbody tr:hover {
+  background: var(--dl-color-surface-muted);
+}
+
+.status-tv-page__table strong,
+.status-tv-page__card strong {
+  color: var(--dl-color-text);
+}
+
+.status-tv-page__pill {
+  align-items: center;
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-sm);
+  display: inline-flex;
+  font-size: var(--dl-font-size-sm);
+  font-weight: var(--dl-font-weight-semibold);
+  line-height: 1;
+  min-height: 30px;
+  padding: var(--dl-space-1) var(--dl-space-2);
+  width: max-content;
+}
+
+.status-tv-page__pill--neutral {
+  background: var(--dl-color-surface-muted);
+}
+
+.status-tv-page__pill--info {
+  background: var(--dl-color-info-background);
+  border-color: var(--dl-color-info-border);
+  color: var(--dl-color-info-foreground);
+}
+
+.status-tv-page__pill--success {
+  background: var(--dl-color-success-background);
+  border-color: var(--dl-color-success-border);
+  color: var(--dl-color-success-foreground);
+}
+
+.status-tv-page__pill--warning {
+  background: var(--dl-color-warning-background);
+  border-color: var(--dl-color-warning-border);
+  color: var(--dl-color-warning-foreground);
+}
+
+.status-tv-page__pill--danger {
+  background: var(--dl-color-danger-background);
+  border-color: var(--dl-color-danger-border);
+  color: var(--dl-color-danger-foreground);
+}
+
+.status-tv-page__stack {
+  display: grid;
+  gap: var(--dl-space-1);
+}
+
+.status-tv-page__technician {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--dl-space-3);
+}
+
+.status-tv-page__technician-swatch {
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--dl-color-border);
+  display: inline-block;
+  flex: 0 0 auto;
+  height: 2.25rem;
+  width: 0.9rem;
+}
+
+.status-tv-page__technician-swatch--empty {
+  background: var(--dl-color-surface-muted);
+}
+
+.status-tv-page__cards {
+  display: none;
+  gap: var(--dl-space-3);
+}
+
+.status-tv-page__card {
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  background: var(--dl-color-surface);
+  display: grid;
+  gap: var(--dl-space-3);
+  padding: var(--dl-space-4);
+}
+
+.status-tv-page__card-header {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--dl-space-3);
+}
+
+.status-tv-page__card-grid {
+  display: grid;
+  gap: var(--dl-space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.status-tv-page__card-field {
+  display: grid;
+  gap: var(--dl-space-1);
+}
+
+@media (max-width: 1199px) {
+  .status-tv-page__table {
+    min-width: 1080px;
+  }
+}
+
+@media (max-width: 980px) {
+  .status-tv-page__shell {
+    padding: var(--dl-space-4);
+  }
+
+  .status-tv-page__filters {
+    grid-template-columns: 1fr;
+  }
+
+  .status-tv-page__table-wrap {
+    display: none;
+  }
+
+  .status-tv-page__cards {
+    display: grid;
+  }
+}
