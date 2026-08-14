@@ -52,6 +52,7 @@ model User {
   cancelledBillingDocuments           BillingDocument[]          @relation("BillingDocumentCancelledBy")
   createdPayments                     Payment[]                  @relation("PaymentCreatedBy")
   cancelledPayments                   Payment[]                  @relation("PaymentCancelledBy")
+  closedBillingMonthArchives          BillingMonthCloseArchive[] @relation("BillingMonthCloseArchiveClosedBy")
   createdWorkFormTemplates            WorkFormTemplate[]         @relation("WorkFormTemplateCreatedBy")
   updatedWorkFormTemplates            WorkFormTemplate[]         @relation("WorkFormTemplateUpdatedBy")
   activatedWorkFormTemplates          WorkFormTemplate[]         @relation("WorkFormTemplateActivatedBy")
@@ -150,6 +151,7 @@ model LegalEntity {
   billingDocuments             BillingDocument[]
   payments                     Payment[]
   billingSeries                BillingSeries[]
+  billingMonthCloseArchives    BillingMonthCloseArchive[]
   billingDocumentLines         BillingDocumentLine[]
   previousWorkAssignmentEvents WorkAssignmentEvent[]   @relation("WorkAssignmentEventPreviousLegalEntity")
   newWorkAssignmentEvents      WorkAssignmentEvent[]   @relation("WorkAssignmentEventNewLegalEntity")
@@ -1153,6 +1155,35 @@ model BillingSeries {
   @@index([documentType, isActive])
   @@index([year])
   @@map("billing_series")
+}
+
+model BillingMonthCloseArchive {
+  id                String   @id @default(cuid())
+  legalEntityId     String   @map("legal_entity_id")
+  year              Int
+  month             Int
+  periodStart       DateTime @map("period_start")
+  periodEnd         DateTime @map("period_end")
+  closedAt          DateTime @map("closed_at")
+  closedByUserId    String?  @map("closed_by_user_id")
+  reportVersion     String   @default("1") @map("report_version") @db.VarChar(24)
+  currency          String   @db.Char(3)
+  totalMinor        Int      @map("total_minor")
+  paidMinor         Int      @map("paid_minor")
+  paidTotalMinor    Int      @map("paid_total_minor")
+  partialTotalMinor Int      @map("partial_total_minor")
+  unpaidTotalMinor  Int      @map("unpaid_total_minor")
+  snapshot          Json     @map("snapshot_json")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  legalEntity       LegalEntity @relation(fields: [legalEntityId], references: [id], onDelete: Restrict)
+  closedBy          User?    @relation("BillingMonthCloseArchiveClosedBy", fields: [closedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([legalEntityId, year, month])
+  @@index([legalEntityId, closedAt])
+  @@index([legalEntityId, periodStart])
+  @@index([closedByUserId])
+  @@map("billing_month_close_archives")
 }
 
 enum BillingCompanyAssignmentStatus {

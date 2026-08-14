@@ -75,8 +75,21 @@ export class BillingController {
 
   @Get("billing/month-registry")
   @RequirePermission("finance.read_reports", "ALL")
-  public getMonthRegistry(@CurrentLegalEntity() legalEntity: LegalEntityContext, @CurrentUser() actor: AuthenticatedUser, @Query() query: BillingRangeQueryDto, @Req() request: Request) {
+  public getMonthRegistry(@CurrentLegalEntity() legalEntity: LegalEntityContext, @CurrentUser() actor: AuthenticatedUser, @Query() query: BillingRangeQueryDto, @Req() request: Request): Promise<unknown> {
     return this.billingStatementService.getMonthRegistry({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, legalEntity, query);
+  }
+
+  @Get("billing/month-registry/archives")
+  @RequirePermission("finance.read_reports", "ALL")
+  public listMonthRegistryArchives(@CurrentLegalEntity() legalEntity: LegalEntityContext): Promise<unknown> {
+    return this.billingStatementService.listMonthCloseArchives(legalEntity);
+  }
+
+  @Post("billing/month-registry/close")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("finance.read_reports", "ALL")
+  public closeMonthRegistry(@CurrentLegalEntity() legalEntity: LegalEntityContext, @CurrentUser() actor: AuthenticatedUser, @Query() query: BillingRangeQueryDto, @Req() request: Request): Promise<unknown> {
+    return this.billingStatementService.closeMonth({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, legalEntity, query);
   }
 
   @Get("billing/receivables")

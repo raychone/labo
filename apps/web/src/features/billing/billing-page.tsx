@@ -30,12 +30,14 @@ import {
   type DoctorBillingStatement,
   type BillingReceivableRow,
   type DocumentPaymentFilter,
+  type MonthCloseArchiveSummary,
   type MonthEndRegistry,
   type PaymentMethod,
   type RecordPaymentInput,
 } from "@dental-lab/shared";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
 import { hasPermission } from "../users/users-api.js";
@@ -56,6 +58,8 @@ import {
   useReceivables,
   useDoctorStatement,
   useAmbiguousLegacyRecords,
+  closeMonthRegistry,
+  fetchMonthRegistryArchives,
   downloadMonthRegistryCsv,
   type BillingWorkspaceParams,
 } from "./billing-api.js";
@@ -63,6 +67,8 @@ import { getErrorMessage } from "../../lib/form-utils.js";
 import "./billing-page.css";
 
 const pageSize = 20;
+type BillingTabId = "overview" | "uninvoiced" | "proformas" | "invoices" | "payments" | "receivables" | "statements" | "month-close" | "series";
+type StatementSource = "documents" | "works";
 const paymentFilterOptions: readonly { readonly label: string; readonly value: DocumentPaymentFilter }[] = [
   { label: "Toate", value: "ALL" },
   { label: "Neachitate", value: "UNPAID" },
@@ -74,20 +80,54 @@ const paymentFilterOptions: readonly { readonly label: string; readonly value: D
   { label: "Anulate", value: "CANCELLED" },
 ];
 
+interface BillingPeriod {
+  readonly month: number;
+  readonly year: number;
+}
+
+const BILLING_YEAR_OPTIONS = Array.from({ length: 101 }, (_, index) => {
+  const year = 2000 + index;
+  return { label: String(year), value: String(year) };
+});
+
+const BILLING_MONTH_OPTIONS = Array.from({ length: 12 }, (_, index) => {
+  const month = index + 1;
+  return {
+    label: new Intl.DateTimeFormat("ro-RO", { month: "short", timeZone: "UTC" }).format(new Date(Date.UTC(2026, index, 1))).replaceAll(".", ""),
+    value: String(month),
+  };
+});
+
+function currentBillingPeriod(now = new Date()): BillingPeriod {
+  return { month: now.getMonth() + 1, year: now.getFullYear() };
+}
+
+function shiftBillingPeriod(period: BillingPeriod, deltaMonths: number): BillingPeriod {
+  const date = new Date(Date.UTC(period.year, period.month - 1 + deltaMonths, 1));
+  return { month: date.getUTCMonth() + 1, year: date.getUTCFullYear() };
+}
+
+function monthRange(period: BillingPeriod): { readonly dateFrom: string; readonly dateTo: string } {
+  const from = new Date(Date.UTC(period.year, period.month - 1, 1));
+  const to = new Date(Date.UTC(period.year, period.month, 0));
+  return { dateFrom: from.toISOString().slice(0, 10), dateTo: to.toISOString().slice(0, 10) };
+}
+
 function currentMonthRange(now = new Date()): { readonly dateFrom: string; readonly dateTo: string } {
-  const from = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
-  const to = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0));
-  return { dateFrom: from.toISOString().slice(0, 10), dateTo: to.toISOString().slice(0, 10) };
+  return monthRange(currentBillingPeriod(now));
 }
 
-function previousMonthRange(now = new Date()): { readonly dateFrom: string; readonly dateTo: string } {
-  const from = new Date(Date.UTC(now.getFullYear(), now.getMonth() - 1, 1));
-  const to = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 0));
-  return { dateFrom: from.toISOString().slice(0, 10), dateTo: to.toISOString().slice(0, 10) };
+function readBillingPeriod(searchParams: URLSearchParams): BillingPeriod | null {
+  const year = Number(searchParams.get("year"));
+  const month = Number(searchParams.get("month"));
+  if (!Number.isInteger(year) || !Number.isInteger(month) || year < 2000 || year > 2100 || month < 1 || month > 12) {
+    return null;
+  }
+  return { month, year };
 }
 
-function currentYearRange(now = new Date()): { readonly dateFrom: string; readonly dateTo: string } {
-  return { dateFrom: `${now.getFullYear()}-01-01`, dateTo: `${now.getFullYear()}-12-31` };
+function formatBillingPeriod(period: BillingPeriod): string {
+  return new Intl.DateTimeFormat("ro-RO", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(period.year, period.month - 1, 1)));
 }
 
 interface ManualPaymentFormState {
@@ -146,6 +186,36 @@ function toggleSelectedId(values: readonly string[], id: string): readonly strin
 
 function selectAllIds(current: readonly string[], next: readonly string[]): readonly string[] {
   return current.length === next.length && current.every((value) => next.includes(value)) ? [] : next;
+}
+
+interface SerializedStatementWork {
+  readonly baseUnitPriceMinor: number | null;
+  readonly code: string;
+  readonly createdAt: string;
+  readonly doctorName: string;
+  readonly id: string;
+  readonly patientName: string;
+  readonly patientReference: string | null;
+  readonly quantity: number;
+  readonly totalPriceMinor: number | null;
+  readonly workCycleNumber: number | null;
+  readonly workTypeName: string;
+}
+
+function serializeStatementWorks(works: readonly BillableWork[]): string {
+  return JSON.stringify(works.map((work) => ({
+    baseUnitPriceMinor: work.baseUnitPriceMinor,
+    code: work.code,
+    createdAt: work.createdAt,
+    doctorName: work.doctorName,
+    id: work.id,
+    patientName: work.patientName,
+    patientReference: work.patientReference,
+    quantity: work.quantity,
+    totalPriceMinor: work.totalPriceMinor,
+    workCycleNumber: work.workCycleNumber,
+    workTypeName: work.workTypeName,
+  }) satisfies SerializedStatementWork));
 }
 
 function toCsv(rows: readonly Readonly<Record<string, string | number | null>>[]): string {
@@ -213,6 +283,7 @@ function toDocumentCsvRow(document: BillingDocumentSummary, currency: string): R
 
 export function BillingPage(): ReactNode {
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   const canReadFinance = hasPermission(permissionsQuery.data, "finance.read");
   const canReadInvoices = hasPermission(permissionsQuery.data, "invoice.read");
@@ -225,7 +296,9 @@ export function BillingPage(): ReactNode {
   const currency = settingsQuery.data?.currency ?? "RON";
   const locale = settingsQuery.data?.locale ?? "ro-RO";
   const activeCompanyLabel = settingsQuery.data ? `${settingsQuery.data.legalEntityCode} - ${settingsQuery.data.legalEntityDisplayName}` : "Firma activă";
+  const urlPeriod = useMemo(() => readBillingPeriod(searchParams), [searchParams.toString()]);
   const [range, setRange] = useState(currentMonthRange);
+  const selectedPeriod = useMemo(() => urlPeriod ?? currentBillingPeriod(), [urlPeriod]);
   const [groupBy, setGroupBy] = useState("clinic");
   const [paymentFilter, setPaymentFilter] = useState<DocumentPaymentFilter>("ALL");
   const [patientFilter, setPatientFilter] = useState("");
@@ -242,6 +315,8 @@ export function BillingPage(): ReactNode {
   const [statementScope, setStatementScope] = useState<"clinic" | "doctor">("clinic");
   const [clinicStatementId, setClinicStatementId] = useState("");
   const [doctorStatementId, setDoctorStatementId] = useState("");
+  const [statementSource, setStatementSource] = useState<StatementSource>("documents");
+  const monthRegistryParams = useMemo<BillingWorkspaceParams>(() => ({ ...monthRange(selectedPeriod), month: selectedPeriod.month, year: selectedPeriod.year }), [selectedPeriod]);
   const overviewParams: BillingWorkspaceParams = { ...range, groupBy };
   const billableParams: BillingWorkspaceParams = { ...range, search, uninvoicedOnly: true, ...(patientFilter ? { patient: patientFilter } : {}), ...(workCodeFilter ? { workCode: workCodeFilter } : {}) };
   const baseDocumentParams: BillingListQuery = {
@@ -259,16 +334,42 @@ export function BillingPage(): ReactNode {
   const invoiceParams: BillingListQuery = { ...baseDocumentParams, type: "INVOICE" };
   const receivablesParams: BillingListQuery = { ...baseDocumentParams, paymentFilter: paymentFilter === "ALL" ? "OUTSTANDING" : paymentFilter, type: "INVOICE" };
   const overviewQuery = useBillingOverview(overviewParams, canReadFinance);
-  const monthCloseClinicOverviewQuery = useBillingOverview({ ...overviewParams, groupBy: "clinic" }, canReadReports);
-  const monthCloseDoctorOverviewQuery = useBillingOverview({ ...overviewParams, groupBy: "doctor" }, canReadReports);
+  const monthCloseClinicOverviewQuery = useBillingOverview({ ...monthRegistryParams, groupBy: "clinic" }, canReadReports);
+  const monthCloseDoctorOverviewQuery = useBillingOverview({ ...monthRegistryParams, groupBy: "doctor" }, canReadReports);
   const billableWorksQuery = useBillableWorks(billableParams, canCreateInvoice || canReadReports);
   const proformasQuery = useBillingDocuments(proformaParams, canReadInvoices);
   const invoicesQuery = useBillingDocuments(invoiceParams, canReadInvoices);
   const paymentsQuery = usePayments(canReadFinance);
   const receivablesQuery = useReceivables(receivablesParams, canReadReports);
-  const monthRegistryQuery = useMonthRegistry(overviewParams, canReadReports);
+  const monthRegistryQuery = useMonthRegistry(monthRegistryParams, canReadReports);
   const ambiguousLegacyQuery = useAmbiguousLegacyRecords(canReadReports);
   const seriesQuery = useBillingSeries(canConfigureSeries);
+  const monthRegistryArchivesQuery = useQuery({
+    enabled: canReadReports,
+    queryFn: fetchMonthRegistryArchives,
+    queryKey: ["billing", "month-registry", "archives", settingsQuery.data?.legalEntityCode ?? "loading"],
+    retry: false,
+  });
+  const closeMonthRegistryMutation = useMutation({
+    mutationFn: () => closeMonthRegistry(monthRegistryParams),
+    onSuccess: async () => {
+      await Promise.all([
+        monthRegistryQuery.refetch(),
+        monthRegistryArchivesQuery.refetch(),
+        overviewQuery.refetch(),
+        monthCloseClinicOverviewQuery.refetch(),
+        monthCloseDoctorOverviewQuery.refetch(),
+      ]);
+      toast.showToast({ message: "Luna a fost arhivată.", variant: "success" });
+    },
+  });
+  function updateSelectedPeriod(period: BillingPeriod): void {
+    const next = new URLSearchParams(searchParams);
+    next.set("year", String(period.year));
+    next.set("month", String(period.month));
+    setSearchParams(next, { replace: true });
+  }
+  const yearOptions = useMemo(() => BILLING_YEAR_OPTIONS, []);
   const billableItemClinics = useMemo(() => {
     const items = billableWorksQuery.data?.items ?? [];
     const clinics = new Map<string, string>();
@@ -397,7 +498,7 @@ export function BillingPage(): ReactNode {
     }
   }
 
-  function openStatementPrint(scope: "clinic" | "doctor"): void {
+  function openStatementPrint(scope: "clinic" | "doctor", source: StatementSource = "documents", works: readonly BillableWork[] = []): void {
     const params = new URLSearchParams({ dateFrom: range.dateFrom, dateTo: range.dateTo });
     params.set("format", "a4");
     if (scope === "clinic" && clinicStatementId) {
@@ -406,10 +507,26 @@ export function BillingPage(): ReactNode {
     if (scope === "doctor" && doctorStatementId) {
       params.set("doctorId", doctorStatementId);
     }
+    params.set("source", source);
+    if (source === "works" && works.length > 0) {
+      params.set("workPayload", serializeStatementWorks(works));
+    }
     if (selectedStatementDocumentIds.length > 0) {
       params.set("documentIds", selectedStatementDocumentIds.join(","));
     }
     window.open(`/billing/statements/${scope}/print?${params.toString()}`, "_blank", "noopener,noreferrer");
+  }
+
+  function openMonthRegistryPrint(): void {
+    const periodRange = monthRange(selectedPeriod);
+    const params = new URLSearchParams({
+      dateFrom: periodRange.dateFrom,
+      dateTo: periodRange.dateTo,
+      format: "a4",
+      month: String(selectedPeriod.month),
+      year: String(selectedPeriod.year),
+    });
+    window.open(`/billing/month-registry/print?${params.toString()}`, "_blank", "noopener,noreferrer");
   }
 
   if (!canUseBilling && !permissionsQuery.isLoading) {
@@ -425,9 +542,9 @@ export function BillingPage(): ReactNode {
           <p>{activeCompanyLabel} · Registru lunar pentru lucrări, proforme, facturi, încasări și solduri.</p>
         </div>
         <div className="billing-page__quick-actions">
-          <Button onClick={() => setRange(currentMonthRange())} variant="secondary">Luna curentă</Button>
-          <Button onClick={() => setRange(previousMonthRange())} variant="secondary">Luna anterioară</Button>
-          <Button onClick={() => setRange(currentYearRange())} variant="secondary">Anul curent</Button>
+          <Button onClick={() => updateSelectedPeriod(currentBillingPeriod())} variant="secondary">Luna curentă</Button>
+          <Button onClick={() => updateSelectedPeriod(shiftBillingPeriod(selectedPeriod, -1))} variant="secondary">Luna anterioară</Button>
+          <Button onClick={() => updateSelectedPeriod(shiftBillingPeriod(selectedPeriod, 1))} variant="secondary">Luna următoare</Button>
         </div>
       </section>
 
@@ -471,7 +588,12 @@ export function BillingPage(): ReactNode {
 
       {overviewQuery.isLoading ? <LoadingState text="Se încarcă situația financiară" /> : null}
       {overviewQuery.error ? <ErrorState title="Situația nu poate fi încărcată" description={getErrorMessage(overviewQuery.error)} /> : null}
-      {overviewQuery.data ? <OverviewCards overview={overviewQuery.data} currency={currency} locale={locale} onNavigate={setActiveTab} /> : null}
+      {overviewQuery.data ? <OverviewCards overview={overviewQuery.data} currency={currency} locale={locale} onNavigate={(tab, nextFilter) => {
+        setActiveTab(tab);
+        if (nextFilter) {
+          setPaymentFilter(nextFilter);
+        }
+      }} /> : null}
 
       <Tabs
         onValueChange={setActiveTab}
@@ -491,14 +613,22 @@ export function BillingPage(): ReactNode {
             ),
           },
           {
+            id: "guide",
+            label: "Ghid facturare",
+            content: <BillingGuideTab />,
+          },
+          {
             id: "uninvoiced",
             label: "Lucrări nefacturate",
             content: (
               <BillableWorksTab
                 canCreateInvoice={canCreateInvoice}
+                canCreateNote={canReadFinance || canReadReports}
                 currency={currency}
                 isCreating={createProformaMutation.isPending || createInvoiceMutation.isPending}
                 locale={locale}
+                onCreateNote={() => openStatementPrint("clinic", "works", selectedWorks)}
+                onCreateProforma={() => void createDocument("proforma")}
                 onCreateInvoice={() => void createDocument("invoice")}
                 onExport={() => downloadCsv("lucrari-nefacturate.csv", toCsv((billableWorksQuery.data?.items ?? []).map((work) => ({
                   "Cod lucrare": work.code,
@@ -520,7 +650,8 @@ export function BillingPage(): ReactNode {
             label: "Proforme",
             content: (
               <DocumentsTab
-                canRecordPayment={canReadFinance}
+                canConvertSelected
+                canRecordPayment={false}
                 currency={currency}
                 documents={proformasQuery.data?.items ?? []}
                 error={proformasQuery.error}
@@ -529,6 +660,19 @@ export function BillingPage(): ReactNode {
                 locale={locale}
                 onExport={() => downloadCsv("proforme.csv", toCsv((proformasQuery.data?.items ?? []).map((document) => toDocumentCsvRow(document, currency))))}
                 onIssueSelected={issueDocumentsById}
+                onConvertSelected={async (documents) => {
+                  const selectedDocument = documents[0];
+                  if (!selectedDocument || documents.length !== 1 || selectedDocument.type !== "PROFORMA") {
+                    return;
+                  }
+                  try {
+                    await convertMutation.mutateAsync(selectedDocument.id);
+                    setSelectedProformaIds([]);
+                    toast.showToast({ message: "Proforma a fost transformată în factură.", variant: "success" });
+                  } catch (error) {
+                    toast.showToast({ message: getErrorMessage(error), variant: "error" });
+                  }
+                }}
                 onPrint={(documentId) => window.open(`/billing/documents/${documentId}/print`, "_blank", "noopener,noreferrer")}
                 onRecordPaymentSelected={recordPaymentForDocument}
                 paymentForm={paymentForm}
@@ -544,6 +688,7 @@ export function BillingPage(): ReactNode {
             label: "Facturi",
             content: (
               <DocumentsTab
+                canConvertSelected={false}
                 canRecordPayment={canRecordPayment}
                 currency={currency}
                 documents={invoicesQuery.data?.items ?? []}
@@ -635,6 +780,8 @@ export function BillingPage(): ReactNode {
                 onSelectionChange={setSelectedStatementDocumentIds}
                 scope={statementScope}
                 setScope={setStatementScope}
+                source={statementSource}
+                setSource={setStatementSource}
               />
             ),
           },
@@ -643,18 +790,38 @@ export function BillingPage(): ReactNode {
             label: "Închidere lună",
             content: <MonthCloseTab
               clinicOverview={monthCloseClinicOverviewQuery.data}
+              archives={monthRegistryArchivesQuery.data?.items ?? []}
               overview={overviewQuery.data}
               registry={monthRegistryQuery.data}
               currency={currency}
               locale={locale}
               doctorOverview={monthCloseDoctorOverviewQuery.data}
+              isClosing={closeMonthRegistryMutation.isPending}
+              monthLabel={formatBillingPeriod(selectedPeriod)}
+              onPeriodChange={updateSelectedPeriod}
               onExportRegistry={async () => {
                 try {
-                  downloadCsv("registru-lunar-facturare.csv", await downloadMonthRegistryCsv(overviewParams));
+                  downloadCsv(`registru-lunar-facturare-${selectedPeriod.year}-${String(selectedPeriod.month).padStart(2, "0")}.csv`, await downloadMonthRegistryCsv(monthRegistryParams));
                 } catch (error) {
                   toast.showToast({ message: getErrorMessage(error), variant: "error" });
                 }
               }}
+              onPrintRegistry={openMonthRegistryPrint}
+              onCloseRegistry={() => closeMonthRegistryMutation.mutate()}
+              onOpenArchive={(archive) => {
+                const periodRange = monthRange({ month: archive.month, year: archive.year });
+                const params = new URLSearchParams({
+                  dateFrom: periodRange.dateFrom,
+                  dateTo: periodRange.dateTo,
+                  format: "a4",
+                  month: String(archive.month),
+                  year: String(archive.year),
+                });
+                window.open(`/billing/month-registry/print?${params.toString()}`, "_blank", "noopener,noreferrer");
+              }}
+              onSelectArchive={(archive) => updateSelectedPeriod({ month: archive.month, year: archive.year })}
+              yearOptions={yearOptions}
+              selectedPeriod={selectedPeriod}
             />,
           },
           {
@@ -676,18 +843,18 @@ function OverviewCards({
 }: {
   readonly currency: string;
   readonly locale: string;
-  readonly onNavigate: (tab: string) => void;
+  readonly onNavigate: (tab: BillingTabId, nextFilter?: DocumentPaymentFilter) => void;
   readonly overview: BillingOverview;
 }): ReactNode {
   const cards = [
     { count: overview.uninvoicedWorkCount, label: "Lucrări nefacturate", tab: "uninvoiced", tone: "money", value: overview.uninvoicedMinor },
     { count: overview.openProformaCount, label: "Proforme deschise", tab: "proformas", tone: "money", value: overview.proformaMinor },
-    { count: overview.unpaidInvoiceCount, label: "Facturi neachitate", tab: "receivables", tone: "money", value: overview.outstandingMinor },
-    { count: overview.partialInvoiceCount, label: "Facturi parțial achitate", tab: "receivables", tone: "money", value: overview.outstandingMinor },
-    { count: overview.paidInvoiceCount, label: "Facturi achitate", tab: "payments", tone: "money", value: overview.paidMinor },
+    { count: overview.unpaidInvoiceCount, label: "Facturi neachitate", filter: "UNPAID", tab: "receivables", tone: "money", value: overview.outstandingMinor },
+    { count: overview.partialInvoiceCount, label: "Facturi parțial achitate", filter: "PARTIALLY_PAID", tab: "receivables", tone: "money", value: overview.outstandingMinor },
+    { count: overview.paidInvoiceCount, label: "Facturi achitate", filter: "PAID", tab: "invoices", tone: "money", value: overview.paidMinor },
     { count: overview.invoiceCount, label: "Total emis", tab: "invoices", tone: "money", value: overview.totalIssuedMinor },
     { count: overview.documentCount, label: "Total documente", tab: "overview", tone: "money", value: overview.paidMinor },
-    { count: overview.unpaidInvoiceCount, label: "Sold restant", tab: "receivables", tone: "money", value: overview.outstandingMinor },
+    { count: overview.unpaidInvoiceCount, label: "Sold restant", filter: "OUTSTANDING", tab: "receivables", tone: "money", value: overview.outstandingMinor },
     { count: overview.ambiguousLegacyCount, label: "Documente legacy de revizuit", tab: "overview", tone: "count", value: overview.ambiguousLegacyCount },
   ] as const;
 
@@ -697,7 +864,7 @@ function OverviewCards({
         <button
           className="billing-page__kpi-card"
           key={card.label}
-          onClick={() => onNavigate(card.tab)}
+          onClick={() => onNavigate(card.tab, "filter" in card ? card.filter : undefined)}
           type="button"
         >
           <span className="billing-page__kpi-label">{card.label}</span>
@@ -760,10 +927,12 @@ function StatementsTab({
   onOpenPrint,
   onSelectionChange,
   scope,
+  source,
   selectedClinicId,
   selectedDocumentIds,
   selectedDoctorId,
   setScope,
+  setSource,
 }: {
   readonly clinicOptions: readonly { readonly label: string; readonly value: string }[];
   readonly clinicStatement: ClinicBillingStatement | undefined;
@@ -773,13 +942,15 @@ function StatementsTab({
   readonly isDoctorLoading: boolean;
   readonly onClinicChange: (value: string) => void;
   readonly onDoctorChange: (value: string) => void;
-  readonly onOpenPrint: (scope: "clinic" | "doctor") => void;
+  readonly onOpenPrint: (scope: "clinic" | "doctor", source: StatementSource) => void;
   readonly onSelectionChange: (ids: readonly string[]) => void;
   readonly scope: "clinic" | "doctor";
+  readonly source: StatementSource;
   readonly selectedClinicId: string;
   readonly selectedDocumentIds: readonly string[];
   readonly selectedDoctorId: string;
   readonly setScope: (scope: "clinic" | "doctor") => void;
+  readonly setSource: (source: StatementSource) => void;
 }): ReactNode {
   const statement = scope === "clinic" ? clinicStatement : doctorStatement;
   const isLoading = scope === "clinic" ? isClinicLoading : isDoctorLoading;
@@ -789,14 +960,18 @@ function StatementsTab({
   const selectedDocuments = documents.filter((document) => selectedDocumentIds.includes(document.documentId));
   const selectedTotalMinor = selectedDocuments.reduce((total, document) => total + document.totalMinor, 0);
   const hasSelection = selectedDocumentIds.length > 0;
+  const hasWorks = Boolean(statement?.uninvoicedWorks.length);
+  const activeSource = source === "works" && hasWorks ? "works" : "documents";
 
   return (
     <section className="billing-page__tab">
       <div className="billing-page__toolbar billing-page__toolbar--inline">
         <Button onClick={() => setScope("clinic")} variant={scope === "clinic" ? "primary" : "secondary"}>Clinică</Button>
         <Button onClick={() => setScope("doctor")} variant={scope === "doctor" ? "primary" : "secondary"}>Medic</Button>
-        <Button disabled={!statement} onClick={() => onOpenPrint(scope)} variant="outline">
-          {hasSelection ? "Exportă selecția PDF" : "Export PDF"}
+        <Button onClick={() => setSource("documents")} variant={activeSource === "documents" ? "primary" : "secondary"}>Documente restante</Button>
+        <Button disabled={!hasWorks} onClick={() => setSource("works")} variant={activeSource === "works" ? "primary" : "secondary"}>Lucrări nefacturate</Button>
+        <Button disabled={!statement} onClick={() => onOpenPrint(scope, activeSource)} variant="outline">
+          {activeSource === "documents" && hasSelection ? "Exportă selecția PDF" : "Export PDF"}
         </Button>
         {hasSelection ? <Button onClick={() => onSelectionChange([])} variant="secondary">Golește selecția</Button> : null}
       </div>
@@ -823,6 +998,7 @@ function StatementsTab({
       {!isLoading && !statement ? <ErrorState title="Nota de plată nu este disponibilă" description={emptyMessage} /> : null}
       {statement ? (
         <StatementPreview
+          activeSource={activeSource}
           onSelectionChange={onSelectionChange}
           statement={statement}
           selectedDocumentIds={selectedDocumentIds}
@@ -836,6 +1012,7 @@ function StatementsTab({
 }
 
 function StatementPreview({
+  activeSource,
   onSelectionChange,
   scope,
   statement,
@@ -843,6 +1020,7 @@ function StatementPreview({
   selectedDocuments,
   selectedTotalMinor,
 }: {
+  readonly activeSource: StatementSource;
   readonly onSelectionChange: (ids: readonly string[]) => void;
   readonly scope: "clinic" | "doctor";
   readonly statement: ClinicBillingStatement | DoctorBillingStatement;
@@ -880,23 +1058,24 @@ function StatementPreview({
           </div>
         </CardContent>
       </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Documente incluse</CardTitle>
-          <CardDescription>{effectiveDocuments.length} documente {hasSelection ? "selectate" : "din perioadă"}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {hasDocuments ? (
-            <SelectableStatementDocumentsTable
-              currency={statement.currency}
-              documents={statement.documents}
-              onSelectionChange={onSelectionChange}
-              selectedDocumentIds={selectedDocumentIds}
-            />
-          ) : <p className="billing-page__readonly">Nu există documente în perioada selectată.</p>}
-        </CardContent>
-      </Card>
-      {!hasSelection ? (
+      {activeSource === "documents" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Documente incluse</CardTitle>
+            <CardDescription>{effectiveDocuments.length} documente {hasSelection ? "selectate" : "din perioadă"}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {hasDocuments ? (
+              <SelectableStatementDocumentsTable
+                currency={statement.currency}
+                documents={statement.documents}
+                onSelectionChange={onSelectionChange}
+                selectedDocumentIds={selectedDocumentIds}
+              />
+            ) : <p className="billing-page__readonly">Nu există documente în perioada selectată.</p>}
+          </CardContent>
+        </Card>
+      ) : (
         <Card>
           <CardHeader>
             <CardTitle>Lucrări nefacturate</CardTitle>
@@ -906,7 +1085,7 @@ function StatementPreview({
             {hasWorks ? <StatementWorksTable rows={statement.uninvoicedWorks} currency={statement.currency} /> : <p className="billing-page__readonly">Nu există lucrări nefacturate în perioada selectată.</p>}
           </CardContent>
         </Card>
-      ) : null}
+      )}
     </div>
   );
 }
@@ -963,9 +1142,12 @@ function StatementWorksTable({ currency, rows }: { readonly currency: string; re
 
 function BillableWorksTab({
   canCreateInvoice,
+  canCreateNote,
   currency,
   isCreating,
   locale,
+  onCreateNote,
+  onCreateProforma,
   onCreateInvoice,
   onExport,
   onToggleWork,
@@ -974,9 +1156,12 @@ function BillableWorksTab({
   selectedWorkIds,
 }: {
   readonly canCreateInvoice: boolean;
+  readonly canCreateNote: boolean;
   readonly currency: string;
   readonly isCreating: boolean;
   readonly locale: string;
+  readonly onCreateNote: () => void;
+  readonly onCreateProforma: () => void;
   readonly onCreateInvoice: () => void;
   readonly onExport: () => void;
   readonly onToggleWork: (work: BillableWork) => void;
@@ -1004,6 +1189,8 @@ function BillableWorksTab({
       <div className="billing-page__toolbar">
         <p>{selectedWorkIds.length} lucrări selectate · {formatMoneyMinor(selectedTotal, currency, locale)}</p>
         <Button onClick={onExport} variant="outline">Export CSV</Button>
+        {canCreateNote ? <Button disabled={selectedWorkIds.length === 0 || isCreating} onClick={onCreateNote} variant="secondary">Creează notă de plată</Button> : null}
+        {canCreateNote ? <Button disabled={selectedWorkIds.length === 0 || isCreating} onClick={onCreateProforma} variant="secondary">Creează proformă</Button> : null}
         {canCreateInvoice ? <Button disabled={selectedWorkIds.length === 0 || isCreating} onClick={onCreateInvoice} variant="secondary">Creează factură</Button> : null}
       </div>
       <DataTable columns={columns} emptyMessage="Nu există lucrări nefacturate în perioada selectată." error={query.error ? getErrorMessage(query.error) : undefined} getRowKey={(work) => work.id} isLoading={query.isLoading} rows={query.data?.items ?? []} />
@@ -1012,6 +1199,7 @@ function BillableWorksTab({
 }
 
 function DocumentsTab({
+  canConvertSelected,
   canRecordPayment,
   currency,
   documents,
@@ -1021,6 +1209,7 @@ function DocumentsTab({
   locale,
   onExport,
   onIssueSelected,
+  onConvertSelected,
   onPrint,
   onRecordPaymentSelected,
   onSelectionChange,
@@ -1029,6 +1218,7 @@ function DocumentsTab({
   selectedDocumentIds,
   selectionLabel,
 }: {
+  readonly canConvertSelected: boolean;
   readonly canRecordPayment: boolean;
   readonly currency: string;
   readonly documents: readonly BillingDocumentSummary[];
@@ -1038,6 +1228,7 @@ function DocumentsTab({
   readonly locale: string;
   readonly onExport: () => void;
   readonly onIssueSelected: (documents: readonly BillingDocumentSummary[]) => Promise<void>;
+  readonly onConvertSelected?: (documents: readonly BillingDocumentSummary[]) => Promise<void>;
   readonly onPrint: (documentId: string) => void;
   readonly onRecordPaymentSelected: (documentId: string) => Promise<void>;
   readonly onSelectionChange: (ids: readonly string[]) => void;
@@ -1063,7 +1254,7 @@ function DocumentsTab({
     { id: "payment", header: "Încasare", renderCell: (document) => toPaymentStatusLabel(document.paymentStatus) },
     { id: "balance", header: "Sold restant", align: "right", renderCell: (document) => formatMoneyMinor(document.balanceMinor, document.currency, locale) },
   ], [locale, onSelectionChange, selectedDocumentIds]);
-  const canUsePaymentForm = Boolean(selectedDocument && selectedDocument.status !== "CANCELLED" && selectedDocument.balanceMinor > 0);
+  const canUsePaymentForm = Boolean(selectedDocument && selectedDocument.type === "INVOICE" && selectedDocument.status !== "CANCELLED" && selectedDocument.balanceMinor > 0);
   const selectedTotalMinor = selectedDocuments.reduce((total, document) => total + document.totalMinor, 0);
 
   async function issueSelected(): Promise<void> {
@@ -1071,6 +1262,13 @@ function DocumentsTab({
       return;
     }
     await onIssueSelected(selectedDocuments);
+  }
+
+  async function convertSelected(): Promise<void> {
+    if (!onConvertSelected || selectedDocuments.length !== 1) {
+      return;
+    }
+    await onConvertSelected(selectedDocuments);
   }
 
   async function recordSelectedPayment(): Promise<void> {
@@ -1086,6 +1284,7 @@ function DocumentsTab({
         <p>{selectedCount} {selectionLabel} selectate · {formatMoneyMinor(selectedTotalMinor, currency, locale)}</p>
         <Button onClick={onExport} variant="outline">Export CSV</Button>
         <Button disabled={selectedCount === 0 || isMutating} onClick={() => void issueSelected()} variant="secondary">Emite selectate</Button>
+        {canConvertSelected ? <Button disabled={selectedCount !== 1 || selectedDocument?.type !== "PROFORMA" || isMutating} onClick={() => void convertSelected()} variant="secondary">Transformă în factură</Button> : null}
         {canRecordPayment ? <Button disabled={!canUsePaymentForm || selectedCount !== 1 || isMutating} onClick={() => setIsPaymentOpen(true)} variant="secondary">Înregistrează încasare</Button> : null}
         <Button disabled={selectedCount === 0} onClick={() => onPrint(selectedDocument ? selectedDocument.id : "")} variant="outline">Export PDF</Button>
       </div>
@@ -1095,8 +1294,8 @@ function DocumentsTab({
         error={error ? getErrorMessage(error) : undefined}
         getRowKey={(document) => document.id}
         isLoading={isLoading}
-        onRowAction={(document) => onSelectionChange(toggleSelectedId(selectedDocumentIds, document.id))}
-        rowActionLabel="Selectează"
+        onRowAction={(document) => onPrint(document.id)}
+        rowActionLabel="Deschide"
         rows={documents}
       />
       {selectedDocument ? (
@@ -1236,20 +1435,40 @@ function ReceivablesTab({
 
 function MonthCloseTab({
   clinicOverview,
+  archives,
   currency,
   doctorOverview,
+  isClosing,
   locale,
+  monthLabel,
   onExportRegistry,
+  onCloseRegistry,
+  onPrintRegistry,
+  onOpenArchive,
+  onPeriodChange,
+  onSelectArchive,
+  selectedPeriod,
   overview,
   registry,
+  yearOptions,
 }: {
   readonly clinicOverview: BillingOverview | undefined;
+  readonly archives: readonly MonthCloseArchiveSummary[];
   readonly currency: string;
   readonly doctorOverview: BillingOverview | undefined;
+  readonly isClosing: boolean;
   readonly locale: string;
+  readonly monthLabel: string;
   readonly onExportRegistry: () => void;
+  readonly onCloseRegistry: () => void;
+  readonly onPrintRegistry: () => void;
+  readonly onOpenArchive: (archive: MonthCloseArchiveSummary) => void;
+  readonly onPeriodChange: (period: BillingPeriod) => void;
+  readonly onSelectArchive: (archive: MonthCloseArchiveSummary) => void;
+  readonly selectedPeriod: BillingPeriod;
   readonly overview: BillingOverview | undefined;
   readonly registry: MonthEndRegistry | undefined;
+  readonly yearOptions: readonly { readonly label: string; readonly value: string }[];
 }): ReactNode {
   if (!overview) {
     return <LoadingState text="Se încarcă închiderea lunii" />;
@@ -1257,9 +1476,44 @@ function MonthCloseTab({
 
   return (
     <section className="billing-page__tab">
-      <div className="billing-page__toolbar">
+      <Card>
+        <CardHeader>
+          <CardTitle>Lună și an</CardTitle>
+          <CardDescription>Alege orice perioadă, iar URL-ul rămâne stabil la refresh.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="billing-page__month-picker">
+            <Select
+              label="An"
+              options={yearOptions}
+              value={String(selectedPeriod.year)}
+              onChange={(event) => onPeriodChange({ month: selectedPeriod.month, year: Number(event.target.value) })}
+            />
+            <div className="billing-page__month-grid" aria-label="Alege luna">
+              {BILLING_MONTH_OPTIONS.map((month) => {
+                const isActive = month.value === String(selectedPeriod.month);
+                return (
+                  <Button
+                    key={month.value}
+                    onClick={() => onPeriodChange({ month: Number(month.value), year: selectedPeriod.year })}
+                    variant={isActive ? "primary" : "secondary"}
+                  >
+                    {month.label}
+                  </Button>
+                );
+              })}
+            </div>
+            <div className="billing-page__toolbar billing-page__toolbar--tight">
+              <Button onClick={() => onPeriodChange(currentBillingPeriod())} variant="secondary">Luna curentă</Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      <div className="billing-page__toolbar billing-page__toolbar--wrap">
+        <p className="billing-page__readonly">Perioada selectată: {monthLabel}</p>
         <Button onClick={onExportRegistry} variant="outline">Export registru lunar CSV</Button>
-        <Button onClick={() => window.print()} variant="outline">Export PDF</Button>
+        <Button onClick={onPrintRegistry} variant="outline">Export PDF</Button>
+        <Button disabled={isClosing} onClick={onCloseRegistry} variant="secondary">Închide și arhivează luna</Button>
       </div>
       {registry ? (
         <div className="billing-page__registry-summary">
@@ -1274,6 +1528,111 @@ function MonthCloseTab({
         <MonthCloseGroupAccordion title="Clinici" overview={clinicOverview ?? overview} currency={currency} locale={locale} />
         <MonthCloseGroupAccordion title="Medici" overview={doctorOverview ?? overview} currency={currency} locale={locale} />
       </div>
+      <section className="billing-page__month-close-archives">
+        <header className="billing-page__month-close-panel-header">
+          <h2>Arhivă închideri</h2>
+          <span>{archives.length} luni</span>
+        </header>
+        {archives.length > 0 ? (
+          <div className="billing-page__month-close-archive-list">
+            {archives.map((archive) => (
+              <Card key={archive.archiveId}>
+                <CardHeader>
+                  <CardTitle>{new Intl.DateTimeFormat("ro-RO", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(archive.year, archive.month - 1, 1)))}</CardTitle>
+                  <CardDescription>
+                    {formatDate(archive.periodStart)} - {formatDate(archive.periodEnd)} · Închis la {formatDate(archive.closedAt)}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="billing-page__month-close-archive-meta">
+                    <span>Total: {formatMoneyMinor(archive.totalMinor, archive.currency, locale)}</span>
+                    <span>Încasat: {formatMoneyMinor(archive.paidMinor, archive.currency, locale)}</span>
+                    <span>Neachitat: {formatMoneyMinor(archive.unpaidTotalMinor, archive.currency, locale)}</span>
+                    <span>Închisă de: {archive.closedByDisplayName ?? archive.closedByEmail ?? "Necunoscut"}</span>
+                  </div>
+                  <div className="billing-page__toolbar billing-page__toolbar--tight">
+                    <Button onClick={() => onSelectArchive(archive)} variant="secondary">Deschide luna</Button>
+                    <Button onClick={() => onOpenArchive(archive)} variant="outline">Deschide PDF</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <p className="billing-page__readonly">Nu există arhive pentru compania activă.</p>
+        )}
+      </section>
+    </section>
+  );
+}
+
+function BillingGuideTab(): ReactNode {
+  const items = [
+    {
+      id: "uninvoiced",
+      title: "Lucrări nefacturate",
+      content: "Aici selectezi lucrările eligibile și folosești butoanele Creează notă de plată, Creează proformă sau Creează factură.",
+    },
+    {
+      id: "statement",
+      title: "Notă de plată",
+      content: "În fila Note de plată alegi Clinică sau Medic, schimbi sursa între documente și lucrări nefacturate și exporți PDF-ul anexă.",
+    },
+    {
+      id: "proforma",
+      title: "Proformă",
+      content: "Proforma rămâne document de lucru până la emitere. Din fila Proforme poți deschide, emite, transforma sau încasa documentul.",
+    },
+    {
+      id: "invoice",
+      title: "Factură",
+      content: "Fila Facturi afișează doar documentele emise. Aici deschizi PDF-ul și înregistrezi plăți manuale pe facturile neachitate sau parțial achitate.",
+    },
+    {
+      id: "payment",
+      title: "Încasare parțială / totală",
+      content: "O plată poate acoperi doar o parte din sold. După fiecare încasare, starea documentului și soldul restant se actualizează.",
+    },
+    {
+      id: "receivables",
+      title: "Restanțe",
+      content: "Fila Restanțe arată doar documentele cu sold rămas. Din ea poți deschide factura și înregistra încasarea lipsă.",
+    },
+    {
+      id: "month-close",
+      title: "Închidere lună",
+      content: "Alegi anul și luna, verifici registrul lunar și apoi exporți PDF sau CSV. Arhivarea salvează un snapshot separat pe firma activă.",
+    },
+    {
+      id: "archive",
+      title: "Arhivă",
+      content: "Arhivele din Închidere lună sunt read-only. Le poți redeschide în registrul lunar sau reda PDF-ul fără să suprascrii snapshot-ul existent.",
+    },
+    {
+      id: "companies",
+      title: "NC vs NG",
+      content: "Firma activă din sidebar separă strict documentele și arhivele. Ce este închis pe NC nu apare pe NG și invers.",
+    },
+  ] as const;
+
+  return (
+    <section className="billing-page__tab billing-page__guide">
+      <Card>
+        <CardHeader>
+          <CardTitle>Ghid facturare</CardTitle>
+          <CardDescription>Fluxul real din aplicație, cu aceleași butoane pe care le folosește managerul.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Accordion
+            allowMultiple
+            items={items.map((item) => ({
+              id: item.id,
+              title: <strong>{item.title}</strong>,
+              content: <p className="billing-page__readonly">{item.content}</p>,
+            }))}
+          />
+        </CardContent>
+      </Card>
     </section>
   );
 }

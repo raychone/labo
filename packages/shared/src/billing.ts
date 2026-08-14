@@ -318,6 +318,20 @@ export interface MonthEndRegistryRow {
   readonly workCodes: readonly string[];
 }
 
+export interface MonthEndRegistryPaymentRow {
+  readonly amountMinor: number;
+  readonly billingDocumentId: string;
+  readonly cancelledAt: string | null;
+  readonly clinicName: string;
+  readonly documentNumber: string | null;
+  readonly id: string;
+  readonly method: PaymentMethod;
+  readonly paymentDate: string;
+  readonly receiptDate: string | null;
+  readonly receiptNumber: string | null;
+  readonly reference: string | null;
+}
+
 export interface MonthEndRegistry {
   readonly currency: string;
   readonly dateFrom: string;
@@ -326,9 +340,33 @@ export interface MonthEndRegistry {
   readonly paidMinor: number;
   readonly paidTotalMinor: number;
   readonly partialTotalMinor: number;
+  readonly payments: readonly MonthEndRegistryPaymentRow[];
   readonly rows: readonly MonthEndRegistryRow[];
   readonly totalMinor: number;
   readonly unpaidTotalMinor: number;
+}
+
+export interface MonthCloseArchiveSummary {
+  readonly archiveId: string;
+  readonly closedAt: string;
+  readonly closedByDisplayName: string | null;
+  readonly closedByEmail: string | null;
+  readonly closedByUserId: string | null;
+  readonly currency: string;
+  readonly month: number;
+  readonly periodEnd: string;
+  readonly periodStart: string;
+  readonly year: number;
+  readonly reportVersion: string;
+  readonly totalMinor: number;
+  readonly paidMinor: number;
+  readonly paidTotalMinor: number;
+  readonly partialTotalMinor: number;
+  readonly unpaidTotalMinor: number;
+}
+
+export interface MonthCloseArchiveDetail extends MonthCloseArchiveSummary {
+  readonly snapshot: MonthEndRegistry;
 }
 
 export interface BillingReceivableRow {

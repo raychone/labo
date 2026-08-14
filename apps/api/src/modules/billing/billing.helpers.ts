@@ -25,6 +25,13 @@ export function getDefaultBillingRange(now = new Date()): { readonly from: Date;
   return { from, to };
 }
 
+export function getMonthBillingRange(year: number, month: number): { readonly from: Date; readonly to: Date } {
+  const from = new Date(Date.UTC(year, month - 1, 1));
+  const to = new Date(Date.UTC(year, month, 0));
+
+  return { from, to };
+}
+
 export function endOfDateOnly(value: Date): Date {
   const end = new Date(value);
   end.setUTCHours(23, 59, 59, 999);

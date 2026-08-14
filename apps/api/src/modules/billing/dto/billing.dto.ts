@@ -57,7 +57,21 @@ export class BillingRangeQueryDto {
 
   @IsOptional()
   @IsIn(BILLING_GROUP_BY)
-  public readonly groupBy: (typeof BILLING_GROUP_BY)[number] = "clinic";
+  public readonly groupBy?: (typeof BILLING_GROUP_BY)[number] = "clinic";
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(2000)
+  @Max(2100)
+  public readonly year?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  public readonly month?: number;
 }
 
 export class BillableWorksQueryDto extends BillingRangeQueryDto {

@@ -11,6 +11,8 @@ import type {
   ClinicBillingStatement,
   CreateBillingDocumentInput,
   DoctorBillingStatement,
+  MonthCloseArchiveDetail,
+  MonthCloseArchiveSummary,
   MonthEndRegistry,
   PaginatedBillingDocumentsResponse,
   PrintableBillingDocument,
@@ -28,6 +30,7 @@ export const billingQueryKeys = {
   documentAttachment: (documentId: string) => ["billing", "documents", documentId, "attachment"] as const,
   documentPrint: (documentId: string) => ["billing", "documents", documentId, "print"] as const,
   monthRegistry: (params: BillingWorkspaceParams) => ["billing", "month-registry", params] as const,
+  monthRegistryArchives: (companyCode: string) => ["billing", "month-registry", "archives", companyCode] as const,
   overview: (params: BillingWorkspaceParams) => ["billing", "overview", params] as const,
   payments: ["billing", "payments"] as const,
   receivables: (params: BillingListQuery) => ["billing", "receivables", params] as const,
@@ -43,9 +46,11 @@ export interface BillingWorkspaceParams {
   readonly dateTo?: string;
   readonly doctorId?: string;
   readonly groupBy?: string;
+  readonly month?: number;
   readonly patient?: string;
   readonly search?: string;
   readonly uninvoicedOnly?: boolean;
+  readonly year?: number;
   readonly workCode?: string;
 }
 
@@ -186,6 +191,15 @@ export async function fetchMonthRegistry(params: BillingWorkspaceParams): Promis
   return parseApiResponse<MonthEndRegistry>(response);
 }
 
+export async function fetchMonthRegistryArchives(): Promise<{ readonly items: readonly MonthCloseArchiveSummary[] }> {
+  const response = await apiFetch("/billing/month-registry/archives");
+  return parseApiResponse<{ readonly items: readonly MonthCloseArchiveSummary[] }>(response);
+}
+
+export async function closeMonthRegistry(params: BillingWorkspaceParams): Promise<MonthCloseArchiveDetail> {
+  return sendJson<MonthCloseArchiveDetail>(`/billing/month-registry/close?${toQueryString(Object.entries(params))}`, "POST");
+}
+
 export async function fetchReceivables(params: BillingListQuery): Promise<BillingReceivables> {
   const response = await apiFetch(`/billing/receivables?${toQueryString(Object.entries(params))}`);
   return parseApiResponse<BillingReceivables>(response);
@@ -202,7 +216,8 @@ export async function downloadMonthRegistryCsv(params: BillingWorkspaceParams): 
     await parseApiResponse<never>(response);
   }
 
-  return response.text();
+  const text = await response.text();
+  return text.startsWith("\uFEFF") ? text : `\uFEFF${text}`;
 }
 
 export function useBillingOverview(params: BillingWorkspaceParams, enabled: boolean) {

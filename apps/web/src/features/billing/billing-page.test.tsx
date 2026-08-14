@@ -3,10 +3,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { RouterProvider, createMemoryRouter } from "react-router";
 
 import { BillingPage } from "./billing-page.js";
 
 function renderWithProviders(component: ReactNode): void {
+  renderWithRouter(component, ["/billing"]);
+}
+
+function renderWithRouter(component: ReactNode, initialEntries: string[]): ReturnType<typeof createMemoryRouter> {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -14,12 +19,22 @@ function renderWithProviders(component: ReactNode): void {
       },
     },
   });
+  const router = createMemoryRouter([
+    {
+      element: <ToastProvider>{component}</ToastProvider>,
+      path: "/billing",
+    },
+  ], {
+    initialEntries,
+  });
 
   render(
     <QueryClientProvider client={queryClient}>
-      <ToastProvider>{component}</ToastProvider>
+      <RouterProvider router={router} />
     </QueryClientProvider>,
   );
+
+  return router;
 }
 
 function createJsonResponse(body: unknown, status = 200): Response {
@@ -143,7 +158,10 @@ describe("BillingPage", () => {
         return Promise.resolve(createJsonResponse({ items: [] }));
       }
       if (url.includes("/billing/month-registry")) {
-        return Promise.resolve(createJsonResponse({ currency: "RON", dateFrom: "2026-08-01", dateTo: "2026-08-31", generatedAt: "2026-08-04T00:00:00.000Z", paidMinor: 0, paidTotalMinor: 0, partialTotalMinor: 0, rows: [], totalMinor: 0, unpaidTotalMinor: 0 }));
+        return Promise.resolve(createJsonResponse({ currency: "RON", dateFrom: "2026-08-01", dateTo: "2026-08-31", generatedAt: "2026-08-04T00:00:00.000Z", paidMinor: 0, paidTotalMinor: 0, partialTotalMinor: 0, payments: [], rows: [], totalMinor: 0, unpaidTotalMinor: 0 }));
+      }
+      if (url.endsWith("/billing/month-registry/archives")) {
+        return Promise.resolve(createJsonResponse({ items: [] }));
       }
       if (url.includes("/billing-documents") && url.includes("type=PROFORMA")) {
         return Promise.resolve(createJsonResponse({
@@ -217,6 +235,7 @@ describe("BillingPage", () => {
 
       return Promise.resolve(createJsonResponse({}, 404));
     }));
+    vi.stubGlobal("open", vi.fn());
 
     renderWithProviders(<BillingPage />);
 
@@ -229,13 +248,101 @@ describe("BillingPage", () => {
     expect(await screen.findByRole("checkbox", { name: "Selectează WO-2026-000001" })).toBeDefined();
     fireEvent.click(screen.getByLabelText("Selectează WO-2026-000001"));
     expect(await screen.findByText(/1 lucrări selectate/)).toBeDefined();
-    expect(screen.queryByRole("button", { name: "Creează proformă" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Creează notă de plată" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Creează proformă" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Creează factură" })).toBeDefined();
     fireEvent.click(screen.getByRole("tab", { name: "Proforme" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Selectează" }));
+    expect(await screen.findByRole("button", { name: "Deschide" })).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Înregistrează încasare" })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Facturi" }));
+    expect(await screen.findByRole("button", { name: "Deschide" })).toBeDefined();
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Selectează FACT-2026-000001" }));
+    expect(screen.getByRole("button", { name: "Înregistrează încasare" })).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Înregistrează încasare" }));
-    fireEvent.change(screen.getByLabelText("Sumă încasată"), { target: { value: "350.00" } });
+    fireEvent.change(await screen.findByLabelText("Sumă încasată"), { target: { value: "350.00" } });
     fireEvent.click(screen.getByRole("button", { name: "Înregistrează încasarea" }));
     expect(screen.queryByText("Incaseaza sold")).toBeNull();
+  });
+
+  it("keeps the selected historical month stable in the URL when navigating months", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/auth/permissions")) {
+        return Promise.resolve(createJsonResponse({
+          permissions: [
+            { key: "finance.read", scopes: ["ALL"] },
+            { key: "finance.read_reports", scopes: ["ALL"] },
+          ],
+        }));
+      }
+      if (url.endsWith("/settings")) {
+        return Promise.resolve(createJsonResponse({ currency: "RON", legalEntityCode: "NC", legalEntityDisplayName: "Nicolaie Cristina", locale: "ro-RO" }));
+      }
+      if (url.includes("/billing/overview")) {
+        return Promise.resolve(createJsonResponse({
+          currency: "RON",
+          documentCount: 0,
+          ambiguousLegacyCount: 0,
+          from: "2026-06-01",
+          groups: [],
+          invoiceCount: 0,
+          openProformaCount: 0,
+          overdueInvoiceCount: 0,
+          outstandingMinor: 0,
+          paidMinor: 0,
+          paidInvoiceCount: 0,
+          partialInvoiceCount: 0,
+          proformaMinor: 0,
+          to: "2026-06-30",
+          totalIssuedMinor: 0,
+          unpaidInvoiceCount: 0,
+          uninvoicedMinor: 0,
+          uninvoicedWorkCount: 0,
+          workValueMinor: 0,
+        }));
+      }
+      if (url.includes("/billing/statements/clinic")) {
+        return Promise.resolve(createJsonResponse({ clinicId: "clinic_1", clinicName: "Clinica Test", currency: "RON", dateFrom: "2026-06-01", dateTo: "2026-06-30", documents: [], generatedAt: "2026-08-04T00:00:00.000Z", paidMinor: 0, totalMinor: 0, uninvoicedMinor: 0, uninvoicedWorks: [] }));
+      }
+      if (url.includes("/billing/statements/doctor")) {
+        return Promise.resolve(createJsonResponse({ currency: "RON", dateFrom: "2026-06-01", dateTo: "2026-06-30", doctorId: "doctor_1", doctorName: "Dr. Ana Popescu", documents: [], generatedAt: "2026-08-04T00:00:00.000Z", paidMinor: 0, totalMinor: 0, uninvoicedMinor: 0, uninvoicedWorks: [] }));
+      }
+      if (url.includes("/billing/billable-works")) {
+        return Promise.resolve(createJsonResponse({ items: [] }));
+      }
+      if (url.includes("/billing/receivables")) {
+        return Promise.resolve(createJsonResponse({ currency: "RON", generatedAt: "2026-08-04T00:00:00.000Z", items: [], overdueCount: 0, totalBalanceMinor: 0 }));
+      }
+      if (url.endsWith("/billing/ambiguous-legacy")) {
+        return Promise.resolve(createJsonResponse({ items: [] }));
+      }
+      if (url.includes("/billing/month-registry")) {
+        return Promise.resolve(createJsonResponse({ currency: "RON", dateFrom: "2026-06-01", dateTo: "2026-06-30", generatedAt: "2026-08-04T00:00:00.000Z", paidMinor: 0, paidTotalMinor: 0, partialTotalMinor: 0, payments: [], rows: [], totalMinor: 0, unpaidTotalMinor: 0 }));
+      }
+      if (url.endsWith("/billing/month-registry/archives")) {
+        return Promise.resolve(createJsonResponse({ items: [] }));
+      }
+      if (url.includes("/billing-documents")) {
+        return Promise.resolve(createJsonResponse({ items: [], page: 1, pageCount: 1, pageSize: 20, total: 0 }));
+      }
+      if (url.endsWith("/payments")) {
+        return Promise.resolve(createJsonResponse({ items: [] }));
+      }
+      if (url.endsWith("/billing-series")) {
+        return Promise.resolve(createJsonResponse({ items: [] }));
+      }
+
+      return Promise.resolve(createJsonResponse({}, 404));
+    }));
+
+    const router = renderWithRouter(<BillingPage />, ["/billing?year=2026&month=6"]);
+
+    expect(await screen.findByRole("heading", { name: "Facturare" })).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Luna următoare" }));
+    expect(router.state.location.search).toBe("?year=2026&month=7");
+    fireEvent.click(screen.getByRole("button", { name: "Luna anterioară" }));
+    expect(router.state.location.search).toBe("?year=2026&month=6");
+    fireEvent.click(screen.getByRole("button", { name: "Luna curentă" }));
+    expect(router.state.location.search).toMatch(/month=\d{1,2}/);
   });
 });
