@@ -435,11 +435,13 @@
 .billing-print__table--attachment th:nth-child(1),
 .billing-print__table--attachment td:nth-child(1) {
   width: 4.75rem;
+  white-space: nowrap;
 }
 
 .billing-print__table--attachment th:nth-child(2),
 .billing-print__table--attachment td:nth-child(2) {
   width: 5.25rem;
+  white-space: nowrap;
 }
 
 .billing-print__table--attachment th:nth-child(3),
@@ -460,6 +462,7 @@
 .billing-print__table--attachment th:nth-child(6),
 .billing-print__table--attachment td:nth-child(6) {
   width: 3rem;
+  white-space: nowrap;
 }
 
 .billing-print__table--attachment th:nth-child(7),
@@ -467,6 +470,7 @@
 .billing-print__table--attachment th:nth-child(8),
 .billing-print__table--attachment td:nth-child(8) {
   width: 4.75rem;
+  white-space: nowrap;
 }
 
 .billing-print__table th,
@@ -494,8 +498,14 @@
 .billing-print__table--attachment th,
 .billing-print__table--attachment td {
   padding: 0.3rem 0.35rem;
-  word-break: break-word;
-  overflow-wrap: anywhere;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.billing-print__table--attachment td:nth-child(3),
+.billing-print__table--attachment td:nth-child(4),
+.billing-print__table--attachment td:nth-child(5) {
+  white-space: normal;
 }
 
 .billing-page__month-close-panel {
@@ -789,8 +799,16 @@
 .billing-statement__table--attachment th,
 .billing-statement__table--attachment td {
   padding: 0.3rem 0.35rem;
-  word-break: break-word;
-  overflow-wrap: anywhere;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.billing-statement__table--attachment td:nth-child(1),
+.billing-statement__table--attachment td:nth-child(2),
+.billing-statement__table--attachment td:nth-child(6),
+.billing-statement__table--attachment td:nth-child(7),
+.billing-statement__table--attachment td:nth-child(8) {
+  white-space: nowrap;
 }
 
 .billing-month-registry {
