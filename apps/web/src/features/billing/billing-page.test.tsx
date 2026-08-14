@@ -160,9 +160,6 @@ describe("BillingPage", () => {
       if (url.includes("/billing/month-registry")) {
         return Promise.resolve(createJsonResponse({ currency: "RON", dateFrom: "2026-08-01", dateTo: "2026-08-31", generatedAt: "2026-08-04T00:00:00.000Z", paidMinor: 0, paidTotalMinor: 0, partialTotalMinor: 0, payments: [], rows: [], totalMinor: 0, unpaidTotalMinor: 0 }));
       }
-      if (url.endsWith("/billing/month-registry/archives")) {
-        return Promise.resolve(createJsonResponse({ items: [] }));
-      }
       if (url.includes("/billing-documents") && url.includes("type=PROFORMA")) {
         return Promise.resolve(createJsonResponse({
           items: [{
@@ -243,6 +240,7 @@ describe("BillingPage", () => {
     expect(screen.queryByLabelText("Status încasare")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Vezi filtrele" }));
     expect(await screen.findByLabelText("Status încasare")).toBeDefined();
+    expect(screen.queryByText("Arhivă închideri")).toBeNull();
     expect((await screen.findAllByText("Nefacturat")).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: /Lucrări nefacturate/ }));
     expect(await screen.findByRole("checkbox", { name: "Selectează WO-2026-000001" })).toBeDefined();

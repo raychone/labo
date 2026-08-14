@@ -30,14 +30,13 @@ import {
   type DoctorBillingStatement,
   type BillingReceivableRow,
   type DocumentPaymentFilter,
-  type MonthCloseArchiveSummary,
   type MonthEndRegistry,
   type PaymentMethod,
   type RecordPaymentInput,
 } from "@dental-lab/shared";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
 import { hasPermission } from "../users/users-api.js";
@@ -59,7 +58,6 @@ import {
   useDoctorStatement,
   useAmbiguousLegacyRecords,
   closeMonthRegistry,
-  fetchMonthRegistryArchives,
   downloadMonthRegistryCsv,
   type BillingWorkspaceParams,
 } from "./billing-api.js";
@@ -283,6 +281,7 @@ function toDocumentCsvRow(document: BillingDocumentSummary, currency: string): R
 
 export function BillingPage(): ReactNode {
   const toast = useToast();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   const canReadFinance = hasPermission(permissionsQuery.data, "finance.read");
@@ -344,18 +343,11 @@ export function BillingPage(): ReactNode {
   const monthRegistryQuery = useMonthRegistry(monthRegistryParams, canReadReports);
   const ambiguousLegacyQuery = useAmbiguousLegacyRecords(canReadReports);
   const seriesQuery = useBillingSeries(canConfigureSeries);
-  const monthRegistryArchivesQuery = useQuery({
-    enabled: canReadReports,
-    queryFn: fetchMonthRegistryArchives,
-    queryKey: ["billing", "month-registry", "archives", settingsQuery.data?.legalEntityCode ?? "loading"],
-    retry: false,
-  });
   const closeMonthRegistryMutation = useMutation({
     mutationFn: () => closeMonthRegistry(monthRegistryParams),
     onSuccess: async () => {
       await Promise.all([
         monthRegistryQuery.refetch(),
-        monthRegistryArchivesQuery.refetch(),
         overviewQuery.refetch(),
         monthCloseClinicOverviewQuery.refetch(),
         monthCloseDoctorOverviewQuery.refetch(),
@@ -790,7 +782,6 @@ export function BillingPage(): ReactNode {
             label: "Închidere lună",
             content: <MonthCloseTab
               clinicOverview={monthCloseClinicOverviewQuery.data}
-              archives={monthRegistryArchivesQuery.data?.items ?? []}
               overview={overviewQuery.data}
               registry={monthRegistryQuery.data}
               currency={currency}
@@ -798,6 +789,7 @@ export function BillingPage(): ReactNode {
               doctorOverview={monthCloseDoctorOverviewQuery.data}
               isClosing={closeMonthRegistryMutation.isPending}
               monthLabel={formatBillingPeriod(selectedPeriod)}
+              onOpenArchive={() => navigate(`/billing/archive?year=${selectedPeriod.year}`)}
               onPeriodChange={updateSelectedPeriod}
               onExportRegistry={async () => {
                 try {
@@ -808,18 +800,6 @@ export function BillingPage(): ReactNode {
               }}
               onPrintRegistry={openMonthRegistryPrint}
               onCloseRegistry={() => closeMonthRegistryMutation.mutate()}
-              onOpenArchive={(archive) => {
-                const periodRange = monthRange({ month: archive.month, year: archive.year });
-                const params = new URLSearchParams({
-                  dateFrom: periodRange.dateFrom,
-                  dateTo: periodRange.dateTo,
-                  format: "a4",
-                  month: String(archive.month),
-                  year: String(archive.year),
-                });
-                window.open(`/billing/month-registry/print?${params.toString()}`, "_blank", "noopener,noreferrer");
-              }}
-              onSelectArchive={(archive) => updateSelectedPeriod({ month: archive.month, year: archive.year })}
               yearOptions={yearOptions}
               selectedPeriod={selectedPeriod}
             />,
@@ -1435,7 +1415,6 @@ function ReceivablesTab({
 
 function MonthCloseTab({
   clinicOverview,
-  archives,
   currency,
   doctorOverview,
   isClosing,
@@ -1443,17 +1422,15 @@ function MonthCloseTab({
   monthLabel,
   onExportRegistry,
   onCloseRegistry,
-  onPrintRegistry,
   onOpenArchive,
+  onPrintRegistry,
   onPeriodChange,
-  onSelectArchive,
   selectedPeriod,
   overview,
   registry,
   yearOptions,
 }: {
   readonly clinicOverview: BillingOverview | undefined;
-  readonly archives: readonly MonthCloseArchiveSummary[];
   readonly currency: string;
   readonly doctorOverview: BillingOverview | undefined;
   readonly isClosing: boolean;
@@ -1461,10 +1438,9 @@ function MonthCloseTab({
   readonly monthLabel: string;
   readonly onExportRegistry: () => void;
   readonly onCloseRegistry: () => void;
+  readonly onOpenArchive: () => void;
   readonly onPrintRegistry: () => void;
-  readonly onOpenArchive: (archive: MonthCloseArchiveSummary) => void;
   readonly onPeriodChange: (period: BillingPeriod) => void;
-  readonly onSelectArchive: (archive: MonthCloseArchiveSummary) => void;
   readonly selectedPeriod: BillingPeriod;
   readonly overview: BillingOverview | undefined;
   readonly registry: MonthEndRegistry | undefined;
@@ -1513,6 +1489,7 @@ function MonthCloseTab({
         <p className="billing-page__readonly">Perioada selectată: {monthLabel}</p>
         <Button onClick={onExportRegistry} variant="outline">Export registru lunar CSV</Button>
         <Button onClick={onPrintRegistry} variant="outline">Export PDF</Button>
+        <Button onClick={onOpenArchive} variant="secondary">Arhivă facturare</Button>
         <Button disabled={isClosing} onClick={onCloseRegistry} variant="secondary">Închide și arhivează luna</Button>
       </div>
       {registry ? (
@@ -1528,40 +1505,6 @@ function MonthCloseTab({
         <MonthCloseGroupAccordion title="Clinici" overview={clinicOverview ?? overview} currency={currency} locale={locale} />
         <MonthCloseGroupAccordion title="Medici" overview={doctorOverview ?? overview} currency={currency} locale={locale} />
       </div>
-      <section className="billing-page__month-close-archives">
-        <header className="billing-page__month-close-panel-header">
-          <h2>Arhivă închideri</h2>
-          <span>{archives.length} luni</span>
-        </header>
-        {archives.length > 0 ? (
-          <div className="billing-page__month-close-archive-list">
-            {archives.map((archive) => (
-              <Card key={archive.archiveId}>
-                <CardHeader>
-                  <CardTitle>{new Intl.DateTimeFormat("ro-RO", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(archive.year, archive.month - 1, 1)))}</CardTitle>
-                  <CardDescription>
-                    {formatDate(archive.periodStart)} - {formatDate(archive.periodEnd)} · Închis la {formatDate(archive.closedAt)}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="billing-page__month-close-archive-meta">
-                    <span>Total: {formatMoneyMinor(archive.totalMinor, archive.currency, locale)}</span>
-                    <span>Încasat: {formatMoneyMinor(archive.paidMinor, archive.currency, locale)}</span>
-                    <span>Neachitat: {formatMoneyMinor(archive.unpaidTotalMinor, archive.currency, locale)}</span>
-                    <span>Închisă de: {archive.closedByDisplayName ?? archive.closedByEmail ?? "Necunoscut"}</span>
-                  </div>
-                  <div className="billing-page__toolbar billing-page__toolbar--tight">
-                    <Button onClick={() => onSelectArchive(archive)} variant="secondary">Deschide luna</Button>
-                    <Button onClick={() => onOpenArchive(archive)} variant="outline">Deschide PDF</Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <p className="billing-page__readonly">Nu există arhive pentru compania activă.</p>
-        )}
-      </section>
     </section>
   );
 }
@@ -1606,7 +1549,7 @@ function BillingGuideTab(): ReactNode {
     {
       id: "archive",
       title: "Arhivă",
-      content: "Arhivele din Închidere lună sunt read-only. Le poți redeschide în registrul lunar sau reda PDF-ul fără să suprascrii snapshot-ul existent.",
+      content: "Arhiva facturare este un workspace separat pentru lunile istorice. Aici redeschizi snapshot-uri fără să suprascrii închiderea deja salvată.",
     },
     {
       id: "companies",

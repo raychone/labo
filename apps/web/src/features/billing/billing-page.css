@@ -796,6 +796,11 @@
 .billing-month-registry {
   display: grid;
   gap: var(--dl-space-4);
+  page: month-registry;
+}
+
+.billing-month-registry--landing {
+  gap: var(--dl-space-3);
 }
 
 .billing-month-registry__paper {
@@ -804,10 +809,14 @@
   border-radius: var(--dl-radius-md);
   display: grid;
   gap: var(--dl-space-4);
-  min-height: 297mm;
+  min-height: 210mm;
   overflow: visible;
   padding: 16mm 14mm 14mm;
   position: relative;
+}
+
+.billing-month-registry--landing .billing-month-registry__paper {
+  gap: var(--dl-space-3);
 }
 
 .billing-month-registry__header {
@@ -815,6 +824,10 @@
   gap: var(--dl-space-4);
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr);
   align-items: start;
+}
+
+.billing-month-registry__header--landing {
+  align-items: end;
 }
 
 .billing-month-registry__identity,
@@ -842,6 +855,111 @@
   font-size: var(--dl-font-size-section-title);
 }
 
+.billing-month-registry__archive-list {
+  display: grid;
+  gap: var(--dl-space-3);
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+}
+
+.billing-month-registry__archive-card {
+  background: color-mix(in srgb, var(--dl-color-surface) 96%, var(--dl-color-border));
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  display: grid;
+  gap: var(--dl-space-3);
+  padding: var(--dl-space-3);
+}
+
+.billing-month-registry__archive-card-meta {
+  display: grid;
+  gap: var(--dl-space-1);
+}
+
+.billing-month-registry__archive-card-meta strong {
+  font-size: var(--dl-font-size-section-title);
+  text-transform: capitalize;
+}
+
+.billing-month-registry__archive-card-meta span,
+.billing-month-registry__archive-card-meta small,
+.billing-month-registry__empty-archive {
+  color: var(--dl-color-text-muted);
+}
+
+.billing-month-registry__archive-card-summary {
+  display: grid;
+  gap: var(--dl-space-1);
+}
+
+.billing-archive-page {
+  display: grid;
+  gap: var(--dl-space-4);
+}
+
+.billing-archive-page__detail-shell {
+  display: grid;
+  gap: var(--dl-space-3);
+}
+
+.billing-archive-page__header {
+  align-items: end;
+  display: grid;
+  gap: var(--dl-space-3);
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+}
+
+.billing-archive-page__header h1 {
+  font-size: var(--dl-font-size-page-title);
+}
+
+.billing-archive-page__header p,
+.billing-archive-page__company span,
+.billing-archive-page__company small {
+  color: var(--dl-color-text-muted);
+}
+
+.billing-archive-page__company strong {
+  display: block;
+  font-size: var(--dl-font-size-section-title);
+}
+
+.billing-archive-page__toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-2);
+}
+
+.billing-archive-page__toolbar--compact {
+  justify-content: flex-start;
+}
+
+.billing-archive-page__month-grid {
+  display: grid;
+  gap: var(--dl-space-3);
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+
+.billing-archive-page__month-card {
+  align-content: start;
+}
+
+.billing-archive-page__month-meta {
+  display: grid;
+  gap: var(--dl-space-1);
+}
+
+.billing-archive-page__summary {
+  display: grid;
+  gap: var(--dl-space-1);
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.billing-archive-page__footer-link {
+  display: flex;
+  justify-content: flex-start;
+}
+
 .billing-month-registry__summary {
   display: grid;
   gap: var(--dl-space-3);
@@ -865,12 +983,20 @@
 }
 
 .billing-month-registry__summary-card strong {
-  font-size: var(--dl-font-size-section-title);
+  font-size: 1rem;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .billing-month-registry__section {
   display: grid;
   gap: var(--dl-space-2);
+}
+
+.billing-month-registry__section > header {
+  break-after: avoid;
+  page-break-after: avoid;
 }
 
 .billing-month-registry__section h2 {
@@ -880,6 +1006,7 @@
 
 .billing-month-registry__table {
   border-collapse: collapse;
+  table-layout: fixed;
   font-size: var(--dl-font-size-small);
   width: 100%;
 }
@@ -892,30 +1019,64 @@
   padding: 0.3rem 0.35rem;
   text-align: left;
   vertical-align: top;
-  word-break: break-word;
-  overflow-wrap: anywhere;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 .billing-month-registry__table th {
   color: var(--dl-color-text-muted);
+  white-space: nowrap;
 }
 
-.billing-month-registry__table tr:first-child th:first-child,
-.billing-month-registry__table tr:first-child td:first-child {
-  border-top-left-radius: 0;
+.billing-month-registry__table td {
+  overflow-wrap: normal;
 }
 
-.billing-month-registry__table tr:first-child th:last-child,
-.billing-month-registry__table tr:first-child td:last-child {
-  border-top-right-radius: 0;
+.billing-month-registry__table tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
-.billing-month-registry__table tr:last-child td:first-child {
-  border-bottom-left-radius: 0;
+.billing-month-registry__cell--nowrap {
+  white-space: nowrap;
 }
 
-.billing-month-registry__table tr:last-child td:last-child {
-  border-bottom-right-radius: 0;
+.billing-month-registry__cell--right {
+  text-align: right;
+}
+
+.billing-month-registry__client-cell {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.billing-month-registry__client-cell strong,
+.billing-month-registry__client-cell small {
+  display: block;
+}
+
+.billing-month-registry__client-cell strong {
+  white-space: nowrap;
+}
+
+.billing-month-registry__client-cell small {
+  color: var(--dl-color-text-muted);
+  font-size: 0.68rem;
+  line-height: 1.1;
+}
+
+.billing-month-registry__work-code-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.35rem;
+}
+
+.billing-month-registry__work-code {
+  white-space: nowrap;
+}
+
+.billing-month-registry__cell-empty {
+  color: var(--dl-color-text-muted);
 }
 
 .billing-page__month-close-archives {
@@ -970,6 +1131,11 @@
   margin: 10mm 12mm 12mm;
 }
 
+@page month-registry {
+  size: A4 landscape;
+  margin: 8mm 10mm 10mm;
+}
+
 @media print {
   html,
   body {
@@ -1004,7 +1170,7 @@
   .billing-month-registry__paper {
     min-height: auto;
     overflow: visible;
-    padding: 12mm 10mm 18mm;
+    padding: 10mm 10mm 12mm;
   }
 
   .billing-month-registry__header,
@@ -1013,12 +1179,22 @@
     page-break-inside: avoid;
   }
 
+  .billing-month-registry__section > header {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
   .billing-month-registry__table thead {
     display: table-header-group;
   }
 
   .billing-month-registry__table tbody {
     display: table-row-group;
+  }
+
+  .billing-month-registry__table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .billing-print-page .dl-tabs {

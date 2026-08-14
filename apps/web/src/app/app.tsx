@@ -85,6 +85,14 @@ const BillingStatementPrintPage = lazy(async () => {
   const module = await import("../features/billing/billing-statement-print-page.js");
   return { default: module.BillingStatementPrintPage };
 });
+const BillingMonthRegistryPrintPage = lazy(async () => {
+  const module = await import("../features/billing/billing-month-registry-print-page.js");
+  return { default: module.BillingMonthRegistryPrintPage };
+});
+const BillingArchivePage = lazy(async () => {
+  const module = await import("../features/billing/billing-archive-page.js");
+  return { default: module.BillingArchivePage };
+});
 const PricingPage = lazy(async () => {
   const module = await import("../features/pricing/pricing-page.js");
   return { default: module.PricingPage };
@@ -110,6 +118,18 @@ const router = createBrowserRouter([
   {
     element: <AuthenticatedRoute><PermissionRoute requiredPermissions={["finance.read_reports"]}><LazyRoute><BillingStatementPrintPage /></LazyRoute></PermissionRoute></AuthenticatedRoute>,
     path: "/billing/statements/:scope/print",
+  },
+  {
+    element: <AuthenticatedRoute><PermissionRoute requiredPermissions={["finance.read_reports"]}><LazyRoute><BillingArchivePage /></LazyRoute></PermissionRoute></AuthenticatedRoute>,
+    path: "/billing/archive",
+  },
+  {
+    element: <AuthenticatedRoute><PermissionRoute requiredPermissions={["finance.read_reports"]}><LazyRoute><BillingArchivePage /></LazyRoute></PermissionRoute></AuthenticatedRoute>,
+    path: "/billing/archive/:year/:month",
+  },
+  {
+    element: <AuthenticatedRoute><PermissionRoute requiredPermissions={["finance.read_reports"]}><LazyRoute><BillingMonthRegistryPrintPage /></LazyRoute></PermissionRoute></AuthenticatedRoute>,
+    path: "/billing/month-registry/print",
   },
   {
     element: <AuthenticatedRoute><PermissionRoute requiredPermissions={operationalStatusReadPermissions}><LazyRoute><StatusTvPage /></LazyRoute></PermissionRoute></AuthenticatedRoute>,

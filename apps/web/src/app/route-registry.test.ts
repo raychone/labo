@@ -10,6 +10,7 @@ describe("route registry", () => {
       "logistics.center.read",
       "settings.read",
       "finance.read",
+      "finance.read_reports",
       "pricing.read",
       "patients.read",
       "clinics.read",
@@ -20,6 +21,7 @@ describe("route registry", () => {
     expect(labels).toContain("Acasă");
     expect(labels).toContain("Status");
     expect(labels).toContain("Facturare");
+    expect(labels).toContain("Arhivă facturare");
     expect(labels).toContain("Prețuri și termene");
     expect(labels).toContain("Pacienți");
     expect(labels).toContain("Clinici și medici");
@@ -31,6 +33,7 @@ describe("route registry", () => {
     expect(labels).not.toContain("Centru operațional");
     expect(labels).not.toContain("Livrările mele");
     expect(labels).not.toContain("Status TV");
+    expect(labels).not.toContain("Arhiva Facturare");
   });
 
   it("keeps technician work routes out of navigation when access is scoped", () => {
@@ -65,5 +68,9 @@ describe("route registry", () => {
   it("resolves the dedicated TV status route without shadowing /status", () => {
     expect(getRouteByPath("/status/tv")?.path).toBe("/status/tv");
     expect(getRouteByPath("/status")?.path).toBe("/status");
+  });
+
+  it("resolves the dedicated month registry print route", () => {
+    expect(getRouteByPath("/billing/month-registry/print")?.path).toBe("/billing/month-registry/print");
   });
 });

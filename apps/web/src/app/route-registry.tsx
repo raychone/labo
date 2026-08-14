@@ -16,7 +16,7 @@ export const workReadPermissions = ["works.read_all", "works.read_assigned"] as 
 export const operationalStatusReadPermissions = workReadPermissions;
 export const scanPermissions = ["scan.use"] as const;
 export const deliveryReadPermissions = ["delivery.read", "delivery.read_own"] as const;
-const managerWorkspacePermissions = ["finance.read", "invoice.read", "invoice.create", "pricing.read", "settings.read", "users.read"] as const;
+const managerWorkspacePermissions = ["finance.read", "finance.read_reports", "invoice.read", "invoice.create", "pricing.read", "settings.read", "users.read"] as const;
 
 function isManagerWorkspace(permissionKeys: readonly string[]): boolean {
   return managerWorkspacePermissions.some((permission) => permissionKeys.includes(permission));
@@ -98,7 +98,7 @@ export const appRoutes = [
   {
     icon: "BI",
     label: "Facturare",
-    navigationGroup: "Management",
+    navigationGroup: "FINANCIAR",
     path: "/billing",
     permissionMode: "any",
     requiredPermissions: ["finance.read", "invoice.read", "invoice.create"],
@@ -109,6 +109,24 @@ export const appRoutes = [
     label: "Note de plată",
     navigationGroup: "Management",
     path: "/billing/statements",
+    permissionMode: "any",
+    requiredPermissions: ["finance.read_reports"],
+    showInNavigation: false,
+  },
+  {
+    icon: "BI",
+    label: "Arhivă facturare",
+    navigationGroup: "FINANCIAR",
+    path: "/billing/archive",
+    permissionMode: "any",
+    requiredPermissions: ["finance.read_reports"],
+    showInNavigation: true,
+  },
+  {
+    icon: "BI",
+    label: "Arhiva Facturare",
+    navigationGroup: "FINANCIAR",
+    path: "/billing/month-registry/print",
     permissionMode: "any",
     requiredPermissions: ["finance.read_reports"],
     showInNavigation: false,
@@ -178,6 +196,7 @@ function shouldShowInNavigation(permissionKeys: readonly string[], route: AppRou
     return route.path === "/dashboard"
       || route.path === "/status"
       || route.path === "/billing"
+      || route.path === "/billing/archive"
       || route.path === "/pricing"
       || route.path === "/patients"
       || route.path === "/clinics"

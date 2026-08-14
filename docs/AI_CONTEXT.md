@@ -52,6 +52,7 @@ Implemented or substantially implemented:
 - billing filters stay collapsed by default and expand on demand;
 - billing overview cards are clickable shortcuts into the related tabs, and the note de plată print view can be scoped to selected documents from the current clinic or doctor statement;
 - invoice print output is rendered from persisted company-aware billing data and now follows a more faithful invoice-style layout with company/legal snapshots and line-unit snapshots;
+- the live billing workspace stays at `/billing`, while historical monthly snapshots are browsed through `/billing/archive` without duplicating archive controls in the active workspace;
 - reception work creation uses searchable patient/work-type pickers, quick patient creation, keyboard navigation, and controlled dynamic checkbox/radio fields;
 - operational status read-model API and frontend `/status` workspace;
 - dedicated `/status/tv` fullscreen operational status mode for a physical laboratory display, authenticated and read-only, with polling-based refresh and no shell/navigation chrome;
@@ -74,7 +75,7 @@ Last completed functional task: `TECH-EXECUTION-001`, which surfaces the live te
 
 Last completed documentation task: `WORKFORM-REAL-DISCOVERY-001`, which audited the real paper work sheet and produced [discovery/WORKFORM-REAL-FIELD-AUDIT.md](discovery/WORKFORM-REAL-FIELD-AUDIT.md) and [discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md](discovery/WORKFORM-REAL-SCHEMA-PROPOSAL.md). `DOCS-TOKEN-001` created the permanent token-efficient documentation system under `docs/`.
 
-`ASSETS-DOCS-001` is completed. It documented the real client assets under `assets/`, reconciled the Creative Dental price list against the seeded catalog, and aligned the printable payment-note / invoice templates with the existing company-aware document stack.
+`ASSETS-DOCS-001` is completed. It documented the real client assets under `assets/`, reconciled the Creative Dental price list against the seeded catalog, and aligned the printable payment-note / invoice templates with the existing company-aware document stack. `BILLING-ARCHIVE-001` extracted the historical month archive into a dedicated `/billing/archive` workspace and kept `/billing` focused on the live financial flow.
 
 `TECH-CLAIM-001C` is deferred and does not block the operational MVP. No automatic claim timeout or background reassignment exists; manual manager release/reassign remains the current recovery mechanism and execution snapshots remain immutable. Technicians can select a personal color that is surfaced as a badge in operational status and workbench views; status filters stay collapsed by default; patient dossiers can carry clinic/doctor referral metadata; manager-only financial tabs stay hidden from non-managers; role navigation is intentionally scoped so technicians stay focused on their own work queue and managers see only manager-facing navigation plus status.
 
