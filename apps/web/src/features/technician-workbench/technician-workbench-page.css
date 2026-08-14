@@ -79,7 +79,7 @@
 .technician-workbench__summary {
   display: grid;
   gap: var(--dl-space-2);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
 }
 
 .technician-workbench__metric {
@@ -106,8 +106,7 @@
 .technician-workbench__filters,
 .technician-workbench__actions,
 .technician-workbench__item-main {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: var(--dl-space-2);
 }
 
@@ -121,6 +120,7 @@
   font-weight: var(--dl-font-weight-semibold);
   min-height: 2.5rem;
   padding: var(--dl-space-2) var(--dl-space-3);
+  width: 100%;
 }
 
 .technician-workbench__tabs button[aria-pressed="true"] {
@@ -140,12 +140,11 @@
   border-radius: var(--dl-radius-md);
   display: grid;
   gap: var(--dl-space-3);
-  padding: var(--dl-space-4);
+  padding: var(--dl-space-3);
 }
 
 .technician-workbench__item-main {
   align-items: flex-start;
-  justify-content: space-between;
 }
 
 .technician-workbench__item-main p {
@@ -169,6 +168,10 @@
   align-items: center;
 }
 
+.technician-workbench__actions > * {
+  width: 100%;
+}
+
 .technician-workbench__modal-note {
   color: var(--dl-color-text-muted);
   font-size: var(--dl-font-size-sm);
@@ -177,22 +180,47 @@
 
 @media (min-width: 720px) {
   .technician-workbench__summary {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .technician-workbench__tabs,
+  .technician-workbench__filters,
+  .technician-workbench__actions,
+  .technician-workbench__item-main {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--dl-space-2);
   }
 
   .technician-workbench__filters,
   .technician-workbench__item-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .technician-workbench__workload > div {
     align-items: center;
     grid-template-columns: 2fr repeat(4, 1fr);
   }
+
+  .technician-workbench__tabs button,
+  .technician-workbench__actions > * {
+    width: auto;
+  }
 }
 
-@media (min-width: 1100px) {
+@media (min-width: 980px) {
+  .technician-workbench__summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1400px) {
   .technician-workbench__summary {
     grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .technician-workbench__filters,
+  .technician-workbench__item-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
