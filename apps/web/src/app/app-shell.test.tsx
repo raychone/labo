@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AuthenticatedAppShell } from "./authenticated-app-shell.js";
 import { PermissionRoute } from "./route-guards.js";
+import { BillingArchivePage } from "../features/billing/billing-archive-page.js";
 
 function renderWithProviders(component: ReactNode, initialEntries = ["/works"]): void {
   const queryClient = new QueryClient({
@@ -214,6 +215,111 @@ describe("AuthenticatedAppShell", () => {
 
     await screen.findByText("Works content");
     expect(screen.queryByText("Firmă activă")).toBeNull();
+  });
+
+  it("renders the billing archive workspace inside the authenticated shell", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/auth/me")) {
+        return Promise.resolve(createJsonResponse({
+          user: {
+            displayName: "Development Manager",
+            email: "manager.dev@example.test",
+            id: "user_1",
+          },
+        }));
+      }
+      if (url.endsWith("/auth/permissions")) {
+        return Promise.resolve(createJsonResponse({
+          permissions: [
+            { key: "finance.read_reports", scopes: ["ALL"] },
+            { key: "settings.read", scopes: ["ALL"] },
+          ],
+        }));
+      }
+      if (url.endsWith("/settings")) {
+        return Promise.resolve(createJsonResponse({
+          laboratoryName: "Laborator Test",
+          legalEntityCode: "NC",
+          legalEntityDisplayName: "Nicolaie Cristina",
+          locale: "ro-RO",
+          primaryColor: "#14532d",
+        }));
+      }
+      if (url.endsWith("/billing/month-registry/archives")) {
+        return Promise.resolve(createJsonResponse({ items: [] }));
+      }
+      return Promise.resolve(createJsonResponse({}, 404));
+    }));
+
+    renderWithProviders(
+      <Routes>
+        <Route element={<AuthenticatedAppShell />} path="/">
+          <Route element={<BillingArchivePage />} path="billing/archive" />
+        </Route>
+      </Routes>,
+      ["/billing/archive?year=2026"],
+    );
+
+    await waitFor(() => expect(screen.getByRole("navigation", { name: "Navigație principală" })).toBeDefined());
+    expect(screen.getByRole("button", { name: "Deconectare" })).toBeDefined();
+    expect(screen.getAllByText("Arhivă facturare").length).toBeGreaterThan(0);
+  });
+
+  it("asks for confirmation before logging out", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/auth/me")) {
+        return Promise.resolve(createJsonResponse({
+          user: {
+            displayName: "Development Manager",
+            email: "manager.dev@example.test",
+            id: "user_1",
+          },
+        }));
+      }
+      if (url.endsWith("/auth/permissions")) {
+        return Promise.resolve(createJsonResponse({
+          permissions: [{ key: "works.read_all", scopes: ["ALL"] }],
+        }));
+      }
+      if (url.endsWith("/settings")) {
+        return Promise.resolve(createJsonResponse({
+          laboratoryName: "Laborator Test",
+          primaryColor: "#14532d",
+        }));
+      }
+      if (url.endsWith("/auth/csrf")) {
+        return Promise.resolve(createJsonResponse({ csrfToken: "csrf-token" }));
+      }
+      if (url.endsWith("/auth/logout")) {
+        return Promise.resolve(createJsonResponse({}, 204));
+      }
+      return Promise.resolve(createJsonResponse({}, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(
+      <Routes>
+        <Route element={<AuthenticatedAppShell />} path="/">
+          <Route element={<div>Works content</div>} path="works" />
+        </Route>
+      </Routes>,
+      ["/works"],
+    );
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Deconectare" })).toBeDefined());
+    fireEvent.click(screen.getByRole("button", { name: "Deconectare" }));
+    expect(await screen.findByRole("dialog", { name: "Confirmă deconectarea" })).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Renunță" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Confirmă deconectarea" })).toBeNull());
+
+    fireEvent.click(screen.getByRole("button", { name: "Deconectare" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Deconectează-te" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/auth\/logout$/), expect.objectContaining({
+      method: "POST",
+    })));
   });
 });
 

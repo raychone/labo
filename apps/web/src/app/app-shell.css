@@ -49,7 +49,7 @@
   border-bottom: var(--dl-border-width) solid var(--dl-color-border);
   display: grid;
   gap: var(--dl-space-3);
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   min-height: 4rem;
   padding: var(--dl-space-2) var(--dl-space-3);
   position: sticky;
