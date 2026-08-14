@@ -228,21 +228,80 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.status-page__card-grid > * {
+  --kpi-accent: var(--dl-color-primary);
+  --kpi-accent-border: color-mix(in srgb, var(--kpi-accent) 28%, var(--dl-color-border));
+  --kpi-accent-surface: color-mix(in srgb, var(--kpi-accent) 8%, var(--dl-color-surface));
+  --kpi-accent-text: color-mix(in srgb, var(--kpi-accent) 78%, var(--dl-color-text));
+}
+
+.status-page__card-grid > *:nth-child(6n + 1) {
+  --kpi-accent: var(--dl-color-primary);
+}
+
+.status-page__card-grid > *:nth-child(6n + 2) {
+  --kpi-accent: #2563eb;
+}
+
+.status-page__card-grid > *:nth-child(6n + 3) {
+  --kpi-accent: #059669;
+}
+
+.status-page__card-grid > *:nth-child(6n + 4) {
+  --kpi-accent: #d97706;
+}
+
+.status-page__card-grid > *:nth-child(6n + 5) {
+  --kpi-accent: #e11d48;
+}
+
+.status-page__card-grid > *:nth-child(6n) {
+  --kpi-accent: #7c3aed;
+}
+
 .status-page__metric span {
   color: var(--dl-color-text-muted);
   font-size: var(--dl-font-size-sm);
 }
 
+.status-page__metric {
+  align-content: center;
+  background: var(--kpi-accent-surface);
+  border: 1px solid var(--kpi-accent-border);
+  border-radius: var(--dl-radius-md);
+  justify-items: center;
+  min-height: 5.25rem;
+  overflow: hidden;
+  padding: calc(var(--dl-space-3) + 0.1rem) var(--dl-space-3) var(--dl-space-3);
+  position: relative;
+  text-align: center;
+}
+
+.status-page__metric::before {
+  background: var(--kpi-accent);
+  content: "";
+  inset: 0 auto auto 0;
+  height: 0.35rem;
+  position: absolute;
+  width: 100%;
+}
+
 .status-page__metric strong {
-  color: var(--dl-color-text);
+  color: var(--kpi-accent-text);
   font-size: var(--dl-font-size-sm);
   overflow-wrap: anywhere;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .status-page__metric-inline {
   align-items: center;
-  display: inline-flex;
+  display: flex;
   gap: var(--dl-space-2);
+  flex-wrap: wrap;
+  justify-content: center;
+  min-width: 0;
 }
 
 .status-page__open-link {
@@ -287,6 +346,21 @@
 .status-page__card-actions > *,
 .status-page__drawer-actions > * {
   width: 100%;
+}
+
+@media (max-width: 719px) {
+  .status-page__card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .status-page__pill {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .status-page__metric-inline {
+    width: 100%;
+  }
 }
 
 @media (min-width: 720px) {

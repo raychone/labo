@@ -14,7 +14,6 @@ import {
   useToast,
 } from "@dental-lab/ui";
 import {
-  formatMoneyMinor,
   type OperationalStatusRow,
   type OperationalStatusTab,
   type TechnicianWorkbenchItem,
@@ -44,6 +43,15 @@ function currentMonthRange(now = new Date()): { readonly dateFrom: string; reado
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const lastDay = String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, "0");
   return { dateFrom: `${now.getFullYear()}-${month}-01`, dateTo: `${now.getFullYear()}-${month}-${lastDay}` };
+}
+
+function formatKpiMoneyMinor(value: number, currency: string, locale = "ro-RO"): string {
+  return new Intl.NumberFormat(locale, {
+    currency,
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+    style: "currency",
+  }).format(value / 100);
 }
 
 function formatDate(value: string | null | undefined): string {
@@ -584,11 +592,11 @@ function ManagerDashboard({
       </div>
       {canReadBilling ? (
         <div className="dashboard-page__metrics dashboard-page__metrics--five">
-          <SummaryMetricCard label="Lucrări nefacturate" to="/billing" value={billing?.uninvoicedWorkCount} />
-          <SummaryMetricCard label="Facturi neachitate" to="/billing" value={billing?.unpaidInvoiceCount} />
-          <SummaryMetricCard label="Facturi parțial achitate" to="/billing" value={billing?.partialInvoiceCount} />
-          <SummaryMetricCard label="Facturi restante" to="/billing" value={billing?.overdueInvoiceCount} />
-          <SummaryMetricCard label="Sold restant" to="/billing" value={billing ? formatMoneyMinor(billing.outstandingMinor, currency, "ro-RO") : undefined} />
+          <SummaryMetricCard label="Lucrări nefacturate" to="/billing?tab=uninvoiced" value={billing?.uninvoicedWorkCount} />
+          <SummaryMetricCard label="Facturi neachitate" to="/billing?tab=receivables&paymentFilter=UNPAID" value={billing?.unpaidInvoiceCount} />
+          <SummaryMetricCard label="Facturi parțial achitate" to="/billing?tab=receivables&paymentFilter=PARTIALLY_PAID" value={billing?.partialInvoiceCount} />
+          <SummaryMetricCard label="Facturi restante" to="/billing?tab=receivables&paymentFilter=OUTSTANDING" value={billing?.overdueInvoiceCount} />
+          <SummaryMetricCard label="Sold restant" to="/billing?tab=receivables&paymentFilter=OUTSTANDING" value={billing ? formatKpiMoneyMinor(billing.outstandingMinor, currency, "ro-RO") : undefined} />
         </div>
       ) : null}
       {canReadBilling ? (
@@ -596,9 +604,9 @@ function ManagerDashboard({
           <SectionState error={isBillingError} isLoading={isBillingLoading} text="Se încarcă situația financiară" />
           {billing ? (
             <div className="dashboard-page__finance-row">
-              <span>Emis: <strong>{formatMoneyMinor(billing.totalIssuedMinor, currency, "ro-RO")}</strong></span>
-              <span>Încasat: <strong>{formatMoneyMinor(billing.paidMinor, currency, "ro-RO")}</strong></span>
-              <span>Restant: <strong>{formatMoneyMinor(billing.outstandingMinor, currency, "ro-RO")}</strong></span>
+              <span>Emis: <strong>{formatKpiMoneyMinor(billing.totalIssuedMinor, currency, "ro-RO")}</strong></span>
+              <span>Încasat: <strong>{formatKpiMoneyMinor(billing.paidMinor, currency, "ro-RO")}</strong></span>
+              <span>Restant: <strong>{formatKpiMoneyMinor(billing.outstandingMinor, currency, "ro-RO")}</strong></span>
               <DashboardAction label="Deschide facturarea" to="/billing" />
             </div>
           ) : null}

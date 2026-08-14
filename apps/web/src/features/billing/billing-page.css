@@ -90,7 +90,7 @@
 }
 
 .billing-page__kpi-card {
-  align-content: start;
+  align-content: center;
   background: var(--kpi-accent-surface);
   border: var(--dl-border-width) solid var(--kpi-accent-border);
   border-radius: var(--dl-radius-md);
@@ -98,10 +98,11 @@
   cursor: pointer;
   display: grid;
   gap: var(--dl-space-3);
+  justify-items: center;
   min-height: 6rem;
   overflow: hidden;
   padding: calc(var(--dl-space-4) + 0.15rem) var(--dl-space-4) var(--dl-space-4);
-  text-align: left;
+  text-align: center;
   position: relative;
 }
 
@@ -122,6 +123,18 @@
 .billing-page__kpi-card:focus-visible {
   outline: 2px solid var(--app-brand-primary);
   outline-offset: 2px;
+}
+
+.billing-page__kpi-label,
+.billing-page__kpi-meta {
+  color: var(--dl-color-text-muted);
+}
+
+.billing-page__kpi-value {
+  color: var(--kpi-accent-text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .billing-page__kpi-label {

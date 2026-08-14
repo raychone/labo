@@ -555,11 +555,14 @@
   border-radius: var(--dl-radius-md);
   display: grid;
   gap: var(--dl-space-3);
+  align-content: center;
+  justify-items: center;
   min-height: 5.25rem;
   min-width: 0;
   overflow: hidden;
   padding: calc(var(--dl-space-3) + 0.15rem) var(--dl-space-3) var(--dl-space-3);
   position: relative;
+  text-align: center;
 }
 
 .dashboard-page__metric::before {
@@ -581,6 +584,7 @@
   font-size: var(--dl-font-size-page-title);
   line-height: 1.05;
   overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
 .dashboard-page__metrics--compact {

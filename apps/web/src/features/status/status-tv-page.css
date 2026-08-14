@@ -121,12 +121,15 @@
 .status-tv-page__summary-card {
   display: grid;
   gap: var(--dl-space-2);
+  align-content: center;
+  justify-items: center;
   min-height: 7.25rem;
   overflow: hidden;
   padding: calc(var(--dl-space-4) + 0.15rem) var(--dl-space-4) var(--dl-space-4);
   position: relative;
   background: var(--kpi-accent-surface);
   border-color: var(--kpi-accent-border);
+  text-align: center;
 }
 
 .status-tv-page__summary-card::before {
@@ -139,10 +142,15 @@
 }
 
 .status-tv-page__summary-card span {
-  margin-top: var(--dl-space-3);
+  margin-top: 0;
   font-size: var(--dl-font-size-sm);
   font-weight: var(--dl-font-weight-semibold);
   text-transform: uppercase;
+}
+
+.status-tv-page__summary-card strong {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .status-tv-page__panel {
