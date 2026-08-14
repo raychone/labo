@@ -270,25 +270,34 @@
   border: 1px solid var(--kpi-accent-border);
   border-radius: var(--dl-radius-md);
   justify-items: center;
-  min-height: 5.25rem;
+  min-height: 7.25rem;
   overflow: hidden;
-  padding: calc(var(--dl-space-3) + 0.1rem) var(--dl-space-3) var(--dl-space-3);
+  padding: calc(var(--dl-space-4) + 0.15rem) var(--dl-space-4) var(--dl-space-4);
   position: relative;
   text-align: center;
 }
 
 .status-page__metric::before {
   background: var(--kpi-accent);
+  border-radius: inherit;
   content: "";
-  inset: 0 auto auto 0;
+  inset: 0 0 auto;
   height: 0.35rem;
   position: absolute;
   width: 100%;
 }
 
+.status-page__metric span {
+  margin-top: 0;
+  font-size: var(--dl-font-size-sm);
+  font-weight: var(--dl-font-weight-semibold);
+  text-transform: uppercase;
+}
+
 .status-page__metric strong {
   color: var(--kpi-accent-text);
-  font-size: var(--dl-font-size-sm);
+  font-size: clamp(1.25rem, 1.6vw, 1.9rem);
+  line-height: 1;
   overflow-wrap: anywhere;
   min-width: 0;
   font-variant-numeric: tabular-nums;
