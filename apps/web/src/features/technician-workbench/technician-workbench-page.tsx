@@ -29,7 +29,7 @@ import {
   type TechnicianWorkbenchItem,
   type WorkSummary,
 } from "@dental-lab/shared";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 
@@ -38,6 +38,7 @@ import { fetchOrganizationContext } from "../organization-context/organization-c
 import { useAvailableWorksForClaim, useClaimWork, useReleaseWork, useStartWorkflowStage, useCompleteWorkflowStage, useMyClaimedWorks } from "../works/works-api.js";
 import { useTechnicianOptions, useTechnicianWorkbench, useTechnicianWorkload } from "./technician-workbench-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
+import { useMediaQuery } from "../../lib/use-media-query.js";
 import { hasPermission } from "../users/users-api.js";
 import "./technician-workbench-page.css";
 
@@ -68,11 +69,14 @@ function formatDate(value: string): string {
 export function TechnicianWorkbenchPage(): ReactNode {
   const toast = useToast();
   const navigate = useNavigate();
+  const listAnchorRef = useRef<HTMLDivElement | null>(null);
   const [tab, setTab] = useState<WorkbenchTab>("AVAILABLE");
   const [filters, setFilters] = useState<TechnicianWorkbenchFilter>(defaultFilters);
   const [claimFilters, setClaimFilters] = useState<ClaimWorksListParams>(defaultClaimFilters);
   const [claimTarget, setClaimTarget] = useState<WorkSummary | null>(null);
   const [releaseTarget, setReleaseTarget] = useState<WorkSummary | null>(null);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const isCompactMobile = useMediaQuery("(max-width: 719px)");
   const permissionsResult = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   const organizationQuery = useQuery({ queryFn: fetchOrganizationContext, queryKey: ["organization-context"], retry: false });
   const canReadWorkbench = hasPermission(permissionsResult.data, "technician.workbench.read");
@@ -97,6 +101,23 @@ export function TechnicianWorkbenchPage(): ReactNode {
     () => pickSingleWorkbenchMatch(myClaimedQuery.data?.items ?? [], claimFilters.search),
     [claimFilters.search, myClaimedQuery.data?.items],
   );
+
+  function focusWorkList(): void {
+    window.setTimeout(() => {
+      listAnchorRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    }, 0);
+  }
+
+  function activateSummary(tabTarget: WorkbenchTab, queue: TechnicianWorkbenchFilter["queue"], overrides: Partial<TechnicianWorkbenchFilter> = {}): void {
+    setTab(tabTarget);
+    setFilters((current) => ({
+      ...current,
+      page: 1,
+      queue,
+      ...overrides,
+    }));
+    focusWorkList();
+  }
 
   function startStage(item: TechnicianWorkbenchItem): void {
     startMutation.mutate({
@@ -144,12 +165,12 @@ export function TechnicianWorkbenchPage(): ReactNode {
 
         {workbenchQuery.data ? (
           <div className="technician-workbench__summary" aria-label="Rezumat atelier">
-            <Metric label="Total activ" value={workbenchQuery.data.summary.totalActive} />
-            <Metric label="De început" value={workbenchQuery.data.summary.unstarted} />
-            <Metric label="În lucru" value={workbenchQuery.data.summary.inProgress} />
-            <Metric label="Urgente" value={workbenchQuery.data.summary.urgent} />
-            <Metric label="Astăzi" value={workbenchQuery.data.summary.dueToday} />
-            <Metric label="Întârziate" value={workbenchQuery.data.summary.overdue} />
+            <MetricButton label="Total activ" onClick={() => activateSummary("AVAILABLE", undefined)} value={workbenchQuery.data.summary.totalActive} />
+            <MetricButton label="De început" onClick={() => activateSummary("MINE", "UNSTARTED", { status: "PENDING" })} value={workbenchQuery.data.summary.unstarted} />
+            <MetricButton label="În lucru" onClick={() => activateSummary("MINE", "IN_PROGRESS", { status: "IN_PROGRESS" })} value={workbenchQuery.data.summary.inProgress} />
+            <MetricButton label="Urgente" onClick={() => activateSummary("MINE", "URGENT", { priority: "URGENT" })} value={workbenchQuery.data.summary.urgent} />
+            <MetricButton label="Astăzi" onClick={() => activateSummary("MINE", "DUE_TODAY")} value={workbenchQuery.data.summary.dueToday} />
+            <MetricButton label="Întârziate" onClick={() => activateSummary("MINE", "OVERDUE")} value={workbenchQuery.data.summary.overdue} />
           </div>
         ) : null}
 
@@ -164,7 +185,14 @@ export function TechnicianWorkbenchPage(): ReactNode {
               <button aria-pressed={tab === "MINE"} onClick={() => setTab("MINE")} type="button">Lucrările mele</button>
             </div>
 
-            <div className="technician-workbench__filters">
+            <div className="technician-workbench__mobile-toolbar">
+              <Button className="technician-workbench__filters-toggle" onClick={() => setMobileFiltersOpen((current) => !current)} variant="secondary">
+                {mobileFiltersOpen ? "Ascunde filtrele" : "Afișează filtrele"}
+              </Button>
+            </div>
+
+            {(!isCompactMobile || mobileFiltersOpen) ? (
+              <div className="technician-workbench__filters">
               <TextInput
                 label="Căutare"
                 onChange={(event) => setClaimFilters((current) => ({ ...current, page: 1, search: event.target.value || undefined }))}
@@ -184,33 +212,39 @@ export function TechnicianWorkbenchPage(): ReactNode {
               />
             </div>
 
-            {tab === "AVAILABLE" ? (
-            <ClaimList
-              emptyDescription="Nu există lucrări disponibile pentru revendicare."
-              isLoading={availableQuery.isLoading}
-              error={availableQuery.error}
-              items={visibleAvailableWorks}
-              actionLabel="Preia"
-              onAction={setClaimTarget}
-              onOpen={(work) => navigate(`/works?workId=${work.id}`)}
-            />
-          ) : (
-            <ClaimList
-              emptyDescription="Nu ai lucrări revendicate."
-              isLoading={myClaimedQuery.isLoading}
-              error={myClaimedQuery.error}
-              items={visibleClaimedWorks}
-              actionLabel="Continuă"
-              onAction={(work) => navigate(`/works?workId=${work.id}`)}
-              onSecondaryAction={setReleaseTarget}
-              onOpen={(work) => navigate(`/works?workId=${work.id}`)}
-              secondaryActionLabel="Eliberează"
-            />
-          )}
-        </CardContent>
-      </Card>
+            ) : null}
 
-        {tab === "MINE" ? (
+            <div ref={listAnchorRef}>
+              {tab === "AVAILABLE" ? (
+                <ClaimList
+                  emptyDescription="Nu există lucrări disponibile pentru revendicare."
+                  isLoading={availableQuery.isLoading}
+                  error={availableQuery.error}
+                  items={visibleAvailableWorks}
+                  actionLabel="Preia"
+                  compact={isCompactMobile}
+                  onAction={setClaimTarget}
+                  onOpen={(work) => navigate(`/works?workId=${work.id}`)}
+                />
+              ) : (
+                <ClaimList
+                  emptyDescription="Nu ai lucrări revendicate."
+                  isLoading={myClaimedQuery.isLoading}
+                  error={myClaimedQuery.error}
+                  items={visibleClaimedWorks}
+                  actionLabel="Continuă"
+                  compact={isCompactMobile}
+                  onAction={(work) => navigate(`/works?workId=${work.id}`)}
+                  onSecondaryAction={setReleaseTarget}
+                  onOpen={(work) => navigate(`/works?workId=${work.id}`)}
+                  secondaryActionLabel="Eliberează"
+                />
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {tab === "MINE" && !isCompactMobile ? (
           <Card>
             <CardHeader>
               <CardTitle>Coada de etape</CardTitle>
@@ -268,6 +302,7 @@ export function TechnicianWorkbenchPage(): ReactNode {
             <div className="technician-workbench__list">
               {(workbenchQuery.data?.items ?? []).map((item) => (
                 <WorkbenchItemCard
+                  compact={isCompactMobile}
                   isCompleting={completeMutation.isPending}
                   isStarting={startMutation.isPending}
                   item={item}
@@ -282,7 +317,7 @@ export function TechnicianWorkbenchPage(): ReactNode {
           </Card>
         ) : null}
 
-        {canReadWorkload ? (
+        {canReadWorkload && !isCompactMobile ? (
           <Card>
             <CardHeader>
               <CardTitle>Încărcare tehnicieni</CardTitle>
@@ -367,12 +402,22 @@ export function TechnicianWorkbenchPage(): ReactNode {
   );
 }
 
-function Metric({ label, value }: { readonly label: string; readonly value: number }): ReactNode {
+function MetricButton({
+  label,
+  onClick,
+  value,
+}: {
+  readonly label: string;
+  readonly onClick: () => void;
+  readonly value: number;
+}): ReactNode {
   return (
-    <div className="technician-workbench__metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
+    <Button className="technician-workbench__metric" onClick={onClick} variant="secondary">
+      <span className="technician-workbench__metric-copy">
+        <span>{label}</span>
+        <strong>{value}</strong>
+      </span>
+    </Button>
   );
 }
 
@@ -420,6 +465,7 @@ function normalizeWorkbenchSearch(value: string | undefined): string {
 
 function ClaimList({
   actionLabel,
+  compact = false,
   emptyDescription,
   error,
   isLoading,
@@ -430,6 +476,7 @@ function ClaimList({
   secondaryActionLabel,
 }: {
   readonly actionLabel: string;
+  readonly compact?: boolean;
   readonly emptyDescription: string;
   readonly error: unknown;
   readonly isLoading: boolean;
@@ -452,7 +499,7 @@ function ClaimList({
   return (
     <div className="technician-workbench__list">
       {items.map((work) => (
-        <article className="technician-workbench__item" key={work.id}>
+        <article className={compact ? "technician-workbench__item technician-workbench__item--compact" : "technician-workbench__item"} key={work.id}>
           <div className="technician-workbench__item-main">
             <div>
               <strong>{work.code}</strong>
@@ -465,8 +512,8 @@ function ClaimList({
             <span>Medic: {work.doctor.displayName}</span>
             <span>Termen: {formatDate(work.deadline.effectiveDueAt ?? work.requestedDeliveryDate)}</span>
             <span>Responsabil: {work.claim.technician?.displayName ?? "Nerevendicată"}</span>
-            <span>Companie execuție: {work.claim.executionLegalEntity?.code ?? "Neselectată"}</span>
-            <span>Context execuție: {work.executionSnapshot.summary.exists ? "Fixat" : "Nefixat"}</span>
+            {!compact ? <span>Companie execuție: {work.claim.executionLegalEntity?.code ?? "Neselectată"}</span> : null}
+            {!compact ? <span>Context execuție: {work.executionSnapshot.summary.exists ? "Fixat" : "Nefixat"}</span> : null}
             <span>Revizie responsabilitate: {work.claim.revision}</span>
           </div>
           <div className="technician-workbench__actions">
@@ -586,6 +633,7 @@ function ReleaseWorkModal({
 }
 
 function WorkbenchItemCard({
+  compact = false,
   isCompleting,
   isStarting,
   item,
@@ -593,6 +641,7 @@ function WorkbenchItemCard({
   onOpen,
   onStart,
 }: {
+  readonly compact?: boolean;
   readonly isCompleting: boolean;
   readonly isStarting: boolean;
   readonly item: TechnicianWorkbenchItem;
@@ -602,7 +651,7 @@ function WorkbenchItemCard({
 }): ReactNode {
   const isInProgress = item.stage.status === "IN_PROGRESS";
   return (
-    <article className="technician-workbench__item">
+    <article className={compact ? "technician-workbench__item technician-workbench__item--compact" : "technician-workbench__item"}>
       <div className="technician-workbench__item-main">
         <div>
           <strong>{item.workCode}</strong>
@@ -623,7 +672,7 @@ function WorkbenchItemCard({
         <StatusBadge label={getWorkStageExecutionStatusLabel(item.stage.status)} variant={item.stage.status === "IN_PROGRESS" ? "production" : "awaiting"} />
         <StatusBadge label={item.realLabSheet.label} variant={item.realLabSheet.status === "FINALIZED" ? "closed" : item.realLabSheet.status === "COMPLETE" ? "production" : "awaiting"} />
         <Button onClick={onOpen} variant="outline">Deschide</Button>
-        <Button onClick={onOpen} variant="outline">{item.realLabSheet.status === "NOT_STARTED" ? "Completează fișa" : "Continuă fișa"}</Button>
+        {!compact ? <Button onClick={onOpen} variant="outline">{item.realLabSheet.status === "NOT_STARTED" ? "Completează fișa" : "Continuă fișa"}</Button> : null}
         <Button
           disabled={(!isInProgress && item.stage.status !== "PENDING") || (item.stage.status === "IN_PROGRESS" && isStarting)}
           isLoading={isStarting}

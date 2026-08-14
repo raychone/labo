@@ -38,6 +38,44 @@
   grid-template-columns: 1fr;
 }
 
+.billing-page__cards > *,
+.billing-month-registry__summary > * {
+  --kpi-accent: var(--app-brand-primary);
+  --kpi-accent-border: color-mix(in srgb, var(--kpi-accent) 28%, var(--dl-color-border));
+  --kpi-accent-surface: color-mix(in srgb, var(--kpi-accent) 8%, var(--dl-color-surface));
+  --kpi-accent-text: color-mix(in srgb, var(--kpi-accent) 82%, var(--dl-color-text));
+}
+
+.billing-page__cards > *:nth-child(6n + 1),
+.billing-month-registry__summary > *:nth-child(6n + 1) {
+  --kpi-accent: var(--app-brand-primary);
+}
+
+.billing-page__cards > *:nth-child(6n + 2),
+.billing-month-registry__summary > *:nth-child(6n + 2) {
+  --kpi-accent: #2563eb;
+}
+
+.billing-page__cards > *:nth-child(6n + 3),
+.billing-month-registry__summary > *:nth-child(6n + 3) {
+  --kpi-accent: #059669;
+}
+
+.billing-page__cards > *:nth-child(6n + 4),
+.billing-month-registry__summary > *:nth-child(6n + 4) {
+  --kpi-accent: #d97706;
+}
+
+.billing-page__cards > *:nth-child(6n + 5),
+.billing-month-registry__summary > *:nth-child(6n + 5) {
+  --kpi-accent: #e11d48;
+}
+
+.billing-page__cards > *:nth-child(6n),
+.billing-month-registry__summary > *:nth-child(6n) {
+  --kpi-accent: #7c3aed;
+}
+
 .billing-page__filters-shell {
   display: grid;
   gap: var(--dl-space-4);
@@ -53,15 +91,27 @@
 
 .billing-page__kpi-card {
   align-content: start;
-  background: var(--dl-color-surface);
-  border: var(--dl-border-width) solid var(--dl-color-border);
+  background: var(--kpi-accent-surface);
+  border: var(--dl-border-width) solid var(--kpi-accent-border);
   border-radius: var(--dl-radius-md);
   color: inherit;
   cursor: pointer;
   display: grid;
-  gap: var(--dl-space-2);
-  padding: var(--dl-space-4);
+  gap: var(--dl-space-3);
+  min-height: 6rem;
+  overflow: hidden;
+  padding: calc(var(--dl-space-4) + 0.15rem) var(--dl-space-4) var(--dl-space-4);
   text-align: left;
+  position: relative;
+}
+
+.billing-page__kpi-card::before {
+  background: var(--kpi-accent);
+  content: "";
+  inset: 0 auto auto 0;
+  height: 0.35rem;
+  position: absolute;
+  width: 100%;
 }
 
 .billing-page__kpi-card:hover {
@@ -80,7 +130,9 @@
 }
 
 .billing-page__kpi-value {
+  color: var(--kpi-accent-text);
   font-size: var(--dl-font-size-section-title);
+  line-height: 1.05;
 }
 
 .billing-page__kpi-meta {
@@ -986,13 +1038,24 @@
 
 .billing-month-registry__summary-card {
   align-content: start;
-  background: color-mix(in srgb, var(--dl-color-surface) 94%, var(--dl-color-border));
-  border: var(--dl-border-width) solid var(--dl-color-border);
+  background: var(--kpi-accent-surface);
+  border: var(--dl-border-width) solid var(--kpi-accent-border);
   border-radius: var(--dl-radius-md);
   display: grid;
-  gap: var(--dl-space-1);
-  min-height: 5rem;
-  padding: var(--dl-space-3);
+  gap: var(--dl-space-2);
+  min-height: 5.25rem;
+  overflow: hidden;
+  padding: calc(var(--dl-space-3) + 0.15rem) var(--dl-space-3) var(--dl-space-3);
+  position: relative;
+}
+
+.billing-month-registry__summary-card::before {
+  background: var(--kpi-accent);
+  content: "";
+  inset: 0 auto auto 0;
+  height: 0.35rem;
+  position: absolute;
+  width: 100%;
 }
 
 .billing-month-registry__summary-card span {
@@ -1001,6 +1064,7 @@
 }
 
 .billing-month-registry__summary-card strong {
+  color: var(--kpi-accent-text);
   font-size: 1rem;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
