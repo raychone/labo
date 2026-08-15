@@ -544,7 +544,30 @@ describe("WorksService", () => {
   });
 
   it("claims an available work atomically with execution company code", async () => {
-    const before = workOrder();
+    const before = workOrder({
+      activeCycle: {
+        ...workOrder().activeCycle,
+        workflowExecution: {
+          currentStageExecutionId: "stage_exec_1",
+          id: "workflow_exec_1",
+          stages: [
+            {
+              allowedRoleCodesSnapshot: ["TEHNICIAN"],
+              assignedUserId: null,
+              id: "stage_exec_1",
+              sortOrder: 1,
+              stageKeySnapshot: "receptie",
+              status: "PENDING",
+              workflowExecutionId: "workflow_exec_1",
+            },
+          ],
+          status: "ACTIVE",
+          version: 1,
+          workflowTemplateId: "template_1",
+          workflowTemplateVersion: 3,
+        },
+      },
+    });
     const after = workOrder({
       assignedTechnicianId: "actor_1",
       claimRevision: 1,
@@ -556,6 +579,9 @@ describe("WorksService", () => {
     const assignmentCreate = vi.fn().mockResolvedValue({});
     const snapshotCreate = vi.fn().mockResolvedValue({});
     const auditCreate = vi.fn().mockResolvedValue({});
+    const stageUpdate = vi.fn().mockResolvedValue({});
+    const workflowUpdate = vi.fn().mockResolvedValue({});
+    const stageEventCreate = vi.fn().mockResolvedValue({});
     const pricingResolve = vi.fn().mockResolvedValue({
       adjustment: {
         basisPoints: null,
@@ -583,17 +609,25 @@ describe("WorksService", () => {
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
           auditLog: { create: auditCreate },
-          user: { findUnique: vi.fn().mockResolvedValue({ displayName: "Actor", id: "actor_1" }) },
+          user: { findUnique: vi.fn().mockResolvedValue({ displayName: "Actor", id: "actor_1", roles: [{ role: { isActive: true, key: "TEHNICIAN" } }] }) },
           workAssignmentEvent: { create: assignmentCreate },
           workCycle: { update: vi.fn().mockResolvedValue({}) },
           workExecutionSnapshot: { create: snapshotCreate },
+          workStageEvent: { create: stageEventCreate },
+          workStageExecution: { update: stageUpdate },
           workOrder: { findUniqueOrThrow: vi.fn().mockResolvedValue(after), updateMany },
+          workWorkflowExecution: { update: workflowUpdate },
         }),
       ),
       legalEntity: { findUnique: vi.fn().mockResolvedValue({ code: "NC", displayName: "Nicolaie Cristina", id: "legal_nc", isActive: true }) },
       workOrder: { findUnique: vi.fn().mockResolvedValue(before) },
     }, {
-      hasPermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ASSIGNED"], permission: "works.claim.create" }),
+      hasPermission: vi.fn().mockImplementation(async ({ permission }: { readonly permission: string }) => {
+        if (permission === "workflow.start_stage") {
+          return { allowed: true, effectiveScopes: ["OWN_STAGE"], permission };
+        }
+        return { allowed: true, effectiveScopes: ["ASSIGNED"], permission };
+      }),
       requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ASSIGNED"], permission: "works.claim.create" }),
     }, undefined, undefined, undefined, undefined, undefined, undefined, { resolve: pricingResolve });
 
@@ -605,6 +639,25 @@ describe("WorksService", () => {
     expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { claimRevision: 0, claimStatus: "UNCLAIMED", id: "work_order_1" },
     }));
+    expect(stageUpdate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        assignedByUserId: "actor_1",
+        assignedUserId: "actor_1",
+      }),
+      where: { id: "stage_exec_1" },
+    });
+    expect(workflowUpdate).toHaveBeenCalledWith({
+      data: { version: { increment: 1 } },
+      where: { id: "workflow_exec_1" },
+    });
+    expect(stageEventCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorUserId: "actor_1",
+        stageExecutionId: "stage_exec_1",
+        type: "STAGE_ASSIGNED",
+        workflowExecutionId: "workflow_exec_1",
+      }),
+    });
     expect(assignmentCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
         executionSnapshotStatus: "LOCKED",

@@ -120,12 +120,12 @@
 
 .status-tv-page__summary-card {
   display: grid;
-  gap: var(--dl-space-2);
+  gap: 0.4rem;
   align-content: center;
   justify-items: center;
-  min-height: 7.25rem;
+  min-height: 5.8rem;
   overflow: hidden;
-  padding: calc(var(--dl-space-4) + 0.15rem) var(--dl-space-4) var(--dl-space-4);
+  padding: 0.9rem 1.05rem 0.85rem;
   position: relative;
   background: var(--kpi-accent-surface);
   border-color: var(--kpi-accent-border);
@@ -143,7 +143,7 @@
 
 .status-tv-page__summary-card span {
   margin-top: 0;
-  font-size: var(--dl-font-size-sm);
+  font-size: 0.8rem;
   font-weight: var(--dl-font-weight-semibold);
   text-transform: uppercase;
 }
@@ -151,6 +151,7 @@
 .status-tv-page__summary-card strong {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  font-size: clamp(1.2rem, 1.8vw, 1.7rem);
 }
 
 .status-tv-page__panel {
@@ -201,12 +202,12 @@
 .status-tv-page__table-wrap {
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  padding-right: var(--dl-space-1);
+  overflow: hidden;
 }
 
 .status-tv-page__table {
   border-collapse: collapse;
+  table-layout: fixed;
   min-width: 980px;
   width: 100%;
 }
@@ -217,7 +218,7 @@
   color: var(--dl-color-text-muted);
   font-size: 0.92rem;
   font-weight: var(--dl-font-weight-semibold);
-  padding: var(--dl-space-4) var(--dl-space-4);
+  padding: var(--dl-space-3) var(--dl-space-4);
   text-align: left;
   position: sticky;
   top: 0;
@@ -226,9 +227,14 @@
 
 .status-tv-page__table tbody td {
   border-bottom: 1px solid var(--dl-color-border);
-  font-size: 1.05rem;
-  padding: var(--dl-space-4) var(--dl-space-4);
+  font-size: 1.12rem;
+  line-height: 1.35;
+  padding: var(--dl-space-3) var(--dl-space-4);
   vertical-align: middle;
+}
+
+.status-tv-page__table tbody td strong {
+  font-size: 1.13rem;
 }
 
 .status-tv-page__table tbody tr:hover {
@@ -352,7 +358,7 @@
   }
 
   .status-tv-page__summary-card {
-    min-height: 6.5rem;
+    min-height: 5.4rem;
   }
 }
 

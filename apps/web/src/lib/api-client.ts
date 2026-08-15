@@ -1,4 +1,32 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3010";
+interface ApiBaseUrlLocation {
+  readonly hostname: string;
+  readonly protocol: string;
+}
+
+export function resolveApiBaseUrl(
+  options: {
+    readonly configuredBaseUrl?: string;
+    readonly isDev?: boolean;
+    readonly location?: ApiBaseUrlLocation | undefined;
+  } = {},
+): string {
+  const configuredBaseUrl = options.configuredBaseUrl ?? import.meta.env.VITE_API_BASE_URL;
+  const isDev = options.isDev ?? import.meta.env.DEV;
+
+  if (configuredBaseUrl) {
+    return configuredBaseUrl;
+  }
+
+  if (isDev && options.location) {
+    return `${options.location.protocol}//${options.location.hostname}:3010`;
+  }
+
+  return "http://localhost:3010";
+}
+
+export const API_BASE_URL = resolveApiBaseUrl({
+  location: typeof window !== "undefined" ? window.location : undefined,
+});
 
 export type ApiFieldErrors = Readonly<Record<string, readonly string[]>>;
 

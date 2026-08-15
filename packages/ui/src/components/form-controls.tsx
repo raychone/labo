@@ -151,12 +151,13 @@ export interface SelectOption {
 export interface SelectProps
   extends FieldControlProps,
     Omit<SelectHTMLAttributes<HTMLSelectElement>, "children"> {
+  readonly labelClassName?: string;
   readonly options: readonly SelectOption[];
   readonly placeholder?: string;
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
-  { className, error, hint, id, label, options, placeholder, required, ...props },
+  { className, error, hint, id, label, labelClassName, options, placeholder, required, ...props },
   ref,
 ) {
   const generatedId = useId();
@@ -166,9 +167,9 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   const hasHint = hint !== undefined;
   const hasError = error !== undefined;
 
-  return (
-    <Field>
-      <FieldLabel htmlFor={controlId} isRequired={required === true}>
+    return (
+      <Field>
+      <FieldLabel className={labelClassName} htmlFor={controlId} isRequired={required === true}>
         {label}
       </FieldLabel>
       {hasHint ? <FieldDescription id={hintId}>{hint}</FieldDescription> : null}

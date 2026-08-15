@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useMemo, type ReactNode } from "react";
 
-import { fetchMonthRegistryArchives, fetchMonthRegistry, downloadMonthRegistryCsv } from "./billing-api.js";
+import { downloadMonthRegistryCsv, downloadMonthRegistryPdf, fetchMonthRegistry, fetchMonthRegistryArchives } from "./billing-api.js";
 import { useSettings } from "../settings/settings-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
 import { MonthRegistryReportView } from "./billing-month-registry-print-page.js";
@@ -126,7 +126,7 @@ export function BillingArchivePage(): ReactNode {
         <div className="billing-archive-page__toolbar">
           <Button onClick={() => navigate("/billing/archive")} variant="outline">Înapoi la arhivă</Button>
           <Button
-            onClick={() => window.open(`/billing/month-registry/print?year=${year}&month=${month}`, "_blank", "noopener,noreferrer")}
+            onClick={() => void downloadMonthRegistryPdf({ year, month })}
             variant="secondary"
           >
             PDF
@@ -207,6 +207,7 @@ export function BillingArchivePage(): ReactNode {
         <Button disabled={selectedYear <= Math.min(...availableYears)} onClick={() => updateYear(selectedYear - 1)} variant="outline">‹</Button>
         <Button onClick={() => updateYear(currentYear())} variant="secondary">Anul curent</Button>
         <Select
+          labelClassName="dl-visually-hidden"
           label="An"
           options={availableYears.map((year) => ({ label: String(year), value: String(year) }))}
           value={String(selectedYear)}
@@ -254,7 +255,7 @@ export function BillingArchivePage(): ReactNode {
                     {archive ? (
                       <>
                         <Button onClick={() => navigate(`/billing/archive/${archive.year}/${archive.month}`)} variant="secondary">Deschide</Button>
-                        <Button onClick={() => window.open(`/billing/month-registry/print?year=${archive.year}&month=${archive.month}`, "_blank", "noopener,noreferrer")} variant="outline">
+                        <Button onClick={() => void downloadMonthRegistryPdf({ year: archive.year, month: archive.month })} variant="outline">
                           PDF
                         </Button>
                         <Button

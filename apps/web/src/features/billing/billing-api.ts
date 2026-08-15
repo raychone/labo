@@ -61,6 +61,8 @@ export interface BillingStatementParams {
   readonly doctorId?: string;
 }
 
+type PdfQueryParams = BillingWorkspaceParams | BillingStatementParams | Readonly<Record<string, boolean | number | string | undefined>>;
+
 export interface BillingPaymentsResponse {
   readonly items: readonly {
     readonly amountMinor: number;
@@ -144,6 +146,65 @@ export async function fetchBillingDocumentPrint(documentId: string): Promise<Pri
 export async function fetchBillingDocumentAttachment(documentId: string): Promise<BillingDocumentAttachment> {
   const response = await apiFetch(`/billing-documents/${documentId}/attachment`);
   return parseApiResponse<BillingDocumentAttachment>(response);
+}
+
+function triggerBrowserDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.rel = "noopener";
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function parseDownloadFilename(contentDisposition: string | null): string | null {
+  if (!contentDisposition) {
+    return null;
+  }
+
+  const filenameStar = /filename\*=UTF-8''([^;]+)/i.exec(contentDisposition)?.[1];
+  if (filenameStar) {
+    try {
+      return decodeURIComponent(filenameStar);
+    } catch {
+      return filenameStar;
+    }
+  }
+
+  const filename = /filename="?([^";]+)"?/i.exec(contentDisposition)?.[1];
+  return filename ?? null;
+}
+
+async function downloadPdf(path: string, fallbackFilename: string, query: PdfQueryParams = {}): Promise<void> {
+  const queryString = toQueryString(Object.entries(query as Record<string, boolean | number | string | undefined>));
+  const response = await apiFetch(queryString ? `${path}?${queryString}` : path);
+  if (!response.ok) {
+    await parseApiResponse<never>(response);
+  }
+
+  const blob = await response.blob();
+  const filename = parseDownloadFilename(response.headers.get("content-disposition")) ?? fallbackFilename;
+  triggerBrowserDownload(blob, filename);
+}
+
+export async function downloadBillingDocumentPdf(documentId: string): Promise<void> {
+  await downloadPdf(`/billing-documents/${documentId}/pdf`, `document-${documentId}.pdf`);
+}
+
+export async function downloadClinicStatementPdf(params: PdfQueryParams): Promise<void> {
+  await downloadPdf("/billing/statements/clinic/pdf", "nota-de-plata-clinic.pdf", params);
+}
+
+export async function downloadDoctorStatementPdf(params: PdfQueryParams): Promise<void> {
+  await downloadPdf("/billing/statements/doctor/pdf", "nota-de-plata-medic.pdf", params);
+}
+
+export async function downloadMonthRegistryPdf(params: PdfQueryParams): Promise<void> {
+  await downloadPdf("/billing/month-registry/pdf", "registru-lunar-facturare.pdf", params);
 }
 
 export async function createProforma(input: CreateBillingDocumentInput): Promise<BillingDocumentDetail> {

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
 
@@ -36,6 +36,7 @@ function createJsonResponse(body: unknown, status = 200): Response {
 
 describe("BillingArchivePage", () => {
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -86,8 +87,11 @@ describe("BillingArchivePage", () => {
   });
 
   it("opens a historical archive snapshot on the detail route", async () => {
-    const openSpy = vi.fn();
-    vi.stubGlobal("open", openSpy);
+    const createObjectUrlSpy = vi.fn(() => "blob:download");
+    const revokeObjectUrlSpy = vi.fn();
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    Object.defineProperty(globalThis.URL, "createObjectURL", { configurable: true, value: createObjectUrlSpy });
+    Object.defineProperty(globalThis.URL, "revokeObjectURL", { configurable: true, value: revokeObjectUrlSpy });
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith("/settings")) {
@@ -148,6 +152,15 @@ describe("BillingArchivePage", () => {
           unpaidTotalMinor: 0,
         }));
       }
+      if (url.startsWith("http://localhost:3010/billing/month-registry/pdf")) {
+        return Promise.resolve(new Response(new Uint8Array([1, 2, 3]), {
+          headers: {
+            "Content-Disposition": "attachment; filename=\"registru-lunar-facturare-2026-08-blob.pdf\"",
+            "Content-Type": "application/pdf",
+          },
+          status: 200,
+        }));
+      }
       return Promise.resolve(createJsonResponse({}, 404));
     }));
 
@@ -162,6 +175,9 @@ describe("BillingArchivePage", () => {
     expect(screen.getByRole("button", { name: "PDF" })).toBeDefined();
     expect(screen.getByRole("button", { name: "CSV" })).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "PDF" }));
-    expect(openSpy).toHaveBeenCalled();
+    await waitFor(() => expect(createObjectUrlSpy).toHaveBeenCalled());
+    await waitFor(() => expect(revokeObjectUrlSpy).toHaveBeenCalled());
+    expect(clickSpy).toHaveBeenCalled();
+    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining("/billing/month-registry/pdf?year=2026&month=8"), expect.any(Object));
   });
 });

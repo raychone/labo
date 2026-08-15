@@ -52,6 +52,7 @@ import { useTechnicianOptions } from "../technician-workbench/technician-workben
 import { useWorkTypeOptions } from "../work-types/work-types-api.js";
 import { hasPermission } from "../users/users-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
+import { useMediaQuery } from "../../lib/use-media-query.js";
 import { useOperationalStatus } from "./status-api.js";
 import "./status-page.css";
 
@@ -355,6 +356,7 @@ export function StatusPage(): ReactNode {
   const currentStageName = searchParams.get("currentStageName") ?? "";
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState<OperationalStatusRow | null>(null);
+  const isCompactMobile = useMediaQuery("(max-width: 719px)");
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   const canReadStatus = hasPermission(permissionsQuery.data, "works.read_all") || hasPermission(permissionsQuery.data, "works.read_assigned");
   const canReadPricingOptions = hasPermission(permissionsQuery.data, "pricing.read");
@@ -633,23 +635,25 @@ export function StatusPage(): ReactNode {
               </p>
             ) : null}
 
-            <div className="status-page__desktop-table">
-              <DataTable
-                columns={columns}
-                emptyMessage="Nu există lucrări pentru filtrele curente."
-                error={statusQuery.isError ? getErrorMessage(statusQuery.error) : undefined}
-                getRowKey={(row) => row.id}
-                isLoading={statusQuery.isLoading}
-                onSortChange={(sort) => patchQuery(toApiSort(sort))}
-                pagination={{
-                  onPageChange: (page) => patchQuery({ page }),
-                  page: statusQuery.data?.meta.page ?? query.page,
-                  pageCount: Math.max(statusQuery.data?.meta.totalPages ?? 1, 1),
-                }}
-                rows={visibleRows}
-                sort={toDataSort(query)}
-              />
-            </div>
+            {!isCompactMobile ? (
+              <div className="status-page__desktop-table">
+                <DataTable
+                  columns={columns}
+                  emptyMessage="Nu există lucrări pentru filtrele curente."
+                  error={statusQuery.isError ? getErrorMessage(statusQuery.error) : undefined}
+                  getRowKey={(row) => row.id}
+                  isLoading={statusQuery.isLoading}
+                  onSortChange={(sort) => patchQuery(toApiSort(sort))}
+                  pagination={{
+                    onPageChange: (page) => patchQuery({ page }),
+                    page: statusQuery.data?.meta.page ?? query.page,
+                    pageCount: Math.max(statusQuery.data?.meta.totalPages ?? 1, 1),
+                  }}
+                  rows={visibleRows}
+                  sort={toDataSort(query)}
+                />
+              </div>
+            ) : null}
 
             <StatusCards
               onOpenDetails={(row) => setSelectedRow(row)}

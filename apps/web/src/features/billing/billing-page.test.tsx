@@ -152,7 +152,28 @@ describe("BillingPage", () => {
         }));
       }
       if (url.includes("/billing/receivables")) {
-        return Promise.resolve(createJsonResponse({ currency: "RON", generatedAt: "2026-08-04T00:00:00.000Z", items: [], overdueCount: 0, totalBalanceMinor: 0 }));
+        return Promise.resolve(createJsonResponse({
+          currency: "RON",
+          generatedAt: "2026-08-04T00:00:00.000Z",
+          items: [{
+            balanceMinor: 35000,
+            clinicName: "Clinica Test",
+            currency: "RON",
+            daysOverdue: 12,
+            doctorNames: ["Dr. Ana Popescu"],
+            documentId: "invoice_1",
+            documentNumber: "FACT-2026-000001",
+            dueDate: "2026-08-10T00:00:00.000Z",
+            issueDate: "2026-07-23T12:00:00.000Z",
+            paidMinor: 0,
+            patientNames: ["Ion Pop"],
+            status: "ISSUED",
+            totalMinor: 35000,
+            workCodes: ["WO-2026-000002"],
+          }],
+          overdueCount: 1,
+          totalBalanceMinor: 35000,
+        }));
       }
       if (url.endsWith("/billing/ambiguous-legacy")) {
         return Promise.resolve(createJsonResponse({ items: [] }));
@@ -257,10 +278,15 @@ describe("BillingPage", () => {
     fireEvent.click(await screen.findByRole("checkbox", { name: "Selectează FACT-2026-000001" }));
     expect(screen.getByRole("button", { name: "Înregistrează încasare" })).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Înregistrează încasare" }));
-    fireEvent.change(await screen.findByLabelText("Sumă încasată"), { target: { value: "350.00" } });
+    fireEvent.change(await screen.findByLabelText("Sumă încasată"), { target: { value: "50.00" } });
     fireEvent.click(screen.getByRole("button", { name: "Înregistrează încasarea" }));
     expect(screen.queryByText("Incaseaza sold")).toBeNull();
-  });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Restanțe" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Selectează FACT-2026-000001" }));
+    fireEvent.click(screen.getByRole("button", { name: "Înregistrează încasare" }));
+    expect(await screen.findByLabelText("Sumă încasată")).toBeDefined();
+  }, 30000);
 
   it("keeps the selected historical month stable in the URL when navigating months", async () => {
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {

@@ -101,10 +101,14 @@ async function createAndPrintPdf(page: Page, url: string, outputPath: string): P
   await expect(page.getByText("Pagina nu a fost găsită")).toHaveCount(0);
   await expect(page.getByText("Adresa accesată nu există în aplicație.")).toHaveCount(0);
   if (url.includes("/billing/statements/")) {
-    await expect(page.getByTitle("Antet notă de plată A4")).toBeVisible();
-    await expect(page.getByText("Notă de plată")).toBeVisible();
+    await expect(page.locator(".billing-statement__paper").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTitle("Antet notă de plată A4")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Catre:")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Anexa la factura")).toBeVisible({ timeout: 15_000 });
   } else if (url.includes("/billing/documents/")) {
-    await expect(page.getByRole("heading", { name: /Factura|Proforma/ })).toBeVisible();
+    await expect(page.locator(".billing-print-page").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "FACTURA" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Seria:")).toBeVisible({ timeout: 15_000 });
   }
   mkdirSync(dirname(outputPath), { recursive: true });
   await page.pdf({ format: "A4", path: outputPath, printBackground: true, preferCSSPageSize: true });

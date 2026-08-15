@@ -13,6 +13,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       adapter: new PrismaPg({
         connectionString: environment.databaseUrl,
       }),
+      transactionOptions: {
+        maxWait: 10_000,
+        timeout: 15_000,
+      },
     });
   }
 

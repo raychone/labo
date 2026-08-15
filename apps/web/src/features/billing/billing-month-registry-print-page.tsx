@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router";
 import { useMemo, type ReactNode } from "react";
 
-import { fetchMonthRegistry, fetchMonthRegistryArchives, type BillingWorkspaceParams } from "./billing-api.js";
+import { downloadMonthRegistryPdf, fetchMonthRegistry, fetchMonthRegistryArchives, type BillingWorkspaceParams } from "./billing-api.js";
 import { useSettings } from "../settings/settings-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
 import "./billing-page.css";
@@ -65,7 +65,7 @@ export function BillingMonthRegistryPrintPage(): ReactNode {
     return (
       <main className="billing-print-page billing-print-page--month-registry">
         <div className="billing-print-page__actions">
-          <Button onClick={() => window.print()}>Export PDF</Button>
+          <Button onClick={() => void downloadMonthRegistryPdf(params)}>Export PDF</Button>
           <Link className="billing-print-page__back-link" to="/billing">Înapoi la facturare</Link>
         </div>
         <ArchiveLandingView
@@ -91,7 +91,7 @@ export function BillingMonthRegistryPrintPage(): ReactNode {
   return (
     <main className="billing-print-page billing-print-page--month-registry">
       <div className="billing-print-page__actions">
-        <Button onClick={() => window.print()}>Export PDF</Button>
+        <Button onClick={() => void downloadMonthRegistryPdf(params)}>Export PDF</Button>
         <Link className="billing-print-page__back-link" to="/billing">Înapoi la facturare</Link>
       </div>
       <MonthRegistryReportView companyLabel={`${settingsQuery.data.legalEntityCode} — ${settingsQuery.data.legalEntityDisplayName}`} registry={registryQuery.data} />
@@ -142,7 +142,7 @@ function ArchiveLandingView({
                 </div>
                 <div className="billing-page__toolbar billing-page__toolbar--tight">
                   <Button
-                    onClick={() => window.open(`/billing/month-registry/print?year=${archive.year}&month=${archive.month}`, "_blank", "noopener,noreferrer")}
+                    onClick={() => void downloadMonthRegistryPdf({ year: archive.year, month: archive.month })}
                     variant="secondary"
                   >
                     Deschide PDF

@@ -161,6 +161,50 @@ describe("AuthenticatedAppShell", () => {
     expect(screen.queryByText("Utilizatori")).toBeNull();
   });
 
+  it("prefers the reception role label when reception and logistics permissions overlap", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/auth/me")) {
+        return Promise.resolve(createJsonResponse({
+          user: {
+            displayName: "Demo Receptie",
+            email: "receptie@demo.local",
+            id: "user_reception",
+          },
+        }));
+      }
+      if (url.endsWith("/auth/permissions")) {
+        return Promise.resolve(createJsonResponse({
+          permissions: [
+            { key: "scan.use", scopes: ["ALL"] },
+            { key: "works.create", scopes: ["ALL"] },
+            { key: "logistics.center.read", scopes: ["ALL"] },
+          ],
+        }));
+      }
+      if (url.endsWith("/settings")) {
+        return Promise.resolve(createJsonResponse({
+          laboratoryName: "Laborator Test",
+          primaryColor: "#14532d",
+        }));
+      }
+      return Promise.resolve(createJsonResponse({}, 404));
+    }));
+
+    renderWithProviders(
+      <Routes>
+        <Route element={<AuthenticatedAppShell />} path="/">
+          <Route element={<div>Dashboard content</div>} path="dashboard" />
+        </Route>
+      </Routes>,
+      ["/dashboard"],
+    );
+
+    await waitFor(() => expect(screen.getByText("Recepție")).toBeDefined());
+    expect(screen.queryByText("Logistică")).toBeNull();
+    expect(screen.getByRole("button", { name: "Deconectare" })).toBeDefined();
+  });
+
   it("opens and closes the mobile drawer with Escape", async () => {
     vi.stubGlobal("fetch", createFetchMock(["works.read_all"]));
 

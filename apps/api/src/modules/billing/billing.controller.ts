@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Param, Patch, Post, Put, Query, Req, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, Patch, Post, Put, Query, Req, Res, StreamableFile, UseGuards } from "@nestjs/common";
 import type { Request, Response } from "express";
 
 import { AuthGuard } from "../auth/auth.guard.js";
@@ -14,6 +14,7 @@ import { AuthorizationService } from "../rbac/authorization.service.js";
 import { PermissionsGuard } from "../rbac/permissions.guard.js";
 import { RequirePermission } from "../rbac/require-permission.decorator.js";
 import { BillingExportService } from "./billing-export.service.js";
+import { BillingPdfExportService } from "./billing-pdf-export.service.js";
 import { BillingPrintService } from "./billing-print.service.js";
 import { BillingService } from "./billing.service.js";
 import { BillingStatementService } from "./billing-statement.service.js";
@@ -38,6 +39,7 @@ export class BillingController {
   public constructor(
     @Inject(AuthorizationService) private readonly authorizationService: AuthorizationService,
     @Inject(BillingExportService) private readonly billingExportService: BillingExportService,
+    @Inject(BillingPdfExportService) private readonly billingPdfExportService: BillingPdfExportService,
     @Inject(BillingPrintService) private readonly billingPrintService: BillingPrintService,
     @Inject(BillingService) private readonly billingService: BillingService,
     @Inject(BillingStatementService) private readonly billingStatementService: BillingStatementService,
@@ -83,6 +85,81 @@ export class BillingController {
   @RequirePermission("finance.read_reports", "ALL")
   public listMonthRegistryArchives(@CurrentLegalEntity() legalEntity: LegalEntityContext): Promise<unknown> {
     return this.billingStatementService.listMonthCloseArchives(legalEntity);
+  }
+
+  @Get("billing-documents/:id/pdf")
+  @RequirePermission("invoice.download", "ALL")
+  public async downloadDocumentPdf(
+    @CurrentLegalEntity() legalEntity: LegalEntityContext,
+    @Param("id") documentId: string,
+    @Req() request: Request,
+  ): Promise<StreamableFile> {
+    const document = await this.billingService.getDocument(legalEntity, documentId);
+    const pdf = await this.billingPdfExportService.renderPdf({
+      filenameBase: document.formattedNumber ? `${document.type === "INVOICE" ? "factura" : "proforma"}-${document.formattedNumber}` : `${document.type === "INVOICE" ? "factura" : "proforma"}-${document.id}`,
+      path: `/billing/documents/${documentId}/print`,
+      query: requestUrlQuery(request),
+      request,
+    });
+
+    return new StreamableFile(pdf.buffer, {
+      disposition: `attachment; filename="${pdf.filename}"`,
+      type: "application/pdf",
+    });
+  }
+
+  @Get("billing/statements/clinic/pdf")
+  @RequirePermission("finance.read_reports", "ALL")
+  public async downloadClinicStatementPdf(
+    @Req() request: Request,
+  ): Promise<StreamableFile> {
+    const pdf = await this.billingPdfExportService.renderPdf({
+      filenameBase: buildStatementFilenameBase("nota-de-plata-clinic", request),
+      path: "/billing/statements/clinic/print",
+      query: requestUrlQuery(request),
+      request,
+    });
+
+    return new StreamableFile(pdf.buffer, {
+      disposition: `attachment; filename="${pdf.filename}"`,
+      type: "application/pdf",
+    });
+  }
+
+  @Get("billing/statements/doctor/pdf")
+  @RequirePermission("finance.read_reports", "ALL")
+  public async downloadDoctorStatementPdf(
+    @Req() request: Request,
+  ): Promise<StreamableFile> {
+    const pdf = await this.billingPdfExportService.renderPdf({
+      filenameBase: buildStatementFilenameBase("nota-de-plata-medic", request),
+      path: "/billing/statements/doctor/print",
+      query: requestUrlQuery(request),
+      request,
+    });
+
+    return new StreamableFile(pdf.buffer, {
+      disposition: `attachment; filename="${pdf.filename}"`,
+      type: "application/pdf",
+    });
+  }
+
+  @Get("billing/month-registry/pdf")
+  @RequirePermission("finance.read_reports", "ALL")
+  public async downloadMonthRegistryPdf(
+    @Req() request: Request,
+  ): Promise<StreamableFile> {
+    const pdf = await this.billingPdfExportService.renderPdf({
+      filenameBase: buildMonthRegistryFilenameBase(request),
+      path: "/billing/month-registry/print",
+      query: requestUrlQuery(request),
+      request,
+    });
+
+    return new StreamableFile(pdf.buffer, {
+      disposition: `attachment; filename="${pdf.filename}"`,
+      type: "application/pdf",
+    });
   }
 
   @Post("billing/month-registry/close")
@@ -264,4 +341,27 @@ export class BillingController {
 
     return finance.allowed || pricing.allowed;
   }
+}
+
+function requestUrlQuery(request: Request): string {
+  return new URL(request.originalUrl, "http://localhost").searchParams.toString();
+}
+
+function buildStatementFilenameBase(prefix: "nota-de-plata-clinic" | "nota-de-plata-medic", request: Request): string {
+  const query = new URL(request.originalUrl, "http://localhost").searchParams;
+  const dateFrom = query.get("dateFrom");
+  const dateTo = query.get("dateTo");
+  const scopeId = query.get("clinicId") ?? query.get("doctorId") ?? "selectie";
+  return [prefix, scopeId, dateFrom, dateTo].filter((value): value is string => typeof value === "string" && value.length > 0).join("-");
+}
+
+function buildMonthRegistryFilenameBase(request: Request): string {
+  const query = new URL(request.originalUrl, "http://localhost").searchParams;
+  const year = query.get("year");
+  const month = query.get("month");
+  if (year && month) {
+    return `registru-lunar-facturare-${year}-${month.padStart(2, "0")}`;
+  }
+
+  return "arhiva-facturare";
 }

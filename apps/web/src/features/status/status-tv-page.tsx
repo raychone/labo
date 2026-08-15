@@ -4,7 +4,6 @@ import {
   DELIVERY_STATUSES,
   LOGISTICS_STATUS_LABELS,
   LOGISTICS_STATUSES,
-  OPERATIONAL_STATUS_MAX_PAGE_SIZE,
   OPERATIONAL_STATUS_SORT_FIELDS,
   type DeadlineVisualState,
   type DeliveryStatus,
@@ -44,13 +43,14 @@ import "./status-tv-page.css";
 
 const defaultQuery: OperationalStatusQuery = {
   page: 1,
-  pageSize: 12,
+  pageSize: 6,
   sortBy: "effectiveDueAt",
   sortDirection: "asc",
   tab: "IN_PROGRESS",
 };
 
 const tvVisibleTabs: readonly OperationalStatusTab[] = ["IN_PROGRESS", "LATE", "RETURNED"];
+const tvPageSize = 6;
 const tvAutoRotateIntervalMs = 12_000;
 
 type StatusQueryPatch = {
@@ -105,7 +105,7 @@ function readQuery(searchParams: URLSearchParams): OperationalStatusQuery {
 
   return {
     page: readPositiveInt(searchParams.get("page"), defaultQuery.page),
-    pageSize: readPositiveInt(searchParams.get("pageSize"), defaultQuery.pageSize, OPERATIONAL_STATUS_MAX_PAGE_SIZE),
+    pageSize: tvPageSize,
     sortBy: isSortField(sortBy) ? sortBy : defaultQuery.sortBy,
     sortDirection: isSortDirection(sortDirection) ? sortDirection : defaultQuery.sortDirection,
     tab: isOperationalTab(tab) ? tab : defaultQuery.tab,
@@ -284,6 +284,7 @@ export function StatusTvPage(): ReactNode {
   const techniciansQuery = useTechnicianOptions(true);
   const workTypesQuery = useWorkTypeOptions(true);
   const rows = useMemo(() => sortRowsForTv(statusQuery.data?.items ?? []), [statusQuery.data?.items]);
+  const visibleRows = useMemo(() => rows.slice(0, tvPageSize), [rows]);
   const isLargeScreen = useMediaQuery("(min-width: 980px)");
   const nowLabel = new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "medium" }).format(clock);
   const totalPages = Math.max(1, statusQuery.data?.meta.totalPages ?? 1);
@@ -309,13 +310,13 @@ export function StatusTvPage(): ReactNode {
   ];
   const sortOptions: readonly SelectOption[] = OPERATIONAL_STATUS_SORT_FIELDS.map((field) => ({ label: field === "effectiveDueAt" ? "Termen" : field === "priority" ? "Prioritate" : field === "createdAt" ? "Creată" : field === "updatedAt" ? "Actualizată" : field === "workCode" ? "Cod lucrare" : field === "clinicName" ? "Cabinet" : "Pacient", value: field }));
   const operationalStateOptions: readonly SelectOption[] = tvVisibleTabs.map((tab) => ({ label: tab === "IN_PROGRESS" ? "În lucru" : tab === "LATE" ? "Întârziate" : "Revenite", value: tab }));
-  const rowsHaveData = rows.length > 0;
+  const rowsHaveData = visibleRows.length > 0;
   const summaryCounters = useMemo(
     () => (statusQuery.data?.counters ?? []).filter((counter) => tvVisibleTabs.includes(counter.tab)),
     [statusQuery.data?.counters],
   );
   const pageLabel = `${query.page}/${totalPages}`;
-  const visibleRowsLabel = `${rows.length}/${statusQuery.data?.meta.total ?? rows.length}`;
+  const visibleRowsLabel = `${visibleRows.length}/${statusQuery.data?.meta.total ?? visibleRows.length}`;
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 30_000);
@@ -387,7 +388,7 @@ export function StatusTvPage(): ReactNode {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {visibleRows.map((row) => (
                 <tr key={row.id}>
                   <td>
                     <span className="status-tv-page__stack">
@@ -438,7 +439,7 @@ export function StatusTvPage(): ReactNode {
       </div>
     ) : (
       <div className="status-tv-page__cards">
-          {rows.map((row) => (
+          {visibleRows.map((row) => (
             <article className="status-tv-page__card" key={row.id}>
               <div className="status-tv-page__card-header">
                 <div className="status-tv-page__stack">

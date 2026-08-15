@@ -42,6 +42,10 @@ import { fetchPermissions } from "../auth/auth-api.js";
 import { hasPermission } from "../users/users-api.js";
 import { useSettings } from "../settings/settings-api.js";
 import {
+  downloadBillingDocumentPdf,
+  downloadClinicStatementPdf,
+  downloadDoctorStatementPdf,
+  downloadMonthRegistryPdf,
   useBillableWorks,
   useBillingDocuments,
   useBillingOverview,
@@ -113,6 +117,35 @@ function monthRange(period: BillingPeriod): { readonly dateFrom: string; readonl
 
 function currentMonthRange(now = new Date()): { readonly dateFrom: string; readonly dateTo: string } {
   return monthRange(currentBillingPeriod(now));
+}
+
+function isBillingTabId(value: string | null): value is BillingTabId {
+  return value === "overview"
+    || value === "uninvoiced"
+    || value === "proformas"
+    || value === "invoices"
+    || value === "payments"
+    || value === "receivables"
+    || value === "statements"
+    || value === "month-close"
+    || value === "series";
+}
+
+function isDocumentPaymentFilter(value: string | null): value is DocumentPaymentFilter {
+  return paymentFilterOptions.some((option) => option.value === value);
+}
+
+function formatKpiMoneyMinor(value: number, currency: string, locale = "ro-RO"): string {
+  return new Intl.NumberFormat(locale, {
+    currency,
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+    style: "currency",
+  }).format(value / 100);
+}
+
+function formatMoneyInputMinor(value: number): string {
+  return (value / 100).toFixed(2);
 }
 
 function readBillingPeriod(searchParams: URLSearchParams): BillingPeriod | null {
@@ -299,12 +332,18 @@ export function BillingPage(): ReactNode {
   const [range, setRange] = useState(currentMonthRange);
   const selectedPeriod = useMemo(() => urlPeriod ?? currentBillingPeriod(), [urlPeriod]);
   const [groupBy, setGroupBy] = useState("clinic");
-  const [paymentFilter, setPaymentFilter] = useState<DocumentPaymentFilter>("ALL");
+  const [paymentFilter, setPaymentFilter] = useState<DocumentPaymentFilter>(() => {
+    const urlPaymentFilter = searchParams.get("paymentFilter");
+    return isDocumentPaymentFilter(urlPaymentFilter) ? urlPaymentFilter : "ALL";
+  });
   const [patientFilter, setPatientFilter] = useState("");
   const [workCodeFilter, setWorkCodeFilter] = useState("");
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState<BillingTabId>(() => {
+    const urlTab = searchParams.get("tab");
+    return isBillingTabId(urlTab) ? urlTab : "overview";
+  });
   const [paymentForm, setPaymentForm] = useState<ManualPaymentFormState>(createEmptyPaymentForm(range.dateTo));
   const [selectedWorkIds, setSelectedWorkIds] = useState<readonly string[]>([]);
   const [selectedProformaIds, setSelectedProformaIds] = useState<readonly string[]>([]);
@@ -490,35 +529,34 @@ export function BillingPage(): ReactNode {
     }
   }
 
-  function openStatementPrint(scope: "clinic" | "doctor", source: StatementSource = "documents", works: readonly BillableWork[] = []): void {
-    const params = new URLSearchParams({ dateFrom: range.dateFrom, dateTo: range.dateTo });
-    params.set("format", "a4");
-    if (scope === "clinic" && clinicStatementId) {
-      params.set("clinicId", clinicStatementId);
+  async function exportStatementPdf(scope: "clinic" | "doctor", source: StatementSource = "documents", works: readonly BillableWork[] = []): Promise<void> {
+    const downloadParams = {
+      dateFrom: range.dateFrom,
+      dateTo: range.dateTo,
+      format: "a4",
+      source,
+      ...(scope === "clinic" && clinicStatementId ? { clinicId: clinicStatementId } : {}),
+      ...(scope === "doctor" && doctorStatementId ? { doctorId: doctorStatementId } : {}),
+      ...(source === "works" && works.length > 0 ? { workPayload: serializeStatementWorks(works) } : {}),
+      ...(source === "documents" && selectedStatementDocumentIds.length > 0 ? { documentIds: selectedStatementDocumentIds.join(",") } : {}),
+    };
+
+    if (scope === "clinic") {
+      await downloadClinicStatementPdf(downloadParams);
+      return;
     }
-    if (scope === "doctor" && doctorStatementId) {
-      params.set("doctorId", doctorStatementId);
-    }
-    params.set("source", source);
-    if (source === "works" && works.length > 0) {
-      params.set("workPayload", serializeStatementWorks(works));
-    }
-    if (selectedStatementDocumentIds.length > 0) {
-      params.set("documentIds", selectedStatementDocumentIds.join(","));
-    }
-    window.open(`/billing/statements/${scope}/print?${params.toString()}`, "_blank", "noopener,noreferrer");
+
+    await downloadDoctorStatementPdf(downloadParams);
   }
 
-  function openMonthRegistryPrint(): void {
+  async function exportMonthRegistryPdf(): Promise<void> {
     const periodRange = monthRange(selectedPeriod);
-    const params = new URLSearchParams({
+    await downloadMonthRegistryPdf({
       dateFrom: periodRange.dateFrom,
       dateTo: periodRange.dateTo,
-      format: "a4",
-      month: String(selectedPeriod.month),
-      year: String(selectedPeriod.year),
+      month: selectedPeriod.month,
+      year: selectedPeriod.year,
     });
-    window.open(`/billing/month-registry/print?${params.toString()}`, "_blank", "noopener,noreferrer");
   }
 
   if (!canUseBilling && !permissionsQuery.isLoading) {
@@ -588,7 +626,7 @@ export function BillingPage(): ReactNode {
       }} /> : null}
 
       <Tabs
-        onValueChange={setActiveTab}
+        onValueChange={(value) => setActiveTab(isBillingTabId(value) ? value : "overview")}
         value={activeTab}
         tabs={[
           {
@@ -619,7 +657,7 @@ export function BillingPage(): ReactNode {
                 currency={currency}
                 isCreating={createProformaMutation.isPending || createInvoiceMutation.isPending}
                 locale={locale}
-                onCreateNote={() => openStatementPrint("clinic", "works", selectedWorks)}
+                onCreateNote={() => void exportStatementPdf("clinic", "works", selectedWorks)}
                 onCreateProforma={() => void createDocument("proforma")}
                 onCreateInvoice={() => void createDocument("invoice")}
                 onExport={() => downloadCsv("lucrari-nefacturate.csv", toCsv((billableWorksQuery.data?.items ?? []).map((work) => ({
@@ -665,7 +703,8 @@ export function BillingPage(): ReactNode {
                     toast.showToast({ message: getErrorMessage(error), variant: "error" });
                   }
                 }}
-                onPrint={(documentId) => window.open(`/billing/documents/${documentId}/print`, "_blank", "noopener,noreferrer")}
+                onDownloadPdf={(documentId) => void downloadBillingDocumentPdf(documentId)}
+                onOpenPreview={(documentId) => window.open(`/billing/documents/${documentId}/print`, "_blank", "noopener,noreferrer")}
                 onRecordPaymentSelected={recordPaymentForDocument}
                 paymentForm={paymentForm}
                 setPaymentForm={setPaymentForm}
@@ -690,7 +729,8 @@ export function BillingPage(): ReactNode {
                 locale={locale}
                 onExport={() => downloadCsv("facturi.csv", toCsv((invoicesQuery.data?.items ?? []).map((document) => toDocumentCsvRow(document, currency))))}
                 onIssueSelected={issueDocumentsById}
-                onPrint={(documentId) => window.open(`/billing/documents/${documentId}/print`, "_blank", "noopener,noreferrer")}
+                onDownloadPdf={(documentId) => void downloadBillingDocumentPdf(documentId)}
+                onOpenPreview={(documentId) => window.open(`/billing/documents/${documentId}/print`, "_blank", "noopener,noreferrer")}
                 onRecordPaymentSelected={recordPaymentForDocument}
                 paymentForm={paymentForm}
                 setPaymentForm={setPaymentForm}
@@ -747,6 +787,8 @@ export function BillingPage(): ReactNode {
                 onOpenSelected={(documentId) => window.open(`/billing/documents/${documentId}/print`, "_blank", "noopener,noreferrer")}
                 onRecordPaymentSelected={recordPaymentForDocument}
                 onSelectionChange={setSelectedReceivableIds}
+                paymentForm={paymentForm}
+                setPaymentForm={setPaymentForm}
                 selectedDocumentIds={selectedReceivableIds}
                 selectedDocuments={selectedReceivables}
               />
@@ -767,7 +809,7 @@ export function BillingPage(): ReactNode {
                 selectedDoctorId={doctorStatementId}
                 onClinicChange={setClinicStatementId}
                 onDoctorChange={setDoctorStatementId}
-                onOpenPrint={openStatementPrint}
+                onOpenPrint={(scope, source) => void exportStatementPdf(scope, source, selectedWorks)}
                 selectedDocumentIds={selectedStatementDocumentIds}
                 onSelectionChange={setSelectedStatementDocumentIds}
                 scope={statementScope}
@@ -798,7 +840,7 @@ export function BillingPage(): ReactNode {
                   toast.showToast({ message: getErrorMessage(error), variant: "error" });
                 }
               }}
-              onPrintRegistry={openMonthRegistryPrint}
+              onPrintRegistry={() => void exportMonthRegistryPdf()}
               onCloseRegistry={() => closeMonthRegistryMutation.mutate()}
               yearOptions={yearOptions}
               selectedPeriod={selectedPeriod}
@@ -841,15 +883,15 @@ function OverviewCards({
   return (
     <section className="billing-page__cards" aria-label="Indicatori facturare">
       {cards.map((card) => (
-        <button
-          className="billing-page__kpi-card"
-          key={card.label}
-          onClick={() => onNavigate(card.tab, "filter" in card ? card.filter : undefined)}
-          type="button"
-        >
+          <button
+            className="billing-page__kpi-card"
+            key={card.label}
+            onClick={() => onNavigate(card.tab, "filter" in card ? card.filter : undefined)}
+            type="button"
+          >
           <span className="billing-page__kpi-label">{card.label}</span>
           <strong className="billing-page__kpi-value">
-            {card.tone === "count" ? card.value : formatMoneyMinor(card.value, currency, locale)}
+            {card.tone === "count" ? card.value : formatKpiMoneyMinor(card.value, currency, locale)}
           </strong>
           <small className="billing-page__kpi-meta">{card.count} înregistrări</small>
         </button>
@@ -1188,9 +1230,10 @@ function DocumentsTab({
   isMutating,
   locale,
   onExport,
+  onDownloadPdf,
   onIssueSelected,
   onConvertSelected,
-  onPrint,
+  onOpenPreview,
   onRecordPaymentSelected,
   onSelectionChange,
   paymentForm,
@@ -1207,9 +1250,10 @@ function DocumentsTab({
   readonly isMutating: boolean;
   readonly locale: string;
   readonly onExport: () => void;
+  readonly onDownloadPdf: (documentId: string) => void;
   readonly onIssueSelected: (documents: readonly BillingDocumentSummary[]) => Promise<void>;
   readonly onConvertSelected?: (documents: readonly BillingDocumentSummary[]) => Promise<void>;
-  readonly onPrint: (documentId: string) => void;
+  readonly onOpenPreview: (documentId: string) => void;
   readonly onRecordPaymentSelected: (documentId: string) => Promise<void>;
   readonly onSelectionChange: (ids: readonly string[]) => void;
   readonly paymentForm: ManualPaymentFormState;
@@ -1217,6 +1261,7 @@ function DocumentsTab({
   readonly selectedDocumentIds: readonly string[];
   readonly selectionLabel: string;
 }): ReactNode {
+  const toast = useToast();
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const selectedDocuments = documents.filter((document) => selectedDocumentIds.includes(document.id));
   const selectedDocument = selectedDocuments[0] ?? null;
@@ -1237,11 +1282,36 @@ function DocumentsTab({
   const canUsePaymentForm = Boolean(selectedDocument && selectedDocument.type === "INVOICE" && selectedDocument.status !== "CANCELLED" && selectedDocument.balanceMinor > 0);
   const selectedTotalMinor = selectedDocuments.reduce((total, document) => total + document.totalMinor, 0);
 
+  useEffect(() => {
+    if (!isPaymentOpen || !canUsePaymentForm || !selectedDocument) {
+      return;
+    }
+
+    const nextAmount = formatMoneyInputMinor(selectedDocument.balanceMinor);
+    setPaymentForm((current) => {
+      if (current.amount === nextAmount) {
+        return current;
+      }
+
+      return { ...current, amount: nextAmount };
+    });
+  }, [canUsePaymentForm, isPaymentOpen, selectedDocument?.balanceMinor, selectedDocument?.id, setPaymentForm]);
+
   async function issueSelected(): Promise<void> {
     if (selectedDocuments.length === 0) {
       return;
     }
-    await onIssueSelected(selectedDocuments);
+
+    const issueableDocuments = selectedDocuments.filter((document) => document.status === "DRAFT");
+    if (issueableDocuments.length === 0) {
+      toast.showToast({ message: "Documentele selectate sunt deja emise.", variant: "error" });
+      return;
+    }
+
+    await onIssueSelected(issueableDocuments);
+    if (issueableDocuments.length !== selectedDocuments.length) {
+      toast.showToast({ message: `Au fost emise doar ${issueableDocuments.length} documente draft selectate.`, variant: "success" });
+    }
   }
 
   async function convertSelected(): Promise<void> {
@@ -1256,6 +1326,7 @@ function DocumentsTab({
       return;
     }
     await onRecordPaymentSelected(selectedDocument.id);
+    setIsPaymentOpen(false);
   }
 
   return (
@@ -1266,7 +1337,7 @@ function DocumentsTab({
         <Button disabled={selectedCount === 0 || isMutating} onClick={() => void issueSelected()} variant="secondary">Emite selectate</Button>
         {canConvertSelected ? <Button disabled={selectedCount !== 1 || selectedDocument?.type !== "PROFORMA" || isMutating} onClick={() => void convertSelected()} variant="secondary">Transformă în factură</Button> : null}
         {canRecordPayment ? <Button disabled={!canUsePaymentForm || selectedCount !== 1 || isMutating} onClick={() => setIsPaymentOpen(true)} variant="secondary">Înregistrează încasare</Button> : null}
-        <Button disabled={selectedCount === 0} onClick={() => onPrint(selectedDocument ? selectedDocument.id : "")} variant="outline">Export PDF</Button>
+        <Button disabled={selectedCount === 0} onClick={() => onDownloadPdf(selectedDocument ? selectedDocument.id : "")} variant="outline">Export PDF</Button>
       </div>
       <DataTable
         columns={columns}
@@ -1274,7 +1345,7 @@ function DocumentsTab({
         error={error ? getErrorMessage(error) : undefined}
         getRowKey={(document) => document.id}
         isLoading={isLoading}
-        onRowAction={(document) => onPrint(document.id)}
+        onRowAction={(document) => onOpenPreview(document.id)}
         rowActionLabel="Deschide"
         rows={documents}
       />
@@ -1363,8 +1434,10 @@ function ReceivablesTab({
   onOpenSelected,
   onRecordPaymentSelected,
   onSelectionChange,
+  setPaymentForm,
   selectedDocumentIds,
   selectedDocuments,
+  paymentForm,
 }: {
   readonly currency: string;
   readonly error: unknown;
@@ -1376,11 +1449,37 @@ function ReceivablesTab({
   readonly onOpenSelected: (documentId: string) => void;
   readonly onRecordPaymentSelected: (documentId: string) => Promise<void>;
   readonly onSelectionChange: (ids: readonly string[]) => void;
+  readonly setPaymentForm: (updater: (current: ManualPaymentFormState) => ManualPaymentFormState) => void;
+  readonly paymentForm: ManualPaymentFormState;
   readonly selectedDocumentIds: readonly string[];
   readonly selectedDocuments: readonly BillingReceivableRow[];
 }): ReactNode {
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const selectedCount = selectedDocumentIds.length;
   const selectedDocument = selectedDocuments[0] ?? null;
+  const canUsePaymentForm = Boolean(selectedDocument && selectedDocument.balanceMinor > 0);
+  useEffect(() => {
+    if (!isPaymentOpen || !selectedDocument) {
+      return;
+    }
+
+    const nextAmount = formatMoneyInputMinor(selectedDocument.balanceMinor);
+    setPaymentForm((current) => {
+      if (current.amount === nextAmount) {
+        return current;
+      }
+
+      return { ...current, amount: nextAmount };
+    });
+  }, [isPaymentOpen, selectedDocument?.balanceMinor, selectedDocument?.documentId, setPaymentForm]);
+
+  async function recordSelectedPayment(): Promise<void> {
+    if (!selectedDocument) {
+      return;
+    }
+    await onRecordPaymentSelected(selectedDocument.documentId);
+    setIsPaymentOpen(false);
+  }
   const columns = useMemo<readonly DataTableColumn<BillingReceivableRow>[]>(() => [
     { id: "select", header: "", renderCell: (item) => <input aria-label={`Selectează ${item.documentNumber ?? item.documentId}`} checked={selectedDocumentIds.includes(item.documentId)} onChange={() => onSelectionChange(toggleSelectedId(selectedDocumentIds, item.documentId))} type="checkbox" /> },
     { id: "number", header: "Factură", renderCell: (item) => item.documentNumber ?? "-" },
@@ -1400,7 +1499,7 @@ function ReceivablesTab({
         <p>{selectedCount} restanțe selectate</p>
         <Button onClick={onExport} variant="outline">Export CSV</Button>
         <Button disabled={selectedCount !== 1 || isMutating} onClick={() => selectedDocument ? onOpenSelected(selectedDocument.documentId) : undefined} variant="secondary">Deschide documentul</Button>
-        <Button disabled={selectedCount !== 1 || isMutating} onClick={() => selectedDocument ? void onRecordPaymentSelected(selectedDocument.documentId) : undefined}>Înregistrează încasare</Button>
+        <Button disabled={!canUsePaymentForm || selectedCount !== 1 || isMutating} onClick={() => setIsPaymentOpen(true)}>Înregistrează încasare</Button>
       </div>
       <DataTable columns={columns} emptyMessage="Nu există facturi restante sau parțial achitate pentru filtrele curente." error={error ? getErrorMessage(error) : undefined} getRowKey={(item) => item.documentId} isLoading={isLoading} rows={items} />
       {selectedDocument ? (
@@ -1408,6 +1507,40 @@ function ReceivablesTab({
           <h2>{selectedDocument.documentNumber ?? "-"}</h2>
           <p>{selectedDocument.clinicName} · {selectedDocument.doctorNames.join(", ") || "-"} · {formatMoneyMinor(selectedDocument.balanceMinor, selectedDocument.currency ?? currency, locale)} restant</p>
         </section>
+      ) : null}
+      {selectedDocument ? (
+        <Modal
+          description={`${selectedDocument.documentNumber ?? "Document"} · sold restant ${formatMoneyMinor(selectedDocument.balanceMinor, selectedDocument.currency ?? currency, locale)}`}
+          footer={<Button disabled={!canUsePaymentForm || isMutating} isLoading={isMutating} onClick={() => void recordSelectedPayment()}>Înregistrează încasarea</Button>}
+          isOpen={isPaymentOpen}
+          onOpenChange={setIsPaymentOpen}
+          title="Înregistrare manuală încasare"
+        >
+          <section className="billing-page__payment-form" aria-label="Înregistrare manuală încasare">
+            <div>
+              <h3>Evidență încasări</h3>
+              <p>Înregistrează manual o plată efectuată în afara aplicației. Aplicația nu procesează bani, nu emite bon fiscal și nu se conectează la POS sau bancă.</p>
+            </div>
+            <TextInput disabled={!canUsePaymentForm} inputMode="decimal" label="Sumă încasată" placeholder="0.00" value={paymentForm.amount} onChange={(event) => setPaymentForm((current) => ({ ...current, amount: event.target.value }))} />
+            <DateInput disabled={!canUsePaymentForm} label="Data încasării" value={paymentForm.paymentDate} onChange={(event) => setPaymentForm((current) => ({ ...current, paymentDate: event.target.value }))} />
+            <Select
+              disabled={!canUsePaymentForm}
+              label="Metoda informativa"
+              options={[
+                { label: "Numerar", value: "CASH" },
+                { label: "Transfer bancar", value: "BANK_TRANSFER" },
+                { label: "Card", value: "CARD" },
+                { label: "Altă metodă", value: "OTHER" },
+              ]}
+              value={paymentForm.method}
+              onChange={(event) => setPaymentForm((current) => ({ ...current, method: event.target.value as PaymentMethod }))}
+            />
+            <TextInput disabled={!canUsePaymentForm} label="Număr chitanță" value={paymentForm.receiptNumber} onChange={(event) => setPaymentForm((current) => ({ ...current, receiptNumber: event.target.value }))} />
+            <DateInput disabled={!canUsePaymentForm} label="Data chitanței" value={paymentForm.receiptDate} onChange={(event) => setPaymentForm((current) => ({ ...current, receiptDate: event.target.value }))} />
+            <TextInput disabled={!canUsePaymentForm} label="Referință bancară" value={paymentForm.reference} onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))} />
+            <TextInput disabled={!canUsePaymentForm} label="Observații" value={paymentForm.notes} onChange={(event) => setPaymentForm((current) => ({ ...current, notes: event.target.value }))} />
+          </section>
+        </Modal>
       ) : null}
     </section>
   );

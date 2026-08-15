@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { WorkFormTemplateKind, type Prisma } from "@prisma/client";
+import { WorkFormTemplateKind, WorkStageEventType, WorkStageExecutionStatus, type Prisma } from "@prisma/client";
 
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
@@ -993,6 +993,53 @@ export class WorksService {
         });
         throw new ConflictException("Lucrarea a fost deja revendicată sau modificată. Reîncarcă lista.");
       }
+
+      const workflowExecution = before.activeCycle?.workflowExecution ?? null;
+      const currentStage = workflowExecution?.currentStageExecutionId
+        ? workflowExecution.stages.find((stage) => stage.id === workflowExecution.currentStageExecutionId) ?? null
+        : null;
+      if (workflowExecution && currentStage && currentStage.status === WorkStageExecutionStatus.PENDING && currentStage.assignedUserId === null && await this.canAutoAssignClaimedStage(tx, context.actorUserId, currentStage.allowedRoleCodesSnapshot)) {
+        await tx.workStageExecution.update({
+          data: {
+            assignedAt: operationNow,
+            assignedByUserId: context.actorUserId,
+            assignedUserId: context.actorUserId,
+            version: { increment: 1 },
+          },
+          where: {
+            id: currentStage.id,
+          },
+        });
+        await tx.workWorkflowExecution.update({
+          data: {
+            version: { increment: 1 },
+          },
+          where: {
+            id: workflowExecution.id,
+          },
+        });
+        await tx.workStageEvent.create({
+          data: {
+            actorUserId: context.actorUserId,
+            metadata: {
+              assignedByUserId: context.actorUserId,
+              assignedUserId: context.actorUserId,
+              stageExecutionId: currentStage.id,
+              stageKey: currentStage.stageKeySnapshot,
+              stageOrder: currentStage.sortOrder,
+              workCode: before.code,
+              workId: workOrderId,
+              workflowExecutionId: workflowExecution.id,
+              workflowTemplateId: workflowExecution.workflowTemplateId,
+              workflowTemplateVersion: workflowExecution.workflowTemplateVersion,
+            },
+            stageExecutionId: currentStage.id,
+            type: WorkStageEventType.STAGE_ASSIGNED,
+            workflowExecutionId: workflowExecution.id,
+          },
+        });
+      }
+
       await tx.workAssignmentEvent.create({
         data: {
           actorUserId: context.actorUserId,
@@ -1043,6 +1090,29 @@ export class WorksService {
     });
 
     return toWorkDetailView(after, false, await this.createClaimAccess(context.actorUserId));
+  }
+
+  private async canAutoAssignClaimedStage(client: Prisma.TransactionClient | PrismaService, userId: string, allowedRoleCodesSnapshot: Prisma.JsonValue): Promise<boolean> {
+    const startPermission = await this.authorizationService.hasPermission({
+      permission: "workflow.start_stage",
+      requiredScope: "OWN_STAGE",
+      userId,
+    });
+
+    if (!startPermission.allowed) {
+      return false;
+    }
+
+    const allowedRoleCodes = Array.isArray(allowedRoleCodesSnapshot)
+      ? allowedRoleCodesSnapshot.filter((value): value is string => typeof value === "string")
+      : [];
+
+    if (allowedRoleCodes.length === 0) {
+      return true;
+    }
+
+    const actorRoleCodes = await this.getActorRoleCodes(client, userId);
+    return actorRoleCodes.some((roleCode) => allowedRoleCodes.includes(roleCode));
   }
 
   public async releaseWork(context: ActorContext, workOrderId: string, dto: ReleaseWorkDto): Promise<WorkDetailView> {
@@ -2494,6 +2564,28 @@ export class WorksService {
     if (!permission.allowed) {
       throw new BadRequestException("Utilizatorul selectat nu poate revendica lucrări.");
     }
+  }
+
+  private async getActorRoleCodes(client: Prisma.TransactionClient | PrismaService, userId: string): Promise<readonly string[]> {
+    const user = await client.user.findUnique({
+      select: {
+        roles: {
+          select: {
+            role: {
+              select: {
+                isActive: true,
+                key: true,
+              },
+            },
+          },
+        },
+      },
+      where: {
+        id: userId,
+      },
+    });
+
+    return (user?.roles ?? []).filter((role) => role.role.isActive).map((role) => role.role.key);
   }
 
   private rejectConflictingPatientPayload(patientId: string | undefined, patientName: string | undefined): void {

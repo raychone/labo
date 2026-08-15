@@ -120,14 +120,6 @@ const router = createBrowserRouter([
     path: "/billing/statements/:scope/print",
   },
   {
-    element: <AuthenticatedRoute><PermissionRoute requiredPermissions={["finance.read_reports"]}><LazyRoute><BillingArchivePage /></LazyRoute></PermissionRoute></AuthenticatedRoute>,
-    path: "/billing/archive",
-  },
-  {
-    element: <AuthenticatedRoute><PermissionRoute requiredPermissions={["finance.read_reports"]}><LazyRoute><BillingArchivePage /></LazyRoute></PermissionRoute></AuthenticatedRoute>,
-    path: "/billing/archive/:year/:month",
-  },
-  {
     element: <AuthenticatedRoute><PermissionRoute requiredPermissions={["finance.read_reports"]}><LazyRoute><BillingMonthRegistryPrintPage /></LazyRoute></PermissionRoute></AuthenticatedRoute>,
     path: "/billing/month-registry/print",
   },
@@ -170,6 +162,14 @@ const router = createBrowserRouter([
       {
         element: <PermissionRoute requiredPermissions={["finance.read", "invoice.read", "invoice.create"]}><LazyRoute><BillingPage /></LazyRoute></PermissionRoute>,
         path: "billing",
+      },
+      {
+        element: <PermissionRoute requiredPermissions={["finance.read_reports"]}><LazyRoute><BillingArchivePage /></LazyRoute></PermissionRoute>,
+        path: "billing/archive",
+      },
+      {
+        element: <PermissionRoute requiredPermissions={["finance.read_reports"]}><LazyRoute><BillingArchivePage /></LazyRoute></PermissionRoute>,
+        path: "billing/archive/:year/:month",
       },
       {
         element: <PermissionRoute requiredPermissions={["clinics.read"]}><LazyRoute><ClinicsPage /></LazyRoute></PermissionRoute>,

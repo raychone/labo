@@ -14,7 +14,7 @@ vi.mock("../../app/auth-state.js", () => ({
   useAuthState: vi.fn(),
 }));
 
-function renderWithProviders(component: ReactNode, initialEntries = ["/status/tv"]): void {
+function renderWithProviders(component: ReactNode, initialEntries = ["/status/tv"]) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -23,7 +23,7 @@ function renderWithProviders(component: ReactNode, initialEntries = ["/status/tv
     },
   });
 
-  render(
+  return render(
     <MemoryRouter initialEntries={initialEntries}>
       <QueryClientProvider client={queryClient}>
         <ToastProvider>{component}</ToastProvider>
@@ -58,6 +58,59 @@ function createAuthState(status: AuthState["status"], permissionKeys: readonly s
   };
 }
 
+const baseStatusTvRow = {
+  claimStatus: "CLAIMED",
+  clinic: { id: "clinic_1", name: "Clinica Test" },
+  createdAt: "2026-08-13T07:00:00.000Z",
+  currentCycle: { code: "CYCLE_2", id: "cycle_2", label: "Ciclul 2", number: 2, reason: "ADJUSTMENT", status: "ACTIVE" },
+  currentStageTechnician: { displayName: "Tehnician Ana", preferredColor: "#0f766e", publicId: "tech_1" },
+  deadline: {
+    badge: "Astăzi",
+    effectiveDueAt: "2026-08-13T14:00:00.000Z",
+    state: "DUE_TODAY",
+    tooltip: "Termenul este astăzi.",
+  },
+  delivery: { code: null, plannedDate: null, status: null },
+  doctor: { id: "doctor_1", name: "Dr. Ana Popescu" },
+  executionCompany: { code: "NC", displayName: "Nicolaie Cristina" },
+  id: "work_1",
+  logistics: { status: "IN_PRODUCTION" },
+  patient: { id: "patient_1", name: "Maria Ionescu", reference: "MI-1" },
+  priority: "URGENT",
+  realLabSheet: {
+    cycleNumber: 2,
+    finalizedAt: null,
+    label: "În lucru",
+    lastModifiedAt: "2026-08-13T08:00:00.000Z",
+    status: "IN_PROGRESS",
+  },
+  updatedAt: "2026-08-13T08:00:00.000Z",
+  workCode: "WO-2026-000001",
+  workOwner: { displayName: "Tehnician Ana", preferredColor: "#0f766e", publicId: "tech_1" },
+  workflow: {
+    currentStage: { key: "ceramica", name: "Ceramică", status: "IN_PROGRESS" },
+    progress: "1/4",
+    progressCompleted: 1,
+    progressTotal: 4,
+    status: "ACTIVE",
+  },
+  workType: { id: "work_type_1", name: "Coroană zirconiu" },
+} as const;
+
+const statusTvItems = Array.from({ length: 7 }, (_, index) => ({
+  ...baseStatusTvRow,
+  id: `work_${index + 1}`,
+  patient: {
+    ...baseStatusTvRow.patient,
+    id: `patient_${index + 1}`,
+    name: index === 0 ? "Maria Ionescu" : `Pacient ${index + 1}`,
+    reference: `MI-${index + 1}`,
+  },
+  workCode: `WO-2026-${String(index + 1).padStart(6, "0")}`,
+  createdAt: `2026-08-13T07:${String(index).padStart(2, "0")}:00.000Z`,
+  updatedAt: `2026-08-13T08:${String(index).padStart(2, "0")}:00.000Z`,
+}));
+
 const statusTvResponse = {
   counters: [
     { count: 2, label: "Astăzi", tab: "TODAY" },
@@ -68,52 +121,13 @@ const statusTvResponse = {
     { count: 1, label: "Revenite", tab: "RETURNED" },
     { count: 0, label: "Finalizate", tab: "COMPLETED" },
   ],
-  items: [
-    {
-      claimStatus: "CLAIMED",
-      clinic: { id: "clinic_1", name: "Clinica Test" },
-      createdAt: "2026-08-13T07:00:00.000Z",
-      currentCycle: { code: "CYCLE_2", id: "cycle_2", label: "Ciclul 2", number: 2, reason: "ADJUSTMENT", status: "ACTIVE" },
-      currentStageTechnician: { displayName: "Tehnician Ana", preferredColor: "#0f766e", publicId: "tech_1" },
-      deadline: {
-        badge: "Astăzi",
-        effectiveDueAt: "2026-08-13T14:00:00.000Z",
-        state: "DUE_TODAY",
-        tooltip: "Termenul este astăzi.",
-      },
-      delivery: { code: null, plannedDate: null, status: null },
-      doctor: { id: "doctor_1", name: "Dr. Ana Popescu" },
-      executionCompany: { code: "NC", displayName: "Nicolaie Cristina" },
-      id: "work_1",
-      logistics: { status: "IN_PRODUCTION" },
-      patient: { id: "patient_1", name: "Maria Ionescu", reference: "MI-1" },
-      priority: "URGENT",
-      realLabSheet: {
-        cycleNumber: 2,
-        finalizedAt: null,
-        label: "În lucru",
-        lastModifiedAt: "2026-08-13T08:00:00.000Z",
-        status: "IN_PROGRESS",
-      },
-      updatedAt: "2026-08-13T08:00:00.000Z",
-      workCode: "WO-2026-000001",
-      workOwner: { displayName: "Tehnician Ana", preferredColor: "#0f766e", publicId: "tech_1" },
-      workflow: {
-        currentStage: { key: "ceramica", name: "Ceramică", status: "IN_PROGRESS" },
-        progress: "1/4",
-        progressCompleted: 1,
-        progressTotal: 4,
-        status: "ACTIVE",
-      },
-      workType: { id: "work_type_1", name: "Coroană zirconiu" },
-    },
-  ],
+  items: statusTvItems,
   meta: {
     hasMore: true,
     page: 1,
-    pageSize: 12,
-    scannedRows: 24,
-    total: 24,
+    pageSize: 6,
+    scannedRows: 7,
+    total: 7,
     totalPages: 2,
   },
 } as const;
@@ -143,9 +157,9 @@ function createFetchMock() {
   });
 }
 
-function renderProtectedRoute(authState: AuthState): void {
+function renderProtectedRoute(authState: AuthState) {
   vi.mocked(useAuthState).mockReturnValue(authState);
-  renderWithProviders(
+  return renderWithProviders(
     <Routes>
       <Route element={<div>Login page</div>} path="/login" />
       <Route element={<div>Forbidden page</div>} path="/forbidden" />
@@ -172,13 +186,14 @@ describe("StatusTvPage", () => {
 
   it("renders the fullscreen TV layout without shell navigation or financial fields", async () => {
     vi.stubGlobal("fetch", createFetchMock());
-    renderProtectedRoute(createAuthState("authenticated", ["works.read_all", "works.read_assigned"]));
+    const { container } = renderProtectedRoute(createAuthState("authenticated", ["works.read_all", "works.read_assigned"]));
 
     expect(await screen.findByRole("heading", { name: "Panou operațional live" })).toBeDefined();
     await waitFor(() => expect(screen.getByText("Maria Ionescu")).toBeDefined());
-    expect(screen.getByText("Coroană zirconiu")).toBeDefined();
+    expect(screen.getAllByText("Coroană zirconiu")).toHaveLength(6);
+    expect(container.querySelectorAll(".status-tv-page__table tbody tr")).toHaveLength(6);
     expect(screen.getByLabelText("Tehnician Ana").getAttribute("style")).toContain("background-color");
-    expect(screen.getByText("Azi")).toBeDefined();
+    expect(screen.getByText(/Azi|Acum/)).toBeDefined();
     expect(screen.queryByText("WO-2026-000001")).toBeNull();
     expect(screen.queryByText("Ciclul 2")).toBeNull();
     expect(screen.queryByText("Deschide navigația")).toBeNull();

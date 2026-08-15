@@ -34,35 +34,81 @@
 
 .status-page__tabs {
   display: flex;
+  flex-wrap: nowrap;
   gap: var(--dl-space-2);
   overflow-x: auto;
   padding-bottom: var(--dl-space-1);
 }
 
 .status-page__tabs button {
-  min-width: 136px;
-  min-height: 56px;
-  border: 1px solid var(--dl-color-border);
+  --tab-accent: var(--dl-color-primary);
+  --tab-accent-border: color-mix(in srgb, var(--tab-accent) 28%, var(--dl-color-border));
+  --tab-accent-surface: color-mix(in srgb, var(--tab-accent) 12%, var(--dl-color-surface));
+  --tab-accent-text: color-mix(in srgb, var(--tab-accent) 82%, var(--dl-color-text));
+  min-width: 152px;
+  min-height: 72px;
+  border: 1px solid var(--tab-accent-border);
   border-radius: var(--dl-radius-md);
-  background: var(--dl-color-surface);
-  color: var(--dl-color-text-muted);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tab-accent) 16%, var(--dl-color-surface)) 0%, var(--tab-accent-surface) 100%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tab-accent) 8%, transparent);
+  color: var(--tab-accent-text);
   cursor: pointer;
   display: grid;
   gap: var(--dl-space-1);
+  justify-items: center;
   font: inherit;
   padding: var(--dl-space-2) var(--dl-space-3);
-  text-align: left;
+  text-align: center;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.status-page__tabs button:nth-child(7n + 1) {
+  --tab-accent: var(--dl-color-primary);
+}
+
+.status-page__tabs button:nth-child(7n + 2) {
+  --tab-accent: #2563eb;
+}
+
+.status-page__tabs button:nth-child(7n + 3) {
+  --tab-accent: #059669;
+}
+
+.status-page__tabs button:nth-child(7n + 4) {
+  --tab-accent: #d97706;
+}
+
+.status-page__tabs button:nth-child(7n + 5) {
+  --tab-accent: #e11d48;
+}
+
+.status-page__tabs button:nth-child(7n + 6) {
+  --tab-accent: #7c3aed;
+}
+
+.status-page__tabs button:nth-child(7n) {
+  --tab-accent: #0891b2;
 }
 
 .status-page__tabs button[aria-pressed="true"] {
-  border-color: var(--dl-color-primary);
-  background: var(--dl-color-primary-soft);
-  color: var(--dl-color-primary);
+  --tab-accent-surface: color-mix(in srgb, var(--tab-accent) 18%, var(--dl-color-surface));
+  transform: translateY(-1px);
 }
 
 .status-page__tabs strong {
-  color: var(--dl-color-text);
-  font-size: var(--dl-font-size-xl);
+  color: var(--tab-accent-text);
+  font-size: clamp(1.45rem, 2vw, 2.1rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.status-page__tabs span {
+  color: color-mix(in srgb, var(--tab-accent-text) 74%, var(--dl-color-text-muted));
+  font-size: 0.8rem;
+  font-weight: var(--dl-font-weight-semibold);
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .status-page__card-header-row {
@@ -131,6 +177,7 @@
 .status-page__owner {
   display: grid;
   gap: var(--dl-space-1);
+  min-width: 0;
 }
 
 .status-page__technician-badge {
@@ -220,6 +267,7 @@
 .status-page__deadline + .status-page__muted {
   display: grid;
   gap: var(--dl-space-1);
+  min-width: 0;
 }
 
 .status-page__card-grid {
@@ -266,11 +314,12 @@
 
 .status-page__metric {
   align-content: center;
-  background: var(--kpi-accent-surface);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--kpi-accent) 14%, var(--dl-color-surface)) 0%, var(--kpi-accent-surface) 100%);
   border: 1px solid var(--kpi-accent-border);
   border-radius: var(--dl-radius-md);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kpi-accent) 8%, transparent);
   justify-items: center;
-  min-height: 7.25rem;
+  min-height: 7.75rem;
   overflow: hidden;
   padding: calc(var(--dl-space-4) + 0.15rem) var(--dl-space-4) var(--dl-space-4);
   position: relative;
@@ -289,14 +338,16 @@
 
 .status-page__metric span {
   margin-top: 0;
-  font-size: var(--dl-font-size-sm);
-  font-weight: var(--dl-font-weight-semibold);
+  color: color-mix(in srgb, var(--kpi-accent-text) 72%, var(--dl-color-text-muted));
+  font-size: 0.72rem;
+  font-weight: var(--dl-font-weight-bold);
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
 .status-page__metric strong {
   color: var(--kpi-accent-text);
-  font-size: clamp(1.25rem, 1.6vw, 1.9rem);
+  font-size: clamp(1.45rem, 1.8vw, 2.15rem);
   line-height: 1;
   overflow-wrap: anywhere;
   min-width: 0;
@@ -392,6 +443,12 @@
 
   .status-page__filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .status-page__tabs {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    padding-bottom: 0;
   }
 }
 

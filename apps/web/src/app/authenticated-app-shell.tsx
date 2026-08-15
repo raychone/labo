@@ -44,7 +44,7 @@ export function AuthenticatedAppShell(): ReactNode {
   const settingsQuery = useSettings(canReadSettings);
   const laboratoryName = settingsQuery.data?.laboratoryName ?? fallbackLaboratoryName;
   const brandColor = getSafeBrandColor(settingsQuery.data?.primaryColor);
-  const workspaceLabel = useMemo(() => getWorkspaceLabel(auth.permissionKeys), [auth.permissionKeys]);
+  const roleLabel = useMemo(() => getRoleLabel(auth.permissionKeys), [auth.permissionKeys]);
   const currentRoute = getRouteByPath(location.pathname);
   const pageTitle = currentRoute?.label ?? (location.pathname === "/forbidden" ? "Acces restricționat" : "Pagina");
   const routes = useMemo(() => getNavigationRoutes(auth.permissionKeys), [auth.permissionKeys]);
@@ -108,7 +108,7 @@ export function AuthenticatedAppShell(): ReactNode {
         routes={routes}
         userEmail={auth.user?.email ?? ""}
         userName={auth.user?.displayName ?? ""}
-        userWorkspace={workspaceLabel}
+        userRole={roleLabel}
       />
       <div className="app-shell__content">
         <header className="app-shell__topbar">
@@ -151,7 +151,7 @@ export function AuthenticatedAppShell(): ReactNode {
           <OrganizationContextSwitch canRead={canReadOrganizationContext} compact />
           <NavigationList currentPath={location.pathname} routes={routes} />
           <div className="app-shell__drawer-user">
-            <UserSummary email={auth.user?.email ?? ""} name={auth.user?.displayName ?? ""} workspace={workspaceLabel} />
+            <UserSummary email={auth.user?.email ?? ""} name={auth.user?.displayName ?? ""} roleLabel={roleLabel} />
             <Button fullWidth isLoading={logoutMutation.isPending} onClick={() => setIsLogoutConfirmOpen(true)} variant="secondary">Deconectare</Button>
           </div>
         </div>
@@ -181,7 +181,7 @@ function AppSidebar({
   routes,
   userEmail,
   userName,
-  userWorkspace,
+  userRole,
 }: {
   readonly currentPath: string;
   readonly canReadOrganizationContext: boolean;
@@ -191,7 +191,7 @@ function AppSidebar({
   readonly routes: readonly ReturnType<typeof getNavigationRoutes>[number][];
   readonly userEmail: string;
   readonly userName: string;
-  readonly userWorkspace: string;
+  readonly userRole: string;
 }): ReactNode {
   return (
     <aside className="app-shell__sidebar">
@@ -199,7 +199,7 @@ function AppSidebar({
       <OrganizationContextSwitch canRead={canReadOrganizationContext} />
       <NavigationList currentPath={currentPath} routes={routes} />
       <div className="app-shell__sidebar-footer">
-        <UserSummary email={userEmail} name={userName} workspace={userWorkspace} />
+        <UserSummary email={userEmail} name={userName} roleLabel={userRole} />
         <Button fullWidth isLoading={isLoggingOut} onClick={onLogout} variant="secondary">Deconectare</Button>
       </div>
     </aside>
@@ -251,20 +251,20 @@ function NavigationList({
   );
 }
 
-function UserSummary({ email, name, workspace }: { readonly email: string; readonly name: string; readonly workspace: string }): ReactNode {
+function UserSummary({ email, name, roleLabel }: { readonly email: string; readonly name: string; readonly roleLabel: string }): ReactNode {
   return (
     <div className="app-shell__user">
       <span aria-hidden="true">{getBrandInitials(name || email)}</span>
       <div>
         <strong>{name}</strong>
-        <small>{workspace}</small>
+        <small>{roleLabel}</small>
         <small>{email}</small>
       </div>
     </div>
   );
 }
 
-function getWorkspaceLabel(permissionKeys: readonly string[]): string {
+function getRoleLabel(permissionKeys: readonly string[]): string {
   if (
     permissionKeys.includes("finance.read")
     || permissionKeys.includes("finance.read_reports")
@@ -281,12 +281,12 @@ function getWorkspaceLabel(permissionKeys: readonly string[]): string {
     return "Tehnician";
   }
 
-  if (permissionKeys.includes("logistics.center.read") || permissionKeys.includes("delivery.read") || permissionKeys.includes("delivery.read_own")) {
-    return "Logistică";
+  if (permissionKeys.includes("scan.use") || permissionKeys.includes("works.create") || permissionKeys.includes("works.read_assigned")) {
+    return "Recepție";
   }
 
-  if (permissionKeys.includes("scan.use") || permissionKeys.includes("works.create") || permissionKeys.includes("works.read_all")) {
-    return "Recepție";
+  if (permissionKeys.includes("logistics.center.read") || permissionKeys.includes("delivery.read") || permissionKeys.includes("delivery.read_own")) {
+    return "Logistică";
   }
 
   return "Utilizator";
