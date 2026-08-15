@@ -192,7 +192,7 @@ describe("StatusTvPage", () => {
     await waitFor(() => expect(screen.getByText("Maria Ionescu")).toBeDefined());
     expect(screen.getAllByText("Coroană zirconiu")).toHaveLength(6);
     expect(container.querySelectorAll(".status-tv-page__table tbody tr")).toHaveLength(6);
-    expect(screen.getByLabelText("Tehnician Ana").getAttribute("style")).toContain("background-color");
+    expect(container.querySelector(".status-tv-page__technician-swatch")?.getAttribute("style")).toContain("background-color");
     expect(screen.getByText(/Azi|Acum/)).toBeDefined();
     expect(screen.queryByText("WO-2026-000001")).toBeNull();
     expect(screen.queryByText("Ciclul 2")).toBeNull();
