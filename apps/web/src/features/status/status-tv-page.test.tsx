@@ -94,7 +94,7 @@ const baseStatusTvRow = {
     progressTotal: 4,
     status: "ACTIVE",
   },
-  workType: { id: "work_type_1", name: "Coroană zirconiu" },
+  workType: { id: "work_type_1", name: "Coroană zirconiu", symbol: "CZr" },
 } as const;
 
 const statusTvItems = Array.from({ length: 7 }, (_, index) => ({
@@ -151,7 +151,7 @@ function createFetchMock() {
       return Promise.resolve(createJsonResponse([{ activeAssignedStages: 0, displayName: "Tehnician Ana", email: "ana@example.test", id: "tech_1", preferredColor: "#0f766e" }]));
     }
     if (url.includes("/work-types/options")) {
-      return Promise.resolve(createJsonResponse([{ basePriceMinor: 120_00, code: "WT-1", id: "work_type_1", name: "Coroană zirconiu" }]));
+        return Promise.resolve(createJsonResponse([{ basePriceMinor: 120_00, code: "WT-1", id: "work_type_1", name: "Coroană zirconiu", symbol: "Zr" }]));
     }
     return Promise.resolve(createJsonResponse({}, 404));
   });
@@ -190,7 +190,7 @@ describe("StatusTvPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Panou operațional live" })).toBeDefined();
     await waitFor(() => expect(screen.getByText("Maria Ionescu")).toBeDefined());
-    expect(screen.getAllByText("Coroană zirconiu")).toHaveLength(6);
+    expect(screen.getAllByText("CZr")).toHaveLength(6);
     expect(container.querySelectorAll(".status-tv-page__table tbody tr")).toHaveLength(6);
     expect(container.querySelector(".status-tv-page__technician-swatch")?.getAttribute("style")).toContain("background-color");
     expect(screen.getByText(/Azi|Acum/)).toBeDefined();

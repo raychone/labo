@@ -46,7 +46,7 @@ Inactive users, deny overrides, resource ownership, and missing permission rows.
 
 ## Implemented Tasks
 
-RBAC-001 and later permission extensions.
+RBAC-001 and later permission extensions, including REALIGN-001B final workflow permission keys for technician operations/earnings, pickups, routes, discounts and storno.
 
 ## Planned Tasks
 

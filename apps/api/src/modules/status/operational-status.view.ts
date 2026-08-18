@@ -130,6 +130,7 @@ export const operationalStatusWorkInclude = {
     select: {
       id: true,
       name: true,
+      symbol: true,
     },
   },
 } as const satisfies Prisma.WorkOrderInclude;
@@ -211,6 +212,7 @@ export interface OperationalStatusRowView {
   readonly workType: {
     readonly id: string;
     readonly name: string;
+    readonly symbol: string;
   };
 }
 
@@ -365,6 +367,7 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
     workType: {
       id: work.workType.id,
       name: work.workType.name,
+      symbol: work.workType.symbol,
     },
   };
 }

@@ -718,6 +718,7 @@ async function seedDemoWorkTypes(prisma: PrismaClient, dataset: DemoDataset): Pr
         id: workType.id,
         isActive: workType.isActive,
         name: workType.name,
+        symbol: workType.symbol,
         unit: "UNIT",
       },
     });
@@ -735,6 +736,7 @@ async function seedDemoPricing(prisma: PrismaClient): Promise<void> {
         id: toDemoPricingWorkTypeId(item.key),
         isActive: true,
         name: item.displayName,
+        symbol: item.workTypeCode,
         unit: item.unit,
       },
     });

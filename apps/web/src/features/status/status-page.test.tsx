@@ -86,7 +86,7 @@ const operationalStatusResponse: OperationalStatusResponse = {
         progressTotal: 4,
         status: "ACTIVE",
       },
-      workType: { id: "work_type_1", name: "Coroană zirconiu" },
+      workType: { id: "work_type_1", name: "Coroană zirconiu", symbol: "CZr" },
     },
   ],
   meta: {
@@ -126,7 +126,7 @@ function createFetchMock() {
       return Promise.resolve(createJsonResponse([{ activeAssignedStages: 0, displayName: "Tehnician Ana", email: "ana@example.test", id: "tech_1", preferredColor: "#0f766e" }]));
     }
     if (url.includes("/work-types/options")) {
-      return Promise.resolve(createJsonResponse([{ basePriceMinor: 120_00, code: "WT-1", id: "work_type_1", name: "Coroană zirconiu" }]));
+        return Promise.resolve(createJsonResponse([{ basePriceMinor: 120_00, code: "WT-1", id: "work_type_1", name: "Coroană zirconiu", symbol: "Zr" }]));
     }
     return Promise.resolve(createJsonResponse({}, 404));
   });

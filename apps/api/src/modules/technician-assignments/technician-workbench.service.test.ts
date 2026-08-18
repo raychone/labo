@@ -22,19 +22,27 @@ function createStage(overrides: Partial<{
   readonly dueDate: Date;
   readonly id: string;
   readonly priority: "NORMAL" | "URGENT";
+  readonly assignedTechnicianId: string | null;
+  readonly assignedUserId: string | null;
+  readonly claimedByUserId: string | null;
+  readonly claimStatus: "UNCLAIMED" | "CLAIMED";
 }> = {}) {
   const code = overrides.code ?? "WO-2026-000001";
   const createdAt = overrides.createdAt ?? new Date("2026-08-01T08:00:00.000Z");
   const dueDate = overrides.dueDate ?? new Date("2026-08-01T18:00:00.000Z");
   const id = overrides.id ?? "stage_exec_1";
   const priority = overrides.priority ?? "NORMAL";
+  const assignedTechnicianId = overrides.assignedTechnicianId ?? null;
+  const assignedUserId = overrides.assignedUserId ?? null;
+  const claimedByUserId = overrides.claimedByUserId ?? null;
+  const claimStatus = overrides.claimStatus ?? "UNCLAIMED";
 
   return {
     allowedRoleCodesSnapshot: ["TEHNICIAN"],
     assignedAt: null,
     assignedBy: null,
     assignedUser: null,
-    assignedUserId: null,
+    assignedUserId,
     id,
     stageKeySnapshot: "model",
     stageNameSnapshot: "Model",
@@ -54,15 +62,18 @@ function createStage(overrides: Partial<{
         priority,
         requestedDeliveryDate: dueDate,
         workType: { id: "wt_1", name: "Tip" },
+        assignedTechnicianId,
+        claimStatus,
+        claimedByUserId,
       },
     },
     workflowExecutionId: `workflow_${id}`,
   } as any;
 }
 
-function createService(stageRecords: readonly ReturnType<typeof createStage>[]): TechnicianWorkbenchService {
+function createService(stageRecords: readonly ReturnType<typeof createStage>[], effectiveScopes: readonly string[] = ["ALL"]): TechnicianWorkbenchService {
   const authorizationService = {
-    hasPermission: vi.fn().mockResolvedValue({ effectiveScopes: ["ALL"] }),
+    hasPermission: vi.fn().mockResolvedValue({ effectiveScopes }),
   } as unknown as AuthorizationService;
   const prisma = {
     $transaction: vi.fn(async (operations: readonly Promise<unknown>[]) => Promise.all(operations)),
@@ -118,5 +129,43 @@ describe("TechnicianWorkbenchService", () => {
       "WO-2026-000200",
       "WO-2026-000201",
     ]);
+  });
+
+  it("keeps a claimed work visible in the technician queue even before the current stage is explicitly assigned", async () => {
+    const stage = createStage({
+      assignedTechnicianId: actor.id,
+      assignedUserId: null,
+      claimedByUserId: actor.id,
+      claimStatus: "CLAIMED",
+      code: "WO-2026-000006",
+      id: "stage_claimed",
+    });
+    const service = createService([stage], ["ASSIGNED"]);
+    const prisma = Reflect.get(service, "prisma") as {
+      readonly workStageExecution: {
+        readonly findMany: { readonly mock: { readonly calls: readonly unknown[][] } };
+      };
+    };
+    const query: TechnicianWorkbenchQueryDto = {
+      page: 1,
+      pageSize: 20,
+      sortBy: "requestedDeliveryDate",
+      sortOrder: "asc",
+    };
+
+    const result = await service.getWorkbench(actor, query);
+
+    expect(result.total).toBe(1);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.workCode).toBe("WO-2026-000006");
+
+    const where = (prisma.workStageExecution.findMany.mock.calls[0]?.[0] as { readonly where?: Record<string, unknown> } | undefined)?.where;
+    expect(where).toMatchObject({
+      OR: expect.arrayContaining([
+        { assignedUserId: actor.id },
+        { workflowExecution: { workOrder: { assignedTechnicianId: actor.id } } },
+        { workflowExecution: { workOrder: { claimedByUserId: actor.id } } },
+      ]),
+    });
   });
 });

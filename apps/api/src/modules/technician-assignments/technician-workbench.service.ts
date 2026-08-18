@@ -149,6 +149,16 @@ export class TechnicianWorkbenchService {
   }
 
   private createWorkbenchWhere(actorUserId: string, hasAll: boolean, query: TechnicianWorkbenchQueryDto, currentStageIds: readonly string[]): Prisma.WorkStageExecutionWhereInput {
+    const technicianOwnershipFilter: Prisma.WorkStageExecutionWhereInput = hasAll
+      ? {}
+      : {
+          OR: [
+            { assignedUserId: actorUserId },
+            { workflowExecution: { workOrder: { assignedTechnicianId: actorUserId } } },
+            { workflowExecution: { workOrder: { claimedByUserId: actorUserId } } },
+          ],
+        };
+
     return {
       id: { in: [...currentStageIds] },
       status: query.status ? query.status : { in: [...activeStageStatuses] },
@@ -162,7 +172,7 @@ export class TechnicianWorkbenchService {
             : query.technicianId
               ? { assignedUserId: query.technicianId }
               : {})
-        : { assignedUserId: actorUserId }),
+        : technicianOwnershipFilter),
       ...(query.stageKey ? { stageKeySnapshot: query.stageKey } : {}),
       ...(query.queue === "UNSTARTED" ? { status: WorkStageExecutionStatus.PENDING } : {}),
       ...(query.queue === "IN_PROGRESS" ? { status: WorkStageExecutionStatus.IN_PROGRESS } : {}),

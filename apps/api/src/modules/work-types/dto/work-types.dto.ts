@@ -81,6 +81,13 @@ export class WorkTypeMutationDto {
   public readonly name?: string;
 
   @IsOptional()
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(40)
+  public readonly symbol?: string;
+
+  @IsOptional()
   @Transform(({ value }) => trimOptionalString(value))
   @IsString()
   @MaxLength(1000)
@@ -104,6 +111,12 @@ export class CreateWorkTypeDto extends WorkTypeMutationDto {
   @MinLength(2)
   @MaxLength(160)
   public declare readonly name: string;
+
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(40)
+  public declare readonly symbol: string;
 
   @Type(() => Number)
   @IsInt()

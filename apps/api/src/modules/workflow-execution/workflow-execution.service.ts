@@ -542,12 +542,8 @@ export class WorkflowExecutionService {
       throw new ForbiddenException("Rolul curent nu poate executa etapa.");
     }
 
-    if (!hasAllScope && stage.assignedUserId !== actor.id) {
-      throw new ForbiddenException("Etapa trebuie să fie asignată utilizatorului curent.");
-    }
-
     return {
-      managerOverride: hasAllScope && (!hasAllowedRole || stage.assignedUserId !== actor.id),
+      managerOverride: hasAllScope && !hasAllowedRole,
     };
   }
 
@@ -603,14 +599,13 @@ export class WorkflowExecutionService {
     const hasAllowedRole = roleCodes.some((roleCode) => allowedRoleCodes.includes(roleCode));
     const canStartAll = canStart.effectiveScopes.includes("ALL");
     const canCompleteAll = canComplete.effectiveScopes.includes("ALL");
-    const isAssigned = currentStage.assignedUserId === actor.id;
-    const canUseStart = canStart.allowed && (canStartAll || (hasAllowedRole && isAssigned));
-    const canUseComplete = canComplete.allowed && (canCompleteAll || (hasAllowedRole && isAssigned));
+    const canUseStart = canStart.allowed && (canStartAll || hasAllowedRole);
+    const canUseComplete = canComplete.allowed && (canCompleteAll || hasAllowedRole);
 
     return {
       canCompleteCurrentStage: canUseComplete && currentStage.status === WorkStageExecutionStatus.IN_PROGRESS,
       canStartCurrentStage: canUseStart && currentStage.status === WorkStageExecutionStatus.PENDING,
-      reason: canUseStart || canUseComplete ? null : "Etapa nu este asignată utilizatorului curent.",
+      reason: canUseStart || canUseComplete ? null : "Rolul curent nu poate executa etapa.",
     };
   }
 

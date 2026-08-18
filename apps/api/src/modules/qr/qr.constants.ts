@@ -11,5 +11,5 @@ export const QR_TOKEN_MAX_GENERATION_ATTEMPTS = 5;
 export const QR_RESOLVE_LIMIT = 120;
 export const QR_RESOLVE_WINDOW_MS = 60_000;
 
-export const WORK_CODE_PATTERN = /^WO-\d{4}-\d{6}$/;
+export const WORK_CODE_PATTERN = /^WO-(?:\d{2}-\d{4}|\d{4}-\d{6})$/;
 export const WORK_QR_TOKEN_PATTERN = /^[A-Za-z0-9_-]{32,64}$/;

@@ -119,7 +119,7 @@ const workSummary = {
   totalPriceMinor: null,
   updatedAt: "2026-08-04T08:00:00.000Z",
   workflow: { currentStageName: "Modelaj", progressCompleted: 1, progressTotal: 4, status: "ACTIVE" },
-  workType: { code: "WT-1", id: "work_type_1", name: "Coroană zirconiu" },
+  workType: { code: "WT-1", id: "work_type_1", name: "Coroană zirconiu", symbol: "CZr" },
 };
 
 const statusRow = {
@@ -141,7 +141,7 @@ const statusRow = {
   workCode: "WO-2026-000001",
   workOwner: { displayName: "Tehnician Ana", publicId: "tech_1" },
   workflow: { currentStage: { key: "modelaj", name: "Modelaj", status: "IN_PROGRESS" }, progress: "1/4", progressCompleted: 1, progressTotal: 4, status: "ACTIVE" },
-  workType: { id: "work_type_1", name: "Coroană zirconiu" },
+  workType: { id: "work_type_1", name: "Coroană zirconiu", symbol: "CZr" },
 };
 
 const technicianItem = {

@@ -41,6 +41,7 @@ export interface DemoWorkTypeSeed {
   readonly id: string;
   readonly isActive: boolean;
   readonly name: string;
+  readonly symbol: string;
 }
 
 export interface DemoWorkSeed {
@@ -229,7 +230,7 @@ function buildWorks(now: Date, clinics: readonly DemoClinicSeed[], doctors: read
       baseUnitPriceMinor: pricingOverride?.baseUnitPriceMinor ?? workTypeSeed.basePriceMinor,
       clinicalNotes: `Demo clinic note ${index + 1}.`,
       clinicId: clinic.id,
-      code: `WO-${now.getFullYear()}-${String(DEMO_WORK_SEQUENCE_START + index).padStart(6, "0")}`,
+      code: `WO-${String(now.getUTCFullYear() % 100).padStart(2, "0")}-${String(DEMO_WORK_SEQUENCE_START + index).padStart(4, "0")}`,
       createdAt,
       doctorId: doctorSeed.id,
       externalReference: `EXT-DEMO-${String(index + 1).padStart(3, "0")}`,
@@ -302,6 +303,7 @@ function workType(id: string, code: string, name: string, basePriceMinor: number
     id,
     isActive: true,
     name,
+    symbol: code,
   };
 }
 

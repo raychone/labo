@@ -10,6 +10,7 @@ function createWork() {
     clinic: { name: "Clinica Test" },
     code: "WO-2026-000001",
     doctor: { displayName: "Dr. Ana Popescu" },
+    assignedTechnicianId: "actor_1",
     deliveryPreparationItems: [],
     id: "work_1",
     activeCycle: {
@@ -103,5 +104,105 @@ describe("ScanService", () => {
         },
       }),
     });
+  });
+
+  it("allows a technician to resolve a work they have already claimed", async () => {
+    const authorization = {
+      hasPermission: vi.fn(({ permission }: { readonly permission: string }) => Promise.resolve({
+        allowed: ["scan.resolve", "works.read_all"].includes(permission),
+        effectiveScopes: ["ASSIGNED"],
+      })),
+    };
+    const service = new ScanService(
+      authorization as unknown as AuthorizationService,
+      {
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+        user: {
+          findUnique: vi.fn().mockResolvedValue({
+            roles: [{ role: { isActive: true, key: "TEHNICIAN" } }],
+          }),
+        },
+        workOrder: { findFirst: vi.fn().mockResolvedValue(createWork()) },
+      } as unknown as PrismaService,
+      { assertAllowed: vi.fn() } as unknown as QrRateLimitService,
+    );
+
+    await expect(
+      service.resolveScan(
+        {
+          actor: {
+            displayName: "Tehnician Demo",
+            email: "tech@example.test",
+            id: "actor_1",
+            isActive: true,
+            mustChangePassword: false,
+            preferredColor: null,
+          },
+          requestMetadata: { ipAddress: "127.0.0.1", userAgent: "vitest" },
+        },
+        { payload: "dl-work:secure_token_12345678901234567890", source: "manual" },
+      ),
+    ).resolves.toMatchObject({
+      work: { code: "WO-2026-000001" },
+    });
+  });
+
+  it("enables stage actions for a claimed work even when the current stage is still unassigned", async () => {
+    const authorization = {
+      hasPermission: vi.fn(({ permission }: { readonly permission: string }) => Promise.resolve({
+        allowed: ["scan.resolve", "works.read_all", "workflow.start_stage", "workflow.complete_stage"].includes(permission),
+        effectiveScopes: ["ASSIGNED"],
+      })),
+    };
+    const service = new ScanService(
+      authorization as unknown as AuthorizationService,
+      {
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+        user: {
+          findUnique: vi.fn().mockResolvedValue({
+            roles: [{ role: { isActive: true, key: "TEHNICIAN" } }],
+          }),
+        },
+        workOrder: {
+          findFirst: vi.fn().mockResolvedValue({
+            ...createWork(),
+            assignedTechnicianId: "actor_1",
+            claimedByUserId: "actor_1",
+            activeCycle: {
+              ...createWork().activeCycle,
+              workflowExecution: {
+                ...createWork().activeCycle.workflowExecution,
+                stages: [
+                  {
+                    ...createWork().activeCycle.workflowExecution.stages[0],
+                    assignedUser: null,
+                    assignedUserId: null,
+                  },
+                ],
+              },
+            },
+          }),
+        },
+      } as unknown as PrismaService,
+      { assertAllowed: vi.fn() } as unknown as QrRateLimitService,
+    );
+
+    const result = await service.resolveScan(
+      {
+        actor: {
+          displayName: "Tehnician Demo",
+          email: "tech@example.test",
+          id: "actor_1",
+          isActive: true,
+          mustChangePassword: false,
+          preferredColor: null,
+        },
+        requestMetadata: { ipAddress: "127.0.0.1", userAgent: "vitest" },
+      },
+      { payload: "dl-work:secure_token_12345678901234567890", source: "manual" },
+    );
+
+    expect(result.actions.find((action) => action.type === "START_STAGE")?.enabled).toBe(true);
+    expect(result.actions.find((action) => action.type === "COMPLETE_STAGE")?.enabled).toBe(false);
   });
 });

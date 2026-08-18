@@ -18,7 +18,7 @@ Opaque token, QR image, print action, scan resolution, work-opened event, curren
 
 ## Business Rules
 
-QR must not expose sensitive work data directly. Resolution requires backend auth.
+QR must not expose sensitive work data directly. Resolution requires backend auth. QR payloads use the opaque `dl-work:` token; manual fallback accepts both new `WO-YY-NNNN` codes and legacy `WO-YYYY-NNNNNN` codes.
 
 ## Data Model
 
@@ -46,7 +46,7 @@ Invalid token, expired/replaced token, camera unavailable, manual fallback.
 
 ## Implemented Tasks
 
-QR-001, SCAN-002, WORKFORM-REAL-001B scan integration.
+QR-001, SCAN-002, WORKFORM-REAL-001B scan integration, WORK-ID-001A compatibility.
 
 ## Planned Tasks
 

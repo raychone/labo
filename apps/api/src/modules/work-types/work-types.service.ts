@@ -22,7 +22,7 @@ interface ActorContext {
 
 type AuditClient = Pick<Prisma.TransactionClient, "auditLog"> | Pick<PrismaService, "auditLog">;
 
-const WORK_TYPE_MUTATION_FIELDS = ["basePriceMinor", "description", "name", "unit"] as const satisfies readonly (keyof UpdateWorkTypeDto)[];
+const WORK_TYPE_MUTATION_FIELDS = ["basePriceMinor", "description", "name", "symbol", "unit"] as const satisfies readonly (keyof UpdateWorkTypeDto)[];
 
 @Injectable()
 export class WorkTypesService {
@@ -42,6 +42,7 @@ export class WorkTypesService {
             OR: [
               { code: { contains: search, mode: "insensitive" } },
               { name: { contains: search, mode: "insensitive" } },
+              { symbol: { contains: search, mode: "insensitive" } },
               { description: { contains: search, mode: "insensitive" } },
             ],
           }
@@ -95,6 +96,7 @@ export class WorkTypesService {
         code,
         createdByUserId: context.actorUserId,
         name: dto.name,
+        symbol: dto.symbol,
         unit: dto.unit,
         updatedByUserId: context.actorUserId,
       };
@@ -108,7 +110,7 @@ export class WorkTypesService {
       await this.recordAudit(tx, {
         action: WORK_TYPES_AUDIT_ACTIONS.created,
         actorUserId: context.actorUserId,
-        metadata: { basePriceMinor: dto.basePriceMinor, code, name: dto.name },
+        metadata: { basePriceMinor: dto.basePriceMinor, code, name: dto.name, symbol: dto.symbol },
         requestMetadata: context.requestMetadata,
         resourceId: createdWorkType.id,
       });
@@ -148,6 +150,7 @@ export class WorkTypesService {
           metadata: {
             changedFields,
             code: before.code,
+            symbol: before.symbol,
             ...(priceChanged
               ? {
                   newBasePriceMinor: updatedWorkType.basePriceMinor,
@@ -192,7 +195,7 @@ export class WorkTypesService {
       await this.recordAudit(tx, {
         action: WORK_TYPES_AUDIT_ACTIONS.archived,
         actorUserId: context.actorUserId,
-        metadata: { code: workType.code },
+          metadata: { code: workType.code, symbol: workType.symbol },
         requestMetadata: context.requestMetadata,
         resourceId: workTypeId,
       });
@@ -229,7 +232,7 @@ export class WorkTypesService {
       await this.recordAudit(tx, {
         action: WORK_TYPES_AUDIT_ACTIONS.restored,
         actorUserId: context.actorUserId,
-        metadata: { code: workType.code },
+        metadata: { code: workType.code, symbol: workType.symbol },
         requestMetadata: context.requestMetadata,
         resourceId: workTypeId,
       });
@@ -295,6 +298,11 @@ export class WorkTypesService {
       case "name":
         if (typeof value === "string") {
           data.name = value;
+        }
+        return;
+      case "symbol":
+        if (typeof value === "string") {
+          data.symbol = value;
         }
         return;
       case "unit":

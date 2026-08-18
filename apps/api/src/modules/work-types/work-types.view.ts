@@ -7,6 +7,7 @@ export interface WorkTypeOptionView {
   readonly code: string;
   readonly id: string;
   readonly name: string;
+  readonly symbol: string;
   readonly unit: string;
 }
 
@@ -33,12 +34,13 @@ export interface PaginatedWorkTypesView {
   readonly total: number;
 }
 
-export function toWorkTypeOptionView(workType: Pick<WorkTypeRecord, "basePriceMinor" | "code" | "id" | "name" | "unit">): WorkTypeOptionView {
+export function toWorkTypeOptionView(workType: Pick<WorkTypeRecord, "basePriceMinor" | "code" | "id" | "name" | "symbol" | "unit">): WorkTypeOptionView {
   return {
     basePriceMinor: workType.basePriceMinor,
     code: workType.code,
     id: workType.id,
     name: workType.name,
+    symbol: workType.symbol,
     unit: workType.unit,
   };
 }

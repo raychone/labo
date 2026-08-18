@@ -22,6 +22,7 @@ const responseBody = {
   id: "work_type_1",
   isActive: true,
   name: "Coroana zirconiu",
+  symbol: "Zr",
   unit: "UNIT",
   updatedAt: "2026-01-01T00:00:00.000Z",
 };
@@ -125,7 +126,7 @@ describe("WorkTypesController", () => {
     await request(app.getHttpServer() as App)
       .post("/work-types")
       .set("Cookie", ["dl_session=session-token"])
-      .send({ basePriceMinor: 35000, name: "Coroana zirconiu", unit: "UNIT" })
+      .send({ basePriceMinor: 35000, name: "Coroana zirconiu", symbol: "Zr", unit: "UNIT" })
       .expect(403);
   });
 
@@ -134,7 +135,7 @@ describe("WorkTypesController", () => {
       .post("/work-types")
       .set("Cookie", ["dl_session=session-token", "dl_csrf=csrf-token"])
       .set("x-csrf-token", "csrf-token")
-      .send({ basePriceMinor: 35000, name: "Coroana zirconiu", unit: "UNIT" })
+      .send({ basePriceMinor: 35000, name: "Coroana zirconiu", symbol: "Zr", unit: "UNIT" })
       .expect(201)
       .expect(responseBody);
     expect(requirePermission).toHaveBeenCalledWith(expect.objectContaining({ permission: "pricing.create" }));

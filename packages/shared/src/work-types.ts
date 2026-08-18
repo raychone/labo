@@ -1,5 +1,5 @@
 export const WORK_TYPE_UNITS = ["ELEMENT", "UNIT", "ARCH", "CASE", "REPAIR", "OTHER"] as const;
-export const WORK_TYPE_SORT_FIELDS = ["basePriceMinor", "code", "createdAt", "name", "updatedAt"] as const;
+export const WORK_TYPE_SORT_FIELDS = ["basePriceMinor", "code", "createdAt", "name", "symbol", "updatedAt"] as const;
 
 export type WorkTypeUnit = (typeof WORK_TYPE_UNITS)[number];
 export type WorkTypeSortField = (typeof WORK_TYPE_SORT_FIELDS)[number];
@@ -9,6 +9,7 @@ export interface WorkTypeOption {
   readonly code: string;
   readonly id: string;
   readonly name: string;
+  readonly symbol: string;
   readonly unit: WorkTypeUnit;
 }
 
@@ -31,6 +32,7 @@ export interface CreateWorkTypeInput {
   readonly basePriceMinor: number;
   readonly description?: string | null;
   readonly name: string;
+  readonly symbol: string;
   readonly unit: WorkTypeUnit;
 }
 

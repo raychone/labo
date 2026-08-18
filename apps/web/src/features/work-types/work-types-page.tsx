@@ -90,6 +90,7 @@ function toMutationInput(values: WorkTypeFormValues): CreateWorkTypeInput {
     basePriceMinor: conversion.value,
     description: values.description,
     name: values.name,
+    symbol: values.symbol,
     unit: values.unit,
   };
 }
@@ -126,6 +127,7 @@ export function WorkTypesPage(): ReactNode {
   const locale = settingsQuery.data?.locale ?? "ro-RO";
   const columns = useMemo<readonly DataTableColumn<WorkTypeSummary>[]>(() => [
     { header: "Cod", id: "code", isSortable: true, renderCell: (workType) => workType.code },
+    { header: "Simbol", id: "symbol", isSortable: true, renderCell: (workType) => workType.symbol },
     { header: "Denumire", id: "name", isSortable: true, renderCell: (workType) => workType.name },
     {
       align: "right",
@@ -168,7 +170,7 @@ export function WorkTypesPage(): ReactNode {
               label="Tip lucrare"
               onChange={(event) => setSelectedOptionId(event.target.value)}
               options={(optionsQuery.data ?? []).map((option) => ({
-                label: `${option.code} · ${option.name} · ${formatMoneyMinor(option.basePriceMinor, currency, locale)}`,
+                label: `${option.name} · ${option.symbol} · ${formatMoneyMinor(option.basePriceMinor, currency, locale)}`,
                 value: option.id,
               }))}
               placeholder="Alege tipul de lucrare"
@@ -187,7 +189,7 @@ export function WorkTypesPage(): ReactNode {
               <TextInput
                 label="Căutare"
                 onChange={(event) => setParams((current) => ({ ...current, page: 1, search: event.target.value || undefined }))}
-                placeholder="Cod, denumire, descriere"
+                placeholder="Cod, simbol, denumire, descriere"
                 type="search"
                 value={params.search ?? ""}
               />

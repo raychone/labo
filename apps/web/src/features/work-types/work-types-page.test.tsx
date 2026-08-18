@@ -64,6 +64,7 @@ const workType = {
   id: "work_type_1",
   isActive: true,
   name: "Coroana zirconiu",
+  symbol: "Zr",
   unit: "UNIT",
   updatedAt: "2026-01-01T00:00:00.000Z",
 };
@@ -103,7 +104,7 @@ describe("WorkTypesPage", () => {
     expect(await screen.findByRole("heading", { name: "Tipuri de lucrări" })).toBeDefined();
     expect(await screen.findByText("WT-0001")).toBeDefined();
     expect(await screen.findByText("Coroana zirconiu")).toBeDefined();
-    expect(await screen.findByRole("option", { name: /WT-0001 · Coroana zirconiu/ })).toBeDefined();
+    expect(await screen.findByRole("option", { name: /Coroana zirconiu · Zr/ })).toBeDefined();
     expect(await screen.findByRole("button", { name: "Adaugă tip de lucrare" })).toBeDefined();
   });
 

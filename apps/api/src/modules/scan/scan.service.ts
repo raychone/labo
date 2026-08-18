@@ -269,6 +269,10 @@ export class ScanService {
       return;
     }
 
+    if (work.assignedTechnicianId === actor.id) {
+      return;
+    }
+
     const currentStage = this.getCurrentStage(work);
     if (currentStage?.assignedUserId !== actor.id) {
       throw new ForbiddenException("Lucrarea scanată nu este asignată utilizatorului curent.");
@@ -285,8 +289,8 @@ export class ScanService {
       this.authorizationService.hasPermission({ permission: "works.read_all", requiredScope: "ALL", userId: actor.id }),
       this.authorizationService.hasPermission({ permission: "workflow.assign_stage", requiredScope: "ALL", userId: actor.id }),
       this.authorizationService.hasPermission({ permission: "workflow.reassign_stage", requiredScope: "ALL", userId: actor.id }),
-      this.getStageAction("workflow.start_stage", actor, roleCodes, currentStage, work.activeCycle?.workflowExecution?.status ?? null, WorkStageExecutionStatus.PENDING),
-      this.getStageAction("workflow.complete_stage", actor, roleCodes, currentStage, work.activeCycle?.workflowExecution?.status ?? null, WorkStageExecutionStatus.IN_PROGRESS),
+      this.getStageAction("workflow.start_stage", actor, roleCodes, work, currentStage, work.activeCycle?.workflowExecution?.status ?? null, WorkStageExecutionStatus.PENDING),
+      this.getStageAction("workflow.complete_stage", actor, roleCodes, work, currentStage, work.activeCycle?.workflowExecution?.status ?? null, WorkStageExecutionStatus.IN_PROGRESS),
     ]);
     const assignAction = this.getAssignmentAction("ASSIGN_STAGE", currentStage, canAssign.allowed);
     const reassignAction = this.getAssignmentAction("REASSIGN_STAGE", currentStage, canReassign.allowed);
@@ -309,6 +313,7 @@ export class ScanService {
     permission: PermissionKey,
     actor: AuthenticatedUser,
     roleCodes: readonly string[],
+    work: ScanWorkRecord,
     currentStage: ScanStageRecord | null,
     workflowStatus: WorkWorkflowExecutionStatus | null,
     requiredStatus: WorkStageExecutionStatus,
@@ -341,10 +346,14 @@ export class ScanService {
     if (!roleCodes.some((roleCode) => allowedRoleCodes.includes(roleCode))) {
       return { enabled: false, reason: "Rolul curent nu poate executa etapa.", type };
     }
-    if (!currentStage.assignedUserId) {
+    const ownsWork = work.assignedTechnicianId === actor.id || work.claimedByUserId === actor.id;
+    if (currentStage.assignedUserId === null) {
+      if (ownsWork) {
+        return { enabled: true, reason: null, type };
+      }
       return { enabled: false, reason: "Etapa nu are responsabil asignat.", type };
     }
-    if (currentStage.assignedUserId !== actor.id) {
+    if (currentStage.assignedUserId !== actor.id && !ownsWork) {
       return { enabled: false, reason: "Etapa este asignată altui utilizator.", type };
     }
 

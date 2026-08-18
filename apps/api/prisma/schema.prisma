@@ -330,6 +330,7 @@ model Doctor {
 model WorkType {
   id                String             @id @default(cuid())
   code              String             @unique @db.VarChar(20)
+  symbol            String             @unique @db.VarChar(40)
   name              String             @db.VarChar(160)
   description       String?            @db.VarChar(1000)
   basePriceMinor    Int                @map("base_price_minor")
@@ -351,6 +352,7 @@ model WorkType {
   priceCatalogItems PriceCatalogItem[]
 
   @@index([name])
+  @@index([symbol])
   @@index([basePriceMinor])
   @@index([isActive])
   @@index([createdAt])
@@ -826,6 +828,14 @@ model WorkOrder {
   @@index([invoicedDocumentId])
   @@index([activeCycleId])
   @@map("work_orders")
+}
+
+model WorkOrderCodeCounter {
+  year      Int      @id
+  lastValue Int      @map("last_value")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("work_order_code_counters")
 }
 
 model WorkCycle {

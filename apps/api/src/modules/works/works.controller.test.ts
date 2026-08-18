@@ -54,7 +54,7 @@ const responseBody = {
   updatedAt: "2026-07-22T12:00:00.000Z",
   updatedByUserId: "user_1",
   version: 1,
-  workType: { code: "WT-0001", id: "work_type_1", name: "Coroana zirconiu" },
+  workType: { code: "WT-0001", id: "work_type_1", name: "Coroana zirconiu", symbol: "CZr" },
 };
 
 describe("WorksController", () => {

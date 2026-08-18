@@ -143,7 +143,7 @@ export function WorkForm({
 
   useEffect(() => {
     if (workTypeId !== "" && selectedWorkType) {
-      setWorkTypeSearch(`${selectedWorkType.code} · ${selectedWorkType.name}`);
+      setWorkTypeSearch(selectedWorkType.name);
     }
   }, [selectedWorkType, workTypeId]);
 
@@ -153,8 +153,8 @@ export function WorkForm({
     value: patient.id,
   })), patientSearch), [patientOptions, patientSearch]);
   const visibleWorkTypeOptions = useMemo(() => filterSearchableOptions(workTypeOptions.map((workType) => ({
-    label: `${workType.code} · ${workType.name}`,
-    secondary: formatWorkTypeUnit(workType.unit),
+    label: workType.name,
+    secondary: `${workType.symbol} · ${formatWorkTypeUnit(workType.unit)}`,
     value: workType.id,
   })), workTypeSearch), [workTypeOptions, workTypeSearch]);
 

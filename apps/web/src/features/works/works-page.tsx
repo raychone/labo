@@ -719,7 +719,7 @@ function CreateWorkModal({
 }: {
   readonly clinicOptions: readonly { readonly code: string; readonly id: string; readonly name: string }[];
   readonly currency: string;
-  readonly formWorkTypeOptions: readonly { readonly code: string; readonly id: string; readonly name: string; readonly unit: string }[];
+  readonly formWorkTypeOptions: readonly { readonly code: string; readonly id: string; readonly name: string; readonly symbol: string; readonly unit: string }[];
   readonly initialClinicId: string | undefined;
   readonly initialDoctorId: string | undefined;
   readonly initialPatient: PatientDetail | undefined;
@@ -880,7 +880,7 @@ function WorkDetailsDrawer({
   readonly canUpdate: boolean;
   readonly clinicOptions: readonly { readonly code: string; readonly id: string; readonly name: string }[];
   readonly currency: string;
-  readonly formWorkTypeOptions: readonly { readonly code: string; readonly id: string; readonly name: string; readonly unit: string }[];
+  readonly formWorkTypeOptions: readonly { readonly code: string; readonly id: string; readonly name: string; readonly symbol: string; readonly unit: string }[];
   readonly isOpen: boolean;
   readonly isSaving: boolean;
   readonly locale: string;

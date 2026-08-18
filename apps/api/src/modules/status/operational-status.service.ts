@@ -126,6 +126,7 @@ export class OperationalStatusService {
                   { clinic: { name: { contains: search, mode: "insensitive" } } },
                   { doctor: { displayName: { contains: search, mode: "insensitive" } } },
                   { workType: { name: { contains: search, mode: "insensitive" } } },
+                  { workType: { symbol: { contains: search, mode: "insensitive" } } },
                 ],
               }
             : {}),

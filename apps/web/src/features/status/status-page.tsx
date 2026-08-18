@@ -187,6 +187,10 @@ function formatDateTime(value: string | null): string {
   return value ? new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "Fără termen";
 }
 
+function getWorkTypeCompactLabel(workType: OperationalStatusRow["workType"]): string {
+  return workType.symbol.trim() || workType.name;
+}
+
 function toDataSort(query: OperationalStatusQuery): DataTableSort {
   return {
     columnId: query.sortBy,
@@ -372,12 +376,12 @@ export function StatusPage(): ReactNode {
   const currentRowWorkTypeOptions = useMemo(() => {
     const workTypes = new Map<string, string>();
     for (const row of rows) {
-      workTypes.set(row.workType.id, row.workType.name);
+      workTypes.set(row.workType.id, `${row.workType.symbol} · ${row.workType.name}`);
     }
     return Array.from(workTypes.entries()).map(([value, label]) => ({ label, value }));
   }, [rows]);
   const workTypeOptions = canReadPricingOptions
-    ? (workTypesQuery.data ?? []).map((workType) => ({ label: `${workType.code} · ${workType.name}`, value: workType.id }))
+    ? (workTypesQuery.data ?? []).map((workType) => ({ label: `${workType.symbol} · ${workType.name}`, value: workType.id }))
     : currentRowWorkTypeOptions;
   const visibleRows = useMemo(() => getFilteredRows(rows, currentStageName), [currentStageName, rows]);
 
@@ -413,7 +417,7 @@ export function StatusPage(): ReactNode {
     {
       header: "Tip",
       id: "workType",
-      renderCell: (row) => <BadgePill label={row.workType.name} tone="neutral" />,
+      renderCell: (row) => <BadgePill label={getWorkTypeCompactLabel(row.workType)} tone="neutral" />,
     },
     {
       header: "Flux",
@@ -686,7 +690,7 @@ function StatusCards({ error, isLoading, onOpenDetails, rows }: { readonly error
           <div className="status-page__card-header">
             <div>
               <strong>{row.patient.name}</strong>
-              <span>{row.workType.name}</span>
+              <span>{getWorkTypeCompactLabel(row.workType)}</span>
             </div>
             <PriorityBadge label={toPriorityLabel(row.priority)} variant={row.priority === "URGENT" ? "urgent" : "normal"} />
           </div>
@@ -695,7 +699,7 @@ function StatusCards({ error, isLoading, onOpenDetails, rows }: { readonly error
               label="Tehnician"
               value={row.workOwner?.preferredColor ? <span className="status-page__technician-badge" aria-label={row.workOwner.displayName} title={row.workOwner.displayName} style={{ backgroundColor: getSafeColor(row.workOwner.preferredColor) ?? "transparent" }} /> : <span className="status-page__technician-badge status-page__technician-badge--empty" title="Fără tehnician" />}
             />
-            <Metric label="Tip" value={<BadgePill label={row.workType.name} tone="neutral" />} />
+            <Metric label="Tip" value={<BadgePill label={getWorkTypeCompactLabel(row.workType)} tone="neutral" />} />
             <Metric
               label="Flux"
               value={
@@ -732,7 +736,7 @@ function StatusDetailDrawer({ onOpenChange, row }: { readonly onOpenChange: (ope
           <Metric label="Pacient" value={row.patient.name} />
           <Metric label="Cabinet" value={row.clinic.name} />
           <Metric label="Medic" value={row.doctor.name} />
-          <Metric label="Tip" value={row.workType.name} />
+          <Metric label="Tip" value={getWorkTypeCompactLabel(row.workType)} />
           <Metric
             label="Tehnician"
             value={row.workOwner

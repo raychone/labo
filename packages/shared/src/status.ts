@@ -119,6 +119,7 @@ export interface OperationalStatusRow {
   readonly workType: {
     readonly id: string;
     readonly name: string;
+    readonly symbol: string;
   };
 }
 

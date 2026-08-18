@@ -43,6 +43,9 @@ const expectedPermissionKeys = [
   "works.deadline.recalculate",
   "works.deadline.set_manual",
   "works.deadline.override_lock",
+  "works.technical_details.read",
+  "works.technical_details.update",
+  "works.production.finalize",
   "works.claim.available.read",
   "works.claim.own.read",
   "works.claim.create",
@@ -74,6 +77,12 @@ const expectedPermissionKeys = [
   "workflow.reopen_stage",
   "technician.workbench.read",
   "technician.workload.read",
+  "technician.operations.read",
+  "technician.operations.manage_own",
+  "technician.rates.read",
+  "technician.rates.manage",
+  "technician.earnings.read_own",
+  "technician.earnings.read_all",
   "logistics.read",
   "logistics.plan",
   "logistics.assign",
@@ -84,6 +93,19 @@ const expectedPermissionKeys = [
   "logistics.unblock_work",
   "logistics.prepare_work",
   "logistics.manage_groups",
+  "logistics.alerts.update",
+  "logistics.delivery_marker.update",
+  "pickup.create",
+  "pickup.read",
+  "pickup.update",
+  "pickup.cancel",
+  "routes.create",
+  "routes.read",
+  "routes.assign",
+  "routes.update",
+  "routes.cancel",
+  "routes.execute_own",
+  "routes.correct_outcome",
   "reception.receive",
   "reception.edit_intake",
   "reception.handover_to_logistics",
@@ -118,6 +140,10 @@ const expectedPermissionKeys = [
   "invoice.download",
   "invoice.cancel",
   "invoice.configure_series",
+  "invoice.storno.create",
+  "invoice.storno.read",
+  "discounts.read",
+  "discounts.manage",
   "pricing.read",
   "pricing.create",
   "pricing.update",
@@ -215,11 +241,31 @@ describe("PERMISSION_REGISTRY", () => {
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["forms.read"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["forms.archive"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["technician.workbench.read"]).toBe("ASSIGNED");
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["technician.operations.read"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["technician.operations.manage_own"]).toBe("ASSIGNED");
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["technician.earnings.read_own"]).toBe("ASSIGNED");
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["technician.earnings.read_all"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["technician.rates.manage"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.claim.available.read"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.claim.create"]).toBe("ASSIGNED");
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.claim.release_own"]).toBe("ASSIGNED");
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.claim.release_any"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.technical_details.update"]).toBe("ASSIGNED");
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.production.finalize"]).toBe("ASSIGNED");
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["logistics.alerts.update"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["logistics.delivery_marker.update"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["pickup.create"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["routes.create"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["routes.correct_outcome"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.CURIER["routes.read"]).toBe("OWN_DELIVERY");
+    expect(ROLE_PERMISSION_MATRIX.CURIER["routes.execute_own"]).toBe("OWN_DELIVERY");
+    expect(ROLE_PERMISSION_MATRIX.CURIER["pickup.read"]).toBe("OWN_DELIVERY");
+    expect(ROLE_PERMISSION_MATRIX.CURIER["routes.create"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.MANAGER["works.claim.reassign"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.MANAGER["technician.rates.manage"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.MANAGER["technician.earnings.read_all"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.MANAGER["discounts.manage"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.MANAGER["invoice.storno.create"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["scan.use"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["scan.resolve"]).toBe("ASSIGNED");
     expect(ROLE_PERMISSION_MATRIX.MEDIC["scan.use"]).toBeNull();

@@ -155,7 +155,7 @@ function createWorkRecord(input: {
     updatedAt: new Date("2026-08-02T08:00:00.000Z"),
     updatedByUserId: null,
     version: 1,
-    workType: { id: "type_1", name: "Coroană" },
+    workType: { id: "type_1", name: "Coroană", symbol: "Cr" },
     workTypeId: "type_1",
   } as unknown as OperationalStatusWorkRecord;
 }

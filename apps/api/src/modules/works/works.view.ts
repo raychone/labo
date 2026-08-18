@@ -196,6 +196,7 @@ export interface WorkTypeFormOptionView {
   readonly code: string;
   readonly id: string;
   readonly name: string;
+  readonly symbol: string;
   readonly unit: string;
 }
 
@@ -238,6 +239,7 @@ export interface WorkSummaryView {
     readonly code: string;
     readonly id: string;
     readonly name: string;
+    readonly symbol: string;
   };
 }
 
@@ -458,11 +460,12 @@ export interface PaginatedWorksView {
   readonly total: number;
 }
 
-export function toWorkTypeFormOptionView(workType: { readonly code: string; readonly id: string; readonly name: string; readonly unit: string }): WorkTypeFormOptionView {
+export function toWorkTypeFormOptionView(workType: { readonly code: string; readonly id: string; readonly name: string; readonly symbol: string; readonly unit: string }): WorkTypeFormOptionView {
   return {
     code: workType.code,
     id: workType.id,
     name: workType.name,
+    symbol: workType.symbol,
     unit: workType.unit,
   };
 }
@@ -509,6 +512,7 @@ export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: bo
       code: workOrder.workType.code,
       id: workOrder.workType.id,
       name: workOrder.workType.name,
+      symbol: workOrder.workType.symbol,
     },
   };
 }

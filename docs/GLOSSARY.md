@@ -2,7 +2,7 @@
 
 | Term | Meaning |
 |---|---|
-| Work order / lucrare | Operational dental lab work record, identified by a work code such as `WO-2026-000001`. |
+| Work order / lucrare | Operational dental lab work record, identified by a work code such as `WO-26-0001`. |
 | Clinica | External dental clinic/cabinet. |
 | Medic | External doctor associated with a clinic. |
 | Pacient | Patient identity record linked to work orders. |

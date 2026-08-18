@@ -12,7 +12,7 @@ describe("scan helpers", () => {
   it("normalizes and validates scan payload prefixes", () => {
     expect(normalizeScanPayload("  dl-work:abc  ")).toBe("dl-work:abc");
     expect(validateScanPayloadPrefix("  dl-work:abc", "dl-work:")).toBe(true);
-    expect(validateScanPayloadPrefix("WO-2026-000001", "dl-work:")).toBe(false);
+    expect(validateScanPayloadPrefix("WO-26-0001", "dl-work:")).toBe(false);
   });
 
   it("detects duplicate scans inside the configured window", () => {

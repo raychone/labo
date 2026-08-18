@@ -45,6 +45,7 @@ export interface WorkTypeSnapshot {
   readonly code: string;
   readonly id: string;
   readonly name: string;
+  readonly symbol: string;
 }
 
 export interface WorkTypeFormOption extends WorkTypeSnapshot {

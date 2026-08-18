@@ -49,6 +49,9 @@ export type PermissionKey =
   | "works.deadline.recalculate"
   | "works.deadline.set_manual"
   | "works.deadline.override_lock"
+  | "works.technical_details.read"
+  | "works.technical_details.update"
+  | "works.production.finalize"
   | "works.claim.available.read"
   | "works.claim.own.read"
   | "works.claim.create"
@@ -80,6 +83,12 @@ export type PermissionKey =
   | "workflow.reopen_stage"
   | "technician.workbench.read"
   | "technician.workload.read"
+  | "technician.operations.read"
+  | "technician.operations.manage_own"
+  | "technician.rates.read"
+  | "technician.rates.manage"
+  | "technician.earnings.read_own"
+  | "technician.earnings.read_all"
   | "logistics.read"
   | "logistics.plan"
   | "logistics.assign"
@@ -90,6 +99,19 @@ export type PermissionKey =
   | "logistics.unblock_work"
   | "logistics.prepare_work"
   | "logistics.manage_groups"
+  | "logistics.alerts.update"
+  | "logistics.delivery_marker.update"
+  | "pickup.create"
+  | "pickup.read"
+  | "pickup.update"
+  | "pickup.cancel"
+  | "routes.create"
+  | "routes.read"
+  | "routes.assign"
+  | "routes.update"
+  | "routes.cancel"
+  | "routes.execute_own"
+  | "routes.correct_outcome"
   | "reception.receive"
   | "reception.edit_intake"
   | "reception.handover_to_logistics"
@@ -124,6 +146,10 @@ export type PermissionKey =
   | "invoice.download"
   | "invoice.cancel"
   | "invoice.configure_series"
+  | "invoice.storno.create"
+  | "invoice.storno.read"
+  | "discounts.read"
+  | "discounts.manage"
   | "pricing.read"
   | "pricing.create"
   | "pricing.update"
@@ -200,6 +226,9 @@ export const PERMISSION_REGISTRY = [
   definePermission("works.deadline.recalculate", "Recalculate work order deadline snapshots."),
   definePermission("works.deadline.set_manual", "Set manual work order deadlines."),
   definePermission("works.deadline.override_lock", "Override locked work order deadlines."),
+  definePermission("works.technical_details.read", "Read technician-editable work technical details."),
+  definePermission("works.technical_details.update", "Update technician-editable work technical details."),
+  definePermission("works.production.finalize", "Mark technical production as finalized."),
   definePermission("works.claim.available.read", "Read work orders available for technician claim."),
   definePermission("works.claim.own.read", "Read own claimed work orders."),
   definePermission("works.claim.create", "Claim an available work order."),
@@ -231,6 +260,12 @@ export const PERMISSION_REGISTRY = [
   definePermission("workflow.reopen_stage", "Reopen workflow stages."),
   definePermission("technician.workbench.read", "Read technician workbench."),
   definePermission("technician.workload.read", "Read technician workload."),
+  definePermission("technician.operations.read", "Read technician operation catalog and performed operations."),
+  definePermission("technician.operations.manage_own", "Manage own performed technician operations."),
+  definePermission("technician.rates.read", "Read technician operation rates."),
+  definePermission("technician.rates.manage", "Manage technician operation rates."),
+  definePermission("technician.earnings.read_own", "Read own technician earnings."),
+  definePermission("technician.earnings.read_all", "Read all technician earnings."),
   definePermission("logistics.read", "Read logistics."),
   definePermission("logistics.plan", "Plan logistics."),
   definePermission("logistics.assign", "Assign logistics work."),
@@ -241,6 +276,19 @@ export const PERMISSION_REGISTRY = [
   definePermission("logistics.unblock_work", "Unblock work after issue resolution."),
   definePermission("logistics.prepare_work", "Confirm packing readiness and packing transitions."),
   definePermission("logistics.manage_groups", "Manage internal delivery preparation groups."),
+  definePermission("logistics.alerts.update", "Update logistics alert color markers."),
+  definePermission("logistics.delivery_marker.update", "Update delivery or pickup route-preparation markers."),
+  definePermission("pickup.create", "Create pickup requests."),
+  definePermission("pickup.read", "Read pickup requests."),
+  definePermission("pickup.update", "Update pickup requests."),
+  definePermission("pickup.cancel", "Cancel pickup requests."),
+  definePermission("routes.create", "Create courier routes."),
+  definePermission("routes.read", "Read courier routes."),
+  definePermission("routes.assign", "Assign couriers to routes."),
+  definePermission("routes.update", "Update courier routes and ordered stops."),
+  definePermission("routes.cancel", "Cancel courier routes."),
+  definePermission("routes.execute_own", "Record outcomes on own assigned route stops."),
+  definePermission("routes.correct_outcome", "Correct route stop outcomes."),
   definePermission("reception.receive", "Receive work orders."),
   definePermission("reception.edit_intake", "Edit intake."),
   definePermission("reception.handover_to_logistics", "Hand over to logistics."),
@@ -275,6 +323,10 @@ export const PERMISSION_REGISTRY = [
   definePermission("invoice.download", "Download invoices."),
   definePermission("invoice.cancel", "Cancel invoices."),
   definePermission("invoice.configure_series", "Configure invoice series."),
+  definePermission("invoice.storno.create", "Create invoice storno documents."),
+  definePermission("invoice.storno.read", "Read invoice storno documents."),
+  definePermission("discounts.read", "Read patient and invoice discounts."),
+  definePermission("discounts.manage", "Manage patient and invoice discounts."),
   definePermission("pricing.read", "Read pricing."),
   definePermission("pricing.create", "Create pricing entries."),
   definePermission("pricing.update", "Update pricing entries."),
@@ -361,6 +413,9 @@ export const ROLE_PERMISSION_MATRIX = {
     "delivery.signature.read": "OWN_DELIVERY",
     "delivery.start_transit": "OWN_DELIVERY",
     "files.upload": "ALL",
+    "pickup.read": "OWN_DELIVERY",
+    "routes.execute_own": "OWN_DELIVERY",
+    "routes.read": "OWN_DELIVERY",
     "scan.resolve": "ASSIGNED",
     "scan.use": "ASSIGNED",
     "works.change_status": "OWN_DELIVERY",
@@ -396,11 +451,21 @@ export const ROLE_PERMISSION_MATRIX = {
     "logistics.unblock_work": "ALL",
     "logistics.update_location": "ALL",
     "patients.read": "ASSIGNED",
+    "pickup.cancel": "ALL",
+    "pickup.create": "ALL",
+    "pickup.read": "ALL",
+    "pickup.update": "ALL",
     "quality.read": "ALL",
     "quality.rework": "ALL",
     "reception.handover_to_courier": "ALL",
     "reports.operational": "ALL",
     "reports.productivity": "ALL",
+    "routes.assign": "ALL",
+    "routes.cancel": "ALL",
+    "routes.correct_outcome": "ALL",
+    "routes.create": "ALL",
+    "routes.read": "ALL",
+    "routes.update": "ALL",
     "scan.resolve": "ALL",
     "scan.use": "ALL",
     "workflow.complete_stage": "OWN_STAGE",
@@ -415,7 +480,10 @@ export const ROLE_PERMISSION_MATRIX = {
     "works.execution_snapshot.history.read": "ALL",
     "works.read_all": "ALL",
     "works.read_assigned": "ASSIGNED",
+    "works.technical_details.read": "ALL",
     "works.update": "ALL",
+    "logistics.alerts.update": "ALL",
+    "logistics.delivery_marker.update": "ALL",
   }),
   MANAGER: grants(Object.fromEntries(PERMISSION_REGISTRY.map((permission) => [permission.key, "ALL"])) as Record<PermissionKey, PermissionScope>),
   MEDIC: grants({
@@ -496,6 +564,9 @@ export const ROLE_PERMISSION_MATRIX = {
     "scan.resolve": "ASSIGNED",
     "scan.use": "ASSIGNED",
     "technician.workbench.read": "ASSIGNED",
+    "technician.earnings.read_own": "ASSIGNED",
+    "technician.operations.manage_own": "ASSIGNED",
+    "technician.operations.read": "ALL",
     "workflow.complete_stage": "OWN_STAGE",
     "workflow.pause_stage": "OWN_STAGE",
     "workflow.read": "ASSIGNED",
@@ -511,7 +582,10 @@ export const ROLE_PERMISSION_MATRIX = {
     "works.execution_snapshot.read": "ASSIGNED",
     "works.execution_snapshot.read_deadline": "ASSIGNED",
     "works.execution_snapshot.history.read": "ASSIGNED",
+    "works.production.finalize": "ASSIGNED",
     "works.read_assigned": "OWN_STAGE",
+    "works.technical_details.read": "ASSIGNED",
+    "works.technical_details.update": "ASSIGNED",
   }),
 } as const satisfies PermissionGrantMatrix;
 
@@ -542,6 +616,8 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "doctors.create",
   "doctors.read",
   "doctors.update",
+  "discounts.manage",
+  "discounts.read",
   "cycles.create_next",
   "cycles.history.read",
   "cycles.read",
@@ -557,8 +633,14 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "work_forms.real.read",
   "work_forms.real.update",
   "finance.read",
+  "invoice.download",
+  "invoice.read",
+  "invoice.storno.create",
+  "invoice.storno.read",
+  "logistics.alerts.update",
   "logistics.block_work",
   "logistics.center.read",
+  "logistics.delivery_marker.update",
   "logistics.manage_groups",
   "logistics.prepare_work",
   "logistics.unblock_work",
@@ -568,6 +650,10 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "patients.documents.read",
   "patients.read",
   "patients.update",
+  "pickup.cancel",
+  "pickup.create",
+  "pickup.read",
+  "pickup.update",
   "pricing.agreements.manage",
   "pricing.agreements.read",
   "pricing.archive",
@@ -575,8 +661,6 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "pricing.read",
   "pricing.resolve_preview",
   "pricing.update",
-  "invoice.download",
-  "invoice.read",
   "quality.approve",
   "quality.read",
   "quality.reject",
@@ -586,9 +670,22 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "reception.receive",
   "reports.operational",
   "reports.productivity",
+  "routes.assign",
+  "routes.cancel",
+  "routes.correct_outcome",
+  "routes.create",
+  "routes.execute_own",
+  "routes.read",
+  "routes.update",
   "scan.resolve",
   "scan.use",
   "settings.read",
+  "technician.earnings.read_all",
+  "technician.earnings.read_own",
+  "technician.operations.manage_own",
+  "technician.operations.read",
+  "technician.rates.manage",
+  "technician.rates.read",
   "technician.workbench.read",
   "technician.workload.read",
   "workflow.archive",
@@ -615,11 +712,14 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "works.deadline.recalculate",
   "works.deadline.read",
   "works.deadline.set_manual",
+  "works.production.finalize",
   "works.execution_snapshot.create",
   "works.execution_snapshot.history.read",
   "works.execution_snapshot.read",
   "works.execution_snapshot.read_deadline",
   "works.execution_snapshot.read_pricing",
+  "works.technical_details.read",
+  "works.technical_details.update",
   "works.update",
 ] as const satisfies readonly PermissionKey[];
 

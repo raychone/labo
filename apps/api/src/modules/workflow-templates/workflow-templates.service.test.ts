@@ -54,6 +54,7 @@ function workType(overrides: Partial<WorkType> = {}): WorkType {
     id: "work_type_1",
     isActive: true,
     name: "Coroană zirconiu",
+    symbol: "Zr",
     unit: "UNIT",
     updatedAt: now,
     updatedByUserId: "actor_1",

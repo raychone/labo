@@ -21,6 +21,7 @@ function workType(overrides: Partial<WorkType> = {}): WorkType {
     id: "work_type_1",
     isActive: true,
     name: "Coroana zirconiu",
+    symbol: "Zr",
     unit: "UNIT",
     updatedAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedByUserId: "actor_1",
@@ -50,7 +51,7 @@ describe("WorkTypesService", () => {
 
     const result = await service.createWorkType(
       { actorUserId: "actor_1", requestMetadata: { ipAddress: "127.0.0.1" } },
-      { basePriceMinor: 35000, name: "Coroana zirconiu", unit: "UNIT" },
+      { basePriceMinor: 35000, name: "Coroana zirconiu", symbol: "Zr", unit: "UNIT" },
     );
 
     expect(codeService.generate).toHaveBeenCalled();
@@ -60,6 +61,7 @@ describe("WorkTypesService", () => {
         code: "WT-0001",
         createdByUserId: "actor_1",
         name: "Coroana zirconiu",
+        symbol: "Zr",
       }),
     });
     expect(create.mock.calls[0]?.[0].data).not.toHaveProperty("basePrice");
@@ -123,6 +125,7 @@ describe("WorkTypesService", () => {
         code: "WT-0001",
         id: "active_1",
         name: "Coroana zirconiu",
+        symbol: "Zr",
         unit: "UNIT",
       },
     ]);
@@ -143,8 +146,8 @@ describe("WorkTypesService", () => {
 
 describe("CreateWorkTypeDto", () => {
   it("rejects negative or non-integer minor unit prices", async () => {
-    const negative = plainToInstance(CreateWorkTypeDto, { basePriceMinor: -1, name: "Test", unit: "UNIT" });
-    const decimal = plainToInstance(CreateWorkTypeDto, { basePriceMinor: 12.5, name: "Test", unit: "UNIT" });
+    const negative = plainToInstance(CreateWorkTypeDto, { basePriceMinor: -1, name: "Test", symbol: "T", unit: "UNIT" });
+    const decimal = plainToInstance(CreateWorkTypeDto, { basePriceMinor: 12.5, name: "Test", symbol: "T", unit: "UNIT" });
 
     expect((await validate(negative)).map((error) => error.property)).toContain("basePriceMinor");
     expect((await validate(decimal)).map((error) => error.property)).toContain("basePriceMinor");

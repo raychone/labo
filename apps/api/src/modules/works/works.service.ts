@@ -527,6 +527,7 @@ export class WorksService {
         code: true,
         id: true,
         name: true,
+        symbol: true,
         unit: true,
       },
       where: {

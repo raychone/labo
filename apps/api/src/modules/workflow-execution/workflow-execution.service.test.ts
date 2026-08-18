@@ -102,6 +102,87 @@ describe("WorkflowExecutionService", () => {
     });
   });
 
+  it("allows an eligible role to start and complete the current stage even when it is not explicitly assigned", async () => {
+    const service = new WorkflowExecutionService(
+      {
+        workWorkflowExecution: {
+          findFirst: vi.fn().mockResolvedValue({
+            completedAt: null,
+            createdAt: new Date("2026-08-15T10:00:00.000Z"),
+            currentStageExecutionId: "stage_exec_1",
+            events: [],
+            id: "workflow_exec_1",
+            stages: [
+              {
+                allowedRoleCodesSnapshot: ["RECEPTIE"],
+                assignedAt: null,
+                assignedBy: null,
+                assignedUser: null,
+                assignedUserId: null,
+                completedAt: null,
+                completedBy: null,
+                estimatedDurationMinutesSnapshot: 30,
+                id: "stage_exec_1",
+                sortOrder: 1,
+                stageDescriptionSnapshot: null,
+                stageKeySnapshot: "receptie",
+                stageNameSnapshot: "Recepție",
+                startedAt: null,
+                startedBy: null,
+                status: "PENDING",
+                updatedAt: new Date("2026-08-15T10:00:00.000Z"),
+                version: 1,
+                workflowExecutionId: "workflow_exec_1",
+              },
+            ],
+            status: "ACTIVE",
+            updatedAt: new Date("2026-08-15T10:00:00.000Z"),
+            workCycleId: "cycle_1",
+            workOrderId: "work_1",
+            workflowTemplateId: "template_1",
+            workflowTemplateVersion: 3,
+            workflowNameSnapshot: "Flux zirconiu",
+            version: 1,
+            startedAt: new Date("2026-08-15T10:00:00.000Z"),
+          }),
+        },
+        user: {
+          findUnique: vi.fn().mockResolvedValue({
+            roles: [{ role: { isActive: true, key: "RECEPTIE" } }],
+          }),
+        },
+        workOrder: {
+          findUnique: vi.fn().mockResolvedValue({ id: "work_1" }),
+        },
+      } as unknown as PrismaService,
+      {
+        hasPermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["OWN_STAGE"], permission: "workflow.start_stage" }),
+      } as unknown as AuthorizationService,
+    );
+
+    await expect(service.getWorkflowForWork({
+      actor: {
+        displayName: "Demo Recepție",
+        email: "reception@example.test",
+        id: "user_1",
+        isActive: true,
+        mustChangePassword: false,
+        preferredColor: null,
+      },
+      requestMetadata: {},
+    }, "work_1")).resolves.toMatchObject({
+      actions: {
+        canCompleteCurrentStage: false,
+        canStartCurrentStage: true,
+        reason: null,
+      },
+      currentStage: {
+        name: "Recepție",
+        status: "PENDING",
+      },
+    });
+  });
+
   it("auto-assigns the initial stage to an eligible non-manager creator", async () => {
     const service = createService();
     const tx = createTx({

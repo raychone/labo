@@ -177,6 +177,10 @@ function toPriorityLabel(priority: WorkPriority): string {
   return priority === "URGENT" ? "Urgent" : "Normal";
 }
 
+function getWorkTypeCompactLabel(workType: OperationalStatusRow["workType"]): string {
+  return workType.symbol.trim() || workType.name;
+}
+
 function toOperationalLabel(row: OperationalStatusRow): string {
   if (row.delivery.status === "DELIVERED" || row.logistics.status === "DELIVERED") {
     return "Plecată la medic";
@@ -398,7 +402,7 @@ export function StatusTvPage(): ReactNode {
                   </td>
                   <td>
                     <span className="status-tv-page__stack">
-                      <BadgePill label={row.workType.name} tone="neutral" />
+                      <BadgePill label={getWorkTypeCompactLabel(row.workType)} tone="neutral" />
                     </span>
                   </td>
                   <td>
@@ -449,7 +453,7 @@ export function StatusTvPage(): ReactNode {
                 <BadgePill label={toPriorityLabel(row.priority)} tone={row.priority === "URGENT" ? "warning" : "neutral"} />
               </div>
               <div className="status-tv-page__card-grid">
-                <div className="status-tv-page__card-field"><BadgePill label={row.workType.name} tone="neutral" /></div>
+                <div className="status-tv-page__card-field"><BadgePill label={getWorkTypeCompactLabel(row.workType)} tone="neutral" /></div>
                 <div className="status-tv-page__card-field">
                   <BadgePill
                     label={row.workflow.currentStage?.name ?? (row.workflow.status === "COMPLETED" ? "Flux finalizat" : "Fără etapă")}
@@ -561,7 +565,7 @@ export function StatusTvPage(): ReactNode {
                 <Select
                   label="Tip lucrare"
                   onChange={(event) => patchQuery({ workTypeId: event.target.value || null })}
-                  options={(workTypesQuery.data ?? []).map((workType) => ({ label: `${workType.code} · ${workType.name}`, value: workType.id }))}
+                  options={(workTypesQuery.data ?? []).map((workType) => ({ label: `${workType.symbol} · ${workType.name}`, value: workType.id }))}
                   placeholder="Toate"
                   value={query.workTypeId ?? ""}
                 />

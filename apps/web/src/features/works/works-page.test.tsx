@@ -131,7 +131,7 @@ function createPngResponse(): Response {
     progressTotal: 2,
     status: "ACTIVE",
   },
-  workType: { code: "WT-0001", id: "work_type_1", name: "Coroana zirconiu" },
+  workType: { code: "WT-0001", id: "work_type_1", name: "Coroana zirconiu", symbol: "CZr" },
 };
 
 const deadlineDashboard = {
@@ -332,9 +332,9 @@ const doctorOptionsResponse = [
 ];
 
 const workTypeOptionsResponse = [
-  { code: "WT-0001", id: "work_type_1", name: "Coroana zirconiu", unit: "UNIT" },
-  { code: "WT-0002", id: "work_type_2", name: "Punte zirconiu", unit: "UNIT" },
-  { code: "WT-0003", id: "work_type_3", name: "Proteză totală", unit: "CASE" },
+  { code: "WT-0001", id: "work_type_1", name: "Coroana zirconiu", symbol: "CZr", unit: "UNIT" },
+  { code: "WT-0002", id: "work_type_2", name: "Punte zirconiu", symbol: "PZr", unit: "UNIT" },
+  { code: "WT-0003", id: "work_type_3", name: "Proteză totală", symbol: "PT", unit: "CASE" },
 ];
 
 const dynamicFieldTestDefinitions: readonly WorkFormFieldDefinition[] = [
@@ -586,7 +586,8 @@ describe("WorksPage", () => {
 
     fireEvent.change(workTypeInput, { target: { value: "punte" } });
     await waitFor(() => expect(within(workTypeListbox).getAllByRole("option")).toHaveLength(1));
-    expect(within(workTypeListbox).getByText("WT-0002 · Punte zirconiu")).toBeDefined();
+    expect(within(workTypeListbox).getByText("Punte zirconiu")).toBeDefined();
+    expect(within(workTypeListbox).getByText("PZr · Bucată")).toBeDefined();
   });
 
   it("submits boolean and radio dynamic fields through the create form contract", async () => {

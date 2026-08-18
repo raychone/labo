@@ -91,6 +91,7 @@ function workType(overrides: Partial<WorkType> = {}): WorkType {
     id: "work_type_1",
     isActive: true,
     name: "Coroana zirconiu",
+    symbol: "Zr",
     unit: "UNIT",
     updatedAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedByUserId: "actor_1",
@@ -296,7 +297,7 @@ describe("WorksService", () => {
     const createdWorkOrder = workOrder();
     const auditCreate = vi.fn().mockResolvedValue({});
     const create = vi.fn().mockResolvedValue(createdWorkOrder);
-    const codeService = { generate: vi.fn().mockResolvedValue("WO-2026-000001") };
+    const codeService = { generate: vi.fn().mockResolvedValue("WO-26-0001") };
     const qrTokenService = { generate: vi.fn().mockResolvedValue("qr_token_1") };
     const service = createService({
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
@@ -326,7 +327,7 @@ describe("WorksService", () => {
     expect(create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         baseUnitPriceMinor: 35000,
-        code: "WO-2026-000001",
+        code: "WO-26-0001",
         currency: "RON",
         patientId: "patient_1",
         patientName: "Ion Pop",

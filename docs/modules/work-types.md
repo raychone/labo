@@ -14,15 +14,15 @@ Historically tied to pricing/admin permissions; `/work-types` route requires `pr
 
 ## Domain Concepts
 
-Code, name, unit, active/archive state, base price minor units.
+Internal generated code, business symbol, long name, unit, active/archive state, base price minor units.
 
 ## Business Rules
 
-Inactive work types should not be selected for new work. Existing works keep historical relation.
+Inactive work types should not be selected for new work. Existing works keep historical relation. `code` is an internal generated identifier; `symbol` is the short operational business label used by final realignment display rules.
 
 ## Data Model
 
-`WorkType`.
+`WorkType`, including distinct `code` and `symbol` fields.
 
 ## API
 
@@ -46,7 +46,7 @@ Duplicate code, inactive type referenced by old works.
 
 ## Implemented Tasks
 
-WORKTYPES-001.
+WORKTYPES-001, WORKTYPE-REALIGN-001A, WORKTYPE-REALIGN-001B.
 
 ## Planned Tasks
 
@@ -54,7 +54,7 @@ Real laboratory sheet template foundation and operational completion are impleme
 
 ## Deferred
 
-Bulk import from external assets.
+Bulk import from external assets beyond the final official catalog.
 
 ## Open Decisions
 

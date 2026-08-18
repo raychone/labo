@@ -26,7 +26,7 @@ export function ManualScanForm({
         id="qrPayload"
         label="Cod scanat sau cod lucrare"
         onChange={(event) => setPayload(event.target.value)}
-        placeholder="WO-2026-000001 sau dl-work:..."
+        placeholder="WO-26-0001 sau dl-work:..."
         required
         value={payload}
       />

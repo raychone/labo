@@ -10,6 +10,7 @@ export const workTypeFormSchema = z.object({
   }),
   description: nullableTrimmedString(1000),
   name: z.string().trim().min(2, "Denumirea este obligatorie.").max(160),
+  symbol: z.string().trim().min(1, "Simbolul este obligatoriu.").max(40),
   unit: z.enum(WORK_TYPE_UNITS),
 });
 

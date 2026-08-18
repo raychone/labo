@@ -23,6 +23,7 @@ export const defaultWorkTypeFormValues: WorkTypeFormValues = {
   basePriceDecimal: "0.00",
   description: null,
   name: "",
+  symbol: "",
   unit: "UNIT",
 };
 
@@ -30,6 +31,7 @@ const workTypeFieldLabels: Record<keyof WorkTypeFormValues, string> = {
   basePriceDecimal: "Preț de bază",
   description: "Descriere",
   name: "Denumire",
+  symbol: "Simbol",
   unit: "Unitate tarifare",
 };
 
@@ -42,6 +44,7 @@ export function toWorkTypeFormValues(workType: WorkTypeDetail | undefined): Work
     basePriceDecimal: minorToDecimalString(workType.basePriceMinor),
     description: workType.description,
     name: workType.name,
+    symbol: workType.symbol,
     unit: workType.unit,
   };
 }
@@ -67,8 +70,9 @@ export function WorkTypeForm({
   return (
     <FormLayout className="work-types-page__form" id={formId} onSubmit={(event) => void form.handleSubmit(onSubmit)(event)}>
       <FormErrorSummary errors={summaryItems} ref={summaryRef} />
-      <FormSection title="Identificare" description="Codul este generat de backend și rămâne nemodificabil.">
+      <FormSection title="Identificare" description="Codul intern este generat de backend; simbolul este afișarea operațională scurtă.">
         <FormGrid>
+          <TextInput disabled={isDisabled} error={form.formState.errors.symbol?.message} id="symbol" label="Simbol" required {...form.register("symbol")} />
           <TextInput disabled={isDisabled} error={form.formState.errors.name?.message} id="name" label="Denumire" required {...form.register("name")} />
           <Select disabled={isDisabled} error={form.formState.errors.unit?.message} id="unit" label="Unitate tarifare" options={workTypeUnitOptions} required {...form.register("unit")} />
         </FormGrid>

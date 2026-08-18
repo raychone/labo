@@ -42,6 +42,10 @@ describe("parseQrLookup", () => {
       kind: "token",
       value: "abcdefghijklmnopqrstuvwxyz123456",
     });
+    expect(parseQrLookup("WO-26-0001")).toEqual({
+      kind: "code",
+      value: "WO-26-0001",
+    });
     expect(parseQrLookup("WO-2026-000001")).toEqual({
       kind: "code",
       value: "WO-2026-000001",

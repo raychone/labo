@@ -14,11 +14,11 @@ Key permissions include `works.create`, `works.read_all`, `works.read_assigned`,
 
 ## Domain Concepts
 
-Work code, clinic, doctor, patient, work type, quantity, priority, status, QR token, deadline, workflow, ownership, execution snapshot, work cycles, cycle-scoped real laboratory sheet.
+Short annual work code, clinic, doctor, patient, work type, quantity, priority, status, QR token, deadline, workflow, ownership, execution snapshot, work cycles, cycle-scoped real laboratory sheet.
 
 ## Business Rules
 
-Reception creates works without selecting `NC`/`NG`. Company context is fixed per cycle by first valid technical claim or manager assignment. The initial runtime workflow stage is auto-assigned to the creating eligible receptionist so the intended handoff can be completed from the existing work-detail flow. Work updates use optimistic revision checks where implemented. A work can have multiple cycles while retaining the same work code and patient; exactly one cycle is active. Returned works are registered at reception through `Înregistrează revenirea`, with required active clinic and doctor selected from registries. The current `WorkOrder` clinic/doctor follow the active cycle, while prior cycle clinic/doctor/snapshots remain immutable history.
+Reception creates works without selecting `NC`/`NG`. Company context is fixed per cycle by first valid technical claim or manager assignment. New visible work codes use the annual format `WO-YY-NNNN`; legacy `WO-YYYY-NNNNNN` codes remain valid and are not renumbered. The initial runtime workflow stage is auto-assigned to the creating eligible receptionist so the intended handoff can be completed from the existing work-detail flow. Work updates use optimistic revision checks where implemented. A work can have multiple cycles while retaining the same work code and patient; exactly one cycle is active. Returned works are registered at reception through `Înregistrează revenirea`, with required active clinic and doctor selected from registries. The current `WorkOrder` clinic/doctor follow the active cycle, while prior cycle clinic/doctor/snapshots remain immutable history.
 
 Each cycle can own one real laboratory sheet submission. Reception and permitted assigned technicians may edit the active cycle sheet until it is finalized. Closed cycles and finalized sheets are read-only; corrections require a new cycle. Editable sheet values are not copied automatically to a new cycle. Active-cycle sheet states are `NOT_STARTED`, `IN_PROGRESS`, `COMPLETE`, and `FINALIZED`; writes use revision checks to prevent stale draft/complete/finalize operations.
 
@@ -50,7 +50,7 @@ Inactive clinic/doctor/work type, doctor outside selected clinic, missing `OTHER
 
 ## Implemented Tasks
 
-WORKS-001, QR-001, WORK-DEADLINES-001A/B/C, TECH-CLAIM-001A/B, WORKFORMS-002, WORKFORM-REAL-001A/B, WORKFLOW-002, STATUS-001A, STATUS-001B, WORK-CYCLES-001A, WORK-CYCLES-001B, CORE-ROLE-UX-001, RECEPTION-WORK-CREATE-001.
+WORKS-001, QR-001, WORK-DEADLINES-001A/B/C, TECH-CLAIM-001A/B, WORKFORMS-002, WORKFORM-REAL-001A/B, WORKFLOW-002, STATUS-001A, STATUS-001B, WORK-CYCLES-001A, WORK-CYCLES-001B, CORE-ROLE-UX-001, RECEPTION-WORK-CREATE-001, WORK-ID-001A.
 
 ## Planned Tasks
 

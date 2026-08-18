@@ -60,7 +60,7 @@ function createWorkRecord(id: string, input: {
       stages: [],
       status: "ACTIVE",
     },
-    workType: { id: "type_1", name: "Coroană" },
+    workType: { id: "type_1", name: "Coroană", symbol: "Cr" },
   } as unknown as OperationalStatusWorkRecord;
 }
 

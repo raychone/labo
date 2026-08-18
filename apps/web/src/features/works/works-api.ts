@@ -396,8 +396,12 @@ export function useFinalizeRealLabSheet() {
 function invalidateClaimQueries(queryClient: ReturnType<typeof useQueryClient>, workOrderId: string): Promise<readonly unknown[]> {
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: worksQueryKeys.all }),
+    queryClient.invalidateQueries({ queryKey: ["works", "available-for-claim"] }),
+    queryClient.invalidateQueries({ queryKey: ["works", "my-claimed"] }),
     queryClient.invalidateQueries({ queryKey: worksQueryKeys.detail(workOrderId) }),
     queryClient.invalidateQueries({ queryKey: worksQueryKeys.assignmentHistory(workOrderId) }),
+    queryClient.invalidateQueries({ queryKey: ["technician-workbench"] }),
+    queryClient.invalidateQueries({ queryKey: statusQueryKeys.all }),
   ]);
 }
 
