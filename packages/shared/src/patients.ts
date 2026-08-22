@@ -40,11 +40,11 @@ export interface PatientOverview extends PatientSummary {
 
 export interface PatientWorkRecord {
   readonly billing: { readonly documentId: string; readonly documentNumber: string | null; readonly status: string } | null;
-  readonly clinic: { readonly id: string; readonly name: string };
+  readonly clinic: { readonly id: string; readonly name: string } | null;
   readonly code: string;
   readonly createdAt: string;
   readonly currentStage: string | null;
-  readonly doctor: { readonly displayName: string; readonly id: string };
+  readonly doctor: { readonly displayName: string; readonly id: string } | null;
   readonly id: string;
   readonly legalEntityCode: string | null;
   readonly patientNameSnapshot: string;

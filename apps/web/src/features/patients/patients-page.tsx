@@ -468,7 +468,7 @@ function PatientDrawer({
             </div>
           ) : null}
           {tab === "works" ? (
-            <ListPanel items={patient.works.map((work) => `${work.code} · ${work.workType.name} · ${work.clinic.name} · ${formatDate(work.createdAt)}`)} empty="Nu există lucrări." />
+            <ListPanel items={patient.works.map((work) => `${work.code} · ${work.workType.name} · ${work.clinic?.name ?? "-"} · ${formatDate(work.createdAt)}`)} empty="Nu există lucrări." />
           ) : null}
           {tab === "relationships" ? (
             <ListPanel items={patient.relationships.map((entry) => `${entry.clinic.name}: ${entry.totalWorks} lucrări, ${entry.doctors.map((doctor) => doctor.displayName).join(", ")}`)} empty="Nu există relații derivate." />

@@ -93,7 +93,7 @@ describe("work execution snapshot mappers", () => {
   it("builds a context snapshot without private patient or auth data", () => {
     const snapshot = buildExecutionContextSnapshot({
       claim: { claimedAt: new Date("2026-07-29T10:00:00.000Z"), revision: 1, source: "TECHNICIAN_FIRST_CLAIM" },
-      legalEntity: { code: "NC", displayName: "NC Demo", publicId: "legal_nc" },
+      legalEntity: { code: "CDT", displayName: "Nicolaie Cristina", publicId: "legal_cdt" },
       technician: { displayName: "Tehnician Demo", publicId: "user_1" },
       work: {
         clinicName: "Clinica Demo",

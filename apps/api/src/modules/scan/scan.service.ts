@@ -1,5 +1,5 @@
 import { ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, WorkFormTemplateKind, WorkStageExecutionStatus, WorkWorkflowExecutionStatus } from "@prisma/client";
+import { Prisma, WorkFormTemplateKind, WorkStageExecutionStatus, WorkWorkflowExecutionStatus, type WorkStatus } from "@prisma/client";
 
 import type { AuthenticatedUser, RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
@@ -70,7 +70,7 @@ export interface ScanContextView {
     readonly patientName: string | null;
     readonly priority: "NORMAL" | "URGENT";
     readonly requestedDeliveryDate: string;
-    readonly status: "REGISTERED";
+    readonly status: WorkStatus;
     readonly workTypeName: string;
   };
   readonly workflow: {
@@ -394,7 +394,12 @@ export class ScanService {
     const logisticsState = work.activeCycle?.logisticsState ?? null;
     const currentStage = this.getCurrentStage(work);
     const completed = execution?.stages.filter((stage) => stage.status === WorkStageExecutionStatus.COMPLETED).length ?? 0;
-    const realLabSheet = this.toRealLabSheetSummary(work.activeCycle);
+    const realLabSheet = this.toRealLabSheetSummary(work.status, work.activeCycle);
+    const persistedLogisticsStatus = logisticsState?.status ?? null;
+    const logisticsStatus = work.status === "FINALIZATA"
+      && (persistedLogisticsStatus === null || persistedLogisticsStatus === "RECEIVED" || persistedLogisticsStatus === "IN_PRODUCTION")
+      ? "READY_FOR_PACKING"
+      : persistedLogisticsStatus ?? (execution?.status === WorkWorkflowExecutionStatus.ACTIVE ? "IN_PRODUCTION" : "RECEIVED");
 
     return {
       actions,
@@ -403,14 +408,14 @@ export class ScanService {
         activeGroup: work.deliveryPreparationItems[0]?.group ?? null,
         blockedReason: logisticsState?.blockedReasonNotes ?? logisticsState?.blockedReasonCode ?? null,
         locationCode: logisticsState?.physicalLocationCode ?? null,
-        status: logisticsState?.status ?? (execution?.status === WorkWorkflowExecutionStatus.ACTIVE ? "IN_PRODUCTION" : "RECEIVED"),
+        status: logisticsStatus,
       },
       realLabSheet,
       resolvedAt: new Date().toISOString(),
       work: {
-        clinicName: work.clinic.name,
+        clinicName: work.clinic?.name ?? "-",
         code: work.code,
-        doctorName: work.doctor.displayName,
+        doctorName: work.doctor?.displayName ?? "-",
         id: work.id,
         patientName: work.patientName,
         priority: work.priority,
@@ -443,9 +448,9 @@ export class ScanService {
     };
   }
 
-  private toRealLabSheetSummary(cycle: ScanWorkRecord["activeCycle"]): ScanContextView["realLabSheet"] {
+  private toRealLabSheetSummary(workStatus: WorkStatus, cycle: ScanWorkRecord["activeCycle"]): ScanContextView["realLabSheet"] {
     const submission = cycle?.workFormSubmissions[0] ?? null;
-    const status = submission?.finalizedAt ? "FINALIZED" : submission?.realLabSheetStatus ?? "NOT_STARTED";
+    const status = workStatus === "FINALIZATA" ? "FINALIZED" : submission?.finalizedAt ? "FINALIZED" : submission?.realLabSheetStatus ?? "NOT_STARTED";
     const labels = {
       COMPLETE: "Completă",
       FINALIZED: "Finalizată",

@@ -408,6 +408,12 @@
   width: 100%;
 }
 
+.status-page__overdue-alert {
+  color: #dc2626;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
 @media (max-width: 719px) {
   .status-page__card-grid {
     grid-template-columns: 1fr;

@@ -11,6 +11,8 @@ import type {
   ReassignWorkInput,
   ReleaseWorkInput,
   ResolveWorkQrInput,
+  SetWorkStatusInput,
+  UpdateTechnicianWorkDetailsInput,
   ResolveWorkQrResult,
   StartStageInput,
   WorkDeadlinePreview,
@@ -172,6 +174,38 @@ export async function reassignWork(workOrderId: string, input: ReassignWorkInput
   return sendJson<WorkDetail>(`/works/${workOrderId}/reassign`, "POST", input);
 }
 
+export async function setWorkStatus(workOrderId: string, input: SetWorkStatusInput): Promise<WorkDetail> {
+  return sendJson<WorkDetail>(`/works/${workOrderId}/status`, "POST", input);
+}
+
+export async function updateTechnicianWorkDetails(workOrderId: string, input: UpdateTechnicianWorkDetailsInput): Promise<WorkDetail> {
+  return sendJson<WorkDetail>(`/works/${workOrderId}/technician-details`, "PATCH", input);
+}
+
+export async function uploadWorkAttachments(workOrderId: string, files: readonly File[]): Promise<WorkDetail["attachments"]> {
+  const csrfToken = await fetchCsrfToken();
+  const body = new FormData();
+  for (const file of files) {
+    body.append("attachments", file);
+  }
+  const response = await apiFetch(`/works/${workOrderId}/attachments`, {
+    body,
+    headers: { "x-csrf-token": csrfToken },
+    method: "POST",
+  });
+  return parseApiResponse<WorkDetail["attachments"]>(response);
+}
+
+export async function downloadWorkAttachment(workOrderId: string, attachmentId: string, expectedMimeType?: string): Promise<Blob> {
+  const response = await apiFetch(`/works/${workOrderId}/attachments/${attachmentId}`);
+  if (!response.ok) {
+    await parseApiResponse<never>(response);
+  }
+  const content = await response.blob();
+  const contentType = response.headers.get("content-type")?.split(";", 1)[0] || expectedMimeType || "application/octet-stream";
+  return new Blob([content], { type: contentType });
+}
+
 export async function fetchAssignmentHistory(workOrderId: string): Promise<readonly WorkAssignmentEventSummary[]> {
   const response = await apiFetch(`/works/${workOrderId}/assignment-history`);
 
@@ -229,6 +263,9 @@ export function useWorks(params: WorksListParams, enabled: boolean) {
     enabled,
     queryFn: () => fetchWorks(params),
     queryKey: worksQueryKeys.list(params),
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
     retry: false,
   });
 }
@@ -338,7 +375,24 @@ export function useUpdateWork() {
   return useMutation({
     mutationFn: ({ input, workOrderId }: { readonly input: UpdateWorkInput; readonly workOrderId: string }) => updateWork(workOrderId, input),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: worksQueryKeys.all });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ["logistics"] }),
+      ]);
+    },
+  });
+}
+
+export function useUploadWorkAttachments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ files, workOrderId }: { readonly files: readonly File[]; readonly workOrderId: string }) => uploadWorkAttachments(workOrderId, files),
+    onSuccess: async (_, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.detail(variables.workOrderId) }),
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ["logistics"] }),
+      ]);
     },
   });
 }
@@ -429,6 +483,27 @@ export function useReassignWork() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ input, workOrderId }: { readonly input: ReassignWorkInput; readonly workOrderId: string }) => reassignWork(workOrderId, input),
+    onSuccess: async (_work, variables) => {
+      await invalidateClaimQueries(queryClient, variables.workOrderId);
+    },
+  });
+}
+
+export function useSetWorkStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ input, workOrderId }: { readonly input: SetWorkStatusInput; readonly workOrderId: string }) => setWorkStatus(workOrderId, input),
+    onSuccess: async (_work, variables) => {
+      await invalidateClaimQueries(queryClient, variables.workOrderId);
+    },
+  });
+}
+
+export function useUpdateTechnicianWorkDetails() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ input, workOrderId }: { readonly input: UpdateTechnicianWorkDetailsInput; readonly workOrderId: string }) =>
+      updateTechnicianWorkDetails(workOrderId, input),
     onSuccess: async (_work, variables) => {
       await invalidateClaimQueries(queryClient, variables.workOrderId);
     },

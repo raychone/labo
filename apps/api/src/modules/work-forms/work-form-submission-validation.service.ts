@@ -69,6 +69,22 @@ const MAX_VALUES_JSON_LENGTH = 25_000;
 const MAX_TEXTAREA_LENGTH = 5_000;
 const MAX_ARRAY_SELECTIONS = 64;
 const STALE_TEMPLATE_MESSAGE = "Formularul acestui tip de lucrare a fost actualizat. Reîncarcă formularul înainte de salvare.";
+const FDI_ADULT_TOOTH_CODES = [
+  "18", "17", "16", "15", "14", "13", "12", "11",
+  "21", "22", "23", "24", "25", "26", "27", "28",
+  "31", "32", "33", "34", "35", "36", "37", "38",
+  "48", "47", "46", "45", "44", "43", "42", "41",
+] as const;
+const FDI_ADULT_TOOTH_CODE_SET = new Set<string>(FDI_ADULT_TOOTH_CODES);
+
+function isFdiAdultToothCode(value: string): boolean {
+  return FDI_ADULT_TOOTH_CODE_SET.has(value);
+}
+
+function normalizeFdiAdultToothSelection(values: readonly string[]): readonly string[] {
+  const selected = new Set(values);
+  return FDI_ADULT_TOOTH_CODES.filter((tooth) => selected.has(tooth));
+}
 
 type WorkFormValue = boolean | number | readonly string[] | string | null;
 type WorkFormDefaultValue = WorkFormValue;
@@ -119,23 +135,8 @@ interface ValidateValuesOptions {
 }
 
 const FORBIDDEN_VALUE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
-const FDI_TOOTH_CODES = new Set([
-  "11", "12", "13", "14", "15", "16", "17", "18",
-  "21", "22", "23", "24", "25", "26", "27", "28",
-  "31", "32", "33", "34", "35", "36", "37", "38",
-  "41", "42", "43", "44", "45", "46", "47", "48",
-  "51", "52", "53", "54", "55",
-  "61", "62", "63", "64", "65",
-  "71", "72", "73", "74", "75",
-  "81", "82", "83", "84", "85",
-]);
-
 function isForbiddenWorkFormValueKey(key: string): boolean {
   return FORBIDDEN_VALUE_KEYS.has(key);
-}
-
-function isFdiToothCode(value: string): boolean {
-  return FDI_TOOTH_CODES.has(value);
 }
 
 function isDateOnlyString(value: string): boolean {
@@ -164,6 +165,7 @@ export class WorkFormSubmissionValidationService {
     input: {
       readonly actorUserId: string;
       readonly submission: SubmissionCreateInput | undefined;
+      readonly enforceRequired?: boolean;
       readonly workCode: string;
       readonly workTypeId: string;
     },
@@ -183,7 +185,7 @@ export class WorkFormSubmissionValidationService {
 
     this.ensureActiveTemplateMatches(template, input.submission.templateId, input.submission.templateVersion);
     const snapshot = this.createSnapshot(template);
-    const values = this.validateValues(snapshot, input.submission.values);
+    const values = this.validateValues(snapshot, input.submission.values, { enforceRequired: input.enforceRequired ?? true });
 
     return {
       audit: {
@@ -438,7 +440,7 @@ export class WorkFormSubmissionValidationService {
   private normalizeFieldValue(field: WorkFormSnapshotField, value: unknown, options: ValidateValuesOptions): WorkFormValue {
     const enforceRequired = options.enforceRequired ?? true;
     if (value === undefined || value === null || value === "") {
-      if (field.required && enforceRequired) {
+      if (field.type !== "TOOTH" && field.required && enforceRequired) {
         throw new BadRequestException(this.requiredMessage(field));
       }
       return field.type === "CHECKBOX" ? false : null;
@@ -467,14 +469,15 @@ export class WorkFormSubmissionValidationService {
         throw new BadRequestException(`${field.label} trebuie să fie o listă de valori.`);
       }
       const unique = [...new Set(value.map((item) => item.trim()).filter((item) => item.length > 0))];
-      if (field.required && enforceRequired && unique.length === 0) {
+      // Teeth are an optional global intake field; an empty selection is valid.
+      if (field.type !== "TOOTH" && field.required && enforceRequired && unique.length === 0) {
         throw new BadRequestException(this.requiredMessage(field));
       }
       if (unique.length > MAX_ARRAY_SELECTIONS) {
         throw new BadRequestException(`${field.label} conține prea multe selecții.`);
       }
       this.validateArrayAllowlist(field, unique);
-      return unique;
+      return field.type === "TOOTH" ? normalizeFdiAdultToothSelection(unique) : unique;
     }
 
     if (typeof value !== "string") {
@@ -549,7 +552,7 @@ export class WorkFormSubmissionValidationService {
   private validateArrayAllowlist(field: WorkFormSnapshotField, values: readonly string[]): void {
     if (field.type === "TOOTH") {
       for (const value of values) {
-        if (!isFdiToothCode(value)) {
+        if (!isFdiAdultToothCode(value)) {
           throw new BadRequestException(`${field.label} conține un dinte FDI invalid.`);
         }
       }

@@ -25,10 +25,6 @@ const UsersPage = lazy(async () => {
   const module = await import("../features/users/users-page.js");
   return { default: module.UsersPage };
 });
-const WorkTypesPage = lazy(async () => {
-  const module = await import("../features/work-types/work-types-page.js");
-  return { default: module.WorkTypesPage };
-});
 const WorkFormBuilderPage = lazy(async () => {
   const module = await import("../features/work-forms/work-form-builder-page.js");
   return { default: module.WorkFormBuilderPage };
@@ -57,9 +53,25 @@ const TechnicianWorkbenchPage = lazy(async () => {
   const module = await import("../features/technician-workbench/technician-workbench-page.js");
   return { default: module.TechnicianWorkbenchPage };
 });
+const TechnicianEarningsPage = lazy(async () => {
+  const module = await import("../features/technician-earnings/technician-earnings-page.js");
+  return { default: module.TechnicianEarningsPage };
+});
+const ManagerTechniciansPage = lazy(async () => {
+  const module = await import("../features/manager-technicians/manager-technicians-page.js");
+  return { default: module.ManagerTechniciansPage };
+});
 const LogisticsPage = lazy(async () => {
   const module = await import("../features/logistics/logistics-page.js");
   return { default: module.LogisticsPage };
+});
+const LogisticsRouteBuilderPage = lazy(async () => {
+  const module = await import("../features/logistics/logistics-route-builder-page.js");
+  return { default: module.LogisticsRouteBuilderPage };
+});
+const CourierRoutePage = lazy(async () => {
+  const module = await import("../features/courier/courier-route-page.js");
+  return { default: module.CourierRoutePage };
 });
 const DeliveriesPage = lazy(async () => {
   const module = await import("../features/deliveries/deliveries-page.js");
@@ -93,9 +105,13 @@ const BillingArchivePage = lazy(async () => {
   const module = await import("../features/billing/billing-archive-page.js");
   return { default: module.BillingArchivePage };
 });
-const PricingPage = lazy(async () => {
+const WorkSettingsPage = lazy(async () => {
   const module = await import("../features/pricing/pricing-page.js");
-  return { default: module.PricingPage };
+  return { default: module.WorkSettingsPage };
+});
+const AuditPage = lazy(async () => {
+  const module = await import("../features/audit/audit-page.js");
+  return { default: module.AuditPage };
 });
 
 function LazyRoute({ children }: { readonly children: ReactNode }): ReactNode {
@@ -156,8 +172,24 @@ const router = createBrowserRouter([
         path: "workbench",
       },
       {
+        element: <PermissionRoute requiredPermissions={["technician.earnings.read_own"]}><LazyRoute><TechnicianEarningsPage /></LazyRoute></PermissionRoute>,
+        path: "earnings",
+      },
+      {
+        element: <PermissionRoute requiredPermissions={["technician.earnings.read_all"]}><LazyRoute><ManagerTechniciansPage /></LazyRoute></PermissionRoute>,
+        path: "technicians",
+      },
+      {
         element: <PermissionRoute requiredPermissions={["logistics.center.read"]}><LazyRoute><LogisticsPage /></LazyRoute></PermissionRoute>,
         path: "logistics",
+      },
+      {
+        element: <PermissionRoute requiredPermissions={["routes.create", "routes.read", "logistics.center.read"]}><LazyRoute><LogisticsRouteBuilderPage /></LazyRoute></PermissionRoute>,
+        path: "routes",
+      },
+      {
+        element: <PermissionRoute requiredPermissions={["routes.read"]}><LazyRoute><CourierRoutePage /></LazyRoute></PermissionRoute>,
+        path: "my-route",
       },
       {
         element: <PermissionRoute requiredPermissions={["finance.read", "invoice.read", "invoice.create"]}><LazyRoute><BillingPage /></LazyRoute></PermissionRoute>,
@@ -180,12 +212,8 @@ const router = createBrowserRouter([
         path: "patients",
       },
       {
-        element: <PermissionRoute requiredPermissions={["pricing.read"]}><LazyRoute><WorkTypesPage /></LazyRoute></PermissionRoute>,
-        path: "work-types",
-      },
-      {
-        element: <PermissionRoute requiredPermissions={["pricing.read"]}><LazyRoute><PricingPage /></LazyRoute></PermissionRoute>,
-        path: "pricing",
+        element: <PermissionRoute requiredPermissions={["pricing.read"]}><LazyRoute><WorkSettingsPage /></LazyRoute></PermissionRoute>,
+        path: "work-settings",
       },
       {
         element: <PermissionRoute requiredPermissions={["forms.read"]}><LazyRoute><WorkFormBuilderPage /></LazyRoute></PermissionRoute>,
@@ -202,6 +230,10 @@ const router = createBrowserRouter([
       {
         element: <PermissionRoute requiredPermissions={["settings.read"]}><LazyRoute><SettingsPage /></LazyRoute></PermissionRoute>,
         path: "settings",
+      },
+      {
+        element: <PermissionRoute requiredPermissions={["audit.read"]}><LazyRoute><AuditPage /></LazyRoute></PermissionRoute>,
+        path: "audit",
       },
       { element: <ForbiddenPage />, path: "forbidden" },
       { element: <NotFoundPage />, path: "*" },

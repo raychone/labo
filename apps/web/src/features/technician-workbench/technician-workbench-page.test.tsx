@@ -34,14 +34,19 @@ function createJsonResponse(body: unknown, status = 200): Response {
 }
 
 function createFetchMock(): ReturnType<typeof vi.fn> {
-  return vi.fn((input: RequestInfo | URL) => {
+  return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    if (url.endsWith("/auth/csrf")) {
+      return Promise.resolve(createJsonResponse({ csrfToken: "csrf-token" }));
+    }
     if (url.endsWith("/auth/permissions")) {
       return Promise.resolve(createJsonResponse({
         permissions: [
           { key: "technician.workbench.read", scopes: ["ALL"] },
           { key: "works.claim.available.read", scopes: ["ALL"] },
           { key: "works.claim.own.read", scopes: ["ALL"] },
+          { key: "technician.operations.manage_own", scopes: ["ASSIGNED"] },
+          { key: "technician.operations.read", scopes: ["ALL"] },
           { key: "technician.workload.read", scopes: ["ALL"] },
         ],
       }));
@@ -137,6 +142,11 @@ function createFetchMock(): ReturnType<typeof vi.fn> {
                 legalEntity: null,
               },
             },
+            status: "RECEPTIE",
+            statusChangedAt: "2026-08-14T08:00:00.000Z",
+            waitingStartedAt: null,
+            completedAt: null,
+            completedByUserId: null,
             workType: { id: "work_type_1", name: "Coroană zirconiu" },
           },
         ],
@@ -184,6 +194,11 @@ function createFetchMock(): ReturnType<typeof vi.fn> {
                 legalEntity: { code: "NC", displayName: "Nicolaie Cristina" },
               },
             },
+            status: "IN_LUCRU",
+            statusChangedAt: "2026-08-14T08:00:00.000Z",
+            waitingStartedAt: null,
+            completedAt: null,
+            completedByUserId: null,
             workType: { id: "work_type_1", name: "Coroană zirconiu" },
           },
         ],
@@ -208,6 +223,65 @@ function createFetchMock(): ReturnType<typeof vi.fn> {
         },
       ]));
     }
+    if (url.endsWith("/technician-operations/options")) {
+      return Promise.resolve(createJsonResponse([
+        { code: "CERAMICA", id: "operation_1", name: "Ceramică" },
+        { code: "GLAZE", id: "operation_2", name: "Glazurare" },
+      ]));
+    }
+    if (url.includes("/technician-operations/performed?")) {
+      return Promise.resolve(createJsonResponse([
+        {
+          createdAt: "2026-08-14T09:00:00.000Z",
+          createdByUserId: "tech_1",
+          currency: "RON",
+          earningMinor: 3000,
+          id: "performed_1",
+          operation: { code: "CERAMICA", id: "operation_1", name: "Ceramică" },
+          performedAt: "2026-08-14T09:00:00.000Z",
+          rateId: "rate_1",
+          removalReason: null,
+          removedAt: null,
+          removedByUserId: null,
+          technicianId: "tech_1",
+          workOrderId: "work_3",
+        },
+      ]));
+    }
+    if (url.endsWith("/technician-operations/performed") && init?.method === "POST") {
+      return Promise.resolve(createJsonResponse({
+        createdAt: "2026-08-14T09:05:00.000Z",
+        createdByUserId: "tech_1",
+        currency: "RON",
+        earningMinor: 2500,
+        id: "performed_2",
+        operation: { code: "GLAZE", id: "operation_2", name: "Glazurare" },
+        performedAt: "2026-08-14T09:05:00.000Z",
+        rateId: "rate_2",
+        removalReason: null,
+        removedAt: null,
+        removedByUserId: null,
+        technicianId: "tech_1",
+        workOrderId: "work_3",
+      }));
+    }
+    if (url.endsWith("/technician-operations/performed/performed_1/remove") && init?.method === "POST") {
+      return Promise.resolve(createJsonResponse({
+        createdAt: "2026-08-14T09:00:00.000Z",
+        createdByUserId: "tech_1",
+        currency: "RON",
+        earningMinor: 3000,
+        id: "performed_1",
+        operation: { code: "CERAMICA", id: "operation_1", name: "Ceramică" },
+        performedAt: "2026-08-14T09:00:00.000Z",
+        rateId: "rate_1",
+        removalReason: "Debifată de tehnician din modalul Manopere.",
+        removedAt: "2026-08-14T09:10:00.000Z",
+        removedByUserId: "tech_1",
+        technicianId: "tech_1",
+        workOrderId: "work_3",
+      }));
+    }
     if (url.endsWith("/technicians/options")) {
       return Promise.resolve(createJsonResponse([
         {
@@ -218,6 +292,108 @@ function createFetchMock(): ReturnType<typeof vi.fn> {
           preferredColor: "#0f766e",
         },
       ]));
+    }
+    if (url.includes("/works/work_3") && !url.includes("/works/work_3/") && (!init || init.method === undefined || init.method === "GET")) {
+      return Promise.resolve(createJsonResponse({
+        assignmentHistory: [],
+        baseUnitPriceMinor: null,
+        claim: {
+          canCurrentUserClaim: false,
+          canCurrentUserReassign: false,
+          canCurrentUserRelease: true,
+          claimedAt: "2026-08-14T08:00:00.000Z",
+          executionLegalEntity: { code: "NC", displayName: "Nicolaie Cristina" },
+          releasedAt: null,
+          releaseReason: null,
+          revision: 1,
+          source: null,
+          status: "CLAIMED",
+          technician: {
+            displayName: "Tehnician Ana",
+            id: "tech_1",
+          },
+        },
+        clinicalNotes: "Note recepție",
+        clinic: { code: "CL-1", id: "clinic_1", name: "Clinica Test" },
+        code: "WO-2026-000003",
+        completedAt: null,
+        completedByUserId: null,
+        createdAt: "2026-08-14T07:30:00.000Z",
+        createdByUserId: "reception_1",
+        currency: null,
+        deadline: {
+          badge: "Astăzi",
+          calculatedAt: null,
+          calculatedDueAt: null,
+          color: "green",
+          countdown: "azi",
+          effectiveDueAt: "2026-08-14T10:00:00.000Z",
+          executionDays: null,
+          explanation: null,
+          includeStartDay: null,
+          isLocked: false,
+          manualDueAt: null,
+          mode: "MANUAL",
+          reasonCode: null,
+          revision: 1,
+          source: "CREATION",
+          startAt: null,
+          status: "DUE_TODAY",
+          timezone: null,
+          tooltip: "",
+        },
+        doctor: { displayName: "Dr. Ana Popescu", id: "doctor_1" },
+        executionSnapshot: {
+          currentTechnician: null,
+          deadline: null,
+          originalTechnician: null,
+          pricing: null,
+          summary: {
+            createdAt: null,
+            exists: true,
+            legalEntity: { code: "NC", displayName: "Nicolaie Cristina", publicId: "legal_nc" },
+            lockedAt: null,
+            status: "LOCKED",
+            version: 1,
+          },
+        },
+        externalReference: null,
+        id: "work_3",
+        internalNotes: "Note interne",
+        invoicedDocumentId: null,
+        patient: null,
+        patientName: "Elena Stoica",
+        patientReference: null,
+        priority: "NORMAL",
+        quantity: 2,
+        requestedDeliveryDate: "2026-08-14T10:00:00.000Z",
+        shade: "A2",
+        status: "IN_LUCRU",
+        statusChangedAt: "2026-08-14T08:00:00.000Z",
+        technicalCodeNotes: "COD-INIȚIAL",
+        totalPriceMinor: null,
+        updatedAt: "2026-08-14T08:00:00.000Z",
+        updatedByUserId: null,
+        version: 1,
+        waitingStartedAt: null,
+        workForm: null,
+        workflow: null,
+        workType: { code: "WT-1", id: "work_type_1", name: "Coroană zirconiu", symbol: "CZr" },
+      }));
+    }
+    if (url.includes("/works/work_3/technician-details") && init?.method === "PATCH") {
+      return Promise.resolve(createJsonResponse({
+        code: "WO-2026-000003",
+        id: "work_3",
+        technicalCodeNotes: "COD-NOU",
+      }));
+    }
+    if (url.includes("/works/work_3/status") && init?.method === "POST") {
+      return Promise.resolve(createJsonResponse({
+        code: "WO-2026-000003",
+        id: "work_3",
+        status: "FINALIZATA",
+      }));
     }
 
     return Promise.resolve(createJsonResponse({}, 404));
@@ -243,7 +419,8 @@ describe("TechnicianWorkbenchPage", () => {
   });
 
   it("switches to a compact mobile layout with hidden workload and toggleable filters", async () => {
-    vi.stubGlobal("fetch", createFetchMock());
+    const fetchMock = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
     const matchMedia = createMatchMedia(true);
     vi.stubGlobal("matchMedia", matchMedia);
     Object.defineProperty(window, "matchMedia", { configurable: true, value: matchMedia });
@@ -254,16 +431,82 @@ describe("TechnicianWorkbenchPage", () => {
     expect(screen.getByRole("button", { name: "Afișează filtrele" })).toBeDefined();
     expect(screen.queryByRole("heading", { name: "Încărcare tehnicieni" })).toBeNull();
     expect(await screen.findByRole("button", { name: "Preia" })).toBeDefined();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/works/available-for-claim?") && String(input).includes("sortBy=createdAt"))).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: "Afișează filtrele" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Ascunde filtrele" })).toBeDefined());
     expect(screen.getByLabelText("Căutare")).toBeDefined();
 
-    fireEvent.click(screen.getByText("De început").closest("button")!);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Lucrările mele" }).getAttribute("aria-pressed")).toBe("true"));
+    fireEvent.click(screen.getAllByRole("button", { name: "Lucrările mele" }).at(-1)!);
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "Lucrările mele" }).at(-1)?.getAttribute("aria-pressed")).toBe("true"));
     await waitFor(() => {
       expect(screen.getByText(/WO-2026-000003/)).toBeDefined();
       expect(screen.getByText(/Elena Stoica/)).toBeDefined();
+    });
+  });
+
+  it("shows claimed work actions and finalizes through the status endpoint", async () => {
+    const fetchMock = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const matchMedia = createMatchMedia(false);
+    vi.stubGlobal("matchMedia", matchMedia);
+    Object.defineProperty(window, "matchMedia", { configurable: true, value: matchMedia });
+
+    renderWithProviders(<TechnicianWorkbenchPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Lucrările mele" }));
+    expect(await screen.findByText(/WO-2026-000003/)).toBeDefined();
+    expect(screen.queryByText("Revendicată")).toBeNull();
+    expect(screen.getByRole("button", { name: "Detalii" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Manopere" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Finalizata" })).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Detalii" }));
+    expect(await screen.findByRole("heading", { name: "Detalii" })).toBeDefined();
+    expect(await screen.findByText("Pacient: Elena Stoica")).toBeDefined();
+    expect(screen.getByText("Tip lucrare: Coroană zirconiu")).toBeDefined();
+    expect(screen.getByLabelText("Cod")).toBeDefined();
+    fireEvent.change(screen.getByLabelText("Cod"), { target: { value: "COD-NOU" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvează" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/works/work_3/technician-details"), expect.objectContaining({
+        body: JSON.stringify({ clinicalNotes: "Note recepție", internalNotes: "Note interne", technicalCodeNotes: "COD-NOU" }),
+        method: "PATCH",
+      }));
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Manopere" }));
+    expect(await screen.findByRole("heading", { name: "Manopere" })).toBeDefined();
+    expect(await screen.findByText("Ceramică")).toBeDefined();
+    expect(screen.getByText("Glazurare")).toBeDefined();
+    expect(screen.queryByText(/30,00/)).toBeNull();
+    fireEvent.click(screen.getByLabelText(/Glazurare/));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/technician-operations/performed"), expect.objectContaining({
+        body: JSON.stringify({ operationId: "operation_2", workOrderId: "work_3" }),
+        method: "POST",
+      }));
+    });
+
+    fireEvent.click(screen.getByLabelText(/Ceramică/));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/technician-operations/performed/performed_1/remove"), expect.objectContaining({
+        body: JSON.stringify({ reason: "Debifată de tehnician din modalul Manopere." }),
+        method: "POST",
+      }));
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Închide" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Finalizata" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/works/work_3/status"), expect.objectContaining({
+        body: JSON.stringify({ reason: "Finalizată de tehnician din atelier.", status: "FINALIZATA" }),
+        method: "POST",
+      }));
     });
   });
 });

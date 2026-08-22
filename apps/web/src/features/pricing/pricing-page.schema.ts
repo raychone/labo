@@ -9,13 +9,27 @@ const moneyDecimal = z
 
 export const catalogFormSchema = z.object({
   category: z.string().trim().min(1, "Categoria este obligatorie."),
-  displayName: z.string().trim().min(1, "Denumirea este obligatorie.").max(160),
+  displayName: z.string().trim().max(160).optional(),
+  executionDays: z.enum(["1", "2", "3", "4", "5", "6"]),
   isActive: z.boolean(),
   notes: z.string().trim().max(1000).optional(),
   sortOrder: z.number().int().min(0).max(10_000),
   standardPriceDecimal: moneyDecimal,
   unit: z.enum(WORK_TYPE_UNITS),
-  workTypeId: z.string().trim().min(1, "Alege tipul de lucrare."),
+  workTypeId: z.string().trim().optional(),
+  workTypeName: z.string().trim().optional(),
+  workTypeSymbol: z.string().trim().optional(),
+  workTypeDescription: z.string().trim().max(1000).optional(),
+}).superRefine((values, context) => {
+  if (!values.workTypeId && !values.workTypeName) {
+    context.addIssue({ code: "custom", message: "Alege sau creează tipul de lucrare.", path: ["workTypeId"] });
+  }
+  if (values.workTypeId && !values.displayName) {
+    context.addIssue({ code: "custom", message: "Denumirea este obligatorie.", path: ["displayName"] });
+  }
+  if (!values.workTypeId && !values.workTypeSymbol) {
+    context.addIssue({ code: "custom", message: "Simbolul este obligatoriu pentru un tip nou.", path: ["workTypeSymbol"] });
+  }
 });
 
 export const executionRulesFormSchema = z.object({
@@ -69,9 +83,24 @@ export const previewFormSchema = z.object({
   workTypeId: z.string().trim().min(1, "Alege tipul de lucrare."),
 });
 
+export const technicianOperationFormSchema = z.object({
+  code: z.string().trim().min(1, "Codul este obligatoriu.").max(40),
+  description: z.string().trim().max(1000).optional(),
+  name: z.string().trim().min(2, "Denumirea este obligatorie.").max(160),
+});
+
+export const technicianRateFormSchema = z.object({
+  effectiveFrom: z.string().trim().optional(),
+  operationId: z.string().trim().min(1, "Alege manopera."),
+  rateDecimal: moneyDecimal,
+  technicianId: z.string().trim().min(1, "Alege tehnicianul."),
+});
+
 export type CatalogFormValues = z.infer<typeof catalogFormSchema>;
 export type ExecutionRulesFormValues = z.infer<typeof executionRulesFormSchema>;
 export type AgreementFormValues = z.infer<typeof agreementFormSchema>;
 export type PreviewFormValues = z.infer<typeof previewFormSchema>;
+export type TechnicianOperationFormValues = z.infer<typeof technicianOperationFormSchema>;
+export type TechnicianRateFormValues = z.infer<typeof technicianRateFormSchema>;
 
 export const pricingCategoryOptions = PRICING_CATEGORIES.map((category) => ({ label: category, value: category }));

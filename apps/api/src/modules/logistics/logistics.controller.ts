@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Inject, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, Patch, Post, Query, Req, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FilesInterceptor } from "@nestjs/platform-express";
 import type { Request } from "express";
 
 import { AuthGuard } from "../auth/auth.guard.js";
@@ -6,19 +7,33 @@ import { CsrfGuard } from "../auth/csrf.guard.js";
 import { CurrentUser } from "../auth/current-user.decorator.js";
 import { getRequestMetadata } from "../auth/request-metadata.js";
 import type { AuthenticatedUser } from "../auth/auth.types.js";
+import { CurrentLegalEntity } from "../organization-context/current-legal-entity.decorator.js";
+import { LegalEntityContextGuard } from "../organization-context/legal-entity-context.guard.js";
+import type { LegalEntityContext } from "../organization-context/organization-context.view.js";
+import { RequireLegalEntityContext } from "../organization-context/require-legal-entity-context.decorator.js";
 import { PermissionsGuard } from "../rbac/permissions.guard.js";
 import { RequirePermission } from "../rbac/require-permission.decorator.js";
+import { LOGISTICS_ATTACHMENT_LIMITS } from "./logistics.constants.js";
 import {
   BlockWorkDto,
+  CancelPickupRequestDto,
+  CourierRoutesQueryDto,
   CreateDeliveryPreparationGroupDto,
+  CreateCourierRouteDto,
+  CreateLogisticsWorkBodyDto,
+  CreatePickupRequestDto,
   DeliveryPreparationGroupsQueryDto,
   DeliveryPreparationWorkDto,
   LogisticsCenterQueryDto,
   LogisticsTransitionDto,
+  RecordCourierRouteStopOutcomeDto,
   UpdateDeliveryPreparationGroupDto,
   UpdateLogisticsLocationDto,
+  UpdateLogisticsWorkActionsDto,
+  UpdatePickupRequestDto,
+  UpdateCourierRouteDto,
 } from "./dto/logistics.dto.js";
-import { LogisticsService } from "./logistics.service.js";
+import { LogisticsService, type UploadedAttachmentFile } from "./logistics.service.js";
 
 @Controller()
 @UseGuards(AuthGuard, PermissionsGuard)
@@ -37,10 +52,97 @@ export class LogisticsController {
     return this.logisticsService.getCenterSummary(actor, query);
   }
 
+  @Get("routes")
+  @RequirePermission("logistics.center.read", "ASSIGNED")
+  public listRoutes(@CurrentUser() actor: AuthenticatedUser, @Query() query: CourierRoutesQueryDto) {
+    return this.logisticsService.listRoutes(actor, query);
+  }
+
+  @Post("routes")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("logistics.center.read", "ASSIGNED")
+  public createRoute(@Body() dto: CreateCourierRouteDto, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
+    return this.logisticsService.createRoute({ actor, requestMetadata: getRequestMetadata(request) }, dto);
+  }
+
+  @Post("routes/:routeId/stops/:stopId/outcome")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("routes.execute_own", "OWN_DELIVERY")
+  public recordRouteStopOutcome(
+    @Param("routeId") routeId: string,
+    @Param("stopId") stopId: string,
+    @Body() dto: RecordCourierRouteStopOutcomeDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Req() request: Request,
+  ) {
+    return this.logisticsService.recordRouteStopOutcome({ actor, requestMetadata: getRequestMetadata(request) }, routeId, stopId, dto);
+  }
+
+  @Patch("routes/:routeId")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("routes.update", "ALL")
+  public updateRoute(@Param("routeId") routeId: string, @Body() dto: UpdateCourierRouteDto, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
+    return this.logisticsService.updateRoute({ actor, requestMetadata: getRequestMetadata(request) }, routeId, dto);
+  }
+
+  @Post("logistics/works")
+  @UseGuards(CsrfGuard, LegalEntityContextGuard)
+  @UseInterceptors(FilesInterceptor("attachments", LOGISTICS_ATTACHMENT_LIMITS.maxFiles, { limits: { fileSize: LOGISTICS_ATTACHMENT_LIMITS.maxFileBytes, files: LOGISTICS_ATTACHMENT_LIMITS.maxFiles } }))
+  @RequireLegalEntityContext()
+  @RequirePermission("works.create", "ALL")
+  public createWorkWithAttachments(
+    @Body() body: CreateLogisticsWorkBodyDto,
+    @CurrentLegalEntity() legalEntity: LegalEntityContext,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Req() request: Request,
+    @UploadedFiles() files: UploadedAttachmentFile[] = [],
+  ) {
+    return this.logisticsService.createWorkWithAttachments({ actor, requestMetadata: getRequestMetadata(request) }, legalEntity, body, files);
+  }
+
+  @Get("pickup-requests")
+  @RequirePermission("pickup.read", "ALL")
+  public listPickupRequests(@CurrentUser() actor: AuthenticatedUser) {
+    return this.logisticsService.listPickupRequests(actor);
+  }
+
+  @Post("pickup-requests")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("pickup.create", "ALL")
+  public createPickupRequest(@Body() dto: CreatePickupRequestDto, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
+    return this.logisticsService.createPickupRequest({ actor, requestMetadata: getRequestMetadata(request) }, dto);
+  }
+
+  @Patch("pickup-requests/:id")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("pickup.update", "ALL")
+  public updatePickupRequest(
+    @Body() dto: UpdatePickupRequestDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param("id") pickupId: string,
+    @Req() request: Request,
+  ) {
+    return this.logisticsService.updatePickupRequest({ actor, requestMetadata: getRequestMetadata(request) }, pickupId, dto);
+  }
+
+  @Post("pickup-requests/:id/cancel")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("pickup.cancel", "ALL")
+  public cancelPickupRequest(@Body() dto: CancelPickupRequestDto, @CurrentUser() actor: AuthenticatedUser, @Param("id") pickupId: string, @Req() request: Request) {
+    return this.logisticsService.cancelPickupRequest({ actor, requestMetadata: getRequestMetadata(request) }, pickupId, dto);
+  }
+
   @Get("works/:workId/logistics")
   @RequirePermission("logistics.center.read", "ASSIGNED")
   public getWorkLogistics(@CurrentUser() actor: AuthenticatedUser, @Param("workId") workOrderId: string) {
     return this.logisticsService.getWorkLogistics(actor, workOrderId);
+  }
+
+  @Patch("works/:workId/logistics-actions")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("logistics.update_location", "ALL")
+  public updateWorkActions(@CurrentUser() actor: AuthenticatedUser, @Param("workId") workOrderId: string, @Body() dto: UpdateLogisticsWorkActionsDto, @Req() request: Request) {
+    return this.logisticsService.updateWorkActions({ actor, requestMetadata: getRequestMetadata(request) }, workOrderId, dto);
   }
 
   @Post("works/:workId/logistics/location")

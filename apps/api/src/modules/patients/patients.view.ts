@@ -127,11 +127,11 @@ export interface PatientOptionView extends PatientNameView {
 
 export interface PatientWorkView {
   readonly billing: { readonly documentId: string; readonly documentNumber: string | null; readonly status: string } | null;
-  readonly clinic: { readonly id: string; readonly name: string };
+  readonly clinic: { readonly id: string; readonly name: string } | null;
   readonly code: string;
   readonly createdAt: string;
   readonly currentStage: string | null;
-  readonly doctor: { readonly displayName: string; readonly id: string };
+  readonly doctor: { readonly displayName: string; readonly id: string } | null;
   readonly id: string;
   readonly legalEntityCode: string | null;
   readonly patientNameSnapshot: string;
@@ -301,6 +301,10 @@ function toPatientRelationships(works: readonly PatientWorkRecord[]): readonly P
   const byClinic = new Map<string, { clinic: { readonly id: string; readonly name: string }; works: PatientWorkRecord[] }>();
 
   for (const work of works) {
+    if (!work.clinic) {
+      continue;
+    }
+
     const existing = byClinic.get(work.clinic.id) ?? { clinic: work.clinic, works: [] };
     existing.works.push(work);
     byClinic.set(work.clinic.id, existing);
@@ -309,6 +313,10 @@ function toPatientRelationships(works: readonly PatientWorkRecord[]): readonly P
   return [...byClinic.values()].map((entry) => {
     const doctors = new Map<string, { displayName: string; id: string; workCount: number }>();
     for (const work of entry.works) {
+      if (!work.doctor) {
+        continue;
+      }
+
       const doctor = doctors.get(work.doctor.id) ?? { displayName: work.doctor.displayName, id: work.doctor.id, workCount: 0 };
       doctors.set(work.doctor.id, { ...doctor, workCount: doctor.workCount + 1 });
     }

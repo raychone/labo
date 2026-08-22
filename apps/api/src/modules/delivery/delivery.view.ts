@@ -222,7 +222,7 @@ export function toDeliveryDetail(delivery: DeliveryRecord, context: DeliveryAcce
     recipientRole: delivery.recipientRole,
     rescheduledFor: delivery.rescheduledFor?.toISOString() ?? null,
     works: delivery.preparationGroup.items.map((item) => ({
-      doctorName: item.workOrder.doctor.displayName,
+      doctorName: item.workOrder.doctor?.displayName ?? "-",
       cycleNumber: item.workCycle?.cycleNumber ?? null,
       id: item.workOrder.id,
       logisticsStatus: item.workOrder.activeCycle?.logisticsState?.status ?? "RECEIVED",

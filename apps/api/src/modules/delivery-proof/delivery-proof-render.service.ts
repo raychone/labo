@@ -63,7 +63,7 @@ export class DeliveryProofRenderService {
       proof: delivery.proof,
       statusLabel: statusLabels[delivery.status],
       works: delivery.preparationGroup.items.map((item) => ({
-        doctorName: item.workOrder.doctor.displayName,
+        doctorName: item.workOrder.doctor?.displayName ?? "-",
         cycleNumber: item.workCycle?.cycleNumber ?? null,
         patientName: item.workOrder.patientName,
         quantity: item.workOrder.quantity,

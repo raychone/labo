@@ -1,7 +1,7 @@
 import { Transform, Type } from "class-transformer";
 import { IsBoolean, IsIn, IsInt, IsISO8601, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
 
-import { MAX_WORK_ORDER_QUANTITY, SORT_DIRECTIONS, WORK_CLAIM_STATUSES, WORK_CYCLE_REASONS, WORK_ORDER_SORT_FIELDS, WORK_PRIORITIES, WORK_STATUSES } from "../works.constants.js";
+import { FINAL_WORK_STATUSES, MAX_WORK_ORDER_QUANTITY, SORT_DIRECTIONS, WORK_CLAIM_STATUSES, WORK_CYCLE_REASONS, WORK_ORDER_SORT_FIELDS, WORK_PRIORITIES, WORK_STATUSES } from "../works.constants.js";
 import { DEADLINE_FILTERS } from "../work-deadline-visual.js";
 
 function trimOptionalString(value: unknown): string | null | undefined {
@@ -113,8 +113,8 @@ export class ListClaimWorksQueryDto extends ListWorksQueryDto {
 export class ClaimWorkDto {
   @Transform(({ value }) => trimRequiredString(value))
   @IsString()
-  @IsIn(["NC", "NG"])
-  public readonly executionLegalEntityCode!: "NC" | "NG";
+  @IsIn(["CDT", "NG"])
+  public readonly executionLegalEntityCode!: "CDT" | "NG";
 
   @Type(() => Number)
   @IsInt()
@@ -147,14 +147,49 @@ export class ReassignWorkDto extends ClaimWorkDto {
   public readonly reason!: string;
 }
 
-export class CreateNextWorkCycleDto {
-  @Transform(({ value }) => trimRequiredString(value))
-  @IsString()
-  public readonly clinicId!: string;
+export class SetWorkStatusDto {
+  @IsIn(FINAL_WORK_STATUSES)
+  public readonly status!: (typeof FINAL_WORK_STATUSES)[number];
 
-  @Transform(({ value }) => trimRequiredString(value))
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
   @IsString()
-  public readonly doctorId!: string;
+  @MinLength(3)
+  @MaxLength(1000)
+  public readonly reason?: string | null;
+}
+
+export class UpdateTechnicianWorkDetailsDto {
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(2000)
+  public readonly clinicalNotes?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(2000)
+  public readonly internalNotes?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(4000)
+  public readonly technicalCodeNotes?: string | null;
+
+}
+
+export class CreateNextWorkCycleDto {
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  public readonly clinicId?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  public readonly doctorId?: string | null;
 
   @IsIn(WORK_CYCLE_REASONS.filter((reason) => reason !== "INITIAL"))
   public readonly reason!: Exclude<(typeof WORK_CYCLE_REASONS)[number], "INITIAL">;
@@ -181,14 +216,14 @@ export class CreateNextWorkCycleDto {
 
 export class WorkMutationDto {
   @IsOptional()
-  @Transform(({ value }) => trimRequiredString(value))
+  @Transform(({ value }) => trimOptionalString(value))
   @IsString()
-  public readonly clinicId?: string;
+  public readonly clinicId?: string | null;
 
   @IsOptional()
-  @Transform(({ value }) => trimRequiredString(value))
+  @Transform(({ value }) => trimOptionalString(value))
   @IsString()
-  public readonly doctorId?: string;
+  public readonly doctorId?: string | null;
 
   @IsOptional()
   @Transform(({ value }) => trimRequiredString(value))
@@ -212,6 +247,18 @@ export class WorkMutationDto {
   @IsString()
   @MaxLength(80)
   public readonly patientReference?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(80)
+  public readonly shade?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(80)
+  public readonly implantPlatform?: string | null;
 
   @IsOptional()
   @Type(() => Number)
@@ -239,6 +286,12 @@ export class WorkMutationDto {
   @IsString()
   @MaxLength(2000)
   public readonly internalNotes?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(4000)
+  public readonly technicalCodeNotes?: string | null;
 
   @IsOptional()
   @Transform(({ value }) => trimOptionalString(value))
@@ -282,13 +335,15 @@ export class UpsertRealLabSheetDto extends WorkFormSubmissionDto {
 }
 
 export class CreateWorkDto extends WorkMutationDto {
-  @Transform(({ value }) => trimRequiredString(value))
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
   @IsString()
-  public declare readonly clinicId: string;
+  public declare readonly clinicId?: string | null;
 
-  @Transform(({ value }) => trimRequiredString(value))
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
   @IsString()
-  public declare readonly doctorId: string;
+  public declare readonly doctorId?: string | null;
 
   @Transform(({ value }) => trimRequiredString(value))
   @IsString()
@@ -354,13 +409,15 @@ export class UpdateWorkDto extends WorkMutationDto {
 }
 
 export class WorkDeadlinePreviewDto {
-  @Transform(({ value }) => trimRequiredString(value))
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
   @IsString()
-  public readonly clinicId!: string;
+  public readonly clinicId?: string | null;
 
-  @Transform(({ value }) => trimRequiredString(value))
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
   @IsString()
-  public readonly doctorId!: string;
+  public readonly doctorId?: string | null;
 
   @Transform(({ value }) => trimRequiredString(value))
   @IsString()

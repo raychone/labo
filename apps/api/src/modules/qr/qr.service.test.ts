@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { QR_RESOLVE_LIMIT } from "./qr.constants.js";
 import { QrRateLimitService } from "./qr-rate-limit.service.js";
 import { parseQrLookup, QrService } from "./qr.service.js";
-import { createPatientDisplay, toWorkQrView } from "./qr.view.js";
+import { createPatientDisplay, createQrPayload, toWorkQrView } from "./qr.view.js";
 
 function qrWork(overrides: Partial<Parameters<typeof toWorkQrView>[0]> = {}): Parameters<typeof toWorkQrView>[0] {
   return {
@@ -29,6 +29,12 @@ describe("QR view helpers", () => {
 
     expect(JSON.stringify(view)).not.toContain("secure_token_12345678901234567890");
     expect(view.label.patientDisplay).toBe("I. P.");
+  });
+
+  it("creates opaque QR payloads from tokens instead of visible work codes", () => {
+    expect(createQrPayload("secure_token_12345678901234567890")).toBe("dl-work:secure_token_12345678901234567890");
+    expect(createQrPayload("secure_token_12345678901234567890")).not.toContain("WO-26-0001");
+    expect(createQrPayload("secure_token_12345678901234567890")).not.toContain("work_order_1");
   });
 
   it("prefers patient reference on printable labels", () => {
@@ -111,11 +117,12 @@ describe("QrService", () => {
       workType: { code: "WT-0001", id: "work_type_1", name: "Coroana zirconiu" },
       workTypeId: "work_type_1",
     };
+    const findUnique = vi.fn().mockResolvedValue(workOrder);
     const service = new QrService(
       { hasPermission: vi.fn().mockResolvedValue({ allowed: false }) } as never,
       {
         auditLog: { create: auditCreate },
-        workOrder: { findUnique: vi.fn().mockResolvedValue(workOrder) },
+        workOrder: { findUnique },
       } as never,
       { assertAllowed: vi.fn() } as never,
     );
@@ -137,6 +144,9 @@ describe("QrService", () => {
 
     expect(result.work.code).toBe("WO-2026-000001");
     expect(result.work.totalPriceMinor).toBeNull();
+    expect(findUnique).toHaveBeenCalledWith(expect.objectContaining({
+      where: { qrToken: "secure_token_12345678901234567890" },
+    }));
     expect(auditCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
         action: "works.qr_resolved",

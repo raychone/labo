@@ -256,6 +256,78 @@
   margin: 0 0 var(--dl-space-3);
 }
 
+.technician-workbench__operations-empty {
+  align-content: center;
+  border: 1px dashed var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  display: grid;
+  gap: var(--dl-space-3);
+  justify-items: center;
+  min-height: 18rem;
+  padding: var(--dl-space-5);
+  text-align: center;
+}
+
+.technician-workbench__operations-empty p {
+  color: var(--dl-color-text-muted);
+  margin: 0;
+}
+
+.technician-workbench__operations-list {
+  display: grid;
+  gap: var(--dl-space-3);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.technician-workbench__operation-row {
+  align-items: center;
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  display: grid;
+  gap: var(--dl-space-3);
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 116px;
+  padding: var(--dl-space-3);
+}
+
+.technician-workbench__operation-row input {
+  block-size: 1.125rem;
+  inline-size: 1.125rem;
+}
+
+.technician-workbench__operation-copy {
+  display: grid;
+  gap: var(--dl-space-1);
+  min-width: 0;
+}
+
+.technician-workbench__operation-copy strong {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) { .technician-workbench__operations-list { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .technician-workbench__operations-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.technician-workbench__details {
+  display: grid;
+  gap: var(--dl-space-4);
+}
+
+.technician-workbench__details-grid {
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  display: grid;
+  gap: var(--dl-space-2);
+  grid-template-columns: 1fr;
+  padding: var(--dl-space-3);
+}
+
+.technician-workbench__details-grid span {
+  color: var(--dl-color-text-muted);
+  font-size: var(--dl-font-size-small);
+  overflow-wrap: anywhere;
+}
+
 @media (min-width: 720px) {
   .technician-workbench__summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -271,7 +343,8 @@
   }
 
   .technician-workbench__filters,
-  .technician-workbench__item-grid {
+  .technician-workbench__item-grid,
+  .technician-workbench__details-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

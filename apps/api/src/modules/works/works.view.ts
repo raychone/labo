@@ -180,6 +180,18 @@ export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
         createdAt: "desc";
       };
     };
+    attachments: {
+      orderBy: {
+        uploadedAt: "asc";
+      };
+      select: {
+        fileName: true;
+        id: true;
+        mimeType: true;
+        sizeBytes: true;
+        uploadedAt: true;
+      };
+    };
     workType: true;
   };
 }>;
@@ -205,7 +217,7 @@ export interface WorkSummaryView {
     readonly code: string;
     readonly id: string;
     readonly name: string;
-  };
+  } | null;
   readonly code: string;
   readonly claim: WorkClaimView;
   readonly createdAt: string;
@@ -214,11 +226,13 @@ export interface WorkSummaryView {
   readonly doctor: {
     readonly displayName: string;
     readonly id: string;
-  };
+  } | null;
   readonly id: string;
   readonly invoicedDocumentId: string | null;
   readonly patientName: string;
   readonly patientReference: string | null;
+  readonly shade: string | null;
+  readonly implantPlatform: string | null;
   readonly patient: {
     readonly firstName: string;
     readonly birthDate: string | null;
@@ -231,6 +245,10 @@ export interface WorkSummaryView {
   readonly quantity: number;
   readonly requestedDeliveryDate: string;
   readonly status: string;
+  readonly statusChangedAt: string | null;
+  readonly waitingStartedAt: string | null;
+  readonly completedAt: string | null;
+  readonly completedByUserId: string | null;
   readonly totalPriceMinor: number | null;
   readonly executionSnapshot: ExecutionSnapshotView;
   readonly updatedAt: string;
@@ -297,12 +315,14 @@ export interface WorkDeadlineView {
 }
 
 export interface WorkDetailView extends Omit<WorkSummaryView, "workflow"> {
+  readonly attachments: readonly { readonly fileName: string; readonly id: string; readonly mimeType: string; readonly sizeBytes: number; readonly uploadedAt: string }[];
   readonly assignmentHistory: readonly WorkAssignmentEventView[];
   readonly baseUnitPriceMinor: number | null;
   readonly clinicalNotes: string | null;
   readonly createdByUserId: string | null;
   readonly externalReference: string | null;
   readonly internalNotes: string | null;
+  readonly technicalCodeNotes: string | null;
   readonly updatedByUserId: string | null;
   readonly version: number;
   readonly workflow: ReturnType<typeof toWorkflowExecutionView> | null;
@@ -318,7 +338,7 @@ export interface WorkCycleView {
   readonly openedAt: string;
   readonly closedAt: string | null;
   readonly createdBy: { readonly displayName: string; readonly publicId: string } | null;
-  readonly clinic: { readonly code: string; readonly id: string; readonly name: string };
+  readonly clinic: { readonly code: string; readonly id: string; readonly name: string } | null;
   readonly doctor: { readonly displayName: string; readonly id: string } | null;
   readonly executionCompany: { readonly code: string; readonly displayName: string } | null;
   readonly workflow: { readonly id: string | null; readonly status: string | null };
@@ -333,9 +353,9 @@ export interface WorkCyclesHistoryView {
   readonly activeCycleId: string | null;
   readonly cycles: readonly WorkCycleView[];
   readonly work: {
-    readonly clinicId: string;
+    readonly clinicId: string | null;
     readonly code: string;
-    readonly doctorId: string;
+    readonly doctorId: string | null;
     readonly id: string;
     readonly patientId: string | null;
     readonly patientName: string;
@@ -472,24 +492,30 @@ export function toWorkTypeFormOptionView(workType: { readonly code: string; read
 
 export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: boolean, access: WorkClaimAccessViewInput): WorkSummaryView {
   return {
-    clinic: {
-      code: workOrder.clinic.code,
-      id: workOrder.clinic.id,
-      name: workOrder.clinic.name,
-    },
+    clinic: workOrder.clinic
+      ? {
+          code: workOrder.clinic.code,
+          id: workOrder.clinic.id,
+          name: workOrder.clinic.name,
+        }
+      : null,
     code: workOrder.code,
     claim: toWorkClaimView(workOrder, access),
     createdAt: workOrder.createdAt.toISOString(),
     currency: includePricing ? workOrder.currency : null,
     deadline: toWorkDeadlineView(workOrder),
-    doctor: {
-      displayName: workOrder.doctor.displayName,
-      id: workOrder.doctor.id,
-    },
+    doctor: workOrder.doctor
+      ? {
+          displayName: workOrder.doctor.displayName,
+          id: workOrder.doctor.id,
+        }
+      : null,
     id: workOrder.id,
     invoicedDocumentId: workOrder.invoicedDocumentId,
-    patientName: workOrder.patientName,
+    patientName: workOrder.patient ? `${workOrder.patient.firstName} ${workOrder.patient.lastName}`.trim() : workOrder.patientName,
     patientReference: workOrder.patientReference,
+    shade: workOrder.shade,
+    implantPlatform: workOrder.implantPlatform,
     patient: workOrder.patient
       ? {
           firstName: workOrder.patient.firstName,
@@ -504,6 +530,10 @@ export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: bo
     quantity: workOrder.quantity,
     requestedDeliveryDate: workOrder.requestedDeliveryDate.toISOString(),
     status: workOrder.status,
+    statusChangedAt: workOrder.statusChangedAt?.toISOString() ?? null,
+    waitingStartedAt: workOrder.waitingStartedAt?.toISOString() ?? null,
+    completedAt: workOrder.completedAt?.toISOString() ?? null,
+    completedByUserId: workOrder.completedByUserId,
     totalPriceMinor: includePricing ? workOrder.totalPriceMinor : null,
     executionSnapshot: toExecutionSnapshotView(workOrder, includePricing),
     updatedAt: workOrder.updatedAt.toISOString(),
@@ -677,12 +707,20 @@ function getPricingSnapshotExplanation(value: Prisma.JsonValue): string | null {
 export function toWorkDetailView(workOrder: WorkOrderRecord, includePricing: boolean, access: WorkClaimAccessViewInput): WorkDetailView {
   return {
     ...toWorkSummaryView(workOrder, includePricing, access),
+    attachments: (workOrder.attachments ?? []).map((attachment) => ({
+      fileName: attachment.fileName,
+      id: attachment.id,
+      mimeType: attachment.mimeType,
+      sizeBytes: attachment.sizeBytes,
+      uploadedAt: attachment.uploadedAt.toISOString(),
+    })),
     assignmentHistory: workOrder.assignmentEvents.map(toWorkAssignmentEventView),
     baseUnitPriceMinor: includePricing ? workOrder.baseUnitPriceMinor : null,
     clinicalNotes: workOrder.clinicalNotes,
     createdByUserId: workOrder.createdByUserId,
     externalReference: workOrder.externalReference,
     internalNotes: workOrder.internalNotes,
+    technicalCodeNotes: workOrder.technicalCodeNotes,
     updatedByUserId: workOrder.updatedByUserId,
     version: workOrder.version,
     workflow: workOrder.activeCycle?.workflowExecution
@@ -703,11 +741,13 @@ export function toWorkCyclesHistoryView(workOrder: WorkCycleHistoryRecord, inclu
       closedAt: cycle.closedAt?.toISOString() ?? null,
       createdBy: cycle.createdBy ? { displayName: cycle.createdBy.displayName, publicId: cycle.createdBy.id } : null,
       cycleNumber: cycle.cycleNumber,
-      clinic: {
-        code: cycle.clinic.code,
-        id: cycle.clinic.id,
-        name: cycle.clinic.name,
-      },
+      clinic: cycle.clinic
+        ? {
+            code: cycle.clinic.code,
+            id: cycle.clinic.id,
+            name: cycle.clinic.name,
+          }
+        : null,
       deadline: {
         effectiveDueAt: cycle.deadlineEffectiveDueAtSnapshot?.toISOString() ?? null,
         mode: cycle.deadlineModeSnapshot,

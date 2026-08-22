@@ -5,11 +5,11 @@ import { QR_PAYLOAD_PREFIX } from "./qr.constants.js";
 export interface QrWorkRecord {
   readonly clinic: {
     readonly name: string;
-  };
+  } | null;
   readonly code: string;
   readonly doctor: {
     readonly displayName: string;
-  };
+  } | null;
   readonly id: string;
   readonly patientName: string;
   readonly patientReference: string | null;
@@ -60,8 +60,8 @@ export function createPatientDisplay(patientName: string, patientReference: stri
 export function toWorkQrView(workOrder: QrWorkRecord): WorkQrView {
   return {
     label: {
-      clinicName: workOrder.clinic.name,
-      doctorName: workOrder.doctor.displayName,
+      clinicName: workOrder.clinic?.name ?? "-",
+      doctorName: workOrder.doctor?.displayName ?? "-",
       dueDate: workOrder.requestedDeliveryDate.toISOString(),
       patientDisplay: createPatientDisplay(workOrder.patientName, workOrder.patientReference),
       priority: workOrder.priority,

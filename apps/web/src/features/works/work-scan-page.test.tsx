@@ -55,7 +55,7 @@ const scanContext = {
   resolvedAt: "2026-07-22T12:00:00.000Z",
   work: {
     clinicName: "Clinica Test",
-    code: "WO-2026-000001",
+    code: "WO-26-0001",
     doctorName: "Dr. Ana Popescu",
     id: "work_order_1",
     patientName: "Ion Pop",
@@ -105,7 +105,7 @@ describe("WorkScanPage", () => {
         return Promise.resolve(createJsonResponse({
           items: [{
             clinic: { code: "NC", id: "clinic_1", name: "Clinica Test" },
-            code: "WO-2026-000001",
+            code: "WO-26-0001",
             doctor: { clinicId: "clinic_1", displayName: "Dr. Ana Popescu", id: "doctor_1" },
             id: "work_order_1",
             patientName: "Ion Pop",
@@ -121,7 +121,7 @@ describe("WorkScanPage", () => {
       }
       if (url.endsWith("/scan/resolve")) {
         expect(init?.method).toBe("POST");
-        expect(init?.body).toBe(JSON.stringify({ payload: "WO-2026-000001", source: "manual" }));
+        expect(init?.body).toBe(JSON.stringify({ payload: "WO-26-0001", source: "manual" }));
         return Promise.resolve(createJsonResponse(scanContext));
       }
 
@@ -131,11 +131,11 @@ describe("WorkScanPage", () => {
 
     renderWithProviders(<WorkScanPage />);
 
-    fireEvent.change(await screen.findByLabelText("Cod scanat sau cod lucrare"), { target: { value: "WO-2026-000001" } });
+    fireEvent.change(await screen.findByLabelText("Cod scanat sau cod lucrare"), { target: { value: "WO-26-0001" } });
     fireEvent.click(screen.getByRole("button", { name: "Caută lucrarea" }));
 
     expect(await screen.findByText("Lucrare găsită")).toBeDefined();
-    expect(await screen.findByText("WO-2026-000001")).toBeDefined();
+    expect(await screen.findByText("WO-26-0001")).toBeDefined();
     expect(await screen.findByText("Flux standard")).toBeDefined();
     expect(await screen.findByText("Tehnician Demo")).toBeDefined();
     expect(await screen.findByText("Necompletată")).toBeDefined();

@@ -12,12 +12,14 @@ export const BILLING_AUDIT_ACTIONS = {
   monthRegistryViewed: "billing.month_registry_viewed",
   paymentCancelled: "billing.payment_cancelled",
   paymentRecorded: "billing.payment_recorded",
+  documentShareAttempted: "billing.document_share_attempted",
   printViewed: "billing.print_viewed",
   proformaConverted: "billing.proforma_converted",
   proformaCreated: "billing.proforma_created",
   proformaIssued: "billing.proforma_issued",
   seriesCreated: "billing.series_created",
   seriesUpdated: "billing.series_updated",
+  stornoCreated: "billing.storno_created",
 } as const;
 
 export const BILLING_RESOURCE_TYPES = {
@@ -25,6 +27,7 @@ export const BILLING_RESOURCE_TYPES = {
   billingExport: "billing_export",
   billingSeries: "billing_series",
   payment: "payment",
+  storno: "storno",
 } as const;
 
 export const BILLING_DOCUMENT_SORT_FIELDS = ["createdAt", "issueDate", "formattedNumber", "totalMinor", "status"] as const;

@@ -1,7 +1,13 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { plainToInstance } from "class-transformer";
+import { validate } from "class-validator";
+import type { Buffer } from "node:buffer";
 import {
+  CourierRouteEventType,
+  CourierRouteStatus,
   DeliveryPreparationGroupStatus,
   LogisticsEventType,
+  PickupRequestStatus,
   WorkLogisticsStatus,
   WorkWorkflowExecutionStatus,
   type LogisticsLocationCode,
@@ -11,16 +17,28 @@ import {
 
 import type { AuthenticatedUser, RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
+import type { LegalEntityContext } from "../organization-context/organization-context.view.js";
 import { AuthorizationService } from "../rbac/authorization.service.js";
-import { LOGISTICS_AUDIT_ACTIONS, LOGISTICS_RESOURCE_TYPES } from "./logistics.constants.js";
+import { CreateWorkDto } from "../works/dto/works.dto.js";
+import { WorksService } from "../works/works.service.js";
+import { LOGISTICS_ATTACHMENT_LIMITS, LOGISTICS_AUDIT_ACTIONS, LOGISTICS_RESOURCE_TYPES } from "./logistics.constants.js";
 import type {
   BlockWorkDto,
+  CancelPickupRequestDto,
+  CourierRoutesQueryDto,
   CreateDeliveryPreparationGroupDto,
+  CreateCourierRouteDto,
+  CreateLogisticsWorkBodyDto,
+  CreatePickupRequestDto,
   DeliveryPreparationGroupsQueryDto,
   LogisticsCenterQueryDto,
   LogisticsTransitionDto,
+  RecordCourierRouteStopOutcomeDto,
   UpdateDeliveryPreparationGroupDto,
   UpdateLogisticsLocationDto,
+  UpdateLogisticsWorkActionsDto,
+  UpdatePickupRequestDto,
+  UpdateCourierRouteDto,
 } from "./dto/logistics.dto.js";
 import {
   type ActionContext,
@@ -40,7 +58,16 @@ import {
   toWorkLogisticsView,
 } from "./logistics.view.js";
 
-type LogisticsCenterCategory = "ALL" | "INTRARI_ASTAZI" | "DE_VERIFICAT" | "IN_PRODUCTIE" | "NEASIGNATE" | "BLOCARE" | "URGENTE" | "INTARZIATE" | "FINALIZATE_AZI" | "DE_AMBALAT" | "IN_AMBALARE" | "GATA_DE_LIVRARE" | "NEFACTURATE";
+type LogisticsCenterCategory = "ALL" | "INTRARI_ASTAZI" | "DE_VERIFICAT" | "IN_PRODUCTIE" | "NEASIGNATE" | "BLOCARE" | "URGENTE" | "INTARZIATE" | "FINALIZATE_AZI" | "DE_AMBALAT" | "IN_AMBALARE" | "GATA_DE_LIVRARE" | "NEFACTURATE" | "IN_ASTEPTARE" | "DE_LIVRAT" | "DE_RIDICAT";
+
+function isWithinDays(value: string, days: 1 | 2 | 3): boolean {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(value);
+  due.setHours(0, 0, 0, 0);
+  const difference = Math.ceil((due.getTime() - today.getTime()) / 86_400_000);
+  return difference >= 0 && difference <= days;
+}
 
 export interface PaginatedLogisticsCenterResponse {
   readonly items: readonly LogisticsCenterItem[];
@@ -55,6 +82,105 @@ interface ActorContext {
   readonly requestMetadata: RequestMetadata;
 }
 
+export interface UploadedAttachmentFile {
+  readonly buffer: Buffer;
+  readonly mimetype: string;
+  readonly originalname: string;
+  readonly size: number;
+}
+
+export interface WorkAttachmentSummary {
+  readonly fileName: string;
+  readonly id: string;
+  readonly mimeType: string;
+  readonly sizeBytes: number;
+  readonly uploadedAt: string;
+}
+
+export interface LogisticsWorkCreateResponse {
+  readonly attachments: readonly WorkAttachmentSummary[];
+  readonly work: Awaited<ReturnType<WorksService["createWork"]>>;
+}
+
+export interface PickupRequestView {
+  readonly address: string | null;
+  readonly cancelledAt: string | null;
+  readonly clinic: {
+    readonly id: string;
+    readonly name: string;
+  };
+  readonly createdAt: string;
+  readonly doctor: {
+    readonly id: string;
+    readonly name: string;
+  };
+  readonly exactTime: string | null;
+  readonly id: string;
+  readonly notes: string | null;
+  readonly phone: string | null;
+  readonly scheduledDate: string;
+  readonly scheduleLabel: string;
+  readonly scheduleType: "EXACT" | "RANGE";
+  readonly status: "SCHEDULED" | "CANCELLED";
+  readonly statusLabel: string;
+  readonly updatedAt: string;
+  readonly version: number;
+  readonly windowEndTime: string | null;
+  readonly windowStartTime: string | null;
+}
+
+export interface CourierRouteStopView {
+  readonly addressOverride: string | null;
+  readonly id: string;
+  readonly outcomeAt: string | null;
+  readonly outcomeByUserName: string | null;
+  readonly outcomeNotes: string | null;
+  readonly outcomeStatus: string;
+  readonly phoneOverride: string | null;
+  readonly pickupRequestId: string | null;
+  readonly stopOrder: number;
+  readonly type: string;
+  readonly workOrderId: string | null;
+}
+
+export interface CourierRouteView {
+  readonly completedAt: string | null;
+  readonly courier: { readonly id: string; readonly name: string } | null;
+  readonly createdAt: string;
+  readonly id: string;
+  readonly name: string;
+  readonly notes: string | null;
+  readonly routeDate: string;
+  readonly routeNumber: string;
+  readonly startedAt: string | null;
+  readonly status: string;
+  readonly stops: readonly CourierRouteStopView[];
+  readonly updatedAt: string;
+  readonly version: number;
+}
+
+export interface PaginatedCourierRoutesResponse {
+  readonly items: readonly CourierRouteView[];
+  readonly page: number;
+  readonly pageCount: number;
+  readonly pageSize: number;
+  readonly total: number;
+}
+
+const courierRouteInclude = {
+  courier: { select: { displayName: true, id: true } },
+  stops: {
+    include: {
+      outcomeBy: { select: { displayName: true } },
+      pickupRequest: { select: { address: true, clinic: { select: { addressLine1: true, addressLine2: true, city: true, name: true, phone: true, postalCode: true } }, exactTime: true, phone: true, scheduledDate: true, windowEndTime: true, windowStartTime: true } },
+      workOrder: { select: { clinic: { select: { addressLine1: true, addressLine2: true, city: true, name: true, phone: true, postalCode: true } }, code: true, patientName: true } },
+    },
+    orderBy: { stopOrder: "asc" },
+  },
+} as const satisfies Prisma.CourierRouteInclude;
+
+type CourierRouteRecord = Prisma.CourierRouteGetPayload<{ include: typeof courierRouteInclude }>;
+
 type LogisticsTx = Prisma.TransactionClient;
 
 @Injectable()
@@ -62,7 +188,290 @@ export class LogisticsService {
   public constructor(
     @Inject(AuthorizationService) private readonly authorizationService: AuthorizationService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(WorksService) private readonly worksService: WorksService,
   ) {}
+
+  public async createWorkWithAttachments(
+    context: ActorContext,
+    legalEntity: LegalEntityContext,
+    body: CreateLogisticsWorkBodyDto,
+    files: readonly UploadedAttachmentFile[],
+  ): Promise<LogisticsWorkCreateResponse> {
+    await this.ensurePermission(context.actor.id, "works.create");
+    await this.ensurePermission(context.actor.id, "files.upload");
+    const dto = await this.parseCreateWorkDto(body.work);
+    this.validateAttachments(files);
+    const canSetManualDeadline = await this.canSetManualDeadline(context.actor.id);
+    const work = await this.worksService.createWork({ actorUserId: context.actor.id, requestMetadata: context.requestMetadata }, legalEntity, dto, canSetManualDeadline);
+    const attachments = await this.saveAttachments(context, work.id, files);
+
+    return { attachments, work };
+  }
+
+  public async listPickupRequests(actor: AuthenticatedUser): Promise<readonly PickupRequestView[]> {
+    await this.ensurePermission(actor.id, "pickup.read");
+    const pickups = await this.prisma.pickupRequest.findMany({
+      include: { clinic: true, doctor: true },
+      orderBy: [{ scheduledDate: "asc" }, { exactTime: "asc" }, { windowStartTime: "asc" }, { createdAt: "asc" }],
+      take: 200,
+    });
+    return pickups.map((pickup) => this.toPickupRequestView(pickup));
+  }
+
+  public async createPickupRequest(context: ActorContext, dto: CreatePickupRequestDto): Promise<PickupRequestView> {
+    await this.ensurePermission(context.actor.id, "pickup.create");
+    const schedule = this.parsePickupSchedule(dto);
+    await this.ensurePickupClinicDoctor(dto.clinicId, dto.doctorId);
+    const pickup = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.pickupRequest.create({
+        data: {
+          address: dto.address ?? null,
+          clinicId: dto.clinicId,
+          doctorId: dto.doctorId,
+          exactTime: schedule.exactTime,
+          notes: dto.notes ?? null,
+          phone: dto.phone ?? null,
+          scheduledDate: schedule.scheduledDate,
+          scheduleType: schedule.scheduleType,
+          windowEndTime: schedule.windowEndTime,
+          windowStartTime: schedule.windowStartTime,
+          createdByUserId: context.actor.id,
+        },
+        include: { clinic: true, doctor: true },
+      });
+      await this.recordAudit(tx, context, LOGISTICS_AUDIT_ACTIONS.pickupCreated, created.id, this.toPickupAuditMetadata(created));
+      return created;
+    });
+    return this.toPickupRequestView(pickup);
+  }
+
+  public async updatePickupRequest(context: ActorContext, pickupId: string, dto: UpdatePickupRequestDto): Promise<PickupRequestView> {
+    await this.ensurePermission(context.actor.id, "pickup.update");
+    const schedule = this.parsePickupSchedule(dto);
+    await this.ensurePickupClinicDoctor(dto.clinicId, dto.doctorId);
+    const pickup = await this.prisma.$transaction(async (tx) => {
+      const current = await tx.pickupRequest.findUnique({ include: { clinic: true, doctor: true }, where: { id: pickupId } });
+      if (!current) {
+        throw new NotFoundException("Cererea de ridicare nu a fost găsită.");
+      }
+      if (current.status === PickupRequestStatus.CANCELLED) {
+        throw new BadRequestException("Cererea de ridicare anulată nu poate fi modificată.");
+      }
+      this.assertVersion(current, dto.version);
+      const updated = await tx.pickupRequest.update({
+        data: {
+          address: dto.address ?? null,
+          clinicId: dto.clinicId,
+          doctorId: dto.doctorId,
+          exactTime: schedule.exactTime,
+          notes: dto.notes ?? null,
+          phone: dto.phone ?? null,
+          scheduledDate: schedule.scheduledDate,
+          scheduleType: schedule.scheduleType,
+          updatedByUserId: context.actor.id,
+          version: { increment: 1 },
+          windowEndTime: schedule.windowEndTime,
+          windowStartTime: schedule.windowStartTime,
+        },
+        include: { clinic: true, doctor: true },
+        where: { id: pickupId },
+      });
+      await this.recordAudit(tx, context, LOGISTICS_AUDIT_ACTIONS.pickupUpdated, updated.id, {
+        after: this.toPickupAuditMetadata(updated),
+        before: this.toPickupAuditMetadata(current),
+      });
+      return updated;
+    });
+    return this.toPickupRequestView(pickup);
+  }
+
+  public async cancelPickupRequest(context: ActorContext, pickupId: string, dto: CancelPickupRequestDto): Promise<PickupRequestView> {
+    await this.ensurePermission(context.actor.id, "pickup.cancel");
+    const pickup = await this.prisma.$transaction(async (tx) => {
+      const current = await tx.pickupRequest.findUnique({ include: { clinic: true, doctor: true }, where: { id: pickupId } });
+      if (!current) {
+        throw new NotFoundException("Cererea de ridicare nu a fost găsită.");
+      }
+      if (current.status === PickupRequestStatus.CANCELLED) {
+        throw new BadRequestException("Cererea de ridicare este deja anulată.");
+      }
+      this.assertVersion(current, dto.version);
+      const updated = await tx.pickupRequest.update({
+        data: {
+          cancelledAt: new Date(),
+          cancelledByUserId: context.actor.id,
+          status: PickupRequestStatus.CANCELLED,
+          updatedByUserId: context.actor.id,
+          version: { increment: 1 },
+        },
+        include: { clinic: true, doctor: true },
+        where: { id: pickupId },
+      });
+      await this.recordAudit(tx, context, LOGISTICS_AUDIT_ACTIONS.pickupCancelled, updated.id, {
+        after: this.toPickupAuditMetadata(updated),
+        before: this.toPickupAuditMetadata(current),
+      });
+      return updated;
+    });
+    return this.toPickupRequestView(pickup);
+  }
+
+  public async createRoute(context: ActorContext, dto: CreateCourierRouteDto): Promise<CourierRouteView> {
+    await this.ensureRoutePermission(context.actor.id, "routes.create");
+    if (dto.courierUserId) {
+      await this.ensurePermission(context.actor.id, "routes.assign");
+    }
+    const routeDate = startOfUtcDay(dto.routeDate);
+    const pickupWorkIds = dto.stops.filter((stop) => stop.type === "PICKUP" && stop.workOrderId).map((stop) => stop.workOrderId as string);
+    if (pickupWorkIds.length > 0) {
+      const pickupWorks = await this.prisma.workOrder.findMany({ select: { id: true }, where: { id: { in: pickupWorkIds }, requiresPickup: true } });
+      if (pickupWorks.length !== new Set(pickupWorkIds).size) {
+        throw new BadRequestException("Stopurile de ridicare trebuie să fie lucrări marcate pentru ridicare sau cereri standalone.");
+      }
+    }
+    const stops = this.toRouteStopCreates(dto.stops);
+    const workOrderIds = dto.stops.map((stop) => stop.workOrderId).filter((id): id is string => Boolean(id));
+    const pickupRequestIds = dto.stops.map((stop) => stop.pickupRequestId).filter((id): id is string => Boolean(id));
+    if (workOrderIds.length > 0 || pickupRequestIds.length > 0) {
+      const existing = await this.prisma.courierRouteStop.findFirst({ where: { OR: [{ workOrderId: { in: workOrderIds } }, { pickupRequestId: { in: pickupRequestIds } }] } });
+      if (existing) throw new ConflictException("Acest item este deja inclus într-o listă de traseu.");
+    }
+    const route = await this.prisma.$transaction(async (tx) => {
+      const routeNumber = await this.nextRouteNumber(tx, routeDate);
+      const created = await tx.courierRoute.create({
+        data: {
+          courierUserId: dto.courierUserId ?? null,
+          createdByUserId: context.actor.id,
+          name: dto.name,
+          notes: dto.notes ?? null,
+          routeDate,
+          routeNumber,
+          status: dto.courierUserId ? CourierRouteStatus.ASSIGNED : CourierRouteStatus.DRAFT,
+          stops: { create: stops },
+        },
+        include: courierRouteInclude,
+      });
+      await this.recordRouteEvent(tx, context, created.id, CourierRouteEventType.ROUTE_CREATED, {
+        routeDate: created.routeDate.toISOString().slice(0, 10),
+        routeId: created.id,
+        routeNumber: created.routeNumber,
+        stopCount: created.stops.length,
+      });
+      await this.recordAudit(tx, context, LOGISTICS_AUDIT_ACTIONS.routeCreated, created.id, this.toRouteAuditMetadata(created));
+      return created;
+    });
+    return this.toCourierRouteView(route);
+  }
+
+  public async listRoutes(actor: AuthenticatedUser, query: CourierRoutesQueryDto): Promise<PaginatedCourierRoutesResponse> {
+    const canReadAll = await this.hasRoutePermission(actor.id, "routes.read", "ALL");
+    const canReadOwn = canReadAll || await this.hasPermission(actor.id, "routes.read", "OWN_DELIVERY");
+    if (!canReadOwn) {
+      throw new ForbiddenException("Nu ai permisiunea necesară pentru trasee.");
+    }
+    const pageSize = Math.min(query.pageSize, 100);
+    const page = Math.max(query.page, 1);
+    const where = this.toRouteWhere(query, actor.id, canReadAll);
+    const [total, routes] = await Promise.all([
+      this.prisma.courierRoute.count({ where }),
+      this.prisma.courierRoute.findMany({
+        include: courierRouteInclude,
+        orderBy: [{ routeDate: "asc" }, { routeNumber: "asc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        where,
+      }),
+    ]);
+    return {
+      items: routes.map((route) => this.toCourierRouteView(route)),
+      page,
+      pageCount: Math.max(1, Math.ceil(total / pageSize)),
+      pageSize,
+      total,
+    };
+  }
+
+  public async updateRoute(context: ActorContext, routeId: string, dto: UpdateCourierRouteDto): Promise<CourierRouteView> {
+    await this.ensureRoutePermission(context.actor.id, "routes.update");
+    if (dto.courierUserId) await this.ensurePermission(context.actor.id, "routes.assign");
+    const stops = this.toRouteStopCreates(dto.stops);
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const current = await tx.courierRoute.findUnique({ where: { id: routeId }, select: { version: true } });
+      if (!current) throw new NotFoundException("Traseul nu a fost găsit.");
+      if (current.version !== dto.version) throw new ConflictException("Traseul a fost modificat între timp.");
+      const route = await tx.courierRoute.update({
+        data: {
+          courierUserId: dto.courierUserId ?? null,
+          name: dto.name,
+          notes: dto.notes ?? null,
+          routeDate: startOfUtcDay(dto.routeDate),
+          updatedByUserId: context.actor.id,
+          version: { increment: 1 },
+          stops: { deleteMany: {}, create: stops },
+        },
+        include: courierRouteInclude,
+        where: { id: routeId },
+      });
+      await this.recordAudit(tx, context, LOGISTICS_AUDIT_ACTIONS.routeUpdated, route.id, this.toRouteAuditMetadata(route));
+      return route;
+    });
+    return this.toCourierRouteView(updated);
+  }
+
+  public async recordRouteStopOutcome(context: ActorContext, routeId: string, stopId: string, dto: RecordCourierRouteStopOutcomeDto): Promise<CourierRouteView> {
+    const now = new Date();
+    const route = await this.prisma.$transaction(async (tx) => {
+      const current = await tx.courierRoute.findUnique({ include: courierRouteInclude, where: { id: routeId } });
+      if (!current) {
+        throw new NotFoundException("Traseul nu a fost găsit.");
+      }
+      await this.assertRouteExecutionAccess(context.actor.id, current.courierUserId);
+      const stop = current.stops.find((item) => item.id === stopId);
+      if (!stop) {
+        throw new NotFoundException("Stopul nu a fost găsit.");
+      }
+      this.assertStopOutcome(stop.type, dto.outcomeStatus);
+      const canCorrect = await this.hasPermission(context.actor.id, "routes.execute_own", "ALL");
+      const isCorrection = stop.outcomeStatus !== "PENDING";
+      if (isCorrection && !canCorrect) {
+        throw new ConflictException("Stopul are deja rezultat.");
+      }
+      await tx.courierRouteStop.update({
+        data: {
+          failureReason: dto.failureReason ?? null,
+          outcomeAt: now,
+          outcomeByUserId: context.actor.id,
+          outcomeNotes: dto.notes ?? null,
+          outcomeStatus: dto.outcomeStatus,
+        },
+        where: { id: stopId },
+      });
+      const allDone = current.stops.every((item) => item.id === stopId ? dto.outcomeStatus !== "PENDING" : item.outcomeStatus !== "PENDING");
+      const updated = await tx.courierRoute.update({
+        data: {
+          ...(allDone ? { completedAt: now, status: CourierRouteStatus.COMPLETED } : { startedAt: current.startedAt ?? now, status: CourierRouteStatus.IN_PROGRESS }),
+          updatedByUserId: context.actor.id,
+          version: { increment: 1 },
+        },
+        include: courierRouteInclude,
+        where: { id: routeId },
+      });
+      await this.recordRouteEvent(tx, context, routeId, isCorrection ? CourierRouteEventType.STOP_OUTCOME_CORRECTED : CourierRouteEventType.STOP_OUTCOME_RECORDED, {
+        outcomeStatus: dto.outcomeStatus,
+        routeId,
+        stopId,
+        stopOrder: stop.stopOrder,
+        type: stop.type,
+      });
+      await this.recordAudit(tx, context, isCorrection ? LOGISTICS_AUDIT_ACTIONS.routeStopOutcomeCorrected : LOGISTICS_AUDIT_ACTIONS.routeStopOutcomeRecorded, routeId, {
+        after: this.toRouteAuditMetadata(updated),
+        before: this.toRouteAuditMetadata(current),
+        stopId,
+      });
+      return updated;
+    });
+    return this.toCourierRouteView(route);
+  }
 
   public async getCenter(actor: AuthenticatedUser, query: LogisticsCenterQueryDto): Promise<PaginatedLogisticsCenterResponse> {
     const actionContext = await this.createActionContext(actor.id);
@@ -71,7 +480,6 @@ export class LogisticsService {
       include: logisticsWorkInclude,
       orderBy: this.toWorkOrderSort(query),
       where: this.toWorkWhere(query),
-      take: 500,
     });
     const filtered = workOrders
       .map((work) => toLogisticsCenterItem(work, actionContext, now))
@@ -95,14 +503,40 @@ export class LogisticsService {
     const workOrders = await this.prisma.workOrder.findMany({
       include: logisticsWorkInclude,
       where: this.toWorkWhere({ ...query, page: 1, pageSize: 100, sortBy: "requestedDeliveryDate", sortDirection: "asc" }),
-      take: 500,
     });
-    return createLogisticsSummary(workOrders.map((work) => toLogisticsCenterItem(work, actionContext, now)));
+    const toPickup = await this.prisma.pickupRequest.count({ where: this.toPickupWhere(query) });
+    return createLogisticsSummary(workOrders.map((work) => toLogisticsCenterItem(work, actionContext, now)), toPickup);
   }
 
   public async getWorkLogistics(actor: AuthenticatedUser, workOrderId: string): Promise<WorkLogisticsView> {
     const work = await this.findWork(workOrderId);
     return toWorkLogisticsView(work, await this.createActionContext(actor.id), new Date());
+  }
+
+  public async updateWorkActions(context: ActorContext, workOrderId: string, dto: UpdateLogisticsWorkActionsDto): Promise<WorkLogisticsView> {
+    await this.ensurePermission(context.actor.id, "logistics.update_location");
+    const current = await this.findWork(workOrderId);
+    const updated = await this.prisma.workOrder.update({
+      data: {
+        ...(dto.logisticsNote !== undefined ? { logisticsNote: dto.logisticsNote } : {}),
+        ...(dto.marker !== undefined ? { logisticsMarker: dto.marker } : {}),
+        ...(dto.requiresDelivery !== undefined ? { requiresDelivery: dto.requiresDelivery, ...(dto.requiresDelivery ? { requiresPickup: false } : {}) } : {}),
+        ...(dto.requiresPickup !== undefined ? { requiresPickup: dto.requiresPickup, ...(dto.requiresPickup ? { requiresDelivery: false } : {}) } : {}),
+        updatedByUserId: context.actor.id,
+        version: { increment: 1 },
+      },
+      where: { id: workOrderId },
+    });
+    await this.prisma.auditLog.create({
+      data: {
+        action: LOGISTICS_AUDIT_ACTIONS.workActionsUpdated,
+        actorUserId: context.actor.id,
+        metadata: { after: { logisticsMarker: updated.logisticsMarker, logisticsNote: updated.logisticsNote, requiresDelivery: updated.requiresDelivery, requiresPickup: updated.requiresPickup }, before: { logisticsMarker: current.logisticsMarker, logisticsNote: current.logisticsNote, requiresDelivery: current.requiresDelivery, requiresPickup: current.requiresPickup } },
+        resourceId: workOrderId,
+        resourceType: LOGISTICS_RESOURCE_TYPES.workLogistics,
+      },
+    });
+    return this.getWorkLogistics(context.actor, workOrderId);
   }
 
   public async updateLocation(context: ActorContext, workOrderId: string, dto: UpdateLogisticsLocationDto): Promise<WorkLogisticsView> {
@@ -367,7 +801,7 @@ export class LogisticsService {
         groupClinicId: groupRecord.clinicId,
         groupStatus: groupRecord.status,
           hasActiveGroup: work.deliveryPreparationItems.some((item) => item.workCycleId === work.activeCycleId),
-        workClinicId: work.clinicId,
+        workClinicId: work.clinicId ?? "",
         workLogisticsStatus: status,
       })) {
         throw new BadRequestException("Lucrarea trebuie să fie gata de livrare, fără grup activ și din aceeași clinică.");
@@ -530,10 +964,16 @@ export class LogisticsService {
     if (work.activeCycle.logisticsState) {
       return work.activeCycle.logisticsState;
     }
-    const status = work.activeCycle.workflowExecution?.status === WorkWorkflowExecutionStatus.ACTIVE ? WorkLogisticsStatus.IN_PRODUCTION : WorkLogisticsStatus.RECEIVED;
+    const status = work.status === "FINALIZATA"
+      ? WorkLogisticsStatus.READY_FOR_PACKING
+      : work.activeCycle.workflowExecution?.status === WorkWorkflowExecutionStatus.ACTIVE
+        ? WorkLogisticsStatus.IN_PRODUCTION
+        : WorkLogisticsStatus.RECEIVED;
     const state = await tx.workLogisticsState.create({
       data: {
-        physicalLocationCode: status === WorkLogisticsStatus.IN_PRODUCTION ? "PRODUCTIE" : "RECEPTIE",
+        physicalLocationCode: status === WorkLogisticsStatus.READY_FOR_PACKING ? "RAFT_FINISARE" : status === WorkLogisticsStatus.IN_PRODUCTION ? "PRODUCTIE" : "RECEPTIE",
+        readyForPackingAt: status === WorkLogisticsStatus.READY_FOR_PACKING ? work.completedAt : null,
+        readyForPackingByUserId: status === WorkLogisticsStatus.READY_FOR_PACKING ? work.completedByUserId : null,
         status,
         workCycleId: work.activeCycle.id,
         workOrderId,
@@ -552,6 +992,10 @@ export class LogisticsService {
   }
 
   private async assertWorkflowCompletedOrOverride(tx: LogisticsTx, workOrderId: string, override: boolean): Promise<void> {
+    const work = await tx.workOrder.findUnique({ select: { status: true }, where: { id: workOrderId } });
+    if (work?.status === "FINALIZATA") {
+      return;
+    }
     const execution = await tx.workWorkflowExecution.findFirst({ select: { status: true }, where: { workCycle: { activeForWorkOrder: { id: workOrderId } }, workOrderId } });
     if (execution?.status === WorkWorkflowExecutionStatus.COMPLETED) {
       return;
@@ -563,6 +1007,10 @@ export class LogisticsService {
   }
 
   private async deriveNonBlockedStatus(tx: LogisticsTx, workOrderId: string): Promise<WorkLogisticsStatus> {
+    const work = await tx.workOrder.findUnique({ select: { status: true }, where: { id: workOrderId } });
+    if (work?.status === "FINALIZATA") {
+      return WorkLogisticsStatus.READY_FOR_PACKING;
+    }
     const execution = await tx.workWorkflowExecution.findFirst({ select: { status: true }, where: { workCycle: { activeForWorkOrder: { id: workOrderId } }, workOrderId } });
     return execution?.status === WorkWorkflowExecutionStatus.COMPLETED ? WorkLogisticsStatus.READY_FOR_PACKING : WorkLogisticsStatus.IN_PRODUCTION;
   }
@@ -593,14 +1041,33 @@ export class LogisticsService {
 
   private toWorkWhere(query: LogisticsCenterQueryDto): Prisma.WorkOrderWhereInput {
     const search = query.search?.trim();
+    const dateRange = toRequestedDeliveryRange(query);
+    const and: Prisma.WorkOrderWhereInput[] = [];
+    if (query.logisticsStatus) {
+      and.push({ activeCycle: { is: { logisticsState: { is: { status: query.logisticsStatus } } } } });
+    }
+    if (query.technicianId) {
+      and.push({ activeCycle: { is: { workflowExecution: { is: { stages: { some: { assignedUserId: query.technicianId } } } } } } });
+    }
+    if (query.workflowStageKey) {
+      and.push({ activeCycle: { is: { workflowExecution: { is: { currentStage: { is: { stageKeySnapshot: query.workflowStageKey } } } } } } });
+    }
+    if (dateRange) {
+      // Finalized works belong to the day they were completed; other works remain date-filtered by deadline.
+      and.push({
+        OR: [
+          { requestedDeliveryDate: dateRange },
+          { completedAt: dateRange, status: "FINALIZATA" },
+        ],
+      });
+    }
     return {
+      ...(and.length > 0 ? { AND: and } : {}),
       ...(query.clinicId ? { clinicId: query.clinicId } : {}),
       ...(query.doctorId ? { doctorId: query.doctorId } : {}),
+      ...(query.workTypeId ? { workTypeId: query.workTypeId } : {}),
+      ...(query.receptionUserId ? { createdByUserId: query.receptionUserId } : {}),
       ...(query.priority ? { priority: query.priority } : {}),
-      ...(query.dateFrom || query.dateTo ? { requestedDeliveryDate: { ...(query.dateFrom ? { gte: new Date(query.dateFrom) } : {}), ...(query.dateTo ? { lte: new Date(query.dateTo) } : {}) } } : {}),
-      ...(query.logisticsStatus ? { activeCycle: { is: { logisticsState: { is: { status: query.logisticsStatus } } } } } : {}),
-      ...(query.technicianId ? { activeCycle: { is: { workflowExecution: { is: { stages: { some: { assignedUserId: query.technicianId } } } } } } } : {}),
-      ...(query.workflowStageKey ? { activeCycle: { is: { workflowExecution: { is: { currentStage: { is: { stageKeySnapshot: query.workflowStageKey } } } } } } } : {}),
       ...(search ? {
         OR: [
           { code: { contains: search, mode: "insensitive" } },
@@ -610,6 +1077,17 @@ export class LogisticsService {
           { doctor: { displayName: { contains: search, mode: "insensitive" } } },
         ],
       } : {}),
+    };
+  }
+
+  private toPickupWhere(query: LogisticsCenterQueryDto): Prisma.PickupRequestWhereInput {
+    const dateRange = toScheduledDateRange(query);
+    return {
+      status: PickupRequestStatus.SCHEDULED,
+      ...(query.clinicId ? { clinicId: query.clinicId } : {}),
+      ...(query.doctorId ? { doctorId: query.doctorId } : {}),
+      ...(query.receptionUserId ? { createdByUserId: query.receptionUserId } : {}),
+      ...(dateRange ? { scheduledDate: dateRange } : {}),
     };
   }
 
@@ -630,6 +1108,12 @@ export class LogisticsService {
     if (query.billingStatus && item.billing.documentStatus !== query.billingStatus && item.billing.paymentStatus !== query.billingStatus) {
       return false;
     }
+    if (query.deliveryHorizonDays && !isWithinDays(item.requestedDeliveryDate, query.deliveryHorizonDays)) {
+      return false;
+    }
+    if (query.pickupHorizonDays && !isWithinDays(item.requestedDeliveryDate, query.pickupHorizonDays)) {
+      return false;
+    }
     return this.matchesCategory(item, query.category);
   }
 
@@ -646,6 +1130,9 @@ export class LogisticsService {
     if (category === "DE_AMBALAT") return item.logistics.status === "READY_FOR_PACKING";
     if (category === "IN_AMBALARE") return item.logistics.status === "PACKING";
     if (category === "GATA_DE_LIVRARE") return item.logistics.status === "READY_FOR_DELIVERY";
+    if (category === "IN_ASTEPTARE") return item.logistics.status === "BLOCKED";
+    if (category === "DE_LIVRAT") return (item.requiresDelivery || item.logistics.status === "READY_FOR_DELIVERY") && item.logistics.status !== "DELIVERED";
+    if (category === "DE_RIDICAT") return item.requiresPickup && item.logistics.status !== "DELIVERED";
     return item.billing.documentId === null;
   }
 
@@ -655,11 +1142,369 @@ export class LogisticsService {
     }
   }
 
-  private async ensurePermission(userId: string, permission: "logistics.update_location" | "logistics.block_work" | "logistics.unblock_work" | "logistics.prepare_work" | "logistics.manage_groups"): Promise<void> {
+  private async parseCreateWorkDto(value: string): Promise<CreateWorkDto> {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      throw new BadRequestException("Datele lucrării nu sunt JSON valid.");
+    }
+
+    const dto = plainToInstance(CreateWorkDto, parsed);
+    const errors = await validate(dto, {
+      forbidNonWhitelisted: true,
+      whitelist: true,
+    });
+    if (errors.length > 0) {
+      throw new BadRequestException("Datele lucrării nu sunt valide.");
+    }
+    return dto;
+  }
+
+  private validateAttachments(files: readonly UploadedAttachmentFile[]): void {
+    if (files.length > LOGISTICS_ATTACHMENT_LIMITS.maxFiles) {
+      throw new BadRequestException(`Poți încărca maximum ${LOGISTICS_ATTACHMENT_LIMITS.maxFiles} fișiere.`);
+    }
+
+    const totalBytes = files.reduce((total, file) => total + file.size, 0);
+    if (totalBytes > LOGISTICS_ATTACHMENT_LIMITS.maxTotalBytes) {
+      throw new BadRequestException("Fișierele depășesc limita totală permisă.");
+    }
+
+    for (const file of files) {
+      const fileName = file.originalname.trim();
+      if (!fileName || fileName.length > 255) {
+        throw new BadRequestException("Numele fișierului este invalid.");
+      }
+      if (file.size <= 0 || file.size > LOGISTICS_ATTACHMENT_LIMITS.maxFileBytes || !file.buffer || file.buffer.length !== file.size) {
+        throw new BadRequestException("Fișierul este gol sau depășește limita permisă.");
+      }
+      if (!LOGISTICS_ATTACHMENT_LIMITS.allowedMimeTypes.includes(file.mimetype as (typeof LOGISTICS_ATTACHMENT_LIMITS.allowedMimeTypes)[number])) {
+        throw new BadRequestException("Tipul fișierului nu este permis.");
+      }
+    }
+  }
+
+  private async saveAttachments(context: ActorContext, workOrderId: string, files: readonly UploadedAttachmentFile[]): Promise<readonly WorkAttachmentSummary[]> {
+    if (files.length === 0) {
+      return [];
+    }
+
+    const attachments = await this.prisma.$transaction(async (tx) => {
+      const created: Prisma.WorkAttachmentGetPayload<object>[] = [];
+      for (const file of files) {
+        const content = new Uint8Array(file.buffer.byteLength);
+        content.set(file.buffer);
+        const attachment = await tx.workAttachment.create({
+          data: {
+            content,
+            fileName: file.originalname.trim(),
+            mimeType: file.mimetype,
+            sizeBytes: file.size,
+            uploadedByUserId: context.actor.id,
+            workOrderId,
+          },
+        });
+        await this.recordAudit(tx, context, LOGISTICS_AUDIT_ACTIONS.attachmentUploaded, attachment.id, {
+          fileName: attachment.fileName,
+          mimeType: attachment.mimeType,
+          sizeBytes: attachment.sizeBytes,
+          workId: workOrderId,
+        });
+        created.push(attachment);
+      }
+      return created;
+    });
+
+    return attachments.map((attachment) => ({
+      fileName: attachment.fileName,
+      id: attachment.id,
+      mimeType: attachment.mimeType,
+      sizeBytes: attachment.sizeBytes,
+      uploadedAt: attachment.uploadedAt.toISOString(),
+    }));
+  }
+
+  private async canSetManualDeadline(userId: string): Promise<boolean> {
+    const result = await this.authorizationService.hasPermission({
+      permission: "works.deadline.set_manual",
+      requiredScope: "ALL",
+      userId,
+    });
+
+    return result.allowed;
+  }
+
+  private parsePickupSchedule(dto: CreatePickupRequestDto): {
+    readonly exactTime: string | null;
+    readonly scheduledDate: Date;
+    readonly scheduleType: "EXACT" | "RANGE";
+    readonly windowEndTime: string | null;
+    readonly windowStartTime: string | null;
+  } {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dto.scheduledDate)) {
+      throw new BadRequestException("Data ridicării trebuie să fie în format YYYY-MM-DD.");
+    }
+    const scheduledDate = new Date(`${dto.scheduledDate}T00:00:00.000Z`);
+    if (Number.isNaN(scheduledDate.getTime()) || scheduledDate.toISOString().slice(0, 10) !== dto.scheduledDate) {
+      throw new BadRequestException("Data ridicării nu este validă.");
+    }
+
+    if (dto.scheduleType === "EXACT") {
+      const exactTime = this.parsePickupTime(dto.exactTime, "Ora exactă este obligatorie.");
+      if (dto.windowStartTime || dto.windowEndTime) {
+        throw new BadRequestException("Ridicarea cu oră exactă nu poate avea interval orar.");
+      }
+      return { exactTime, scheduledDate, scheduleType: "EXACT", windowEndTime: null, windowStartTime: null };
+    }
+
+    const windowStartTime = this.parsePickupTime(dto.windowStartTime, "Ora de început este obligatorie.");
+    const windowEndTime = this.parsePickupTime(dto.windowEndTime, "Ora de final este obligatorie.");
+    if (dto.exactTime) {
+      throw new BadRequestException("Ridicarea pe interval nu poate avea oră exactă.");
+    }
+    if (this.timeToMinutes(windowStartTime) >= this.timeToMinutes(windowEndTime)) {
+      throw new BadRequestException("Intervalul de ridicare trebuie să aibă ora de început înaintea orei de final.");
+    }
+    return { exactTime: null, scheduledDate, scheduleType: "RANGE", windowEndTime, windowStartTime };
+  }
+
+  private parsePickupTime(value: string | null | undefined, missingMessage: string): string {
+    if (!value) {
+      throw new BadRequestException(missingMessage);
+    }
+    if (!/^\d{2}:\d{2}$/.test(value)) {
+      throw new BadRequestException("Ora ridicării trebuie să fie în format HH:mm.");
+    }
+    const parts = value.split(":").map(Number);
+    const hour = parts[0];
+    const minute = parts[1];
+    if (hour === undefined || minute === undefined) {
+      throw new BadRequestException("Ora ridicării nu este validă.");
+    }
+    if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      throw new BadRequestException("Ora ridicării nu este validă.");
+    }
+    return value;
+  }
+
+  private timeToMinutes(value: string): number {
+    const [hour = 0, minute = 0] = value.split(":").map(Number);
+    return hour * 60 + minute;
+  }
+
+  private async ensurePickupClinicDoctor(clinicId: string, doctorId: string): Promise<void> {
+    const [clinic, doctor] = await Promise.all([
+      this.prisma.clinic.findFirst({ select: { id: true }, where: { id: clinicId, isActive: true } }),
+      this.prisma.doctor.findFirst({ select: { id: true }, where: { clinicId, id: doctorId, isActive: true } }),
+    ]);
+    if (!clinic) {
+      throw new BadRequestException("Clinica selectată nu este validă.");
+    }
+    if (!doctor) {
+      throw new BadRequestException("Medicul selectat nu este valid pentru clinica aleasă.");
+    }
+  }
+
+  private toPickupRequestView(pickup: Prisma.PickupRequestGetPayload<{ include: { clinic: true; doctor: true } }>): PickupRequestView {
+    const exactTime = pickup.exactTime;
+    const windowStartTime = pickup.windowStartTime;
+    const windowEndTime = pickup.windowEndTime;
+    return {
+      cancelledAt: pickup.cancelledAt?.toISOString() ?? null,
+      address: pickup.address,
+      clinic: { id: pickup.clinic.id, name: pickup.clinic.name },
+      createdAt: pickup.createdAt.toISOString(),
+      doctor: { id: pickup.doctor.id, name: pickup.doctor.displayName },
+      exactTime,
+      id: pickup.id,
+      notes: pickup.notes,
+      scheduledDate: pickup.scheduledDate.toISOString().slice(0, 10),
+      scheduleLabel: pickup.scheduleType === "EXACT" ? exactTime ?? "-" : `${windowStartTime ?? "-"}-${windowEndTime ?? "-"}`,
+      scheduleType: pickup.scheduleType,
+      status: pickup.status,
+      statusLabel: pickup.status === PickupRequestStatus.CANCELLED ? "Anulată" : "Programată",
+      updatedAt: pickup.updatedAt.toISOString(),
+      version: pickup.version,
+      windowEndTime,
+      windowStartTime,
+      phone: pickup.phone,
+    };
+  }
+
+  private toPickupAuditMetadata(pickup: Prisma.PickupRequestGetPayload<{ include: { clinic: true; doctor: true } }>): Prisma.InputJsonObject {
+    return {
+      clinicId: pickup.clinicId,
+      doctorId: pickup.doctorId,
+      exactTime: pickup.exactTime,
+      pickupId: pickup.id,
+      scheduledDate: pickup.scheduledDate.toISOString().slice(0, 10),
+      scheduleType: pickup.scheduleType,
+      status: pickup.status,
+      version: pickup.version,
+      windowEndTime: pickup.windowEndTime,
+      windowStartTime: pickup.windowStartTime,
+    };
+  }
+
+  private toRouteStopCreates(stops: readonly CreateCourierRouteDto["stops"][number][]): Prisma.CourierRouteStopCreateWithoutRouteInput[] {
+    const seen = new Set<string>();
+    return stops.map((stop, index) => {
+      if (stop.type === "DELIVERY") {
+        if (!stop.workOrderId || stop.pickupRequestId) {
+          throw new BadRequestException("Stopul de livrare trebuie să conțină doar lucrare.");
+        }
+        const key = `DELIVERY:${stop.workOrderId}`;
+        if (seen.has(key)) {
+          throw new BadRequestException("Lucrarea este deja în traseu.");
+        }
+        seen.add(key);
+        return { addressOverride: stop.addressOverride ?? null, phoneOverride: stop.phoneOverride ?? null, stopNotes: stop.stopNotes ?? null, stopOrder: index + 1, type: "DELIVERY", workOrder: { connect: { id: stop.workOrderId } } };
+      }
+      if ((!stop.pickupRequestId && !stop.workOrderId) || (stop.pickupRequestId && stop.workOrderId)) {
+        throw new BadRequestException("Stopul de ridicare trebuie să conțină o lucrare bifată sau o cerere de ridicare.");
+      }
+      const key = `PICKUP:${stop.pickupRequestId ?? stop.workOrderId}`;
+      if (seen.has(key)) {
+        throw new BadRequestException("Ridicarea este deja în traseu.");
+      }
+      seen.add(key);
+      return stop.pickupRequestId
+        ? { addressOverride: stop.addressOverride ?? null, phoneOverride: stop.phoneOverride ?? null, stopNotes: stop.stopNotes ?? null, pickupRequest: { connect: { id: stop.pickupRequestId } }, stopOrder: index + 1, type: "PICKUP" }
+        : { addressOverride: stop.addressOverride ?? null, phoneOverride: stop.phoneOverride ?? null, stopNotes: stop.stopNotes ?? null, workOrder: { connect: { id: stop.workOrderId as string } }, stopOrder: index + 1, type: "PICKUP" };
+    });
+  }
+
+  private async nextRouteNumber(tx: LogisticsTx, routeDate: Date): Promise<string> {
+    const count = await tx.courierRoute.count({ where: { routeDate } });
+    const yy = String(routeDate.getUTCFullYear()).slice(-2);
+    const mm = String(routeDate.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(routeDate.getUTCDate()).padStart(2, "0");
+    return `TR-${yy}${mm}${dd}-${String(count + 1).padStart(2, "0")}`;
+  }
+
+  private toRouteWhere(query: CourierRoutesQueryDto, actorUserId: string, canReadAll: boolean): Prisma.CourierRouteWhereInput {
+    const routeDate = toDateRange(query.exactDate, query.dateFrom, query.dateTo);
+    return {
+      ...(canReadAll ? (query.courierUserId ? { courierUserId: query.courierUserId } : {}) : { courierUserId: actorUserId }),
+      ...(query.status ? { status: query.status } : {}),
+      ...(routeDate ? { routeDate } : {}),
+    };
+  }
+
+  private async assertRouteExecutionAccess(userId: string, courierUserId: string | null): Promise<void> {
+    if (await this.hasPermission(userId, "routes.execute_own", "ALL")) {
+      return;
+    }
+    if (courierUserId === userId && await this.hasPermission(userId, "routes.execute_own", "OWN_DELIVERY")) {
+      return;
+    }
+    throw new ForbiddenException("Nu ai acces la acest traseu.");
+  }
+
+  private assertStopOutcome(type: "DELIVERY" | "PICKUP", outcome: string): void {
+    if (type === "DELIVERY" && outcome !== "DELIVERED" && outcome !== "NOT_DELIVERED") {
+      throw new BadRequestException("Stopul de livrare acceptă doar livrat sau nelivrat.");
+    }
+    if (type === "PICKUP" && outcome !== "PICKED_UP" && outcome !== "NOT_PICKED_UP") {
+      throw new BadRequestException("Stopul de ridicare acceptă doar ridicat sau neridicat.");
+    }
+  }
+
+  private toCourierRouteView(route: CourierRouteRecord): CourierRouteView {
+    return {
+      completedAt: route.completedAt?.toISOString() ?? null,
+      courier: route.courier ? { id: route.courier.id, name: route.courier.displayName } : null,
+      createdAt: route.createdAt.toISOString(),
+      id: route.id,
+      name: route.name,
+      notes: route.notes,
+      routeDate: route.routeDate.toISOString().slice(0, 10),
+      routeNumber: route.routeNumber,
+      startedAt: route.startedAt?.toISOString() ?? null,
+      status: route.status,
+      stops: route.stops.map((stop) => ({
+        addressOverride: stop.addressOverride ?? this.toRouteStopAddress(stop),
+        id: stop.id,
+        outcomeAt: stop.outcomeAt?.toISOString() ?? null,
+        outcomeByUserName: stop.outcomeBy?.displayName ?? null,
+        failureReason: stop.failureReason,
+        outcomeNotes: stop.outcomeNotes,
+        outcomeStatus: stop.outcomeStatus,
+        phoneOverride: stop.phoneOverride ?? this.toRouteStopPhone(stop),
+        pickupRequestId: stop.pickupRequestId,
+        stopOrder: stop.stopOrder,
+        stopNotes: stop.stopNotes,
+        targetLabel: this.toRouteStopTargetLabel(stop),
+        type: stop.type,
+        workOrderId: stop.workOrderId,
+      })),
+      updatedAt: route.updatedAt.toISOString(),
+      version: route.version,
+    };
+  }
+
+  private toRouteStopTargetLabel(stop: CourierRouteRecord["stops"][number]): string {
+    if (stop.type === "DELIVERY") {
+      return stop.workOrder ? `${stop.workOrder.code} · ${stop.workOrder.patientName}` : "Livrare";
+    }
+    if (stop.workOrder) {
+      return `${stop.workOrder.code} · ${stop.workOrder.patientName}`;
+    }
+    if (!stop.pickupRequest) {
+      return "Ridicare";
+    }
+    const time = stop.pickupRequest.exactTime ?? [stop.pickupRequest.windowStartTime, stop.pickupRequest.windowEndTime].filter(Boolean).join("-");
+    return `${stop.pickupRequest.clinic.name}${time ? ` · ${time}` : ""}`;
+  }
+
+  private toRouteStopAddress(stop: CourierRouteRecord["stops"][number]): string | null {
+    const source = stop.type === "PICKUP" && stop.pickupRequest
+      ? { address: stop.pickupRequest.address, clinic: stop.pickupRequest.clinic }
+      : { address: null, clinic: stop.workOrder?.clinic };
+    if (source.address) return source.address;
+    const clinic = source.clinic;
+    if (!clinic) return null;
+    return [clinic.addressLine1, clinic.addressLine2, clinic.postalCode, clinic.city].filter(Boolean).join(", ") || null;
+  }
+
+  private toRouteStopPhone(stop: CourierRouteRecord["stops"][number]): string | null {
+    if (stop.type === "PICKUP" && stop.pickupRequest?.phone) return stop.pickupRequest.phone;
+    return stop.workOrder?.clinic?.phone ?? stop.pickupRequest?.clinic.phone ?? null;
+  }
+
+  private toRouteAuditMetadata(route: CourierRouteRecord): Prisma.InputJsonObject {
+    return {
+      courierUserId: route.courierUserId,
+      routeDate: route.routeDate.toISOString().slice(0, 10),
+      routeId: route.id,
+      routeNumber: route.routeNumber,
+      status: route.status,
+      stopOrder: route.stops.map((stop) => ({ pickupRequestId: stop.pickupRequestId, stopOrder: stop.stopOrder, type: stop.type, workOrderId: stop.workOrderId })),
+      version: route.version,
+    };
+  }
+
+  private async ensurePermission(userId: string, permission: "files.upload" | "works.create" | "pickup.create" | "pickup.read" | "pickup.update" | "pickup.cancel" | "routes.assign" | "routes.create" | "routes.read" | "logistics.update_location" | "logistics.block_work" | "logistics.unblock_work" | "logistics.prepare_work" | "logistics.manage_groups"): Promise<void> {
     const result = await this.authorizationService.hasPermission({ permission, requiredScope: "ALL", userId });
     if (!result.allowed) {
       throw new ForbiddenException("Nu ai permisiunea necesară pentru această acțiune logistică.");
     }
+  }
+
+  private async ensureRoutePermission(userId: string, permission: "routes.create" | "routes.update"): Promise<void> {
+    if (await this.hasRoutePermission(userId, permission, "ALL")) return;
+    throw new ForbiddenException("Nu ai permisiunea necesară pentru această acțiune logistică.");
+  }
+
+  private async hasPermission(userId: string, permission: "routes.execute_own" | "routes.read", requiredScope: "ALL" | "OWN_DELIVERY"): Promise<boolean> {
+    return (await this.authorizationService.hasPermission({ permission, requiredScope, userId })).allowed;
+  }
+
+  private async hasRoutePermission(userId: string, permission: "routes.create" | "routes.read" | "routes.update", requiredScope: "ALL"): Promise<boolean> {
+    const direct = await this.authorizationService.hasPermission({ permission, requiredScope, userId });
+    if (direct.allowed) return true;
+    return (await this.authorizationService.hasPermission({ permission: "logistics.center.read", requiredScope: "ALL", userId })).allowed;
   }
 
   private async createActionContext(userId: string): Promise<ActionContext> {
@@ -707,13 +1552,32 @@ export class LogisticsService {
     });
   }
 
+  private async recordRouteEvent(tx: LogisticsTx, context: ActorContext, routeId: string, type: CourierRouteEventType, metadata: Prisma.InputJsonObject): Promise<void> {
+    await tx.courierRouteEvent.create({
+      data: {
+        actorUserId: context.actor.id,
+        metadata,
+        routeId,
+        type,
+      },
+    });
+  }
+
   private async recordAudit(tx: LogisticsTx, context: ActorContext, action: string, resourceId: string, metadata: Prisma.InputJsonObject): Promise<void> {
     const data: Prisma.AuditLogUncheckedCreateInput = {
       action,
       actorUserId: context.actor.id,
       metadata,
       resourceId,
-      resourceType: action.includes("group") ? LOGISTICS_RESOURCE_TYPES.deliveryPreparationGroup : LOGISTICS_RESOURCE_TYPES.workLogistics,
+      resourceType: action === LOGISTICS_AUDIT_ACTIONS.attachmentUploaded
+        ? LOGISTICS_RESOURCE_TYPES.workAttachment
+        : action.startsWith("route.")
+          ? LOGISTICS_RESOURCE_TYPES.courierRoute
+        : action.startsWith("pickup.")
+          ? LOGISTICS_RESOURCE_TYPES.pickupRequest
+        : action.includes("group")
+          ? LOGISTICS_RESOURCE_TYPES.deliveryPreparationGroup
+          : LOGISTICS_RESOURCE_TYPES.workLogistics,
     };
     if (context.requestMetadata.ipAddress) {
       data.ipAddress = context.requestMetadata.ipAddress;
@@ -728,6 +1592,40 @@ export class LogisticsService {
 function isToday(date: Date): boolean {
   const now = new Date();
   return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
+}
+
+function toRequestedDeliveryRange(query: LogisticsCenterQueryDto): Prisma.DateTimeFilter | null {
+  return toDateRange(query.exactDate, query.dateFrom, query.dateTo);
+}
+
+function toScheduledDateRange(query: LogisticsCenterQueryDto): Prisma.DateTimeFilter | null {
+  return toDateRange(query.exactDate, query.dateFrom, query.dateTo);
+}
+
+function toDateRange(exactDate?: string, dateFrom?: string, dateTo?: string): Prisma.DateTimeFilter | null {
+  if (exactDate) {
+    const start = startOfUtcDay(exactDate);
+    return { gte: start, lt: addUtcDays(start, 1) };
+  }
+  const range: Prisma.DateTimeFilter = {};
+  if (dateFrom) {
+    range.gte = startOfUtcDay(dateFrom);
+  }
+  if (dateTo) {
+    range.lt = addUtcDays(startOfUtcDay(dateTo), 1);
+  }
+  return Object.keys(range).length > 0 ? range : null;
+}
+
+function startOfUtcDay(value: string): Date {
+  const date = new Date(value);
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function addUtcDays(value: Date, days: number): Date {
+  const next = new Date(value);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
 }
 
 function canAddWorkToPreparationGroup(input: {

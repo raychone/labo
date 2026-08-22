@@ -4,8 +4,8 @@ import type { ExecutionTimeRule, PriceCatalogItem, PricingAdjustmentType, Pricin
 import { PrismaService } from "../database/prisma.service.js";
 
 interface ResolvePricingInput {
-  readonly clinicId: string;
-  readonly doctorId: string;
+  readonly clinicId: string | null;
+  readonly doctorId: string | null;
   readonly evaluationDate: Date;
   readonly legalEntityId: string;
   readonly legalEntityCode: string;
@@ -165,9 +165,13 @@ export class PricingResolverService {
   private async findActiveAgreements(client: PricingResolverClient, input: {
     readonly evaluationDate: Date;
     readonly legalEntityId: string;
-    readonly subjectId: string;
+    readonly subjectId: string | null;
     readonly subjectType: "CLINIC" | "DOCTOR";
   }): Promise<readonly AgreementWithRules[]> {
+    if (!input.subjectId) {
+      return [];
+    }
+
     return client.pricingAgreement.findMany({
       include: {
         rules: true,

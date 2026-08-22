@@ -2,6 +2,8 @@ import type { WorkTypeUnit } from "./work-types.js";
 
 export const BILLING_DOCUMENT_TYPES = ["PROFORMA", "INVOICE"] as const;
 export const BILLING_DOCUMENT_STATUSES = ["DRAFT", "ISSUED", "PARTIALLY_PAID", "PAID", "CANCELLED"] as const;
+export const BILLING_ADJUSTMENT_SCOPES = ["WORK", "PATIENT", "DOCUMENT"] as const;
+export const BILLING_ADJUSTMENT_MODES = ["PERCENTAGE", "FIXED"] as const;
 export const PAYMENT_METHODS = ["CASH", "BANK_TRANSFER", "CARD", "OTHER"] as const;
 export const PAYMENT_STATUSES = ["UNPAID", "PARTIALLY_PAID", "PAID"] as const;
 export const DOCUMENT_PAYMENT_FILTERS = ["ALL", "UNPAID", "PARTIALLY_PAID", "PAID", "OUTSTANDING", "DUE", "OVERDUE", "CANCELLED"] as const;
@@ -10,6 +12,8 @@ export const BILLING_DOCUMENT_SORT_FIELDS = ["createdAt", "issueDate", "formatte
 
 export type BillingDocumentType = (typeof BILLING_DOCUMENT_TYPES)[number];
 export type BillingDocumentStatus = (typeof BILLING_DOCUMENT_STATUSES)[number];
+export type BillingAdjustmentScope = (typeof BILLING_ADJUSTMENT_SCOPES)[number];
+export type BillingAdjustmentMode = (typeof BILLING_ADJUSTMENT_MODES)[number];
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 export type DocumentPaymentFilter = (typeof DOCUMENT_PAYMENT_FILTERS)[number];
@@ -75,6 +79,8 @@ export interface BillingDocumentSummary {
   readonly status: BillingDocumentStatus;
   readonly totalMinor: number;
   readonly type: BillingDocumentType;
+  readonly stornoOfDocumentId?: string | null;
+  readonly stornoDocumentId?: string | null;
   readonly workCodes: readonly string[];
   readonly workCount: number;
 }
@@ -118,6 +124,8 @@ export interface BillingOverview {
   readonly to: string;
   readonly totalIssuedMinor: number;
   readonly unpaidInvoiceCount: number;
+  readonly unpaidOutstandingMinor: number;
+  readonly partialOutstandingMinor: number;
   readonly outstandingMinor: number;
   readonly uninvoicedMinor: number;
   readonly uninvoicedWorkCount: number;
@@ -126,12 +134,12 @@ export interface BillingOverview {
 
 export interface BillableWork {
   readonly baseUnitPriceMinor: number | null;
-  readonly clinicId: string;
+  readonly clinicId: string | null;
   readonly clinicName: string;
   readonly code: string;
   readonly createdAt: string;
   readonly currency: string | null;
-  readonly doctorId: string;
+  readonly doctorId: string | null;
   readonly doctorName: string;
   readonly id: string;
   readonly invoicedDocumentId: string | null;
@@ -160,7 +168,17 @@ export interface BillingSeriesView {
   readonly year: number;
 }
 
+export interface BillingAdjustmentInput {
+  readonly amountMinor?: number;
+  readonly mode: BillingAdjustmentMode;
+  readonly patientName?: string | null;
+  readonly percentage?: number;
+  readonly scope: BillingAdjustmentScope;
+  readonly workOrderId?: string | null;
+}
+
 export interface CreateBillingDocumentInput {
+  readonly adjustments?: readonly BillingAdjustmentInput[];
   readonly dueDate?: string | null;
   readonly issueDate: string;
   readonly notes?: string | null;

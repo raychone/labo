@@ -164,6 +164,35 @@
   justify-content: flex-start;
 }
 
+.billing-page__toolbar--actions {
+  align-items: center;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  overflow-x: auto;
+  width: 100%;
+}
+
+.billing-page__toolbar--actions p {
+  margin-inline-end: auto;
+  white-space: nowrap;
+}
+
+.billing-page__review-summary {
+  display: grid;
+  gap: 0.35rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--color-border, #d5dfdb);
+  border-radius: 0.75rem;
+}
+
+@media (max-width: 700px) {
+  .billing-page__review-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 .billing-page__toolbar--tight {
   align-items: center;
   justify-content: flex-start;

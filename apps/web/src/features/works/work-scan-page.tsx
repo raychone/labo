@@ -28,11 +28,23 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Acțiunea a eșuat.";
 }
 
+const WORK_STATUS_LABELS: Record<ScanContextView["work"]["status"], string> = {
+  FINALIZATA: "Finalizată",
+  IN_ASTEPTARE: "În așteptare",
+  IN_LUCRU: "În lucru",
+  RECEPTIE: "Recepție",
+  REGISTERED: "Înregistrată",
+};
+
 export function WorkScanPage(): ReactNode {
   const navigate = useNavigate();
   const toast = useToast();
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   const canScan = hasPermission(permissionsQuery.data, "scan.use");
+  const showLegacyExecution = hasPermission(permissionsQuery.data, "works.read_all")
+    && !hasPermission(permissionsQuery.data, "works.create")
+    && !hasPermission(permissionsQuery.data, "technician.workbench.read")
+    && !hasPermission(permissionsQuery.data, "logistics.center.read");
   const canSearchWorks = true;
   const resolveMutation = useResolveOperationalScan();
   const startMutation = useStartWorkflowStage();
@@ -80,10 +92,10 @@ export function WorkScanPage(): ReactNode {
     const patientSearch = manualPatientSearch.trim().toLowerCase();
 
     return (manualLookupQuery.data?.items ?? []).filter((work) => {
-      if (clinicSearch.length > 0 && !work.clinic.id.toLowerCase().includes(clinicSearch) && !work.clinic.name.toLowerCase().includes(clinicSearch) && !work.clinic.code.toLowerCase().includes(clinicSearch)) {
+      if (clinicSearch.length > 0 && (!work.clinic || (!work.clinic.id.toLowerCase().includes(clinicSearch) && !work.clinic.name.toLowerCase().includes(clinicSearch) && !work.clinic.code.toLowerCase().includes(clinicSearch)))) {
         return false;
       }
-      if (doctorSearch.length > 0 && !work.doctor.displayName.toLowerCase().includes(doctorSearch)) {
+      if (doctorSearch.length > 0 && !work.doctor?.displayName.toLowerCase().includes(doctorSearch)) {
         return false;
       }
       if (patientSearch.length > 0 && !work.patientName.toLowerCase().includes(patientSearch)) {
@@ -258,6 +270,7 @@ export function WorkScanPage(): ReactNode {
                 isOpening={openedMutation.isPending}
                 onAction={setPendingAction}
                 onOpenWork={() => void openWork()}
+                showLegacyExecution={showLegacyExecution}
               />
             ) : null}
 
@@ -280,7 +293,7 @@ export function WorkScanPage(): ReactNode {
                       <div>
                         <strong>{work.code}</strong>
                         <p>{work.patientName}</p>
-                        <p>{work.clinic.name} · {work.doctor.displayName}</p>
+                        <p>{work.clinic?.name ?? "-"} · {work.doctor?.displayName ?? "-"}</p>
                         <p>{work.workType.name}</p>
                       </div>
                       <div className="work-scan-page__lookup-actions">
@@ -323,11 +336,13 @@ function ScanResult({
   isOpening,
   onAction,
   onOpenWork,
+  showLegacyExecution,
 }: {
   readonly context: ScanContextView;
   readonly isOpening: boolean;
   readonly onAction: (actionType: ScanActionType) => void;
   readonly onOpenWork: () => void;
+  readonly showLegacyExecution: boolean;
 }): ReactNode {
   const stage = context.workflow?.currentStage ?? null;
   const openAction = context.actions.find((action) => action.type === "OPEN_WORK");
@@ -341,14 +356,17 @@ function ScanResult({
       </CardHeader>
       <CardContent className="work-scan-page__result">
         <div className="work-scan-page__result-summary">
-          <StatusBadge label="Înregistrată" variant="registered" />
+          <StatusBadge
+            label={WORK_STATUS_LABELS[context.work.status]}
+            variant={context.work.status === "FINALIZATA" ? "production" : context.work.status === "IN_ASTEPTARE" ? "awaiting" : "registered"}
+          />
           <div>
             <strong>{context.work.patientName ?? context.work.code}</strong>
             <p>{context.work.clinicName} · {context.work.doctorName}</p>
             <p>{context.work.workTypeName}</p>
           </div>
         </div>
-        {context.workflow ? (
+        {showLegacyExecution && context.workflow ? (
           <div className="work-scan-page__workflow">
             <div>
               <span>Flux</span>
@@ -366,9 +384,9 @@ function ScanResult({
               <p>{stage?.allowedRoleLabels.join(", ") ?? "Nu există roluri active"}</p>
             </div>
           </div>
-        ) : (
+        ) : showLegacyExecution ? (
           <p>Lucrarea nu are flux operațional activ.</p>
-        )}
+        ) : null}
         <div className="work-scan-page__workflow">
           {context.delivery ? (
             <div>
@@ -395,26 +413,28 @@ function ScanResult({
           <div>
             <span>Fișă laborator</span>
             <strong>{context.realLabSheet.label}</strong>
-            <p>{context.realLabSheet.cycleNumber ? `Ciclul ${context.realLabSheet.cycleNumber}` : "Fără ciclu activ"}</p>
+            <p>{context.realLabSheet.status}</p>
           </div>
         </div>
         <div className="work-scan-page__actions">
           <Button disabled={!openAction?.enabled} isLoading={isOpening} onClick={onOpenWork} variant="outline">
             Deschide lucrarea
           </Button>
-          <Button disabled={!openAction?.enabled} isLoading={isOpening} onClick={onOpenWork} variant="outline">
-            {context.realLabSheet.status === "NOT_STARTED" ? "Completează fișa" : "Deschide fișa"}
-          </Button>
+          {showLegacyExecution ? (
+            <Button disabled={!openAction?.enabled} isLoading={isOpening} onClick={onOpenWork} variant="outline">
+              {context.realLabSheet.status === "NOT_STARTED" ? "Completează fișa" : "Deschide fișa"}
+            </Button>
+          ) : null}
           {context.delivery ? (
             <Button onClick={() => window.location.assign(`/deliveries?deliveryId=${encodeURIComponent(context.delivery?.id ?? "")}`)} variant="outline">
               {context.delivery.status === "IN_TRANSIT" ? "Confirmă predarea" : "Deschide livrarea"}
             </Button>
           ) : null}
-          {workflowActions.map((action) => (
+          {showLegacyExecution ? workflowActions.map((action) => (
             <Button disabled={!action.enabled} key={action.type} onClick={() => onAction(action.type)} variant={action.enabled ? "primary" : "secondary"}>
               {getActionLabel(action.type)}
             </Button>
-          ))}
+          )) : null}
         </div>
         <ActionReasons actions={context.actions} />
       </CardContent>

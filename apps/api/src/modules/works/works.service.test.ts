@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException } from "@nestjs/common";
 import type { Clinic, Doctor, Patient, Prisma, WorkType } from "@prisma/client";
 import { plainToInstance } from "class-transformer";
 import { validate } from "class-validator";
@@ -177,6 +177,7 @@ function workOrder(overrides: Record<string, unknown> = {}) {
     effectiveDueAt: new Date("2026-07-27T14:00:00.000Z"),
     id: "work_order_1",
     internalNotes: null,
+    technicalCodeNotes: null,
     patient: patient(),
     patientId: "patient_1",
     patientName: "Ion Pop",
@@ -189,7 +190,8 @@ function workOrder(overrides: Record<string, unknown> = {}) {
     releasedByUserId: null,
     quantity: 2,
     requestedDeliveryDate: new Date("2026-08-01T00:00:00.000Z"),
-    status: "REGISTERED",
+    shade: "A2",
+    status: "RECEPTIE",
     totalPriceMinor: 70000,
     updatedAt: new Date("2026-07-22T12:00:00.000Z"),
     updatedByUserId: "actor_1",
@@ -276,7 +278,7 @@ function createService(
 }
 
 const legalEntity = {
-  code: "NC",
+  code: "CDT",
   displayName: "Nicolaie Cristina",
   id: "legal_nc",
 } as const;
@@ -289,11 +291,12 @@ const createDto = {
   priority: "NORMAL",
   quantity: 2,
   requestedDeliveryDate: "2026-08-20",
+  shade: "A2",
   workTypeId: "work_type_1",
 } as const;
 
 describe("WorksService", () => {
-  it("creates a REGISTERED work order with immutable pricing snapshot and audit", async () => {
+  it("creates a RECEPTIE work order with immutable pricing snapshot and audit", async () => {
     const createdWorkOrder = workOrder();
     const auditCreate = vi.fn().mockResolvedValue({});
     const create = vi.fn().mockResolvedValue(createdWorkOrder);
@@ -333,7 +336,10 @@ describe("WorksService", () => {
         patientName: "Ion Pop",
         qrToken: "qr_token_1",
         quantity: 2,
-        status: "REGISTERED",
+        shade: "A2",
+        status: "RECEPTIE",
+        statusChangedAt: expect.any(Date) as Date,
+        statusChangedByUserId: "actor_1",
         totalPriceMinor: 70000,
       }),
       include: expect.objectContaining({ clinic: true, doctor: true, workType: true }),
@@ -345,8 +351,90 @@ describe("WorksService", () => {
         resourceType: "work_order",
       }),
     });
-    expect(result.status).toBe("REGISTERED");
+    expect(result.status).toBe("RECEPTIE");
     expect(result.totalPriceMinor).toBe(70000);
+  });
+
+  it.each([
+    { label: "clinic and doctor", clinicId: "clinic_1", doctorId: "doctor_1", expectedClinic: clinic(), expectedDoctor: doctor() },
+    { label: "clinic only", clinicId: "clinic_1", doctorId: null, expectedClinic: clinic(), expectedDoctor: null },
+    { label: "doctor only", clinicId: null, doctorId: "doctor_1", expectedClinic: null, expectedDoctor: doctor() },
+    { label: "neither clinic nor doctor", clinicId: null, doctorId: null, expectedClinic: null, expectedDoctor: null },
+  ])("creates a work order with optional intake source: $label", async ({ clinicId, doctorId, expectedClinic, expectedDoctor }) => {
+    const createdWorkOrder = workOrder({
+      clinic: expectedClinic,
+      clinicId,
+      doctor: expectedDoctor,
+      doctorId,
+    });
+    const create = vi.fn().mockResolvedValue(createdWorkOrder);
+    const cycleCreate = vi.fn().mockResolvedValue({ id: "cycle_1" });
+    const clinicFindUnique = vi.fn().mockResolvedValue({ isActive: true });
+    const doctorFindUnique = vi.fn().mockResolvedValue({ clinicId: "clinic_1", isActive: true });
+    const deadlineService = {
+      resolveForWork: vi.fn().mockResolvedValue({
+        calculatedDueAt: new Date("2026-07-27T14:00:00.000Z"),
+        deadlineCalculatedAt: new Date("2026-07-22T12:00:00.000Z"),
+        deadlineDueHour: 17,
+        deadlineDueMinute: 0,
+        deadlineExecutionDays: 3,
+        deadlineExplanation: "Termen calculat.",
+        deadlineIncludeStartDay: false,
+        deadlineLockedAt: null,
+        deadlineLockedReason: null,
+        deadlineMode: "CALCULATED",
+        deadlineReasonCode: null,
+        deadlineRuleSnapshot: {},
+        deadlineSource: "CREATION",
+        deadlineStartAt: new Date("2026-07-22T12:00:00.000Z"),
+        deadlineTimezone: "Europe/Bucharest",
+        effectiveDueAt: new Date("2026-07-27T14:00:00.000Z"),
+        manualDueAt: null,
+      }),
+      shouldRecalculate: vi.fn().mockReturnValue(false),
+      assertExpectedRevision: vi.fn(),
+    };
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          auditLog: { create: vi.fn().mockResolvedValue({}) },
+          clinic: { findUnique: clinicFindUnique },
+          doctor: { findUnique: doctorFindUnique },
+          laboratorySettings: {
+            upsert: vi.fn().mockResolvedValue({ currency: "RON" }),
+          },
+          workCycle: { create: cycleCreate },
+          workOrder: { create, findUniqueOrThrow: vi.fn().mockResolvedValue(createdWorkOrder), update: vi.fn().mockResolvedValue(createdWorkOrder) },
+          workType: { findUnique: vi.fn().mockResolvedValue({ basePriceMinor: 35000, isActive: true }) },
+        }),
+      ),
+    }, undefined, undefined, { generate: vi.fn().mockResolvedValue("WO-26-0001") }, { generate: vi.fn().mockResolvedValue("qr_token_1") }, undefined, undefined, deadlineService);
+
+    await service.createWork(
+      { actorUserId: "actor_1", requestMetadata: { ipAddress: "127.0.0.1" } },
+      legalEntity,
+      { ...createDto, clinicId, doctorId },
+      false,
+    );
+
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        clinicId,
+        doctorId,
+      }),
+    }));
+    expect(cycleCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        clinicId,
+        doctorId,
+      }),
+    });
+    expect(deadlineService.resolveForWork).toHaveBeenCalledWith(expect.objectContaining({
+      clinicId,
+      doctorId,
+    }));
+    expect(clinicFindUnique).toHaveBeenCalledTimes(clinicId ? 1 : 0);
+    expect(doctorFindUnique).toHaveBeenCalledTimes(doctorId ? 1 : 0);
   });
 
   it("persists intake values and reopens them unchanged on the created work detail", async () => {
@@ -544,6 +632,71 @@ describe("WorksService", () => {
     }
   });
 
+  it("lists reception-created unclaimed works as claimable without manual dispatch or stage reassignment", async () => {
+    const receptionCreatedWork = workOrder({
+      activeCycle: {
+        ...workOrder().activeCycle,
+        workflowExecution: {
+          currentStageExecutionId: "stage_reception",
+          id: "workflow_reception",
+          stages: [
+            {
+              allowedRoleCodesSnapshot: ["RECEPTIE"],
+              assignedUserId: "reception_1",
+              id: "stage_reception",
+              sortOrder: 1,
+              stageKeySnapshot: "receptie",
+              status: "PENDING",
+              workflowExecutionId: "workflow_reception",
+            },
+          ],
+          status: "ACTIVE",
+          version: 1,
+          workflowTemplateId: "template_1",
+          workflowTemplateVersion: 3,
+        },
+      },
+      claimStatus: "UNCLAIMED",
+      claimedByUserId: null,
+      code: "WO-26-0008",
+      createdByUserId: "reception_1",
+      status: "RECEPTIE",
+    });
+    const findMany = vi.fn().mockResolvedValue([receptionCreatedWork]);
+    const service = createService({
+      workOrder: {
+        findMany,
+      },
+    }, {
+      hasPermission: vi.fn().mockImplementation(async ({ permission }: { readonly permission: string }) => {
+        if (permission === "works.claim.available.read") {
+          return { allowed: true, effectiveScopes: ["ALL"], permission };
+        }
+        if (permission === "works.claim.create") {
+          return { allowed: true, effectiveScopes: ["ASSIGNED"], permission };
+        }
+        return { allowed: false, effectiveScopes: [], permission };
+      }),
+      requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ALL"], permission: "works.claim.available.read" }),
+    });
+
+    const result = await service.listAvailableForClaim("technician_1", {
+      page: 1,
+      pageSize: 20,
+      sortBy: "createdAt",
+      sortDirection: "asc",
+    });
+
+    expect(result.items.map((item) => item.code)).toEqual(["WO-26-0008"]);
+    expect(result.items[0]?.claim.status).toBe("UNCLAIMED");
+    expect(result.items[0]?.claim.canCurrentUserClaim).toBe(true);
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        claimStatus: "UNCLAIMED",
+      }),
+    }));
+  });
+
   it("claims an available work atomically with execution company code", async () => {
     const before = workOrder({
       activeCycle: {
@@ -620,7 +773,7 @@ describe("WorksService", () => {
           workWorkflowExecution: { update: workflowUpdate },
         }),
       ),
-      legalEntity: { findUnique: vi.fn().mockResolvedValue({ code: "NC", displayName: "Nicolaie Cristina", id: "legal_nc", isActive: true }) },
+      legalEntity: { findUnique: vi.fn().mockResolvedValue({ code: "CDT", displayName: "Nicolaie Cristina", id: "legal_cdt", isActive: true }) },
       workOrder: { findUnique: vi.fn().mockResolvedValue(before) },
     }, {
       hasPermission: vi.fn().mockImplementation(async ({ permission }: { readonly permission: string }) => {
@@ -633,7 +786,7 @@ describe("WorksService", () => {
     }, undefined, undefined, undefined, undefined, undefined, undefined, { resolve: pricingResolve });
 
     const result = await service.claimWork({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {
-      executionLegalEntityCode: "NC",
+      executionLegalEntityCode: "CDT",
       expectedClaimRevision: 0,
     });
 
@@ -664,14 +817,14 @@ describe("WorksService", () => {
         executionSnapshotStatus: "LOCKED",
         executionSnapshotVersion: 1,
         eventType: "CLAIMED",
-        newLegalEntityId: "legal_nc",
+        newLegalEntityId: "legal_cdt",
         newTechnicianId: "actor_1",
         revision: 1,
       }),
     });
     expect(snapshotCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        executionLegalEntityCode: "NC",
+        executionLegalEntityCode: "CDT",
         pricingTotalMinor: 80000,
         snapshotLockedAt: expect.any(Date) as Date,
         status: "LOCKED",
@@ -689,8 +842,8 @@ describe("WorksService", () => {
       deadlineExplanation: "Termen calculat.",
       deadlineStartAt: new Date("2026-07-22T12:00:00.000Z"),
       deadlineTimezone: "Europe/Bucharest",
-      executionLegalEntityCode: "NC",
-      executionLegalEntity: { code: "NC", displayName: "Nicolaie Cristina", id: "legal_nc" },
+      executionLegalEntityCode: "CDT",
+      executionLegalEntity: { code: "CDT", displayName: "Nicolaie Cristina", id: "legal_cdt" },
       pricingCurrency: "RON",
       pricingQuantity: "2",
       pricingSourceLabel: "Catalog NC",
@@ -806,7 +959,7 @@ describe("WorksService", () => {
           workOrder: { findUniqueOrThrow, updateMany },
         }),
       ),
-      legalEntity: { findUnique: vi.fn().mockResolvedValue({ code: "NC", displayName: "Nicolaie Cristina", id: "legal_nc", isActive: true }) },
+      legalEntity: { findUnique: vi.fn().mockResolvedValue({ code: "CDT", displayName: "Nicolaie Cristina", id: "legal_cdt", isActive: true }) },
       workOrder: { findUnique: vi.fn()
         .mockResolvedValueOnce(beforeClaim)
         .mockResolvedValueOnce(afterClaim)
@@ -817,7 +970,7 @@ describe("WorksService", () => {
     }, undefined, undefined, undefined, undefined, undefined, undefined, { resolve: pricingResolve });
 
     const claimResult = await service.claimWork({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {
-      executionLegalEntityCode: "NC",
+      executionLegalEntityCode: "CDT",
       expectedClaimRevision: 0,
     });
     const releaseResult = await service.releaseWork({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {
@@ -825,7 +978,7 @@ describe("WorksService", () => {
       reason: "Transfer",
     });
     const reclaimResult = await service.claimWork({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {
-      executionLegalEntityCode: "NC",
+      executionLegalEntityCode: "CDT",
       expectedClaimRevision: 2,
     });
 
@@ -848,7 +1001,7 @@ describe("WorksService", () => {
           workOrder: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
         }),
       ),
-      legalEntity: { findUnique: vi.fn().mockResolvedValue({ code: "NC", displayName: "Nicolaie Cristina", id: "legal_nc", isActive: true }) },
+      legalEntity: { findUnique: vi.fn().mockResolvedValue({ code: "CDT", displayName: "Nicolaie Cristina", id: "legal_cdt", isActive: true }) },
       workOrder: { findUnique: vi.fn().mockResolvedValue(workOrder()) },
     }, {
       hasPermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ASSIGNED"], permission: "works.claim.create" }),
@@ -875,9 +1028,316 @@ describe("WorksService", () => {
     });
 
     await expect(service.claimWork({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {
-      executionLegalEntityCode: "NC",
+      executionLegalEntityCode: "CDT",
       expectedClaimRevision: 0,
     })).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it("allows exactly one simultaneous claim to commit", async () => {
+    const before = workOrder({ claimRevision: 0, claimStatus: "UNCLAIMED", claimedByUserId: null });
+    const committedClaims: { readonly actorUserId: string; readonly claimedAt: Date }[] = [];
+    const auditCreate = vi.fn().mockResolvedValue({});
+    const assignmentCreate = vi.fn().mockResolvedValue({});
+    const updateMany = vi.fn(async ({ data, where }: { readonly data: { readonly claimedAt: Date; readonly claimedByUserId: string }; readonly where: { readonly claimRevision: number; readonly claimStatus: string; readonly id: string } }) => {
+      await Promise.resolve();
+      const canCommit = committedClaims.length === 0 && where.id === "work_order_1" && where.claimRevision === 0 && where.claimStatus === "UNCLAIMED";
+      if (!canCommit) {
+        return { count: 0 };
+      }
+      committedClaims.push({ actorUserId: data.claimedByUserId, claimedAt: data.claimedAt });
+      return { count: 1 };
+    });
+    const findUniqueOrThrow = vi.fn(async () => workOrder({
+      assignedTechnician: { displayName: "Actor", id: committedClaims[0]?.actorUserId ?? "actor_1", preferredColor: null },
+      assignedTechnicianId: committedClaims[0]?.actorUserId ?? "actor_1",
+      assignmentUpdatedAt: committedClaims[0]?.claimedAt ?? new Date("2026-07-22T12:00:00.000Z"),
+      claimedAt: committedClaims[0]?.claimedAt ?? new Date("2026-07-22T12:00:00.000Z"),
+      claimedByUserId: committedClaims[0]?.actorUserId ?? "actor_1",
+      claimRevision: 1,
+      claimSource: "TECHNICIAN_CLAIM",
+      claimStatus: "CLAIMED",
+      executionLegalEntity: { code: "NC", displayName: "Nicolaie Cristina" },
+      executionLegalEntityId: "legal_nc",
+    }));
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          auditLog: { create: auditCreate },
+          user: { findUnique: vi.fn().mockResolvedValue({ displayName: "Actor", id: "actor_1", roles: [{ role: { isActive: true, key: "TEHNICIAN" } }] }) },
+          workAssignmentEvent: { create: assignmentCreate },
+          workCycle: { update: vi.fn().mockResolvedValue({}) },
+          workExecutionSnapshot: { create: vi.fn().mockResolvedValue({}) },
+          workOrder: { findUniqueOrThrow, updateMany },
+        }),
+      ),
+      legalEntity: { findUnique: vi.fn().mockResolvedValue({ code: "CDT", displayName: "Nicolaie Cristina", id: "legal_cdt", isActive: true }) },
+      workOrder: { findUnique: vi.fn().mockResolvedValue(before) },
+    }, {
+      hasPermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ASSIGNED"], permission: "works.claim.create" }),
+      requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ASSIGNED"], permission: "works.claim.create" }),
+    }, undefined, undefined, undefined, undefined, undefined, undefined, {
+      resolve: vi.fn().mockResolvedValue({
+        adjustment: { basisPoints: null, fixedAmountMinor: null, overridePriceMinor: null, type: null },
+        appliedAgreementId: null,
+        appliedAgreementType: null,
+        appliedRuleScope: null,
+        catalogItemId: "catalog_nc_1",
+        currency: "RON",
+        executionTimeRule: null,
+        executionTimeRules: [],
+        explanation: "Se folosește prețul standard al firmei active.",
+        finalUnitPriceMinor: 40000,
+        legalEntityCode: "NC",
+        quantity: 2,
+        resolutionTrace: [],
+        standardUnitPriceMinor: 40000,
+        totalPriceMinor: 80000,
+        workTypeId: "work_type_1",
+      }),
+    });
+
+    const results = await Promise.allSettled([
+      service.claimWork({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {
+        executionLegalEntityCode: "CDT",
+        expectedClaimRevision: 0,
+      }),
+      service.claimWork({ actorUserId: "actor_2", requestMetadata: {} }, "work_order_1", {
+        executionLegalEntityCode: "CDT",
+        expectedClaimRevision: 0,
+      }),
+    ]);
+
+    const fulfilled = results.filter((result): result is PromiseFulfilledResult<Awaited<ReturnType<WorksService["claimWork"]>>> => result.status === "fulfilled");
+    const rejected = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]?.reason).toBeInstanceOf(ConflictException);
+    expect(committedClaims).toHaveLength(1);
+    expect(committedClaims[0]?.claimedAt).toBeInstanceOf(Date);
+    expect(fulfilled[0]?.value.claim.status).toBe("CLAIMED");
+    expect(fulfilled[0]?.value.claim.technician?.publicId).toBe(committedClaims[0]?.actorUserId);
+    expect(assignmentCreate).toHaveBeenCalledTimes(1);
+    expect(auditCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ action: "work_orders.claim_conflict" }),
+    }));
+  });
+
+  it("changes claimed work between final operational states with explicit timestamps and audit", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-20T09:15:00.000Z"));
+    const beforeWaiting = workOrder({
+      assignedTechnicianId: "actor_1",
+      claimStatus: "CLAIMED",
+      claimedByUserId: "actor_1",
+      status: "IN_LUCRU",
+    });
+    const afterWaiting = workOrder({
+      ...beforeWaiting,
+      status: "IN_ASTEPTARE",
+      statusChangedAt: new Date("2026-08-20T09:15:00.000Z"),
+      statusChangedByUserId: "actor_1",
+      waitingStartedAt: new Date("2026-08-20T09:15:00.000Z"),
+    });
+    const afterInProgress = workOrder({
+      ...beforeWaiting,
+      status: "IN_LUCRU",
+      statusChangedAt: new Date("2026-08-20T09:15:00.000Z"),
+      statusChangedByUserId: "actor_1",
+      waitingStartedAt: null,
+    });
+    const auditCreate = vi.fn().mockResolvedValue({});
+    const update = vi.fn()
+      .mockResolvedValueOnce(afterWaiting)
+      .mockResolvedValueOnce(afterInProgress);
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          auditLog: { create: auditCreate },
+          workOrder: { update },
+        }),
+      ),
+      workOrder: {
+        findUnique: vi.fn()
+          .mockResolvedValueOnce(beforeWaiting)
+          .mockResolvedValueOnce({ ...beforeWaiting, status: "IN_ASTEPTARE", waitingStartedAt: new Date("2026-08-20T09:15:00.000Z") }),
+      },
+    }, {
+      hasPermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["OWN_STAGE"], permission: "works.change_status" }),
+      requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["OWN_STAGE"], permission: "works.change_status" }),
+    });
+
+    try {
+      const waiting = await service.setWorkStatus({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {
+        reason: "Așteptăm materiale",
+        status: "IN_ASTEPTARE",
+      });
+      const inProgress = await service.setWorkStatus({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {
+        reason: "Materialele au venit",
+        status: "IN_LUCRU",
+      });
+
+      expect(waiting.status).toBe("IN_ASTEPTARE");
+      expect(waiting.waitingStartedAt).toBe("2026-08-20T09:15:00.000Z");
+      expect(inProgress.status).toBe("IN_LUCRU");
+      expect(inProgress.waitingStartedAt).toBeNull();
+      expect(update).toHaveBeenNthCalledWith(1, expect.objectContaining({
+        data: expect.objectContaining({
+          status: "IN_ASTEPTARE",
+          statusChangedAt: new Date("2026-08-20T09:15:00.000Z"),
+          statusChangedByUserId: "actor_1",
+          waitingStartedAt: new Date("2026-08-20T09:15:00.000Z"),
+        }),
+      }));
+      expect(update).toHaveBeenNthCalledWith(2, expect.objectContaining({
+        data: expect.objectContaining({
+          status: "IN_LUCRU",
+          waitingStartedAt: null,
+        }),
+      }));
+      expect(auditCreate).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ action: "work_orders.status_changed" }),
+      }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("finalizes claimed work and blocks invalid status transitions", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-20T10:00:00.000Z"));
+    const before = workOrder({
+      assignedTechnicianId: "actor_1",
+      claimStatus: "CLAIMED",
+      claimedByUserId: "actor_1",
+      status: "IN_LUCRU",
+    });
+    const after = workOrder({
+      ...before,
+      completedAt: new Date("2026-08-20T10:00:00.000Z"),
+      completedByUserId: "actor_1",
+      status: "FINALIZATA",
+      statusChangedAt: new Date("2026-08-20T10:00:00.000Z"),
+      statusChangedByUserId: "actor_1",
+    });
+    const auditCreate = vi.fn().mockResolvedValue({});
+    const update = vi.fn().mockResolvedValue(after);
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          auditLog: { create: auditCreate },
+          workOrder: { update },
+        }),
+      ),
+      workOrder: {
+        findUnique: vi.fn()
+          .mockResolvedValueOnce(before)
+          .mockResolvedValueOnce({ ...before, status: "RECEPTIE" }),
+      },
+    }, {
+      hasPermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["OWN_STAGE"], permission: "works.change_status" }),
+      requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["OWN_STAGE"], permission: "works.change_status" }),
+    });
+
+    try {
+      const result = await service.setWorkStatus({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {
+        status: "FINALIZATA",
+      });
+
+      expect(result.status).toBe("FINALIZATA");
+      expect(result.completedAt).toBe("2026-08-20T10:00:00.000Z");
+      expect(result.completedByUserId).toBe("actor_1");
+      expect(update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          completedAt: new Date("2026-08-20T10:00:00.000Z"),
+          completedByUserId: "actor_1",
+          status: "FINALIZATA",
+        }),
+      }));
+      expect(auditCreate).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          action: "work_orders.status_changed",
+          metadata: expect.objectContaining({
+            completedAt: "2026-08-20T10:00:00.000Z",
+            completedByUserId: "actor_1",
+            newStatus: "FINALIZATA",
+          }),
+        }),
+      }));
+      await expect(service.setWorkStatus({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {
+        status: "FINALIZATA",
+      })).rejects.toBeInstanceOf(BadRequestException);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("updates own technician details and audits changed fields", async () => {
+    const before = workOrder({
+      assignedTechnicianId: "actor_1",
+      claimStatus: "CLAIMED",
+      claimedByUserId: "actor_1",
+      clinicalNotes: "Note vechi",
+      internalNotes: "Intern vechi",
+      technicalCodeNotes: "COD-1",
+    });
+    const after = workOrder({
+      ...before,
+      clinicalNotes: "Note noi",
+      internalNotes: "Intern nou",
+      technicalCodeNotes: "COD-2",
+      version: 2,
+    });
+    const auditCreate = vi.fn().mockResolvedValue({});
+    const update = vi.fn().mockResolvedValue(after);
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          auditLog: { create: auditCreate },
+          workOrder: { update },
+        }),
+      ),
+      workOrder: { findUnique: vi.fn().mockResolvedValue(before) },
+    }, {
+      hasPermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ASSIGNED"], permission: "works.technical_details.update" }),
+      requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ASSIGNED"], permission: "works.technical_details.update" }),
+    });
+
+    const result = await service.updateTechnicianDetails({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {
+      clinicalNotes: "Note noi",
+      internalNotes: "Intern nou",
+      technicalCodeNotes: "COD-2",
+    });
+
+    expect(result.technicalCodeNotes).toBe("COD-2");
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        clinicalNotes: "Note noi",
+        internalNotes: "Intern nou",
+        technicalCodeNotes: "COD-2",
+        version: { increment: 1 },
+      }),
+    }));
+    expect(auditCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        action: "work_orders.technical_details_updated",
+        metadata: expect.objectContaining({
+          changedFields: expect.arrayContaining(["clinicalNotes", "internalNotes", "technicalCodeNotes"]),
+        }),
+      }),
+    }));
+  });
+
+  it("blocks technician detail updates for unassigned work", async () => {
+    const service = createService({
+      workOrder: { findUnique: vi.fn().mockResolvedValue(workOrder({ assignedTechnicianId: "other_tech", claimedByUserId: "other_tech" })) },
+    }, {
+      hasPermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ASSIGNED"], permission: "works.technical_details.update" }),
+      requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ASSIGNED"], permission: "works.technical_details.update" }),
+    });
+
+    await expect(service.updateTechnicianDetails({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {
+      technicalCodeNotes: "COD",
+    })).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it("keeps existing pricing snapshot when catalog price changes later", async () => {

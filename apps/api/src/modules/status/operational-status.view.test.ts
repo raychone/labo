@@ -150,6 +150,7 @@ function createWorkRecord(input: {
     releasedAt: null,
     releasedByUserId: null,
     requestedDeliveryDate: new Date("2026-08-05T08:00:00.000Z"),
+    shade: null,
     status: "REGISTERED",
     totalPriceMinor: 10_000,
     updatedAt: new Date("2026-08-02T08:00:00.000Z"),
@@ -165,6 +166,8 @@ describe("operational status view", () => {
     const row = toOperationalStatusRow(createWorkRecord({ effectiveDueAt: new Date("2026-08-04T10:00:00.000Z") }), new Date("2026-08-04T08:00:00.000Z"));
 
     expect(row.workCode).toBe("WO-2026-000001");
+    expect(row.claimedAt).toBeNull();
+    expect(row.shade).toBeNull();
     expect(row.workflow.progress).toBe("1/2");
     expect(row.deadline.state).toBe("DUE_TODAY");
     expect(JSON.stringify(row)).not.toContain("totalPriceMinor");
@@ -182,6 +185,17 @@ describe("operational status view", () => {
     expect(matchesOperationalStatusTab(inProgress, "IN_PROGRESS")).toBe(true);
     expect(matchesOperationalStatusTab(delivered, "AT_CLINIC")).toBe(true);
     expect(matchesOperationalStatusTab(delivered, "COMPLETED")).toBe(true);
+  });
+
+  it("classifies canonical finalized works as completed even when workflow data lags", () => {
+    const row = toOperationalStatusRow(
+      { ...createWorkRecord({ claimStatus: "CLAIMED", stageStatus: "IN_PROGRESS" }), status: "FINALIZATA" },
+      new Date("2026-08-04T08:00:00.000Z"),
+    );
+
+    expect(row.operationalStatus).toBe("FINALIZATA");
+    expect(matchesOperationalStatusTab(row, "COMPLETED")).toBe(true);
+    expect(matchesOperationalStatusTab(row, "IN_PROGRESS")).toBe(false);
   });
 
   it("keeps returned count at zero when cycle data does not exist", () => {

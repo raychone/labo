@@ -66,6 +66,14 @@
   padding-top: var(--dl-space-4);
 }
 
+.pricing-page__rule-editor {
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-sm);
+  display: grid;
+  gap: var(--dl-space-3);
+  padding: var(--dl-space-3);
+}
+
 .pricing-page__json {
   font-family: var(--dl-font-family-mono);
   min-height: 220px;

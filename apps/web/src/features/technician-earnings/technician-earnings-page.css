@@ -1,0 +1,175 @@
+.technician-earnings {
+  min-height: 100%;
+  padding: 16px 0 24px;
+}
+
+.technician-earnings__layout {
+  display: grid;
+  gap: 20px;
+}
+
+.technician-earnings__header h1 {
+  margin: 0;
+}
+
+.technician-earnings__header p,
+.technician-earnings__muted {
+  color: var(--color-text-muted);
+  margin: 6px 0 0;
+}
+
+.technician-earnings__header p {
+  max-width: 52rem;
+}
+
+.technician-earnings__filters,
+.technician-earnings__summary,
+.technician-earnings__work-header {
+  display: grid;
+  gap: 12px;
+}
+
+.technician-earnings__filters,
+.technician-earnings__summary {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.technician-earnings__field {
+  display: grid;
+  gap: 6px;
+}
+
+.technician-earnings__field span {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.technician-earnings__field input {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text);
+  font: inherit;
+  min-height: 40px;
+  padding: 0 12px;
+}
+
+.technician-earnings__work-list {
+  display: grid;
+  gap: 16px;
+}
+
+.technician-earnings__work {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.technician-earnings__work-header {
+  align-items: center;
+  background: var(--color-surface-muted);
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 12px 14px;
+}
+
+.technician-earnings__work-header div {
+  display: grid;
+  gap: 2px;
+}
+
+.technician-earnings__work-header span {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.technician-earnings__table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.technician-earnings__table th,
+.technician-earnings__table td {
+  border-top: 1px solid var(--color-border);
+  padding: 10px 14px;
+  text-align: left;
+}
+
+.technician-earnings__payment {
+  align-items: flex-start;
+  border-bottom: 1px solid var(--color-border);
+  display: grid;
+  gap: 4px;
+  padding: 12px 0;
+}
+
+.technician-earnings__payment:last-child {
+  border-bottom: 0;
+}
+
+.technician-earnings__table th {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+@media (max-width: 720px) {
+  .technician-earnings {
+    padding: 12px 0 20px;
+  }
+
+  .technician-earnings__layout {
+    gap: 14px;
+  }
+
+  .technician-earnings__header h1 {
+    font-size: 1.75rem;
+  }
+
+  .technician-earnings__header p {
+    font-size: 0.95rem;
+  }
+
+  .technician-earnings__filters,
+  .technician-earnings__summary {
+    grid-template-columns: 1fr;
+  }
+
+  .technician-earnings__work-header {
+    grid-template-columns: 1fr;
+  }
+
+  .technician-earnings__table,
+  .technician-earnings__table thead,
+  .technician-earnings__table tbody,
+  .technician-earnings__table tr,
+  .technician-earnings__table td {
+    display: block;
+  }
+
+  .technician-earnings__table thead {
+    display: none;
+  }
+
+  .technician-earnings__table tr {
+    border-top: 1px solid var(--color-border);
+    padding: 10px 14px;
+  }
+
+  .technician-earnings__table td {
+    border: 0;
+    padding: 3px 0 3px 7.5rem;
+    position: relative;
+    min-height: 1.4rem;
+  }
+
+  .technician-earnings__table td::before {
+    color: var(--color-text-muted);
+    content: attr(data-label);
+    font-size: 0.75rem;
+    font-weight: 600;
+    left: 0;
+    position: absolute;
+    text-transform: uppercase;
+    top: 3px;
+  }
+}

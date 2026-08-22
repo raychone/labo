@@ -89,6 +89,9 @@ export type PermissionKey =
   | "technician.rates.manage"
   | "technician.earnings.read_own"
   | "technician.earnings.read_all"
+  | "technician.payments.read_own"
+  | "technician.payments.read_all"
+  | "technician.payments.create"
   | "logistics.read"
   | "logistics.plan"
   | "logistics.assign"
@@ -266,6 +269,9 @@ export const PERMISSION_REGISTRY = [
   definePermission("technician.rates.manage", "Manage technician operation rates."),
   definePermission("technician.earnings.read_own", "Read own technician earnings."),
   definePermission("technician.earnings.read_all", "Read all technician earnings."),
+  definePermission("technician.payments.read_own", "Read own technician payments and balance."),
+  definePermission("technician.payments.read_all", "Read all technician payments and balances."),
+  definePermission("technician.payments.create", "Record a technician payment."),
   definePermission("logistics.read", "Read logistics."),
   definePermission("logistics.plan", "Plan logistics."),
   definePermission("logistics.assign", "Assign logistics work."),
@@ -401,6 +407,7 @@ export const ROLE_PERMISSION_MATRIX = {
   CURIER: grants({
     "comments.create": "ALL",
     "comments.read_external": "ALL",
+    "organization_context.read": "ALL",
     "cycles.read": "OWN_DELIVERY",
     "delivery.capture_signature": "OWN_DELIVERY",
     "delivery.complete": "OWN_DELIVERY",
@@ -412,7 +419,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "delivery.signature.capture": "OWN_DELIVERY",
     "delivery.signature.read": "OWN_DELIVERY",
     "delivery.start_transit": "OWN_DELIVERY",
-    "files.upload": "ALL",
+    "files.read": "OWN_DELIVERY",
     "pickup.read": "OWN_DELIVERY",
     "routes.execute_own": "OWN_DELIVERY",
     "routes.read": "OWN_DELIVERY",
@@ -426,6 +433,8 @@ export const ROLE_PERMISSION_MATRIX = {
     "comments.create": "ALL",
     "comments.read_external": "ALL",
     "comments.read_internal": "ALL",
+    "clinics.read": "ALL",
+    "organization_context.read": "ALL",
     "cycles.history.read": "ALL",
     "cycles.read": "ALL",
     "delivery.assign": "ALL",
@@ -436,6 +445,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "delivery.proof.print": "ALL",
     "delivery.reschedule": "ALL",
     "delivery.signature.read": "ALL",
+    "doctors.read": "ALL",
     "files.read": "ALL",
     "files.upload": "ALL",
     "work_forms.real.history.read": "ALL",
@@ -474,6 +484,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "works.assign": "ALL",
     "works.change_status": "ALL",
     "works.claim.history.read": "ALL",
+    "works.create": "ALL",
     "works.deadline.read": "ALL",
     "works.execution_snapshot.read": "ALL",
     "works.execution_snapshot.read_deadline": "ALL",
@@ -489,8 +500,8 @@ export const ROLE_PERMISSION_MATRIX = {
   MEDIC: grants({
     "comments.create": "ALL",
     "comments.read_external": "ALL",
+    "organization_context.read": "ALL",
     "files.read": "OWN_CLINIC",
-    "files.upload": "OWN_CLINIC",
     "works.read_assigned": "OWN_CLINIC",
     "works.deadline.read": "OWN_CLINIC",
     "works.execution_snapshot.read": "OWN_CLINIC",
@@ -501,6 +512,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "comments.create": "ALL",
     "comments.read_external": "ALL",
     "comments.read_internal": "ALL",
+    "organization_context.read": "ALL",
     "cycles.create_next": "ALL",
     "cycles.history.read": "ALL",
     "cycles.read": "ALL",
@@ -514,7 +526,6 @@ export const ROLE_PERMISSION_MATRIX = {
     "work_forms.real.read": "ALL",
     "work_forms.real.update": "ALL",
     "files.read": "ALL",
-    "files.upload": "ALL",
     "logistics.block_work": "ALL",
     "logistics.center.read": "ALL",
     "logistics.prepare_delivery": "ALL",
@@ -549,10 +560,10 @@ export const ROLE_PERMISSION_MATRIX = {
     "comments.create": "ALL",
     "comments.read_external": "ALL",
     "comments.read_internal": "ALL",
+    "organization_context.read": "ALL",
     "cycles.history.read": "ASSIGNED",
     "cycles.read": "ASSIGNED",
     "files.read": "ASSIGNED",
-    "files.upload": "ASSIGNED",
     "forms.read": "ALL",
     "work_forms.real.finalize": "ASSIGNED",
     "work_forms.real.history.read": "ASSIGNED",
@@ -565,6 +576,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "scan.use": "ASSIGNED",
     "technician.workbench.read": "ASSIGNED",
     "technician.earnings.read_own": "ASSIGNED",
+    "technician.payments.read_own": "ASSIGNED",
     "technician.operations.manage_own": "ASSIGNED",
     "technician.operations.read": "ALL",
     "workflow.complete_stage": "OWN_STAGE",
@@ -682,6 +694,9 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "settings.read",
   "technician.earnings.read_all",
   "technician.earnings.read_own",
+  "technician.payments.read_all",
+  "technician.payments.read_own",
+  "technician.payments.create",
   "technician.operations.manage_own",
   "technician.operations.read",
   "technician.rates.manage",

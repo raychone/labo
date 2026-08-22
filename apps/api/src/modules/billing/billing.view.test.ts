@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateBillingAmounts, toBillableWorkView, type BillableWorkRecord } from "./billing.view.js";
+import { calculateBillingAmounts, isActiveOverdueInvoice, toBillableWorkView, type BillableWorkRecord } from "./billing.view.js";
 
 describe("billing view helpers", () => {
   it("derives unpaid, partial and paid balances from active payments only", () => {
@@ -30,6 +30,23 @@ describe("billing view helpers", () => {
       paidMinor: 1000,
       paymentStatus: "PAID",
     });
+  });
+
+  it("limits arrears to active issued invoices with a past due date", () => {
+    const now = new Date("2026-08-20T12:00:00.000Z");
+    const base = {
+      dueDate: new Date("2026-08-19T00:00:00.000Z"),
+      payments: [{ amountMinor: 400, cancelledAt: null }],
+      totalMinor: 1000,
+      type: "INVOICE" as const,
+    };
+
+    expect(isActiveOverdueInvoice({ ...base, status: "PARTIALLY_PAID" }, now)).toBe(true);
+    expect(isActiveOverdueInvoice({ ...base, status: "DRAFT" }, now)).toBe(false);
+    expect(isActiveOverdueInvoice({ ...base, status: "CANCELLED" }, now)).toBe(false);
+    expect(isActiveOverdueInvoice({ ...base, dueDate: new Date("2026-08-20T00:00:00.000Z"), status: "PARTIALLY_PAID" }, now)).toBe(false);
+    expect(isActiveOverdueInvoice({ ...base, dueDate: null, status: "PARTIALLY_PAID" }, now)).toBe(false);
+    expect(isActiveOverdueInvoice({ ...base, status: "PARTIALLY_PAID", stornoDocumentId: "storno_1" }, now)).toBe(false);
   });
 });
 

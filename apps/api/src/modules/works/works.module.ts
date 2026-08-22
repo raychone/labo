@@ -19,5 +19,6 @@ import { WorksService } from "./works.service.js";
   controllers: [WorksController],
   imports: [AuthModule, DatabaseModule, DeadlinesModule, OrganizationContextModule, PatientsModule, PricingModule, QrModule, RbacModule, WorkFormsModule, WorkflowExecutionModule],
   providers: [WorkDeadlineService, WorkOrderCodeService, WorksService],
+  exports: [WorksService],
 })
 export class WorksModule {}

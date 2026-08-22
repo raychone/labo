@@ -35,8 +35,8 @@ describe("settings contracts", () => {
 
   it("formats contextual settings labels without internal IDs", () => {
     expect(formatContextualSettingsLabel({
-      legalEntityCode: "NC",
+      legalEntityCode: "CDT",
       legalEntityDisplayName: "Nicolaie Cristina",
-    })).toBe("NC — Nicolaie Cristina");
+    })).toBe("CDT — Nicolaie Cristina");
   });
 });

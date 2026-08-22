@@ -22,11 +22,11 @@ Real laboratory sheets use dedicated permissions:
 
 ## Domain Concepts
 
-Template, template kind, version, field definition, field lifecycle metadata, runtime submission, cycle-scoped real laboratory sheet, operational sheet status, revision, immutable response snapshot, real paper-sheet field audit.
+Template, template kind, version, field definition, field lifecycle metadata, runtime submission, adult permanent FDI tooth configuration, cycle-scoped real laboratory sheet, operational sheet status, revision, immutable response snapshot, real paper-sheet field audit.
 
 ## Business Rules
 
-Templates are versioned. Runtime submissions validate against field definitions and preserve submitted data. Generic work forms remain work-order submissions. Real laboratory sheets are `REAL_LAB_SHEET` templates, stored per `WorkCycle`, finalized per cycle, immutable for historical cycles, and financially isolated. Active-cycle real sheets support `NOT_STARTED`, `IN_PROGRESS`, `COMPLETE`, and `FINALIZED`; draft saves allow partial values, while complete/finalize enforce required fields server-side.
+Templates are versioned. Runtime submissions validate against field definitions and preserve submitted data. `TOOTH` fields accept only adult permanent FDI identifiers, render as a four-quadrant multiselect, and normalize saved selections to the canonical quadrant order. Generic work forms remain work-order submissions. Real laboratory sheets are `REAL_LAB_SHEET` templates, stored per `WorkCycle`, finalized per cycle, immutable for historical cycles, and financially isolated. Active-cycle real sheets support `NOT_STARTED`, `IN_PROGRESS`, `COMPLETE`, and `FINALIZED`; draft saves allow partial values, while complete/finalize enforce required fields server-side.
 
 The MVP real sheet uses one common field set for all work types:
 
@@ -80,7 +80,7 @@ Archived templates, cloned templates, invalid field option, stale template/versi
 
 ## Implemented Tasks
 
-FORMS-001, WORKFORMS-001, WORKFORMS-002, WORKFORM-REAL-DISCOVERY-001, WORKFORM-REAL-001A, WORKFORM-REAL-001B.
+FORMS-001, WORKFORMS-001, WORKFORMS-002, WORKFORM-REAL-DISCOVERY-001, WORKFORM-REAL-001A, WORKFORM-REAL-001B, TEETH-001A, TEETH-001B.
 
 ## Planned Tasks
 

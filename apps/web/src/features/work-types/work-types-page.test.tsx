@@ -104,7 +104,7 @@ describe("WorkTypesPage", () => {
     expect(await screen.findByRole("heading", { name: "Tipuri de lucrări" })).toBeDefined();
     expect(await screen.findByText("WT-0001")).toBeDefined();
     expect(await screen.findByText("Coroana zirconiu")).toBeDefined();
-    expect(await screen.findByRole("option", { name: /Coroana zirconiu · Zr/ })).toBeDefined();
+    expect(screen.queryByText("Selector pentru lucrări viitoare")).toBeNull();
     expect(await screen.findByRole("button", { name: "Adaugă tip de lucrare" })).toBeDefined();
   });
 

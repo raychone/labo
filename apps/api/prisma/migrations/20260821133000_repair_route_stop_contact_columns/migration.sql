@@ -1,0 +1,8 @@
+ALTER TABLE "courier_route_stops"
+  ADD COLUMN IF NOT EXISTS "address_override" VARCHAR(300),
+  ADD COLUMN IF NOT EXISTS "phone_override" VARCHAR(40),
+  ADD COLUMN IF NOT EXISTS "stop_notes" VARCHAR(500);
+
+ALTER TABLE "pickup_requests"
+  ADD COLUMN IF NOT EXISTS "address" VARCHAR(300),
+  ADD COLUMN IF NOT EXISTS "phone" VARCHAR(40);

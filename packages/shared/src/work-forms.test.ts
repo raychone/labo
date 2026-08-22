@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  FDI_ADULT_TOOTH_CODES,
+  FDI_ADULT_TOOTH_QUADRANTS,
   isWorkFormFieldKey,
+  normalizeFdiAdultToothSelection,
   normalizeWorkFormFieldsOrder,
   validateWorkFormFieldCompatibility,
   validateWorkFormOptions,
@@ -48,6 +51,18 @@ describe("work form helpers", () => {
 
     expect(result.ok).toBe(false);
     expect(result.errors.join(" ")).toContain("Duplicate option value");
+  });
+
+  it("defines adult permanent FDI teeth by canonical quadrants and normalizes selections", () => {
+    expect(FDI_ADULT_TOOTH_QUADRANTS.map((quadrant) => quadrant.teeth)).toStrictEqual([
+      ["18", "17", "16", "15", "14", "13", "12", "11"],
+      ["21", "22", "23", "24", "25", "26", "27", "28"],
+      ["31", "32", "33", "34", "35", "36", "37", "38"],
+      ["48", "47", "46", "45", "44", "43", "42", "41"],
+    ]);
+    expect(FDI_ADULT_TOOTH_CODES).toHaveLength(32);
+    expect(FDI_ADULT_TOOTH_CODES).not.toContain("51");
+    expect(normalizeFdiAdultToothSelection(["22", "11", "11", "18", "51"])).toStrictEqual(["18", "11", "22"]);
   });
 
   it("checks field type compatibility", () => {

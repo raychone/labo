@@ -1,7 +1,8 @@
 export const WORK_ORDER_RESOURCE_TYPE = "work_order";
 export const WORK_ORDER_SORT_FIELDS = ["code", "createdAt", "effectiveDueAt", "priority", "requestedDeliveryDate", "status", "totalPriceMinor", "updatedAt"] as const;
 export const WORK_PRIORITIES = ["NORMAL", "URGENT"] as const;
-export const WORK_STATUSES = ["REGISTERED"] as const;
+export const WORK_STATUSES = ["REGISTERED", "RECEPTIE", "IN_LUCRU", "IN_ASTEPTARE", "FINALIZATA"] as const;
+export const FINAL_WORK_STATUSES = ["RECEPTIE", "IN_LUCRU", "IN_ASTEPTARE", "FINALIZATA"] as const;
 export const WORK_CLAIM_STATUSES = ["UNCLAIMED", "CLAIMED"] as const;
 export const WORK_CYCLE_REASONS = ["INITIAL", "PROBA", "FINISHING", "ADJUSTMENT", "REPAIR", "REMAKE", "WARRANTY", "CLARIFICATION", "OTHER"] as const;
 export const SORT_DIRECTIONS = ["asc", "desc"] as const;
@@ -15,6 +16,8 @@ export const WORK_ORDER_AUDIT_ACTIONS = {
   deadlineUnresolved: "work_orders.deadline_unresolved",
   claimed: "work_orders.claimed",
   claimConflict: "work_orders.claim_conflict",
+  statusChanged: "work_orders.status_changed",
+  technicalDetailsUpdated: "work_orders.technical_details_updated",
   released: "work_orders.released",
   assigned: "work_orders.assigned",
   reassigned: "work_orders.reassigned",

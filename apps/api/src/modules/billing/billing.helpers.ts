@@ -39,5 +39,8 @@ export function endOfDateOnly(value: Date): Date {
 }
 
 export function formatBillingNumber(prefix: string, year: number, number: number): string {
+  if (prefix === "CD" || prefix === "NG") {
+    return `${prefix} ${String(year).slice(-2)}${String(number).padStart(4, "0")}`;
+  }
   return `${prefix}-${year}-${String(number).padStart(6, "0")}`;
 }

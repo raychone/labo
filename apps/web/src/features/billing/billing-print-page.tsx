@@ -68,7 +68,7 @@ export function BillingPrintPage(): ReactNode {
 
 function PrintableDocumentView({ document }: { readonly document: PrintableBillingDocument }): ReactNode {
   const numberParts = parseFormattedNumber(document.formattedNumber);
-  const pages = chunkRows(document.lines, 8);
+  const pages = chunkRows(document.type === "INVOICE" ? [] : document.lines, 8);
   return (
     <article className="billing-print billing-print--invoice">
       <div className="billing-print__pages billing-print__pages--invoice">
@@ -111,12 +111,14 @@ function PrintableDocumentView({ document }: { readonly document: PrintableBilli
                   </div>
                 </section>
 
-                <LinesTable
-                  currency={document.currency}
-                  lines={pageLines}
-                  startIndex={pageIndex * 8}
-                  variant="invoice"
-                />
+                {document.type === "INVOICE" ? <InvoiceSimpleLine currency={document.currency} totalMinor={document.totalMinor} /> : (
+                  <LinesTable
+                    currency={document.currency}
+                    lines={pageLines}
+                    startIndex={pageIndex * 8}
+                    variant="invoice"
+                  />
+                )}
 
                 {isLastPage ? (
                   <>
@@ -155,6 +157,33 @@ function PartyBlock({
       {party.website ? <p>{party.website}</p> : null}
       {lines?.filter((line): line is string => typeof line === "string" && line.length > 0).map((line) => <p key={line}>{line}</p>)}
     </section>
+  );
+}
+
+function InvoiceSimpleLine({ currency, totalMinor }: { readonly currency: string; readonly totalMinor: number }): ReactNode {
+  return (
+    <table className="billing-print__table billing-print__table--invoice">
+      <thead>
+        <tr>
+          <th>Nr.</th>
+          <th>Denumirea produselor sau serviciilor</th>
+          <th>U.M.</th>
+          <th>Cantitate</th>
+          <th>Preț unitar</th>
+          <th>Valoare</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td><strong>Lucrari protetice</strong></td>
+          <td>bucată</td>
+          <td>1</td>
+          <td>{formatMoneyMinor(totalMinor, currency, "ro-RO")}</td>
+          <td>{formatMoneyMinor(totalMinor, currency, "ro-RO")}</td>
+        </tr>
+      </tbody>
+    </table>
   );
 }
 

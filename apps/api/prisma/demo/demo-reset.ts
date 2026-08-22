@@ -14,6 +14,58 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
       },
     });
 
+    await tx.courierRouteEvent.deleteMany({
+      where: { routeId: { startsWith: `${DEMO_ID_PREFIX}route_` } },
+    });
+    await tx.courierRouteStop.deleteMany({
+      where: {
+        OR: [
+          { id: { startsWith: `${DEMO_ID_PREFIX}route_` } },
+          { routeId: { startsWith: `${DEMO_ID_PREFIX}route_` } },
+          { pickupRequestId: { startsWith: `${DEMO_ID_PREFIX}pickup_` } },
+          { workOrder: demoWorkOrderWhere() },
+        ],
+      },
+    });
+    await tx.courierRoute.deleteMany({
+      where: { id: { startsWith: `${DEMO_ID_PREFIX}route_` } },
+    });
+    await tx.auditLog.deleteMany({
+      where: {
+        OR: [
+          { resourceId: { startsWith: `${DEMO_ID_PREFIX}invoice_` } },
+          { action: { startsWith: "billing.document_share_" }, actorUserId: { startsWith: `${DEMO_ID_PREFIX}user_` } },
+        ],
+      },
+    });
+    await tx.pickupRequest.deleteMany({
+      where: {
+        OR: [
+          { id: { startsWith: `${DEMO_ID_PREFIX}pickup_` } },
+          { clinicId: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
+        ],
+      },
+    });
+    await tx.technicianPerformedOperation.deleteMany({
+      where: {
+        OR: [
+          { id: { startsWith: `${DEMO_ID_PREFIX}performed_` } },
+          { workOrder: demoWorkOrderWhere() },
+        ],
+      },
+    });
+    await tx.technicianOperationRate.deleteMany({
+      where: {
+        OR: [
+          { id: { startsWith: `${DEMO_ID_PREFIX}rate_` } },
+          { technicianId: { startsWith: `${DEMO_ID_PREFIX}user_` } },
+        ],
+      },
+    });
+    await tx.technicianOperation.deleteMany({
+      where: { id: { startsWith: `${DEMO_ID_PREFIX}operation_` } },
+    });
+
     await tx.pricingAgreementRule.deleteMany({
       where: {
         OR: [
@@ -200,7 +252,12 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
     });
 
     await tx.doctor.deleteMany({
-      where: { id: { startsWith: `${DEMO_ID_PREFIX}doctor_` } },
+      where: {
+        OR: [
+          { id: { startsWith: `${DEMO_ID_PREFIX}doctor_` } },
+          { clinicId: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
+        ],
+      },
     });
 
     await tx.clinic.deleteMany({
@@ -232,6 +289,15 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
         user: {
           email: { endsWith: `@${DEMO_EMAIL_DOMAIN}` },
         },
+      },
+    });
+
+    await tx.technicianPayment.deleteMany({
+      where: {
+        OR: [
+          { technicianId: { startsWith: `${DEMO_ID_PREFIX}user_` } },
+          { createdByUserId: { startsWith: `${DEMO_ID_PREFIX}user_` } },
+        ],
       },
     });
 

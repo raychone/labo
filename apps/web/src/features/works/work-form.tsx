@@ -1,7 +1,6 @@
 import {
   Button,
   DateInput,
-  ErrorState,
   FormActions,
   FormErrorSummary,
   FormGrid,
@@ -9,17 +8,17 @@ import {
   FormLayout,
   FormSection,
   NumberInput,
+  RadioGroup,
   Select,
   TextInput,
   Textarea,
 } from "@dental-lab/ui";
-import type { ClinicOption, DoctorOption, PatientOption, WorkDeadlinePreview, WorkDetail, WorkFormTemplateDetail, WorkPriority, WorkTypeFormOption } from "@dental-lab/shared";
+import type { ClinicOption, CreateWorkInput, DoctorOption, PatientOption, UpdateWorkInput, WorkDeadlinePreview, WorkDeadlinePreviewInput, WorkDetail, WorkFormTemplateDetail, WorkPriority, WorkTypeFormOption } from "@dental-lab/shared";
 import type { ReactNode } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { useEffect, useId, useMemo, useState } from "react";
 
-import type { WorkFormValues } from "./works-page.schema.js";
-import { WorkFormEmptyState, WorkFormFields, WorkFormLoadingState } from "./work-dynamic-form.js";
+import { IMPLANT_PLATFORM_OPTIONS, RESTORATION_TYPE_OPTIONS, WORK_SHADE_OPTIONS, type WorkFormValues } from "./works-page.schema.js";
 import { getFormErrorSummaryItems, useErrorSummaryFocus } from "../../lib/form-utils.js";
 
 export const defaultWorkFormValues: WorkFormValues = {
@@ -28,11 +27,16 @@ export const defaultWorkFormValues: WorkFormValues = {
   doctorId: "",
   externalReference: null,
   internalNotes: null,
+  implantPlatform: null,
+  implantPlatformCustom: null,
   patientId: "",
   patientReference: null,
   priority: "NORMAL",
   quantity: 1,
   requestedDeliveryDate: "",
+  requestedDeliveryTime: "",
+  restorationType: null,
+  shade: null,
   workFormValues: {},
   workTypeId: "",
 };
@@ -48,11 +52,16 @@ const workFieldLabels: Record<keyof WorkFormValues, string> = {
   doctorId: "Medic",
   externalReference: "Referință externă",
   internalNotes: "Note interne",
+  implantPlatform: "Platformă implant",
+  implantPlatformCustom: "Alt tip platformă",
   patientId: "Pacient",
   patientReference: "Identificator pacient",
   priority: "Prioritate",
-  quantity: "Cantitate",
-  requestedDeliveryDate: "Termen promis",
+  quantity: "Elemente",
+  requestedDeliveryDate: "Data termenului",
+  requestedDeliveryTime: "Ora termenului",
+  restorationType: "Tip restaurare",
+  shade: "Culoare",
   workFormValues: "Detalii specifice lucrării",
   workTypeId: "Tip lucrare",
 };
@@ -71,20 +80,125 @@ export function toWorkFormValues(work: WorkDetail | undefined): WorkFormValues {
     }
   }
 
+  const restorationValue = workFormValues.restoration_type;
+
   return {
-    clinicId: work.clinic.id,
+    clinicId: work.clinic?.id ?? "",
     clinicalNotes: work.clinicalNotes,
-    doctorId: work.doctor.id,
+    doctorId: work.doctor?.id ?? "",
     externalReference: work.externalReference,
     internalNotes: work.internalNotes,
+    implantPlatform: work.implantPlatform && IMPLANT_PLATFORM_OPTIONS.includes(work.implantPlatform as (typeof IMPLANT_PLATFORM_OPTIONS)[number]) ? work.implantPlatform : work.implantPlatform ? "Alt tip" : null,
+    implantPlatformCustom: work.implantPlatform && !IMPLANT_PLATFORM_OPTIONS.includes(work.implantPlatform as (typeof IMPLANT_PLATFORM_OPTIONS)[number]) ? work.implantPlatform : null,
     patientId: work.patient?.id ?? "",
     patientReference: work.patientReference,
     priority: work.priority,
     quantity: work.quantity,
     requestedDeliveryDate: work.requestedDeliveryDate.slice(0, 10),
+    requestedDeliveryTime: work.deadline.manualDueAt?.slice(11, 16) ?? work.deadline.effectiveDueAt?.slice(11, 16) ?? "",
+    restorationType: restorationValue === "cimentata" || restorationValue === "insurubata" ? restorationValue : null,
+    shade: work.shade,
     workFormValues,
     workTypeId: work.workType.id,
   };
+}
+
+export function toWorkMutationInput(values: WorkFormValues, template: WorkFormTemplateDetail | null | undefined, includeManualDueAt?: boolean, includePatient?: true): CreateWorkInput;
+export function toWorkMutationInput(values: WorkFormValues, template: WorkFormTemplateDetail | null | undefined, includeManualDueAt: boolean, includePatient: false): UpdateWorkInput;
+export function toWorkMutationInput(values: WorkFormValues, template: WorkFormTemplateDetail | null | undefined, includeManualDueAt = true, includePatient = true): CreateWorkInput | UpdateWorkInput {
+  const dynamicValues = toPersistedWorkFormValues(values, template);
+  return {
+    clinicId: values.clinicId === "" ? null : values.clinicId,
+    clinicalNotes: values.clinicalNotes,
+    doctorId: values.doctorId === "" ? null : values.doctorId,
+    externalReference: values.externalReference,
+    internalNotes: values.internalNotes,
+    ...(includePatient ? { patientId: values.patientId } : {}),
+    patientReference: values.patientReference,
+    priority: values.priority,
+    quantity: values.quantity,
+    requestedDeliveryDate: values.requestedDeliveryDate,
+    ...(includeManualDueAt ? { manualDueAt: toManualDueAt(values.requestedDeliveryDate, values.requestedDeliveryTime) } : {}),
+    shade: values.shade,
+    implantPlatform: values.implantPlatform === "Alt tip" ? values.implantPlatformCustom : values.implantPlatform,
+    ...(template
+      ? {
+          workFormSubmission: {
+            templateId: template.id,
+            templateVersion: template.version,
+            values: dynamicValues,
+          },
+        }
+      : {}),
+    workTypeId: values.workTypeId,
+  };
+}
+
+export function toPersistedWorkFormValues(values: WorkFormValues, template?: { readonly fields: readonly { readonly key: string }[] } | null): WorkFormValues["workFormValues"] {
+  const workFormValues = { ...values.workFormValues };
+  if (values.restorationType) {
+    workFormValues.restoration_type = values.restorationType;
+  } else {
+    delete workFormValues.restoration_type;
+  }
+  if (template?.fields.some((field) => field.key === "shade")) {
+    if (values.shade) {
+      workFormValues.shade = values.shade;
+    } else {
+      delete workFormValues.shade;
+    }
+  }
+  return workFormValues;
+}
+
+export function toWorkDeadlinePreviewInput(values: Pick<WorkFormValues, "clinicId" | "doctorId" | "quantity" | "requestedDeliveryDate" | "requestedDeliveryTime" | "workTypeId">): WorkDeadlinePreviewInput | null {
+  if (values.workTypeId === "" || !Number.isFinite(values.quantity) || values.quantity < 1) {
+    return null;
+  }
+  return {
+    clinicId: values.clinicId === "" ? null : values.clinicId,
+    doctorId: values.doctorId === "" ? null : values.doctorId,
+    manualDueAt: toManualDueAt(values.requestedDeliveryDate, values.requestedDeliveryTime),
+    quantity: values.quantity,
+    workTypeId: values.workTypeId,
+  };
+}
+
+export function validateDynamicWorkForm(form: UseFormReturn<WorkFormValues>, template: WorkFormTemplateDetail | null | undefined): boolean {
+  if (!template) {
+    return true;
+  }
+
+  let isValid = true;
+  for (const field of template.fields) {
+    const value = form.getValues(`workFormValues.${field.key}`);
+    if (field.required && !hasMeaningfulDynamicValue(value)) {
+      form.setError(`workFormValues.${field.key}`, { message: `${field.label} este obligatoriu.` });
+      isValid = false;
+    }
+    if ((field.type === "SELECT" || field.type === "RADIO" || field.type === "SHADE") && hasMeaningfulDynamicValue(value)) {
+      const allowed = new Set(field.options.map((option) => option.value));
+      if (typeof value !== "string" || !allowed.has(value)) {
+        form.setError(`workFormValues.${field.key}`, { message: "Alege o opțiune validă." });
+        isValid = false;
+      }
+    }
+  }
+
+  return isValid;
+}
+
+function toManualDueAt(date: string, time: string): string | null {
+  if (date === "" || time === "") {
+    return null;
+  }
+
+  const value = new Date(`${date}T${time}:00`);
+  return Number.isNaN(value.getTime()) ? null : value.toISOString();
+}
+
+function hasMeaningfulDynamicValue(value: unknown): boolean {
+  return value !== null && value !== undefined && value !== "" && (!Array.isArray(value) || value.length > 0);
 }
 
 export function WorkForm({
@@ -93,16 +207,11 @@ export function WorkForm({
   form,
   formId,
   isDisabled,
-  isTemplateError,
-  isTemplateLoading,
   onClinicChange,
   onCreatePatient,
-  onRetryTemplate,
   onSubmit,
-  template,
-  totalPreview,
-  deadlinePreview,
-  isDeadlinePreviewLoading,
+  allowPatientEdit = true,
+  workDetailsSlot,
   workTypeOptions,
   patientOptions,
 }: {
@@ -111,13 +220,11 @@ export function WorkForm({
   readonly form: UseFormReturn<WorkFormValues>;
   readonly formId: string;
   readonly isDisabled: boolean;
-  readonly isTemplateError: boolean;
-  readonly isTemplateLoading: boolean;
   readonly onClinicChange: (clinicId: string) => void;
   readonly onCreatePatient: () => void;
-  readonly onRetryTemplate: () => void;
   readonly onSubmit: (values: WorkFormValues) => void;
-  readonly template: WorkFormTemplateDetail | null | undefined;
+  readonly allowPatientEdit?: boolean;
+  readonly workDetailsSlot?: ReactNode;
   readonly totalPreview?: string | null;
   readonly deadlinePreview?: WorkDeadlinePreview | null;
   readonly isDeadlinePreviewLoading?: boolean;
@@ -129,11 +236,18 @@ export function WorkForm({
     ? getFormErrorSummaryItems(form.formState.errors, workFieldLabels)
     : [];
   const [patientSearch, setPatientSearch] = useState("");
+  const [clinicSearch, setClinicSearch] = useState("");
+  const [doctorSearch, setDoctorSearch] = useState("");
   const [workTypeSearch, setWorkTypeSearch] = useState("");
   const patientId = form.watch("patientId");
+  const clinicId = form.watch("clinicId");
+  const doctorId = form.watch("doctorId");
   const workTypeId = form.watch("workTypeId");
+  const implantPlatform = form.watch("implantPlatform");
   const selectedPatient = useMemo(() => patientOptions.find((patient) => patient.id === patientId) ?? null, [patientId, patientOptions]);
   const selectedWorkType = useMemo(() => workTypeOptions.find((workType) => workType.id === workTypeId) ?? null, [workTypeId, workTypeOptions]);
+  const selectedClinic = useMemo(() => clinicOptions.find((clinic) => clinic.id === clinicId) ?? null, [clinicId, clinicOptions]);
+  const selectedDoctor = useMemo(() => doctorOptions.find((doctor) => doctor.id === doctorId) ?? null, [doctorId, doctorOptions]);
 
   useEffect(() => {
     if (patientId !== "" && selectedPatient) {
@@ -147,6 +261,28 @@ export function WorkForm({
     }
   }, [selectedWorkType, workTypeId]);
 
+  useEffect(() => {
+    if (clinicId !== "" && selectedClinic) {
+      setClinicSearch(`${selectedClinic.code} · ${selectedClinic.name}`);
+    }
+  }, [clinicId, selectedClinic]);
+
+  useEffect(() => {
+    if (doctorId !== "" && selectedDoctor) {
+      setDoctorSearch(selectedDoctor.displayName);
+    }
+  }, [doctorId, selectedDoctor]);
+
+  const visibleClinicOptions = useMemo(() => filterSearchableOptions(clinicOptions.map((clinic) => ({
+    label: `${clinic.code} · ${clinic.name}`,
+    secondary: undefined,
+    value: clinic.id,
+  })), clinicSearch), [clinicOptions, clinicSearch]);
+  const visibleDoctorOptions = useMemo(() => filterSearchableOptions(doctorOptions.map((doctor) => ({
+    label: doctor.displayName,
+    secondary: undefined,
+    value: doctor.id,
+  })), doctorSearch), [doctorOptions, doctorSearch]);
   const visiblePatientOptions = useMemo(() => filterSearchableOptions(patientOptions.map((patient) => ({
     label: patient.fullName,
     secondary: patient.birthDate ? formatSearchableDate(patient.birthDate) : undefined,
@@ -162,42 +298,55 @@ export function WorkForm({
     <FormLayout className="works-page__form" id={formId} onSubmit={(event) => void form.handleSubmit(onSubmit)(event)}>
       <FormErrorSummary errors={summaryItems} ref={summaryRef} />
 
-      <FormSection title="Clinică și medic" description="Alege sursa lucrării. Medicul este resetat dacă schimbi clinica.">
+      <FormSection title="Clinică și medic">
         <FormGrid>
-          <Select
-            disabled={isDisabled}
+          <SearchablePickerField
+            disabled={isDisabled || !allowPatientEdit}
             error={form.formState.errors.clinicId?.message}
             id="clinicId"
-            label="Cabinet"
-            options={clinicOptions.map((clinic) => ({ label: `${clinic.code} · ${clinic.name}`, value: clinic.id }))}
-            placeholder="Alege cabinetul"
-            required
-            value={form.watch("clinicId")}
-            {...form.register("clinicId", {
-              onChange: (event) => onClinicChange((event.target as HTMLSelectElement).value),
-            })}
+            label="Clinică"
+            onSelect={(value) => {
+              form.setValue("clinicId", value, { shouldDirty: true, shouldValidate: true });
+              form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true });
+              onClinicChange(value);
+              setDoctorSearch("");
+            }}
+            onSearchChange={(value) => {
+              setClinicSearch(value);
+              if (value === "") {
+                form.setValue("clinicId", "", { shouldDirty: true, shouldValidate: true });
+              }
+            }}
+            options={visibleClinicOptions}
+            placeholder="Caută clinica"
+            required={false}
+            searchValue={clinicSearch}
+            selectedValue={clinicId}
+            emptyMessage="Nu există clinici potrivite."
           />
-          <Select
-            disabled={isDisabled || form.watch("clinicId") === ""}
+          <SearchablePickerField
+            disabled={isDisabled}
             error={form.formState.errors.doctorId?.message}
-            hint={form.watch("clinicId") === "" ? "Alege mai întâi cabinetul." : doctorOptions.length === 0 ? "Nu există medici activi pentru clinica selectată." : undefined}
             id="doctorId"
             label="Medic"
-            options={doctorOptions.map((doctor) => ({ label: doctor.displayName, value: doctor.id }))}
-            placeholder="Alege medicul"
-            required
-            value={form.watch("doctorId")}
-            {...form.register("doctorId", {
-              onChange: (event) => {
-                const value = (event.target as HTMLSelectElement).value;
-                form.setValue("doctorId", value, { shouldDirty: true, shouldValidate: true });
-              },
-            })}
+            onSelect={(value) => form.setValue("doctorId", value, { shouldDirty: true, shouldValidate: true })}
+            onSearchChange={(value) => {
+              setDoctorSearch(value);
+              if (value === "") {
+                form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true });
+              }
+            }}
+            options={visibleDoctorOptions}
+            placeholder="Caută medicul"
+            required={false}
+            searchValue={doctorSearch}
+            selectedValue={doctorId}
+            emptyMessage={doctorOptions.length === 0 ? "Nu există medici activi disponibili." : "Nu există medici potriviți."}
           />
         </FormGrid>
       </FormSection>
 
-      <FormSection title="Pacient" description="Alege pacientul din registru sau creează rapid un pacient nou.">
+      <FormSection title="Pacient">
         <FormGrid>
           <SearchablePickerField
             disabled={isDisabled}
@@ -213,14 +362,13 @@ export function WorkForm({
             selectedValue={patientId}
             emptyMessage="Nu există pacienți potriviți."
           />
-          <div>
+          {allowPatientEdit ? <div>
             <Button disabled={isDisabled} onClick={onCreatePatient} type="button" variant="secondary">Pacient nou</Button>
-            <p className="works-page__muted">Fără cod pacient afișat.</p>
-          </div>
+          </div> : null}
         </FormGrid>
       </FormSection>
 
-      <FormSection title="Lucrare" description="Selectează tipul și volumul. Prețul este doar preview pentru utilizatorii autorizați.">
+      <FormSection title="Lucrare">
         <FormGrid>
           <SearchablePickerField
             disabled={isDisabled}
@@ -240,58 +388,90 @@ export function WorkForm({
             disabled={isDisabled}
             error={form.formState.errors.quantity?.message}
             id="quantity"
-            label="Cantitate"
+            label="Elemente"
             min={1}
             required
             {...form.register("quantity", { valueAsNumber: true })}
           />
-          {totalPreview ? <p className="works-page__price-preview">Preview total: <strong>{totalPreview}</strong></p> : null}
+          <SearchablePickerField
+            disabled={isDisabled}
+            error={form.formState.errors.shade?.message}
+            id="shade"
+            label="Culoare"
+            onSelect={(value) => form.setValue("shade", value, { shouldDirty: true, shouldValidate: true })}
+            onSearchChange={(value) => {
+              if (value === "") {
+                form.setValue("shade", null, { shouldDirty: true, shouldValidate: true });
+              }
+            }}
+            options={WORK_SHADE_OPTIONS.map((value) => ({ label: value, secondary: undefined, value }))}
+            placeholder="Caută culoarea"
+            required={false}
+            searchValue={form.watch("shade") ?? ""}
+            selectedValue={form.watch("shade") ?? ""}
+            emptyMessage="Nu există culori potrivite."
+          />
+          <SearchablePickerField
+            disabled={isDisabled}
+            error={form.formState.errors.implantPlatform?.message}
+            id="implantPlatform"
+            label="Platformă implant"
+            onSelect={(value) => form.setValue("implantPlatform", value, { shouldDirty: true, shouldValidate: true })}
+            onSearchChange={(value) => {
+              if (value === "") {
+                form.setValue("implantPlatform", null, { shouldDirty: true, shouldValidate: true });
+              }
+            }}
+            options={IMPLANT_PLATFORM_OPTIONS.map((value) => ({ label: value, secondary: undefined, value }))}
+            placeholder="Caută platforma"
+            required={false}
+            searchValue={implantPlatform ?? ""}
+            selectedValue={implantPlatform ?? ""}
+            emptyMessage="Nu există platforme potrivite."
+          />
+          {implantPlatform === "Alt tip" ? <TextInput disabled={isDisabled} error={form.formState.errors.implantPlatformCustom?.message} id="implantPlatformCustom" label="Alt tip platformă" placeholder="Introdu tipul platformei" {...form.register("implantPlatformCustom")} /> : null}
+          <RadioGroup
+            disabled={isDisabled}
+            label="Tip restaurare"
+            name="restorationType"
+            onValueChange={(value) => {
+              if (value === "cimentata" || value === "insurubata") {
+                form.setValue("restorationType", value, { shouldDirty: true, shouldValidate: true });
+              }
+            }}
+            options={RESTORATION_TYPE_OPTIONS}
+            value={form.watch("restorationType") ?? ""}
+          />
+          {workDetailsSlot}
         </FormGrid>
       </FormSection>
 
-      <FormSection title="Detalii specifice lucrării" description="Câmpurile vin din formularul activ al tipului de lucrare selectat.">
-        {form.watch("workTypeId") === "" ? (
-          <p className="works-page__muted">Alege tipul lucrării pentru a verifica formularul specific.</p>
-        ) : isTemplateLoading ? (
-          <WorkFormLoadingState />
-        ) : isTemplateError ? (
-          <div className="works-page__template-error">
-            <ErrorState
-              description="Nu putem determina formularul activ pentru acest tip de lucrare. Salvarea este blocată până la reîncărcare."
-              title="Formularul specific nu a fost încărcat"
-            />
-            <Button onClick={onRetryTemplate} type="button" variant="secondary">Reîncarcă formularul</Button>
-          </div>
-        ) : template ? (
-          <WorkFormFields fields={template.fields} form={form} isDisabled={isDisabled} />
-        ) : (
-          <WorkFormEmptyState />
-        )}
-      </FormSection>
-
-      <FormSection title="Termen și prioritate" description="Termenul este salvat ca dată calendaristică, fără conversie de fus orar în frontend.">
+      <FormSection title="Termen și prioritate">
         <FormGrid>
           <DateInput
             disabled={isDisabled}
             error={form.formState.errors.requestedDeliveryDate?.message}
             id="requestedDeliveryDate"
-            label="Termen promis"
+            label="Data termenului"
             required
             {...form.register("requestedDeliveryDate")}
           />
+          <TextInput
+            disabled={isDisabled}
+            error={form.formState.errors.requestedDeliveryTime?.message}
+            id="requestedDeliveryTime"
+            label="Ora termenului"
+            placeholder="HH:mm"
+            {...form.register("requestedDeliveryTime")}
+          />
           <Select disabled={isDisabled} error={form.formState.errors.priority?.message} id="priority" label="Prioritate" options={priorityOptions} required {...form.register("priority")} />
         </FormGrid>
-        <DeadlinePreviewPanel isLoading={isDeadlinePreviewLoading === true} preview={deadlinePreview ?? null} />
       </FormSection>
 
-      <FormSection title="Observații" description="Notele interne rămân vizibile doar personalului autorizat.">
+      <FormSection title="Observații">
         <FormGrid>
-          <TextInput disabled={isDisabled} error={form.formState.errors.externalReference?.message} id="externalReference" label="Referință externă" {...form.register("externalReference")} />
           <FormGridFull>
-            <Textarea disabled={isDisabled} error={form.formState.errors.clinicalNotes?.message} id="clinicalNotes" label="Note clinice" rows={4} {...form.register("clinicalNotes")} />
-          </FormGridFull>
-          <FormGridFull>
-            <Textarea disabled={isDisabled} error={form.formState.errors.internalNotes?.message} id="internalNotes" label="Note interne" rows={4} {...form.register("internalNotes")} />
+            <Textarea disabled={isDisabled} error={form.formState.errors.clinicalNotes?.message} id="clinicalNotes" label="Note" rows={4} {...form.register("clinicalNotes")} />
           </FormGridFull>
         </FormGrid>
       </FormSection>
@@ -369,10 +549,7 @@ function SearchablePickerField({
   const controlId = id ?? generatedId;
   const listboxId = `${controlId}-listbox`;
 
-  const selectedOption = options.find((option) => option.value === selectedValue);
-  const hint = selectedOption
-    ? `Selectat: ${selectedOption.label}`
-    : "Apasă și tastează pentru căutare. Lista începe cu 3 variante.";
+  const hint = undefined;
 
   useEffect(() => {
     if (!isOpen) {
@@ -416,9 +593,15 @@ function SearchablePickerField({
           window.setTimeout(() => setOpen(false), 120);
         }}
         onChange={(event) => {
-          onSearchChange(event.target.value);
+          const nextValue = event.target.value;
+          onSearchChange(nextValue);
           if (selectedValue !== "") {
             onSelect("");
+          }
+          const exactOption = options.find((option) => option.value === nextValue.trim() || normalizeSearchText(option.label) === normalizeSearchText(nextValue.trim()));
+          if (exactOption) {
+            selectOption(exactOption);
+            return;
           }
           setOpen(true);
           setHighlightedIndex(0);
@@ -487,33 +670,6 @@ function SearchablePickerField({
           )) : <div className="works-page__search-empty">{emptyMessage}</div>}
         </div>
       ) : null}
-    </div>
-  );
-}
-
-function DeadlinePreviewPanel({ isLoading, preview }: { readonly isLoading: boolean; readonly preview: WorkDeadlinePreview | null }): ReactNode {
-  if (isLoading) {
-    return <p className="works-page__muted">Se calculează termenul estimat...</p>;
-  }
-
-  if (!preview) {
-    return <p className="works-page__muted">Alege cabinetul, medicul, tipul lucrării și cantitatea pentru termen estimat.</p>;
-  }
-
-  if (preview.mode === "UNRESOLVED") {
-    return (
-      <div className="works-page__deadline-preview">
-        <strong>Termen estimat nerezolvat</strong>
-        <span>{preview.explanation}</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="works-page__deadline-preview">
-      <strong>{preview.mode === "MANUAL" ? "Termen manual" : "Termen estimat"}</strong>
-      <span>{preview.effectiveDueAt ? new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(preview.effectiveDueAt)) : "Fără termen efectiv"}</span>
-      <span>{preview.executionDays === null ? preview.explanation : `${preview.executionDays} zile lucrătoare. ${preview.explanation}`}</span>
     </div>
   );
 }

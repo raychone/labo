@@ -53,8 +53,10 @@ export interface PriceCatalogItemSummary {
   readonly updatedAt: string;
   readonly workType: {
     readonly code: string;
+    readonly description: string | null;
     readonly id: string;
     readonly name: string;
+    readonly symbol: string;
   };
 }
 

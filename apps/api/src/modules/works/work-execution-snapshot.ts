@@ -9,9 +9,9 @@ export type ExecutionSnapshotSource = "MANAGER_ASSIGNMENT" | "TECHNICIAN_FIRST_C
 
 export interface ExecutionSnapshotWorkContext {
   readonly clinicName: string;
-  readonly clinicPublicId: string;
+  readonly clinicPublicId: string | null;
   readonly doctorName: string;
-  readonly doctorPublicId: string;
+  readonly doctorPublicId: string | null;
   readonly quantity: number;
   readonly workCode: string;
   readonly workTypeCode: string;
@@ -20,7 +20,7 @@ export interface ExecutionSnapshotWorkContext {
 }
 
 export interface ExecutionSnapshotLegalEntityContext {
-  readonly code: "NC" | "NG";
+  readonly code: "CDT" | "NG";
   readonly displayName: string;
   readonly publicId: string;
 }

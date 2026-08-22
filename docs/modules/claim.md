@@ -21,13 +21,15 @@ Available works, my claimed works, NC/NG selection, release, reassign, assignmen
 Current implemented behavior:
 
 - Unclaimed eligible works appear in available-for-claim.
+- Reception-created unclaimed works are immediately claimable even if the current workflow stage is still assigned to reception; no manual `Trimite la tehnician`, `Alocă`, `Pornește`, or `Mută` step is required before `GET /works/available-for-claim` returns them.
 - Technician claims with explicit `executionLegalEntityCode` `NC` or `NG`.
 - First valid claim in a cycle creates a locked execution snapshot with legal entity, technician, pricing, deadline, and context JSON.
-- Release clears active owner/legal entity but does not delete or recalculate the snapshot.
+- Successful claim and manager reassign set the work operational status to `IN_LUCRU` with explicit status-change timestamp/actor.
+- Release clears active owner/legal entity and returns non-final work to `RECEPTIE`, but does not delete or recalculate the snapshot.
 - Reclaim must use the already locked legal entity.
 - Manager reassign changes current technician but preserves locked execution context.
 - Wrong firm after snapshot is rejected with 409.
-- Claim/reassign use optimistic `expectedClaimRevision`.
+- Claim/reassign use optimistic `expectedClaimRevision`. `Preia` is committed through a conditional transaction update on `claimRevision`, `claimStatus: UNCLAIMED`, and work id, so concurrent claims produce one committed owner and one conflict.
 
 Deferred behavior:
 
@@ -39,7 +41,7 @@ Deferred behavior:
 
 ## Data Model
 
-`WorkOrder` claim fields, `WorkCycle`, `WorkAssignmentEvent`, `WorkExecutionSnapshot`.
+`WorkOrder` claim fields plus operational status timestamp fields, `WorkCycle`, `WorkAssignmentEvent`, `WorkExecutionSnapshot`.
 
 ## API
 
@@ -63,7 +65,7 @@ Concurrent claim, stale revision, delivered work cannot be claimed, pricing unre
 
 ## Implemented Tasks
 
-TECH-CLAIM-001A, TECH-CLAIM-001B, WORK-CYCLES-001A.
+TECH-CLAIM-001A, TECH-CLAIM-001B, WORK-CYCLES-001A, CLAIM-001A, CLAIM-001B, STATE-001A.
 
 ## Planned Tasks
 

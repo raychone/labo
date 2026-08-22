@@ -34,16 +34,16 @@ function getOptionalEnv(name: string): string | null {
   return value && value.length > 0 ? value : null;
 }
 
-function getLegalEntitySettingsSeed(prefix: "NC" | "NG"): LegalEntitySettingsSeed {
-  const fallback = prefix === "NC"
+function getLegalEntitySettingsSeed(prefix: "CDT" | "NG"): LegalEntitySettingsSeed {
+  const fallback = prefix === "CDT"
     ? {
-      addressLine1: "Adresă NC de validat",
+      addressLine1: "Adresă CDT de validat",
       bankName: null,
       city: "București",
       companyRegistrationNumber: "J40/000001/2026",
-      email: "nc.dev@example.test",
+      email: "cdt.dev@example.test",
       iban: null,
-      legalName: "NC Date Juridice De Validat",
+      legalName: "CDT Date Juridice De Validat",
       taxId: "RO10000001",
     }
     : {
@@ -81,7 +81,7 @@ async function main(): Promise<void> {
   const passwordHash = await hashPassword(password);
 
   for (const legalEntity of [
-    { code: "NC", displayName: "Nicolaie Cristina", sortOrder: 1 },
+    { code: "CDT", displayName: "Nicolaie Cristina", sortOrder: 1 },
     { code: "NG", displayName: "Nicolaie Gabriel", sortOrder: 2 },
   ]) {
     await prisma.legalEntity.upsert({
@@ -229,7 +229,7 @@ async function main(): Promise<void> {
     },
   });
 
-  for (const code of ["NC", "NG"] as const) {
+  for (const code of ["CDT", "NG"] as const) {
     const legalEntity = await prisma.legalEntity.findUniqueOrThrow({
       where: { code },
     });
@@ -294,13 +294,14 @@ async function main(): Promise<void> {
   });
 
   const legalEntities = await prisma.legalEntity.findMany({
-    where: { code: { in: ["NC", "NG"] } },
+    where: { code: { in: ["CDT", "NG"] } },
   });
 
   for (const legalEntity of legalEntities) {
+    const invoicePrefix = legalEntity.code === "NG" ? "NG" : "CD";
     for (const series of [
       { documentType: "PROFORMA" as const, prefix: "PF", year: 2026 },
-      { documentType: "INVOICE" as const, prefix: "FACT", year: 2026 },
+      { documentType: "INVOICE" as const, prefix: invoicePrefix, year: 2026 },
     ]) {
       await prisma.billingSeries.upsert({
         create: {

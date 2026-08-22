@@ -381,7 +381,7 @@ function TechnicianDashboard({
           {myWorks.map((work) => <WorkPreviewCard key={work.id} actionLabel="Continuă lucrarea" actionTo={`/works?workId=${work.id}`} work={work} />)}
           {canScanWork && myWorks.length === 0 ? <DashboardAction label="Scanează QR" to="/scan" /> : null}
         </DashboardSection>
-        <DashboardSection title="Disponibile pentru preluare" description="Preluarea și firma NC/NG se confirmă în fluxul existent.">
+        <DashboardSection title="Disponibile pentru preluare" description="Preluarea și firma NC/NG se confirmă la deschiderea lucrării.">
           <SectionState error={isAvailableError} isLoading={isAvailableLoading} text="Se încarcă lucrările disponibile" />
           {!isAvailableLoading && !isAvailableError && availableWorks.length === 0 ? (
             <DashboardEmptyState description="Nu există lucrări disponibile pentru preluare." title="Lista este goală" />
@@ -472,12 +472,12 @@ function ReceptionDashboard({
         </DashboardSection>
         <DashboardSection title="Fișe care necesită completare" description="Fișe necompletate sau draft din lucrările vizibile.">
           {incompleteRows.length === 0 ? <DashboardEmptyState description="Nu există fișe incomplete în lista curentă." title="Fișe la zi" /> : null}
-          {incompleteRows.map((row) => <OperationalPreviewCard key={row.id} actionLabel="Completează fișa" row={row} />)}
+          {incompleteRows.map((row) => <OperationalPreviewCard key={row.id} actionLabel="Deschide lucrarea" row={row} />)}
         </DashboardSection>
       </div>
-      <DashboardSection title="Lucrări revenite" description="Cicluri curente deschise după revenire.">
+      <DashboardSection title="Lucrări care necesită verificare" description="Lucrări revenite sau care necesită atenție.">
         {returnedRows.length === 0 ? <DashboardEmptyState description="Nu există lucrări revenite în lista curentă." title="Nicio revenire recentă" /> : null}
-        {returnedRows.slice(0, shortListSize).map((row) => <OperationalPreviewCard key={row.id} actionLabel="Deschide ciclul curent" row={row} />)}
+        {returnedRows.slice(0, shortListSize).map((row) => <OperationalPreviewCard key={row.id} actionLabel="Deschide lucrarea" row={row} />)}
       </DashboardSection>
       <Modal
         description="Caută o lucrare finalizată și înregistreaz-o ca revenire."
@@ -487,8 +487,8 @@ function ReceptionDashboard({
             onClick={() => {
               returnMutation.mutate({
                 input: {
-                  clinicId: selectedReturnedWork.clinic.id,
-                  doctorId: selectedReturnedWork.doctor.id,
+                  clinicId: selectedReturnedWork.clinic?.id ?? null,
+                  doctorId: selectedReturnedWork.doctor?.id ?? null,
                   ...(selectedReturnedWork.currentCycle?.id ? { expectedActiveCycleId: selectedReturnedWork.currentCycle.id } : {}),
                   notes: null,
                   reason: "PROBA",
@@ -533,7 +533,7 @@ function ReceptionDashboard({
               >
                 <strong>{row.workCode}</strong>
                 <span>{row.patient.name}</span>
-                <span>{row.clinic.name} · {row.doctor.name}</span>
+                <span>{row.clinic?.name ?? "-"} · {row.doctor?.name ?? "-"}</span>
                 <span>{row.workType.name}</span>
               </button>
             ))}
@@ -627,11 +627,10 @@ function WorkPreviewCard({ actionLabel, actionTo, work }: { readonly actionLabel
         <PriorityBadge label={work.priority === "URGENT" ? "Urgent" : "Normal"} variant={work.priority === "URGENT" ? "urgent" : "normal"} />
       </div>
       <div className="dashboard-page__work-grid">
-        <MetricCell label="Clinică" value={work.clinic.name} />
-        <MetricCell label="Medic" value={work.doctor.displayName} />
+        <MetricCell label="Clinică" value={work.clinic?.name ?? "-"} />
+        <MetricCell label="Medic" value={work.doctor?.displayName ?? "-"} />
         <MetricCell label="Tip" value={work.workType.name} />
-        <MetricCell label="Etapă" value={work.workflow?.currentStageName ?? "Fără etapă"} />
-        <MetricCell label="Progres" value={work.workflow ? `${work.workflow.progressCompleted}/${work.workflow.progressTotal}` : "-"} />
+        <MetricCell label="Stare" value={work.status} />
         <MetricCell label="Termen" value={formatDate(work.deadline.effectiveDueAt ?? work.requestedDeliveryDate)} />
         <MetricCell label="Companie" value={work.executionSnapshot.summary.legalEntity?.code ?? work.claim.executionLegalEntity?.code ?? "Nefixată"} />
         <MetricCell label="Responsabil" value={work.claim.technician?.displayName ?? "Nerevendicată"} />
@@ -639,7 +638,6 @@ function WorkPreviewCard({ actionLabel, actionTo, work }: { readonly actionLabel
       <div className="dashboard-page__work-actions">
         <DeadlineIndicator label={work.deadline.badge} state={work.deadline.status} />
         <DashboardAction label={actionLabel} to={actionTo} variant="primary" />
-        <DashboardAction label="Deschide lucrarea" to={`/works?workId=${work.id}`} />
       </div>
     </article>
   );
@@ -656,14 +654,12 @@ function OperationalPreviewCard({ actionLabel, row }: { readonly actionLabel: st
         <PriorityBadge label={row.priority === "URGENT" ? "Urgent" : "Normal"} variant={row.priority === "URGENT" ? "urgent" : "normal"} />
       </div>
       <div className="dashboard-page__work-grid">
-        <MetricCell label="Clinică" value={row.clinic.name} />
-        <MetricCell label="Medic" value={row.doctor.name} />
+        <MetricCell label="Clinică" value={row.clinic?.name ?? "-"} />
+        <MetricCell label="Medic" value={row.doctor?.name ?? "-"} />
         <MetricCell label="Tip" value={row.workType.name} />
-        <MetricCell label="Ciclu" value={row.currentCycle?.label ?? "-"} />
-        <MetricCell label="Etapă" value={row.workflow.currentStage?.name ?? "Fără etapă"} />
-        <MetricCell label="Progres" value={row.workflow.progress ?? `${row.workflow.progressCompleted}/${row.workflow.progressTotal}`} />
+        <MetricCell label="Stare logistică" value={row.logistics.status ?? "-"} />
         <MetricCell label="Tehnician" value={row.currentStageTechnician?.displayName ?? row.workOwner?.displayName ?? "Neasignat"} />
-        <MetricCell label="NC/NG" value={row.executionCompany?.code ?? "Nefixată"} />
+        <MetricCell label="CDT/NG" value={row.executionCompany?.code ?? "Nefixată"} />
       </div>
       <div className="dashboard-page__work-actions">
         <DeadlineIndicator label={row.deadline.badge} state={row.deadline.state} />
@@ -687,7 +683,7 @@ function AttentionList({ items }: { readonly items: readonly (OperationalStatusR
         <article className="dashboard-page__attention-item" key={item.id}>
           <div>
             <strong>{item.workCode}</strong>
-            <span>{item.patientName} · {item.clinic.name} · {item.stage.name}</span>
+            <span>{item.patientName} · {item.clinic?.name ?? "-"}</span>
           </div>
           <div className="dashboard-page__work-actions">
             <DeadlineIndicator label={formatDate(item.dueDate)} state={item.categories.includes("OVERDUE") ? "late" : item.categories.includes("DUE_TODAY") ? "due_today" : "on_time"} />
@@ -699,7 +695,7 @@ function AttentionList({ items }: { readonly items: readonly (OperationalStatusR
         <article className="dashboard-page__attention-item" key={item.id}>
           <div>
             <strong>{item.workCode}</strong>
-            <span>{item.patient.name} · {item.clinic.name} · {item.workflow.currentStage?.name ?? "Fără etapă"}</span>
+            <span>{item.patient.name} · {item.clinic?.name ?? "-"} · {item.logistics.status ?? "-"}</span>
           </div>
           <div className="dashboard-page__work-actions">
             <DeadlineIndicator label={item.deadline.badge} state={item.deadline.state} />

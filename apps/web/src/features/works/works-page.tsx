@@ -30,20 +30,15 @@ import {
   LEGAL_ENTITY_CODES,
   WORK_CYCLE_REASONS,
   formatMoneyMinor,
-  formatPatientSex,
   getLegalEntityDisplayName,
   getWorkStageExecutionStatusLabel,
-  type CreateNextWorkCycleInput,
   type CreateWorkInput,
-  type LegalEntityCode,
+  type CreateNextWorkCycleInput,
   type PatientOption,
   type PatientDetail,
   type RealLabSheetOperationalStatus,
   type RealLabSheetView,
-  type TechnicianOption,
   type UpdateWorkInput,
-  type WorkDeadlinePreviewInput,
-  type WorkFormTemplateDetail,
   type WorkSortField,
   type WorkSummary,
   type WorkCycleReason,
@@ -63,10 +58,10 @@ import { useSettings } from "../settings/settings-api.js";
 import { hasPermission } from "../users/users-api.js";
 import { useWorkTypeOptions } from "../work-types/work-types-api.js";
 import { useActiveWorkFormTemplate } from "../work-forms/work-form-templates-api.js";
-import { WorkForm, WorkFormActions, defaultWorkFormValues, toWorkFormValues } from "./work-form.js";
-import { WorkFormFieldRenderer, WorkFormReadOnlyView } from "./work-dynamic-form.js";
+import { WorkForm, WorkFormActions, defaultWorkFormValues, toPersistedWorkFormValues, toWorkDeadlinePreviewInput, toWorkFormValues, toWorkMutationInput } from "./work-form.js";
+import { WorkFormFieldRenderer } from "./work-dynamic-form.js";
 import { WorkWorkflowSection } from "./work-workflow-section.js";
-import { useCreateNextWorkCycle, useCreateWork, useFinalizeRealLabSheet, useRealLabSheet, useReassignWork, useUpdateWork, useUpsertRealLabSheet, useWork, useWorkCycles, useWorkDeadlinePreview, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
+import { downloadWorkAttachment, useCreateNextWorkCycle, useCreateWork, useFinalizeRealLabSheet, useRealLabSheet, useUpdateWork, useUpdateTechnicianWorkDetails, useUploadWorkAttachments, useUpsertRealLabSheet, useWork, useWorkCycles, useWorkDeadlinePreview, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
 import { workFormSchema, type WorkFormValues } from "./works-page.schema.js";
 import { WorkQrModal } from "./work-qr-modal.js";
 import { applyApiErrorsToForm, getErrorMessage, getFormErrorSummaryItems, UnsavedChangesPrompt, useBeforeUnloadPrompt, useCloseGuard, useErrorSummaryFocus } from "../../lib/form-utils.js";
@@ -90,6 +85,8 @@ const defaultListParams: WorksListParams = {
   status: undefined,
   workTypeId: undefined,
 };
+
+const EMPTY_WORK_ATTACHMENTS = [] as const;
 
 const priorityFilterOptions = [
   { label: "Toate", value: "" },
@@ -166,31 +163,6 @@ function fromApiSort(field: string, direction: "asc" | "desc"): DataTableSort {
   };
 }
 
-function toMutationInput(values: WorkFormValues, template: WorkFormTemplateDetail | null | undefined): CreateWorkInput {
-  return {
-    clinicId: values.clinicId,
-    clinicalNotes: values.clinicalNotes,
-    doctorId: values.doctorId,
-    externalReference: values.externalReference,
-    internalNotes: values.internalNotes,
-    patientId: values.patientId,
-    patientReference: values.patientReference,
-    priority: values.priority,
-    quantity: values.quantity,
-    requestedDeliveryDate: values.requestedDeliveryDate,
-    ...(template
-      ? {
-          workFormSubmission: {
-            templateId: template.id,
-            templateVersion: template.version,
-            values: values.workFormValues,
-          },
-        }
-      : {}),
-    workTypeId: values.workTypeId,
-  };
-}
-
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium" }).format(new Date(value));
 }
@@ -220,7 +192,8 @@ function BadgePill({ label, tone = "neutral" }: { readonly label: string; readon
 }
 
 function toWorkOperationalLabel(work: WorkSummary): { readonly label: string; readonly tone: "neutral" | "info" | "success" | "warning" | "danger" } {
-  if (work.workflow?.status === "COMPLETED") {
+  // The work status is canonical; workflow status can lag while logistics prepares the next step.
+  if (work.status === "FINALIZATA" || work.workflow?.status === "COMPLETED") {
     return { label: "Finalizată", tone: "success" };
   }
   if (work.claim.status === "CLAIMED" || work.workflow?.currentStageName) {
@@ -229,38 +202,11 @@ function toWorkOperationalLabel(work: WorkSummary): { readonly label: string; re
   return { label: "Înregistrată", tone: "warning" };
 }
 
-function toWorkFlowLabel(work: WorkSummary): { readonly label: string; readonly tone: "neutral" | "info" | "success" | "warning" } {
-  if (work.workflow?.status === "COMPLETED") {
-    return { label: "Flux finalizat", tone: "success" };
-  }
-  return {
-    label: work.workflow?.currentStageName ?? "Fără etapă",
-    tone: work.workflow?.currentStageName && work.workflow.currentStageName.length > 0 ? "info" : "neutral",
-  };
-}
-
-function hasMeaningfulDynamicValue(value: unknown): boolean {
-  return value !== null && value !== undefined && value !== "" && (!Array.isArray(value) || value.length > 0);
-}
-
-function toDeadlinePreviewInput(values: Pick<WorkFormValues, "clinicId" | "doctorId" | "quantity" | "workTypeId">): WorkDeadlinePreviewInput | null {
-  if (values.clinicId === "" || values.doctorId === "" || values.workTypeId === "" || !Number.isFinite(values.quantity) || values.quantity < 1) {
-    return null;
-  }
-
-  return {
-    clinicId: values.clinicId,
-    doctorId: values.doctorId,
-    quantity: values.quantity,
-    workTypeId: values.workTypeId,
-  };
-}
-
-function DeadlineBadge({ deadline }: { readonly deadline: WorkSummary["deadline"] }): ReactNode {
+function DeadlineBadge({ deadline, showTooltip = true }: { readonly deadline: WorkSummary["deadline"]; readonly showTooltip?: boolean }): ReactNode {
   return (
     <span
       className={`works-page__deadline-badge works-page__deadline-badge--${deadline.color}`}
-      title={deadline.tooltip}
+      title={showTooltip ? deadline.tooltip : undefined}
     >
       {deadline.badge}
     </span>
@@ -268,20 +214,14 @@ function DeadlineBadge({ deadline }: { readonly deadline: WorkSummary["deadline"
 }
 
 function DeadlineDetailCard({ work }: { readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
-  const appliedRule = work.deadline.executionDays === null
-    ? "Regulă manuală sau nerezolvată"
-    : `${work.deadline.executionDays} zile lucrătoare`;
-  const sourceLabel = work.deadline.mode === "MANUAL" ? "Manual" : work.deadline.mode === "CALCULATED" ? "Calculat" : "Nerezolvat";
-
   return (
     <Card>
       <CardHeader>
         <CardTitle>Termen</CardTitle>
-        <CardDescription>{work.deadline.tooltip}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="works-page__deadline-card">
-          <DeadlineBadge deadline={work.deadline} />
+          <DeadlineBadge deadline={work.deadline} showTooltip={false} />
           <div>
             <span className="works-page__muted">Data</span>
             <strong>{work.deadline.effectiveDueAt ? formatDate(work.deadline.effectiveDueAt) : "Fără termen"}</strong>
@@ -298,77 +238,10 @@ function DeadlineDetailCard({ work }: { readonly work: import("@dental-lab/share
             <span className="works-page__muted">Countdown</span>
             <strong>{work.deadline.countdown}</strong>
           </div>
-          <div>
-            <span className="works-page__muted">Regulă aplicată</span>
-            <strong>{appliedRule}</strong>
-          </div>
-          <div>
-            <span className="works-page__muted">Manual/Calculat</span>
-            <strong>{sourceLabel}</strong>
-          </div>
-          <div>
-            <span className="works-page__muted">Ultima recalculare</span>
-            <strong>{work.deadline.calculatedAt ? formatDateTime(work.deadline.calculatedAt) : "Nedisponibilă"}</strong>
-          </div>
-          <div className="works-page__deadline-card-note">
-            <span className="works-page__muted">Explicație</span>
-            <p>{work.deadline.explanation ?? "Nu există explicație disponibilă."}</p>
-          </div>
-          <div className="works-page__deadline-card-note">
-            <span className="works-page__muted">Istoric termen</span>
-            <p>{getDeadlineTimelineLabel(work.deadline.source, work.deadline.status)}</p>
-          </div>
         </div>
       </CardContent>
     </Card>
   );
-}
-
-function getDeadlineTimelineLabel(source: import("@dental-lab/shared").WorkDeadlineSource | null, status: string): string {
-  if (status === "UNRESOLVED") {
-    return "Deadline modificat: termen nerezolvat.";
-  }
-
-  switch (source) {
-    case "CREATION":
-      return "Deadline calculat la înregistrarea lucrării.";
-    case "WORK_UPDATE":
-      return "Deadline recalculat după modificarea lucrării.";
-    case "MANUAL_OVERRIDE":
-      return "Deadline manual setat de utilizator autorizat.";
-    case "MANUAL_RECALCULATION":
-      return "Deadline recalculat manual.";
-    case "LEGACY_BACKFILL":
-      return "Deadline rezolvat din termenul istoric.";
-    case "FUTURE_TECH_CLAIM":
-      return "Deadline rezolvat prin flux tehnic viitor.";
-    default:
-      return "Deadline modificat.";
-  }
-}
-
-function validateDynamicWorkForm(form: import("react-hook-form").UseFormReturn<WorkFormValues>, template: WorkFormTemplateDetail | null | undefined): boolean {
-  if (!template) {
-    return true;
-  }
-
-  let isValid = true;
-  for (const field of template.fields) {
-    const value = form.getValues(`workFormValues.${field.key}`);
-    if (field.required && !hasMeaningfulDynamicValue(value)) {
-      form.setError(`workFormValues.${field.key}`, { message: `${field.label} este obligatoriu.` });
-      isValid = false;
-    }
-    if ((field.type === "SELECT" || field.type === "RADIO" || field.type === "SHADE") && hasMeaningfulDynamicValue(value)) {
-      const allowed = new Set(field.options.map((option) => option.value));
-      if (typeof value !== "string" || !allowed.has(value)) {
-        form.setError(`workFormValues.${field.key}`, { message: "Alege o opțiune validă." });
-        isValid = false;
-      }
-    }
-  }
-
-  return isValid;
 }
 
 export function WorksPage(): ReactNode {
@@ -391,14 +264,21 @@ export function WorksPage(): ReactNode {
   const canCreate = hasPermission(permissionsQuery.data, "works.create");
   const canUpdate = hasPermission(permissionsQuery.data, "works.update");
   const canReadCycles = hasPermission(permissionsQuery.data, "cycles.read") || hasPermission(permissionsQuery.data, "cycles.history.read");
+  const canShowLegacyExecution = hasPermission(permissionsQuery.data, "works.read_all")
+    && !hasPermission(permissionsQuery.data, "works.create")
+    && !hasPermission(permissionsQuery.data, "technician.workbench.read")
+    && !hasPermission(permissionsQuery.data, "logistics.center.read");
+  const canShowLegacyCycles = canReadCycles && canShowLegacyExecution;
   const canCreateNextCycle = hasPermission(permissionsQuery.data, "cycles.create_next");
   const canReadPricing = hasPermission(permissionsQuery.data, "pricing.read");
+  const canEditTechnicalCode = hasPermission(permissionsQuery.data, "works.technical_details.update");
+  const canUploadFiles = hasPermission(permissionsQuery.data, "files.upload");
   const canReadTechnicianOptions = hasPermission(permissionsQuery.data, "technician.workload.read");
   const worksQuery = useWorks(params, canRead);
   const selectedWorkQuery = useWork(selectedWorkId, canRead);
   const clinicOptionsQuery = useQuery({ enabled: canRead || canCreate, queryFn: fetchClinicOptions, queryKey: ["clinics", "options"], retry: false });
   const doctorOptionsQuery = useQuery({
-    enabled: (canRead || canCreate) && params.clinicId !== undefined,
+    enabled: canRead || canCreate,
     queryFn: () => fetchDoctorOptions(params.clinicId),
     queryKey: ["doctors", "options", params.clinicId],
     retry: false,
@@ -451,16 +331,6 @@ export function WorksPage(): ReactNode {
       header: "Tip",
       id: "workType",
       renderCell: (work) => <BadgePill label={work.workType.name} tone="neutral" />,
-    },
-    {
-      header: "Flux",
-      id: "workflow",
-      renderCell: (work) => (
-        <div className="works-page__badge-stack">
-          <BadgePill label={toWorkFlowLabel(work).label} tone={toWorkFlowLabel(work).tone} />
-          <span className="works-page__muted">{work.workflow ? `${work.workflow.progressCompleted}/${work.workflow.progressTotal}` : "0/0"}</span>
-        </div>
-      ),
     },
     {
       header: "Stare",
@@ -573,7 +443,6 @@ export function WorksPage(): ReactNode {
                     value={params.clinicId ?? ""}
                   />
                   <Select
-                    disabled={params.clinicId === undefined}
                     label="Medic"
                     onChange={(event) => setParams((current) => ({ ...current, doctorId: event.target.value || undefined, page: 1 }))}
                     options={(doctorOptionsQuery.data ?? []).map((doctor) => ({ label: doctor.displayName, value: doctor.id }))}
@@ -600,7 +469,7 @@ export function WorksPage(): ReactNode {
                   />
                   <Select
                     label="Companie execuție"
-                    onChange={(event) => setParams((current) => ({ ...current, executionLegalEntityCode: event.target.value === "NC" || event.target.value === "NG" ? event.target.value : undefined, page: 1 }))}
+                    onChange={(event) => setParams((current) => ({ ...current, executionLegalEntityCode: event.target.value === "CDT" || event.target.value === "NG" ? event.target.value : undefined, page: 1 }))}
                     options={legalEntityFilterOptions}
                     value={params.executionLegalEntityCode ?? ""}
                   />
@@ -660,8 +529,11 @@ export function WorksPage(): ReactNode {
       />
 
       <WorkDetailsDrawer
+        canEditTechnicalCode={canEditTechnicalCode}
+        canUploadFiles={canUploadFiles}
         canCreateNextCycle={canCreateNextCycle}
-        canReadCycles={canReadCycles}
+        canReadCycles={canShowLegacyCycles}
+        canShowLegacyExecution={canShowLegacyExecution}
         canReadPricing={canReadPricing}
         canUpdate={canUpdate}
         clinicOptions={clinicOptionsQuery.data ?? []}
@@ -743,26 +615,30 @@ function CreateWorkModal({
   const selectedDoctorId = form.watch("doctorId");
   const selectedWorkTypeId = form.watch("workTypeId");
   const quantity = form.watch("quantity");
-  const deadlinePreviewInput = useMemo(() => toDeadlinePreviewInput({
+  const requestedDeliveryDate = form.watch("requestedDeliveryDate");
+  const requestedDeliveryTime = form.watch("requestedDeliveryTime");
+  const deadlinePreviewInput = useMemo(() => toWorkDeadlinePreviewInput({
     clinicId: selectedClinicId,
     doctorId: selectedDoctorId,
     quantity,
+    requestedDeliveryDate,
+    requestedDeliveryTime,
     workTypeId: selectedWorkTypeId,
-  }), [quantity, selectedClinicId, selectedDoctorId, selectedWorkTypeId]);
+  }), [quantity, requestedDeliveryDate, requestedDeliveryTime, selectedClinicId, selectedDoctorId, selectedWorkTypeId]);
   const deadlinePreviewQuery = useWorkDeadlinePreview(deadlinePreviewInput, isOpen);
+  const activeTemplateQuery = useActiveWorkFormTemplate(selectedWorkTypeId || undefined, isOpen && selectedWorkTypeId !== "");
+  const submitDisabled = activeTemplateQuery.isLoading || activeTemplateQuery.isError;
   const selectedPriceOption = pricingWorkTypeOptions.find((option) => option.id === selectedWorkTypeId);
   const totalPreview = selectedPriceOption && Number.isFinite(quantity)
     ? formatMoneyMinor(selectedPriceOption.basePriceMinor * quantity, currency, locale)
     : null;
   const closeGuard = useCloseGuard(form.formState.isDirty, isSaving, onOpenChange);
   const doctorsQuery = useQuery({
-    enabled: isOpen && selectedClinicId !== "",
-    queryFn: () => fetchDoctorOptions(selectedClinicId),
+    enabled: isOpen,
+    queryFn: () => fetchDoctorOptions(selectedClinicId || undefined),
     queryKey: ["doctors", "options", "create-work", selectedClinicId],
     retry: false,
   });
-  const activeTemplateQuery = useActiveWorkFormTemplate(selectedWorkTypeId || undefined, isOpen && selectedWorkTypeId !== "");
-  const submitDisabled = activeTemplateQuery.isLoading || activeTemplateQuery.isError;
   const patientOptions = useMemo(() => mergePatientOptions(patientOptionsQuery.data ?? [], initialPatient?.overview ?? null), [initialPatient, patientOptionsQuery.data]);
 
   useEffect(() => {
@@ -818,18 +694,12 @@ function CreateWorkModal({
           form={form}
           formId="create-work-form"
           isDisabled={isSaving}
-          isTemplateError={activeTemplateQuery.isError}
-          isTemplateLoading={activeTemplateQuery.isLoading}
           onClinicChange={() => form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true })}
           onCreatePatient={() => setPatientCreateOpen(true)}
-          onRetryTemplate={() => void activeTemplateQuery.refetch()}
           onSubmit={(values) => {
             form.clearErrors("root");
-            if (validateDynamicWorkForm(form, activeTemplateQuery.data)) {
-              onSubmit(toMutationInput(values, activeTemplateQuery.data));
-            }
+            onSubmit(toWorkMutationInput(values, activeTemplateQuery.data));
           }}
-          template={activeTemplateQuery.data}
           totalPreview={totalPreview}
           deadlinePreview={deadlinePreviewQuery.data ?? null}
           isDeadlinePreviewLoading={deadlinePreviewQuery.isFetching}
@@ -854,9 +724,167 @@ function CreateWorkModal({
   );
 }
 
+function WorkCodeAndFilesFields({
+  canEditCode,
+  canUploadFiles,
+  work,
+}: {
+  readonly canEditCode: boolean;
+  readonly canUploadFiles: boolean;
+  readonly work: import("@dental-lab/shared").WorkDetail;
+}): ReactNode {
+  const attachments = work.attachments ?? EMPTY_WORK_ATTACHMENTS;
+  type Attachment = (typeof attachments)[number];
+  const [code, setCode] = useState(work.technicalCodeNotes ?? "");
+  const [preview, setPreview] = useState<{ readonly attachment: Attachment; readonly url: string } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
+  const [pendingFiles, setPendingFiles] = useState<readonly File[]>([]);
+  const updateMutation = useUpdateTechnicianWorkDetails();
+  const uploadMutation = useUploadWorkAttachments();
+
+  useEffect(() => {
+    setCode(work.technicalCodeNotes ?? "");
+  }, [work.technicalCodeNotes]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const createdUrls: string[] = [];
+    const imageAttachments = attachments.filter((attachment) => attachment.mimeType.startsWith("image/"));
+    void Promise.all(imageAttachments.map(async (attachment) => {
+      try {
+        const blob = await downloadWorkAttachment(work.id, attachment.id, attachment.mimeType);
+        const url = URL.createObjectURL(blob);
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return null;
+        }
+        createdUrls.push(url);
+        return [attachment.id, url] as const;
+      } catch {
+        return null;
+      }
+    })).then((entries) => {
+      if (!cancelled) setThumbnailUrls(Object.fromEntries(entries.filter((entry): entry is readonly [string, string] => entry !== null)));
+    });
+    return () => {
+      cancelled = true;
+      createdUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [attachments, work.id]);
+
+  function upload(files: readonly File[]): void {
+    if (files.length > 0) {
+      setPendingFiles(files);
+      uploadMutation.mutate({ files, workOrderId: work.id });
+    }
+  }
+
+  useEffect(() => {
+    if (!uploadMutation.isPending && uploadMutation.isSuccess) {
+      setPendingFiles([]);
+    }
+  }, [uploadMutation.isPending, uploadMutation.isSuccess]);
+
+  async function download(attachment: (typeof attachments)[number]): Promise<void> {
+    const blob = await downloadWorkAttachment(work.id, attachment.id, attachment.mimeType);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = attachment.fileName;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  }
+
+  async function openPreview(attachment: Attachment): Promise<void> {
+    if (!attachment.mimeType.startsWith("image/")) {
+      await download(attachment);
+      return;
+    }
+    setPreviewLoading(true);
+    try {
+      const blob = await downloadWorkAttachment(work.id, attachment.id, attachment.mimeType);
+      const url = URL.createObjectURL(blob);
+      setPreview((current) => {
+        if (current) URL.revokeObjectURL(current.url);
+        return { attachment, url };
+      });
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  function closePreview(): void {
+    if (preview) URL.revokeObjectURL(preview.url);
+    setPreview(null);
+  }
+
+  return (
+    <>
+        <div className="works-page__detail-field">
+          <span>Cod</span>
+          {canEditCode ? (
+            <>
+              <Textarea aria-label="Cod tehnic" label="Cod" onChange={(event) => setCode(event.target.value)} rows={5} value={code} />
+              <Button disabled={updateMutation.isPending} isLoading={updateMutation.isPending} onClick={() => updateMutation.mutate({ workOrderId: work.id, input: { technicalCodeNotes: code.trim() || null } })} size="small" type="button">Salvează codul</Button>
+            </>
+          ) : <strong>{work.technicalCodeNotes || "-"}</strong>}
+        </div>
+        <div className="works-page__detail-field">
+          <span>Fișiere atașate</span>
+          {attachments.length > 0 ? (
+            <ul className="works-page__attachment-list">
+              {attachments.map((attachment) => (
+                <li key={attachment.id}>
+                  {attachment.mimeType.startsWith("image/") ? (
+                    <button aria-label={`Previzualizează ${attachment.fileName}`} className="works-page__attachment-preview-button" disabled={previewLoading} onClick={() => void openPreview(attachment)} type="button">
+                      <span className="works-page__attachment-thumb">{thumbnailUrls[attachment.id] ? <img alt="" src={thumbnailUrls[attachment.id]} /> : <span aria-hidden="true">▧</span>}</span>
+                      <span>{attachment.fileName}</span>
+                    </button>
+                  ) : <span>{attachment.fileName}</span>}
+                  <span className="works-page__attachment-meta">
+                    <small>{Math.ceil(attachment.sizeBytes / 1024)} KB</small>
+                    <button aria-label={`Descarcă ${attachment.fileName}`} className="works-page__attachment-download" onClick={() => void download(attachment)} type="button">Descarcă</button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : <strong>Nu există fișiere.</strong>}
+          {pendingFiles.length > 0 ? (
+            <div aria-live="polite" className="works-page__pending-attachments">
+              <strong>{uploadMutation.isPending ? "Se încarcă fișierele…" : "Fișiere adăugate"}</strong>
+              {pendingFiles.map((file) => <span key={`${file.name}-${file.size}-${file.lastModified}`}>{file.name}</span>)}
+            </div>
+          ) : null}
+          {canUploadFiles ? (
+            <label className="works-page__attachment-dropzone" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); upload([...event.dataTransfer.files]); }} onPaste={(event) => upload([...event.clipboardData.files])}>
+              <span>Adaugă fișiere</span>
+              <small>Trage, lipește sau selectează din dispozitiv.</small>
+              <input accept="image/jpeg,image/png,image/webp,application/pdf" multiple onChange={(event) => { upload([...(event.target.files ?? [])]); event.currentTarget.value = ""; }} type="file" />
+            </label>
+          ) : null}
+          {uploadMutation.isError ? <p className="works-page__muted">Fișierele nu au putut fi încărcate.</p> : null}
+        </div>
+        <Modal
+          description={preview?.attachment.fileName ?? "Previzualizare imagine"}
+          footer={preview ? <Button onClick={() => void download(preview.attachment)}>Descarcă imaginea</Button> : null}
+          isOpen={preview !== null}
+          onOpenChange={(open) => { if (!open) closePreview(); }}
+          size="full"
+          title={preview?.attachment.fileName ?? "Previzualizare"}
+        >
+          {preview ? <div className="works-page__image-preview"><img alt={preview.attachment.fileName} src={preview.url} /></div> : null}
+        </Modal>
+    </>
+  );
+}
+
 function WorkDetailsDrawer({
+  canEditTechnicalCode,
+  canUploadFiles,
   canCreateNextCycle,
   canReadCycles,
+  canShowLegacyExecution,
   canReadPricing,
   canUpdate,
   clinicOptions,
@@ -874,8 +902,11 @@ function WorkDetailsDrawer({
   workError,
   workTypeOptionsError,
 }: {
+  readonly canEditTechnicalCode: boolean;
+  readonly canUploadFiles: boolean;
   readonly canCreateNextCycle: boolean;
   readonly canReadCycles: boolean;
+  readonly canShowLegacyExecution: boolean;
   readonly canReadPricing: boolean;
   readonly canUpdate: boolean;
   readonly clinicOptions: readonly { readonly code: string; readonly id: string; readonly name: string }[];
@@ -894,7 +925,6 @@ function WorkDetailsDrawer({
   readonly workTypeOptionsError: unknown;
 }): ReactNode {
   const toast = useToast();
-  const [isPatientCreateOpen, setPatientCreateOpen] = useState(false);
   const form = useForm<WorkFormValues>({
     defaultValues: toWorkFormValues(work),
     resolver: zodResolver(workFormSchema),
@@ -903,21 +933,24 @@ function WorkDetailsDrawer({
   const selectedDoctorId = form.watch("doctorId");
   const selectedWorkTypeId = form.watch("workTypeId");
   const quantity = form.watch("quantity");
-  const deadlinePreviewInput = useMemo(() => toDeadlinePreviewInput({
+  const requestedDeliveryDate = form.watch("requestedDeliveryDate");
+  const requestedDeliveryTime = form.watch("requestedDeliveryTime");
+  const deadlinePreviewInput = useMemo(() => toWorkDeadlinePreviewInput({
     clinicId: selectedClinicId,
     doctorId: selectedDoctorId,
     quantity,
+    requestedDeliveryDate,
+    requestedDeliveryTime,
     workTypeId: selectedWorkTypeId,
-  }), [quantity, selectedClinicId, selectedDoctorId, selectedWorkTypeId]);
+  }), [quantity, requestedDeliveryDate, requestedDeliveryTime, selectedClinicId, selectedDoctorId, selectedWorkTypeId]);
   const deadlinePreviewQuery = useWorkDeadlinePreview(deadlinePreviewInput, isOpen && canUpdate);
+  const activeTemplateQuery = useActiveWorkFormTemplate(selectedWorkTypeId || undefined, isOpen && selectedWorkTypeId !== "");
   const doctorsQuery = useQuery({
-    enabled: isOpen && selectedClinicId !== "",
-    queryFn: () => fetchDoctorOptions(selectedClinicId),
+    enabled: isOpen,
+    queryFn: () => fetchDoctorOptions(selectedClinicId || undefined),
     queryKey: ["doctors", "options", "work-detail", selectedClinicId],
     retry: false,
   });
-  const patientOptionsQuery = usePatientOptions("", isOpen);
-  const createPatientMutation = useCreatePatient();
   const selectedPriceOption = pricingWorkTypeOptions.find((option) => option.id === selectedWorkTypeId);
   const totalPreview = selectedPriceOption && Number.isFinite(quantity)
     ? formatMoneyMinor(selectedPriceOption.basePriceMinor * quantity, currency, locale)
@@ -925,14 +958,10 @@ function WorkDetailsDrawer({
   const closeGuard = useCloseGuard(form.formState.isDirty, isSaving, onOpenChange);
   const [pendingWorkTypeChange, setPendingWorkTypeChange] = useState<UpdateWorkInput | null>(null);
   const isWorkTypeChanging = Boolean(work && selectedWorkTypeId !== "" && selectedWorkTypeId !== work.workType.id);
-  const activeTemplateQuery = useActiveWorkFormTemplate(selectedWorkTypeId || undefined, isOpen && isWorkTypeChanging);
-  const submitDisabled = activeTemplateQuery.isLoading || activeTemplateQuery.isError;
-  const [isReassignOpen, setReassignOpen] = useState(false);
+  const submitDisabled = false;
   const [isReturnOpen, setReturnOpen] = useState(false);
-  const reassignMutation = useReassignWork();
   const createNextCycleMutation = useCreateNextWorkCycle();
   const cyclesQuery = useWorkCycles(work?.id ?? null, isOpen && canReadCycles && work !== undefined);
-  const techniciansQuery = useTechnicianOptions(Boolean(work?.claim.canCurrentUserReassign));
   const activeCycleNumber = cyclesQuery.data?.cycles.find((cycle) => cycle.id === cyclesQuery.data?.activeCycleId)?.cycleNumber ?? null;
 
   useEffect(() => {
@@ -948,12 +977,9 @@ function WorkDetailsDrawer({
   useBeforeUnloadPrompt(isOpen && form.formState.isDirty && !isSaving);
 
   function buildUpdateInput(values: WorkFormValues): UpdateWorkInput | null {
-    const templateForValidation = isWorkTypeChanging ? activeTemplateQuery.data : null;
-    if (!validateDynamicWorkForm(form, templateForValidation)) {
-      return null;
-    }
-
-    const baseInput = toMutationInput(values, isWorkTypeChanging ? activeTemplateQuery.data : null);
+    const template = activeTemplateQuery.data ?? (work?.workForm ? { fields: work.workForm.fields } : null);
+    const dynamicValues = toPersistedWorkFormValues(values, template);
+    const baseInput = toWorkMutationInput(values, null, false, false);
     return {
       ...baseInput,
       expectedDeadlineRevision: work?.deadline.revision ?? 0,
@@ -963,7 +989,7 @@ function WorkDetailsDrawer({
             ...(baseInput.workFormSubmission ? { workFormSubmission: baseInput.workFormSubmission } : {}),
           }
         : {
-            workFormValues: values.workFormValues,
+            workFormValues: dynamicValues,
           }),
     };
   }
@@ -972,6 +998,7 @@ function WorkDetailsDrawer({
     <>
       <UnsavedChangesPrompt when={isOpen && form.formState.isDirty && !isSaving} />
       <Drawer
+        className="works-page__work-details-drawer"
         description={work ? `${work.code} · ${work.status}` : "Detalii lucrare"}
         isOpen={isOpen}
         onOpenChange={closeGuard.handleOpenChange}
@@ -980,9 +1007,8 @@ function WorkDetailsDrawer({
         {workError ? <ErrorState title="Lucrarea nu a fost încărcată" description={getErrorMessage(workError)} /> : null}
         {work ? (
           <div className="works-page__drawer">
-            <ExecutionNowCard activeCycleNumber={activeCycleNumber} work={work} />
-            <WorkPatientCard work={work} />
-            <WorkWorkflowSection isOpen={isOpen} workId={work.id} />
+            <ExecutionNowCard activeCycleNumber={canShowLegacyExecution ? activeCycleNumber : null} showLegacyExecution={canShowLegacyExecution} work={work} />
+            {canShowLegacyExecution ? <WorkWorkflowSection isOpen={isOpen} workId={work.id} /> : null}
             {canReadCycles ? (
               <RealLabSheetSection
                 history={cyclesQuery.data}
@@ -1002,11 +1028,6 @@ function WorkDetailsDrawer({
               <Button onClick={() => onShowQr(work.id)} variant="outline">Vezi QR</Button>
             </div>
             <DeadlineDetailCard work={work} />
-            <ExecutionSnapshotCard work={work} />
-            <WorkResponsibilityCard
-              onReassign={() => setReassignOpen(true)}
-              work={work}
-            />
             {canReadCycles ? (
               <WorkCyclesSection
                 canCreateNextCycle={canCreateNextCycle}
@@ -1024,13 +1045,14 @@ function WorkDetailsDrawer({
               form={form}
               formId="update-work-form"
               isDisabled={!canUpdate || isSaving}
-              isTemplateError={activeTemplateQuery.isError}
-              isTemplateLoading={activeTemplateQuery.isLoading}
               onClinicChange={() => form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true })}
-              onCreatePatient={() => setPatientCreateOpen(true)}
-              onRetryTemplate={() => void activeTemplateQuery.refetch()}
+              allowPatientEdit={false}
+              onCreatePatient={() => undefined}
               onSubmit={(values) => {
                 form.clearErrors("root");
+                if (activeTemplateQuery.isLoading || (activeTemplateQuery.isError && !work.workForm)) {
+                  return;
+                }
                 const updateInput = buildUpdateInput(values);
                 if (!updateInput) {
                   return;
@@ -1041,33 +1063,13 @@ function WorkDetailsDrawer({
                 }
                 onSubmit(updateInput);
               }}
-              template={isWorkTypeChanging ? activeTemplateQuery.data : work.workForm ? {
-                activatedAt: null,
-                activatedByUserId: null,
-                archivedAt: null,
-                archivedByUserId: null,
-                createdAt: work.workForm.submittedAt,
-                createdByUserId: null,
-                description: null,
-                fieldCount: work.workForm.fields.length,
-                fields: work.workForm.fields.map((field) => ({ ...field, id: field.key, isActive: true })),
-                id: work.workForm.templateId ?? "snapshot",
-                kind: work.workForm.templateKind ?? "GENERIC",
-                name: work.workForm.templateName,
-                status: "ACTIVE",
-                updatedAt: work.workForm.updatedAt,
-                updatedByUserId: null,
-                version: work.workForm.templateVersion,
-                workType: { code: work.workType.code, id: work.workType.id, isActive: true, name: work.workType.name },
-                workTypeId: work.workType.id,
-              } : null}
               totalPreview={canReadPricing ? totalPreview : null}
               deadlinePreview={deadlinePreviewQuery.data ?? null}
               isDeadlinePreviewLoading={deadlinePreviewQuery.isFetching}
               workTypeOptions={formWorkTypeOptions}
-              patientOptions={mergePatientOptions(patientOptionsQuery.data ?? [], work.patient)}
+              patientOptions={work.patient ? [{ birthDate: work.patient.birthDate ?? null, firstName: work.patient.firstName, fullName: work.patient.fullName, id: work.patient.id, lastName: work.patient.lastName, workCount: 0 }] : []}
+              workDetailsSlot={<WorkCodeAndFilesFields canEditCode={canEditTechnicalCode} canUploadFiles={canUploadFiles} work={work} />}
             />
-            <WorkFormReadOnlyView submission={work.workForm} />
             <WorkFormActions
               canReset={form.formState.isDirty}
               formId="update-work-form"
@@ -1094,43 +1096,6 @@ function WorkDetailsDrawer({
         }}
         title="Schimbi tipul lucrării?"
         variant="danger"
-      />
-      <QuickPatientModal
-        isOpen={isPatientCreateOpen}
-        isSaving={createPatientMutation.isPending}
-        onOpenChange={setPatientCreateOpen}
-        onSubmit={(values) => createPatientMutation.mutate(values, {
-          onSuccess: (patient) => {
-            form.setValue("patientId", patient.overview.id, { shouldDirty: true, shouldValidate: true });
-            setPatientCreateOpen(false);
-          },
-        })}
-        submitError={createPatientMutation.error}
-      />
-      <ReassignWorkModal
-        isLoading={reassignMutation.isPending}
-        isOpen={isReassignOpen}
-        onOpenChange={setReassignOpen}
-        onSubmit={(input) => {
-          if (!work) {
-            return;
-          }
-          reassignMutation.mutate({
-            input: {
-              ...input,
-              expectedClaimRevision: work.claim.revision,
-            },
-            workOrderId: work.id,
-          }, {
-            onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Responsabilitatea nu a fost modificată", variant: "error" }),
-            onSuccess: (updatedWork) => {
-              setReassignOpen(false);
-              toast.showToast({ message: `${updatedWork.code} a fost reasignată.`, variant: "success" });
-            },
-          });
-        }}
-        technicians={techniciansQuery.data ?? []}
-        work={work}
       />
       <RegisterReturnModal
         clinicOptions={clinicOptions}
@@ -1214,7 +1179,7 @@ function WorkCyclesSection({
                   <StatusBadge label={cycle.status === "ACTIVE" ? "Activ" : "Închis"} variant={cycle.status === "ACTIVE" ? "production" : "closed"} />
                 </div>
                 <div className="works-page__cycle-grid">
-                  <MetricCell label="Cabinet" value={`${cycle.clinic.code} · ${cycle.clinic.name}`} />
+                  <MetricCell label="Cabinet" value={cycle.clinic ? `${cycle.clinic.code} · ${cycle.clinic.name}` : "-"} />
                   <MetricCell label="Medic" value={cycle.doctor?.displayName ?? "Fără medic"} />
                   <MetricCell label="Deschis" value={formatDateTime(cycle.openedAt)} />
                   <MetricCell label="Închis" value={cycle.closedAt ? formatDateTime(cycle.closedAt) : "Ciclu activ"} />
@@ -1243,54 +1208,36 @@ function MetricCell({ label, value }: { readonly label: string; readonly value: 
   );
 }
 
-function ExecutionNowCard({ activeCycleNumber, work }: { readonly activeCycleNumber: number | null; readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
+function ExecutionNowCard({ activeCycleNumber, showLegacyExecution, work }: { readonly activeCycleNumber: number | null; readonly showLegacyExecution: boolean; readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
   const currentStage = work.workflow?.currentStage ?? null;
   const progress = work.workflow ? `${work.workflow.progress.completed}/${work.workflow.progress.total}` : "0/0";
   const currentTechnician = work.executionSnapshot.currentTechnician ?? work.claim.technician;
-  const executionCompany = work.executionSnapshot.summary.legalEntity?.code ?? "Nefixată";
+  const executionCompany = work.executionSnapshot.summary.legalEntity?.code ?? work.claim.executionLegalEntity?.code ?? "Nefixată";
   const currentCycleLabel = activeCycleNumber ? `Ciclul ${activeCycleNumber}` : "Fără ciclu activ";
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Acțiunea mea acum</CardTitle>
-        <CardDescription>{work.code} · {work.patientName} · {work.workType.name}</CardDescription>
+        <CardDescription>{work.code} · {work.workType.name}</CardDescription>
       </CardHeader>
       <CardContent className="works-page__execution-now">
         <div className="works-page__execution-now-grid">
           <MetricCell label="Lucrare" value={work.code} />
-          <MetricCell label="Pacient" value={work.patientName} />
           <MetricCell label="Tip lucrare" value={work.workType.name} />
-          <MetricCell label="Ciclu curent" value={currentCycleLabel} />
-          <MetricCell label="Etapă curentă" value={currentStage?.name ?? "Fără etapă curentă"} />
-          <MetricCell label="Poziție etapă" value={currentStage ? `Etapa ${currentStage.sortOrder} din ${work.workflow?.progress.total ?? 0}` : "N/A"} />
-          <MetricCell label="Status etapă" value={currentStage ? getWorkStageExecutionStatusLabel(currentStage.status) : "Nedefinit"} />
+          {showLegacyExecution ? <MetricCell label="Ciclu curent" value={currentCycleLabel} /> : null}
+          {showLegacyExecution ? <MetricCell label="Etapă curentă" value={currentStage?.name ?? "Fără etapă curentă"} /> : null}
+          {showLegacyExecution ? <MetricCell label="Poziție etapă" value={currentStage ? `Etapa ${currentStage.sortOrder} din ${work.workflow?.progress.total ?? 0}` : "N/A"} /> : null}
+          {showLegacyExecution ? <MetricCell label="Status etapă" value={currentStage ? getWorkStageExecutionStatusLabel(currentStage.status) : "Nedefinit"} /> : null}
           <MetricCell label="Prioritate" value={work.priority === "URGENT" ? "Urgent" : "Normal"} />
-          <MetricCell label="Tehnician curent" value={currentTechnician?.displayName ?? "Nerevendicată"} />
-          <MetricCell label="Companie execuție" value={executionCompany} />
-          <MetricCell label="Progres" value={progress} />
-          <MetricCell label="Termen" value={formatOptionalDateTime(work.executionSnapshot.deadline?.effectiveDueAt ?? work.deadline.effectiveDueAt)} />
+          <MetricCell label="Tehnician" value={currentTechnician?.displayName ?? "Nerevendicată"} />
+          <MetricCell label="Firmă" value={executionCompany} />
+          {showLegacyExecution ? <MetricCell label="Progres" value={progress} /> : null}
+          <MetricCell label="Termen exact" value={formatOptionalDateTime(work.executionSnapshot.deadline?.effectiveDueAt ?? work.deadline.effectiveDueAt)} />
+          <MetricCell label="Status" value={work.status} />
+          <MetricCell label="Start execuție" value={formatOptionalDateTime(work.executionSnapshot.deadline?.startAt ?? work.deadline.startAt)} />
         </div>
-        <p className="works-page__muted">Acțiunile de etapă și fișa reală sunt mai jos în același drawer.</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function WorkPatientCard({ work }: { readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Pacient</CardTitle>
-        <CardDescription>Datele pacientului salvate pe lucrare.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="works-page__patient-grid">
-          <MetricCell label="Nume" value={work.patientName} />
-          <MetricCell label="Sex" value={work.patient?.sex ? formatPatientSex(work.patient.sex) : "Nespecificat"} />
-          <MetricCell label="Cod pacient" value={work.patientReference ?? "Fără cod"} />
-          <MetricCell label="Data nașterii" value={work.patient?.birthDate ? formatDate(work.patient.birthDate) : "Fără dată"} />
-        </div>
+        {showLegacyExecution ? <p className="works-page__muted">Acțiunile istorice de producție sunt disponibile în acest drawer.</p> : null}
       </CardContent>
     </Card>
   );
@@ -1562,27 +1509,25 @@ function RegisterReturnModal({
   const [notes, setNotes] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const doctorsQuery = useQuery({
-    enabled: isOpen && clinicId !== "",
-    queryFn: () => fetchDoctorOptions(clinicId),
+    enabled: isOpen,
+    queryFn: () => fetchDoctorOptions(clinicId || undefined),
     queryKey: ["doctors", "options", "return-work", clinicId],
     retry: false,
   });
   const isOther = reason === "OTHER";
   const trimmedNotes = notes.trim();
   const notesError = submitted && isOther && trimmedNotes.length < 3 ? "Notele sunt obligatorii pentru Alt motiv." : undefined;
-  const clinicError = submitted && clinicId === "" ? "Alege cabinetul." : undefined;
-  const doctorError = submitted && doctorId === "" ? "Alege medicul." : undefined;
-  const canSubmit = clinicId !== "" && doctorId !== "" && (!isOther || trimmedNotes.length >= 3) && Boolean(history?.activeCycleId);
+  const canSubmit = (!isOther || trimmedNotes.length >= 3) && Boolean(history?.activeCycleId);
 
   useEffect(() => {
     if (isOpen && work) {
-      setClinicId(activeCycle?.clinic.id ?? work.clinic.id);
-      setDoctorId(activeCycle?.doctor?.id ?? work.doctor.id);
+      setClinicId(activeCycle?.clinic?.id ?? work.clinic?.id ?? "");
+      setDoctorId(activeCycle?.doctor?.id ?? work.doctor?.id ?? "");
       setReason("PROBA");
       setNotes("");
       setSubmitted(false);
     }
-  }, [activeCycle?.clinic.id, activeCycle?.doctor?.id, isOpen, work]);
+  }, [activeCycle?.clinic?.id, activeCycle?.doctor?.id, isOpen, work]);
 
   useEffect(() => {
     if (!doctorsQuery.data || doctorId === "") {
@@ -1630,7 +1575,6 @@ function RegisterReturnModal({
         </div>
         <FormGrid>
           <Select
-            error={clinicError}
             label="Cabinet"
             onChange={(event) => {
               setClinicId(event.target.value);
@@ -1638,17 +1582,14 @@ function RegisterReturnModal({
             }}
             options={clinicOptions.map((clinic) => ({ label: `${clinic.code} · ${clinic.name}`, value: clinic.id }))}
             placeholder="Alege cabinet"
-            required
             value={clinicId}
           />
           <Select
-            disabled={clinicId === "" || doctorsQuery.isLoading}
-            error={doctorError}
+            disabled={doctorsQuery.isLoading}
             label="Medic"
             onChange={(event) => setDoctorId(event.target.value)}
             options={(doctorsQuery.data ?? []).map((doctor) => ({ label: doctor.displayName, value: doctor.id }))}
-            placeholder={clinicId === "" ? "Alege mai întâi cabinetul" : "Alege medic"}
-            required
+            placeholder="Alege medic"
             value={doctorId}
           />
           <Select
@@ -1677,222 +1618,6 @@ function RegisterReturnModal({
       </FormLayout>
     </Modal>
   );
-}
-
-function ExecutionSnapshotCard({ work }: { readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
-  const snapshot = work.executionSnapshot;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Context de execuție</CardTitle>
-        <CardDescription>Firma, termenul și condițiile fixate la prima preluare.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {snapshot.summary.exists ? (
-          <div className="works-page__responsibility">
-            <div>
-              <span className="works-page__muted">Status snapshot</span>
-              <strong>{snapshot.summary.status === "LOCKED" ? "Fixat" : snapshot.summary.status}</strong>
-            </div>
-            <div>
-              <span className="works-page__muted">Versiune</span>
-              <strong>{snapshot.summary.version ?? "-"}</strong>
-            </div>
-            <div>
-              <span className="works-page__muted">Firmă</span>
-              <strong>{snapshot.summary.legalEntity ? `${snapshot.summary.legalEntity.code} · ${snapshot.summary.legalEntity.displayName}` : "-"}</strong>
-            </div>
-            <div>
-              <span className="works-page__muted">Tehnician inițial</span>
-              <strong>{snapshot.originalTechnician?.displayName ?? "-"}</strong>
-            </div>
-            <div>
-              <span className="works-page__muted">Tehnician curent</span>
-              <strong>{snapshot.currentTechnician?.displayName ?? "Nerevendicată"}</strong>
-            </div>
-            <div>
-              <span className="works-page__muted">Fixat la</span>
-              <strong>{snapshot.summary.lockedAt ? formatDateTime(snapshot.summary.lockedAt) : "-"}</strong>
-            </div>
-            <div>
-              <span className="works-page__muted">Start execuție</span>
-              <strong>{snapshot.deadline?.startAt ? formatDateTime(snapshot.deadline.startAt) : "-"}</strong>
-            </div>
-            <div>
-              <span className="works-page__muted">Termen final</span>
-              <strong>{snapshot.deadline?.effectiveDueAt ? formatDateTime(snapshot.deadline.effectiveDueAt) : "Fără termen"}</strong>
-            </div>
-            <div>
-              <span className="works-page__muted">Regulă termen</span>
-              <strong>{snapshot.deadline ? `${snapshot.deadline.mode}${snapshot.deadline.executionDays ? ` · ${snapshot.deadline.executionDays} zile` : ""}` : "-"}</strong>
-            </div>
-            {snapshot.pricing ? (
-              <>
-                <div>
-                  <span className="works-page__muted">Preț fixat</span>
-                  <strong>{formatPrice(snapshot.pricing.totalMinor, snapshot.pricing.currency, "ro-RO")}</strong>
-                </div>
-                <div>
-                  <span className="works-page__muted">Sursă preț</span>
-                  <strong>{snapshot.pricing.sourceLabel ?? snapshot.pricing.sourceType ?? "-"}</strong>
-                </div>
-              </>
-            ) : (
-              <div>
-                <span className="works-page__muted">Financiar</span>
-                <strong>Informațiile financiare nu sunt disponibile pentru rolul curent.</strong>
-              </div>
-            )}
-          </div>
-        ) : (
-          <p className="works-page__muted">Contextul de execuție va fi stabilit la prima preluare.</p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function WorkResponsibilityCard({
-  onReassign,
-  work,
-}: {
-  readonly onReassign: () => void;
-  readonly work: import("@dental-lab/shared").WorkDetail;
-}): ReactNode {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Responsabilitate</CardTitle>
-        <CardDescription>Tehnicianul responsabil și compania de execuție selectată la revendicare.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="works-page__responsibility">
-          <div>
-            <span className="works-page__muted">Status</span>
-            <strong>{work.claim.status === "CLAIMED" ? "Revendicată" : "Disponibilă"}</strong>
-          </div>
-          <div>
-            <span className="works-page__muted">Tehnician</span>
-            <strong>{work.claim.technician?.displayName ?? "Nerevendicată"}</strong>
-          </div>
-          <div>
-            <span className="works-page__muted">Companie execuție</span>
-            <strong>{work.claim.executionLegalEntity ? `${work.claim.executionLegalEntity.code} · ${work.claim.executionLegalEntity.displayName}` : "Neselectată"}</strong>
-          </div>
-          <div>
-            <span className="works-page__muted">Revizie</span>
-            <strong>{work.claim.revision}</strong>
-          </div>
-          {work.claim.canCurrentUserReassign ? <Button onClick={onReassign} variant="outline">Reasignează</Button> : null}
-        </div>
-        {work.assignmentHistory.length > 0 ? (
-          <div className="works-page__timeline">
-            {work.assignmentHistory.map((event) => (
-              <div key={event.id}>
-                <strong>{getAssignmentEventLabel(event.eventType)}</strong>
-                <span>{formatDateTime(event.createdAt)} · {event.actor.displayName}</span>
-                <p>
-                  {event.newTechnician?.displayName ?? "Fără responsabil"} · {event.newLegalEntity?.code ?? "Fără companie"}
-                  {event.executionSnapshot.version ? ` · Snapshot v${event.executionSnapshot.version} ${event.executionSnapshot.status === "LOCKED" ? "fixat" : event.executionSnapshot.status}` : ""}
-                  {event.reason ? ` · ${event.reason}` : ""}
-                </p>
-              </div>
-            ))}
-          </div>
-        ) : <p className="works-page__muted">Nu există istoric de responsabilitate.</p>}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ReassignWorkModal({
-  isLoading,
-  isOpen,
-  onOpenChange,
-  onSubmit,
-  technicians,
-  work,
-}: {
-  readonly isLoading: boolean;
-  readonly isOpen: boolean;
-  readonly onOpenChange: (isOpen: boolean) => void;
-  readonly onSubmit: (input: { readonly executionLegalEntityCode: LegalEntityCode; readonly reason: string; readonly technicianId: string }) => void;
-  readonly technicians: readonly TechnicianOption[];
-  readonly work: import("@dental-lab/shared").WorkDetail | undefined;
-}): ReactNode {
-  const [technicianId, setTechnicianId] = useState("");
-  const [executionLegalEntityCode, setExecutionLegalEntityCode] = useState<LegalEntityCode>("NC");
-  const [reason, setReason] = useState("");
-  const fixedCode = work?.executionSnapshot.summary.legalEntity?.code ?? null;
-
-  useEffect(() => {
-    if (isOpen) {
-      setTechnicianId(work?.claim.technician?.publicId ?? "");
-      setExecutionLegalEntityCode(fixedCode ?? work?.claim.executionLegalEntity?.code ?? "NC");
-      setReason("");
-    }
-  }, [fixedCode, isOpen, work]);
-
-  return (
-    <Modal
-      description={work ? `${work.code} · revizie responsabilitate ${work.claim.revision}` : "Alege tehnicianul și compania de execuție."}
-      footer={(
-        <Button
-          disabled={technicianId === "" || reason.trim().length < 3}
-          isLoading={isLoading}
-          onClick={() => onSubmit({ executionLegalEntityCode, reason: reason.trim(), technicianId })}
-        >
-          Reasignează
-        </Button>
-      )}
-      isOpen={isOpen}
-      onOpenChange={onOpenChange}
-      title="Reasignează lucrarea"
-    >
-      <FormLayout>
-        <Select
-          label="Tehnician"
-          onChange={(event) => setTechnicianId(event.target.value)}
-          options={technicians.map((technician) => ({ label: technician.displayName, value: technician.id }))}
-          placeholder="Alege tehnician"
-          required
-          value={technicianId}
-        />
-        <Select
-          label="Companie execuție"
-          disabled={fixedCode !== null}
-          onChange={(event) => {
-            if (event.target.value === "NC" || event.target.value === "NG") {
-              setExecutionLegalEntityCode(event.target.value);
-            }
-          }}
-          options={legalEntityFilterOptions.filter((option) => option.value !== "")}
-          required
-          value={executionLegalEntityCode}
-        />
-        <p className="works-page__muted">
-          {fixedCode
-            ? "Reasignarea schimbă tehnicianul curent, dar păstrează contextul de execuție existent."
-            : "Prima asignare va fixa firma, prețul și termenul pentru această lucrare."}
-        </p>
-        <Textarea label="Motiv" onChange={(event) => setReason(event.target.value)} required rows={4} value={reason} />
-      </FormLayout>
-    </Modal>
-  );
-}
-
-function getAssignmentEventLabel(eventType: import("@dental-lab/shared").WorkAssignmentEventType): string {
-  switch (eventType) {
-    case "ASSIGNED":
-      return "Asignare";
-    case "CLAIMED":
-      return "Revendicare";
-    case "REASSIGNED":
-      return "Reasignare";
-    case "RELEASED":
-      return "Eliberare";
-  }
 }
 
 function PageState({ children }: { readonly children: ReactNode }): ReactNode {

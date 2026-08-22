@@ -48,8 +48,8 @@ export interface TechnicianWorkbenchFilter {
 export interface TechnicianWorkbenchItem {
   readonly assignment: TechnicianAssignmentView;
   readonly categories: readonly TechnicianQueueCategory[];
-  readonly clinic: { readonly id: string; readonly name: string };
-  readonly doctor: { readonly displayName: string; readonly id: string };
+  readonly clinic: { readonly id: string; readonly name: string } | null;
+  readonly doctor: { readonly displayName: string; readonly id: string } | null;
   readonly dueDate: string;
   readonly id: string;
   readonly patientName: string;

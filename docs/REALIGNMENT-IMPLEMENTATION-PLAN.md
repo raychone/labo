@@ -2,7 +2,7 @@
 
 Canonical implementation source for the final real-world Dental Lab workflow realignment.
 
-Status: `IN_PROGRESS`  
+Status: `COMPLETE`
 Scope: planning only; implement one subepic at a time.  
 Primary rule: extend the existing app; do not rewrite working modules.
 
@@ -59,6 +59,8 @@ Primary rule: extend the existing app; do not rewrite working modules.
 | R21 | Payments are recorded per issued invoice against final invoice total, paid amount and remaining amount. |
 | R22 | Proforma is not part of the final user-facing billing workflow; legacy support may remain internal/deferred if removal is risky. |
 | R23 | Storno is allowed for unpaid, partially paid and fully paid invoices; historical payments stay associated with the original invoice and are never deleted, rewritten or automatically transferred. |
+| R24 | Payment Note may show previous arrears for the same billing customer/context, but those arrears are informational only and never increase the new invoice accounting total. |
+| R25 | Invoice and Payment Note sharing must use secure non-predictable document references/links and audit app-initiated download/email/WhatsApp/share attempts where the app can know the result. |
 
 ## Official Work Type Catalog
 
@@ -142,9 +144,11 @@ Normal path uses primary action `Emite factura`: calculated catalog/agreement/wo
 
 Adjustments/discounts apply to work, patient-within-current-invoice, or whole invoice; each supports percentage and fixed amount. The UI must show calculated total, total adjustments/discount, and final invoice total, with reset-to-calculated behavior where appropriate. Catalog/agreement/work prices remain unchanged; documents use the frozen commercial snapshot.
 
-Issuing creates one immutable shared commercial snapshot for both documents. Invoice shows only simplified line `Lucrari protetice` and final total. Payment note keeps the required header/footer and detailed works/patients/prices/adjustments/final total. Totals must always agree.
+Issuing creates one immutable shared commercial snapshot for both documents. Invoice shows only simplified line `Lucrari protetice` and final total. Payment note keeps the required header/footer and detailed works/patients/prices/adjustments/final total for the current invoice. Invoice and payment-note totals for the current invoice must always agree.
 
-Payments are recorded per issued invoice. Storno may be created for unpaid, partially paid or fully paid invoices; the original invoice remains immutable and historically accessible, existing payments remain associated with it, and the UI/domain must preserve how much had been paid before storno. Storno creates the reversing/net-zero effect for the original invoice and restores related works/commercial values for re-invoicing, but it does not delete, transfer or attach historical payments to any replacement invoice. Future payment reallocation/regularization is a separate concern. Proforma and user-facing invoice series management are not part of the final product. Future e-Factura or external billing platform support must use adapter/export boundaries; do not implement fiscal integration in MVP.
+Payment Note must also include a separate `Restante existente` section for real previous overdue invoices belonging to the same billing customer/context as the new invoice. Reuse the existing billing/customer relation; do not invent a second customer identity model. If optional clinic/doctor data makes matching ambiguous, the billing implementation must choose the safest existing billing identity already used for invoice issuance and keep the rule inside billing. Active arrears are calculated from issued invoice and payment records only: invoice is issued, not storno'd, remaining amount is greater than zero, and due date is in the past. Each arrear row shows invoice number, invoice date, due date, original invoice total, paid amount, and remaining overdue amount. Partial payments reduce the overdue amount. Storno'd invoices are excluded from active arrears. Payment Note totals must separate current invoice amount, previous arrears total, and total currently due. Previous arrears are informational on the Payment Note only: they do not become new invoice lines, do not increase the new invoice total, and do not duplicate previous debt into the new invoice.
+
+Payments are recorded per issued invoice. Storno may be created for unpaid, partially paid or fully paid invoices; the original invoice remains immutable and historically accessible, existing payments remain associated with it, and the UI/domain must preserve how much had been paid before storno. Storno creates the reversing/net-zero effect for the original invoice and restores related works/commercial values for re-invoicing, but it does not delete, transfer or attach historical payments to any replacement invoice. Future payment reallocation/regularization is a separate concern. Proforma and user-facing invoice series management are not part of the final product. Future e-Factura, email, WhatsApp Business, or external document delivery support must use adapter/export boundaries; do not implement fiscal integration or require complex provider integration in MVP.
 
 ## RBAC Target Matrix
 
@@ -511,11 +515,11 @@ Manual checks: generated invoice visual/PDF.
 ### BILLING-001C - Payment Note Detailed Breakdown
 Objective: Preserve/extend `Nota de plata` as detailed commercial statement.
 Dependencies: BILLING-001B, BILLING-001D
-Scope: required header/footer, detailed works, patients, prices, discounts/adjustments, final total, print/PDF, same frozen snapshot as invoice.
+Scope: required header/footer, detailed current-invoice works, patients, prices, discounts/adjustments, current invoice amount, `Restante existente`, previous arrears total, total currently due, print/PDF, same frozen snapshot as invoice for current issued values.
 Out of scope: technician earnings.
-Acceptance criteria: statement shows detailed work/pricing and adjustments; invoice remains simplified; invoice total and payment-note total always agree.
-Automated checks: statement service/render tests.
-Manual checks: print payment note.
+Acceptance criteria: statement shows detailed current work/pricing and adjustments; invoice remains simplified; invoice total and payment-note current invoice amount always agree; `Restante existente` lists only real overdue issued invoices for the same billing customer/context; each arrear row includes invoice number, invoice date, due date, original total, paid amount and remaining overdue amount; partial payments reduce arrears; storno'd invoices are excluded; payment note shows current invoice amount, previous arrears total and total currently due; previous arrears never become invoice lines and never change the new invoice accounting total.
+Automated checks: statement service/render tests, arrears rendering tests, current-total-vs-arrears separation tests.
+Manual checks: print payment note with no arrears, partial-payment arrears and storno'd prior invoice.
 
 ### DISCOUNT-001A - Patient and Invoice Discounts
 Objective: Add commercial adjustments/discounts for work, patient-within-current-invoice, and whole invoice.
@@ -529,11 +533,20 @@ Manual checks: apply each adjustment level/mode, issue invoice, verify calculate
 ### PAYMENT-001A - Invoice Payment Tracking
 Objective: Record payments against issued invoices.
 Dependencies: BILLING-001B, BILLING-001C
-Scope: invoice total, paid amount, remaining amount, payment history against invoice, status updates where current model supports them.
+Scope: invoice total, canonical paid amount from real payment records, remaining amount, payment history against invoice, overdue eligibility, arrears query/read model for billing statements, status updates where current model supports them.
 Out of scope: payment evidence upload and external payment reconciliation.
-Acceptance criteria: payments are never recorded against proforma or catalog/agreement values; remaining amount is derived from issued invoice total minus invoice payments; if an invoice is later storno'd, its existing payments remain visible on the original invoice and are not automatically moved to the replacement invoice.
-Automated checks: payment service tests.
-Manual checks: record partial/full payment and verify invoice remaining amount.
+Acceptance criteria: payments are never recorded against proforma or catalog/agreement values; paid amount is derived from invoice payment records; remaining amount is derived from issued invoice total minus paid amount; partial payments reduce remaining and overdue amounts; an invoice qualifies as active arrear only when issued, not storno'd, remaining amount is greater than zero and due date is in the past; arrears query is scoped to the same billing customer/context used for the new invoice; if an invoice is later storno'd, its existing payments remain visible on the original invoice, are not automatically moved to the replacement invoice, and the storno'd invoice is excluded from active arrears.
+Automated checks: payment service tests, remaining amount tests, overdue eligibility tests, arrears read-model tests.
+Manual checks: record partial/full payment and verify invoice remaining amount; verify prior partial unpaid invoice appears in `Restante existente`; verify storno'd invoice disappears from active arrears.
+
+### DOCUMENT-SHARE-001A - Invoice and Payment Note Sharing
+Objective: Add simple user-facing sharing actions for invoices and payment notes.
+Dependencies: BILLING-001B, BILLING-001C, PAYMENT-001A
+Scope: `Descarca PDF`, `Trimite email`, `Trimite WhatsApp` actions for Invoice and Payment Note; recipient prefill from existing clinic/doctor/customer email where available; recipient confirmation/edit before sending where appropriate; generated document download/share; native/Web Share API where supported; WhatsApp deep-link with prefilled message; secure temporary document link when browser/deep-link cannot attach a PDF; opaque non-predictable document references, authenticated or time-limited access, expiration/revocation strategy, no internal DB IDs exposed; audit document type, document ID/reference, channel `EMAIL|WHATSAPP|DOWNLOAD|SHARE`, recipient where applicable, actor, timestamp, and success/failure where knowable; adapter/service boundary for future email provider and WhatsApp Business/direct provider integration.
+Out of scope: mandatory WhatsApp Business API, guaranteed WhatsApp PDF attachment from normal URL, delivery/read confirmations unless a chosen provider supports them, complex external provider integration for MVP.
+Acceptance criteria: manager can download invoice/payment note PDF; manager can initiate email send/share with editable recipient; manager can initiate WhatsApp/native share without claiming automatic PDF attachment when unsupported; secure shared links are opaque and revocable/expiring; sharing attempts are audited where the app initiates or can observe the result.
+Automated checks: document action rendering tests, share-link security tests, audit tests, adapter boundary tests.
+Manual checks: download PDF, send/share email with edited recipient, open WhatsApp share/deep-link, inspect audit entries and link expiration behavior.
 
 ### STORNO-001A - Storno Domain
 Objective: Add immutable invoice storno support as a reversing commercial/accounting effect.
@@ -556,7 +569,7 @@ Manual checks: full storno flow.
 ### AUDIT-001A - Audit Coverage Expansion
 Objective: Ensure all final meaningful mutations write useful audit.
 Dependencies: REALIGN-001B
-Scope: work create/edit, teeth, deadline, claim, state, code, operations, earnings, alerts, markers, pickups, routes, outcomes, rates, discounts, invoices, storno, company context.
+Scope: work create/edit, teeth, deadline, claim, state, code, operations, earnings, alerts, markers, pickups, routes, outcomes, rates, discounts, invoices, payments, storno, document download/share attempts, company context.
 Out of scope: duplicating sensitive payloads.
 Acceptance criteria: each listed mutation has who/what/when/entity/before/after where safe.
 Automated checks: representative service tests.
@@ -582,8 +595,8 @@ Manual checks: route/billing/status history navigation.
 
 ### DEMO-E2E-001A - Demo Data Realignment
 Objective: Seed realistic final workflow data.
-Dependencies: all functional subepics through STORNO-001B
-Scope: catalog, roles, optional clinic/doctor cases, works, manopere/rates, pickups, routes, billing examples.
+Dependencies: all functional subepics through DOCUMENT-SHARE-001A
+Scope: catalog, roles, optional clinic/doctor cases, works, manopere/rates, pickups, routes, billing examples, previous overdue invoices with partial payments, storno'd prior invoice, document sharing examples.
 Out of scope: production data migration.
 Acceptance criteria: demo supports final E2E scenario.
 Automated checks: demo seed tests.
@@ -597,6 +610,169 @@ Out of scope: exhaustive UI permutations.
 Acceptance criteria: final E2E scenario passes and negative manual dispatch workflow does not exist.
 Automated checks: smoke tests, `pnpm test`, `pnpm typecheck`, `pnpm build`.
 Manual checks: mobile critical paths for intake, teeth, manopere, status, courier.
+
+## Current Execution Checkpoint
+
+Completed subepics: 45. Remaining subepics: 0. Recommended execution bundles remaining: 0.
+
+Completed and not to be regrouped for reimplementation: `REALIGN-001A`, `REALIGN-001B`, `WORKTYPE-REALIGN-001A`, `WORKTYPE-REALIGN-001B`, `WORK-ID-001A`, `WORK-ID-001B`, `INTAKE-001A`, `INTAKE-001B`, `TEETH-001A`, `TEETH-001B`, `CLAIM-001A`, `CLAIM-001B`, `STATE-001A`, `TECH-001A`, `TECH-001B`, `OPS-001A`, `OPS-001B`, `OPS-001C`, `TECH-001C`, `EARNINGS-001A`, `MANAGER-TECH-001A`, `LOGISTICS-001A`, `PICKUP-001A`, `STATUS-REALIGN-001A`, `STATUS-REALIGN-001B`, `LOGISTICS-STATUS-001A`, `LOGISTICS-STATUS-001B`, `ROUTE-001A`, `ROUTE-001B`, `COURIER-001A`, `COURIER-001B`, `BILLING-001A`, `BILLING-001D`, `BILLING-001B`, `BILLING-001C`, `DISCOUNT-001A`, `PAYMENT-001A`, `DOCUMENT-SHARE-001A`, `STORNO-001A`, `STORNO-001B`, `AUDIT-001A`, `AUDIT-001B`, `REPORTING-001A`, `DEMO-E2E-001A`, `E2E-REALIGN-001A`.
+
+All planned implementation subepics are complete. Do not reopen completed work unless a regression or a new approved requirement requires it.
+
+## Low-Token Codex Execution Rules
+
+1. Read only the target bundle/subepics and direct dependencies.
+2. Do not perform full repository architecture audits.
+3. Do not rediscover already-final business decisions.
+4. Search outside target modules only for direct references/blockers.
+5. Extend existing architecture; do not rebuild working systems.
+6. Use focused tests where the repository supports them.
+7. If Vitest still runs the whole package despite targeting a file, do not spend tokens trying to redesign test infrastructure during feature work.
+8. Run package typecheck only for packages actually changed, unless shared changes require more.
+9. Do not run broad E2E/full builds after every small bundle; reserve them for meaningful checkpoints.
+10. Avoid verbose documentation changes. Update task/checkpoint docs concisely.
+11. Preserve one logical commit/checkpoint per subepic even when multiple subepics are implemented in one Codex session where practical.
+12. Stop after the requested bundle. Do not start the next bundle automatically.
+
+## Token-Efficient Execution Bundles
+
+| Bundle | Subepics | Cost | Main context | Why grouped |
+|---|---|---|---|---|
+| BUNDLE-DISCOUNT-01 | `DISCOUNT-001A` | HIGH | Commercial adjustments, billing calculations, snapshot validation | Discounts alter final commercial totals and need isolated financial validation. |
+| BUNDLE-PAYMENT-01 | `PAYMENT-001A` | HIGH | Invoice payments, remaining amount, arrears read model | Payment state and arrears affect billing truth and storno eligibility. |
+| BUNDLE-DOCUMENT-SHARE-01 | `DOCUMENT-SHARE-001A` | HIGH | Billing document download/export, email/WhatsApp sharing adapters, audit | Sharing is security-sensitive and should not be mixed with financial calculation work. |
+| BUNDLE-STORNO-01 | `STORNO-001A` | HIGH | Storno domain, immutable source invoice relation, re-invoicing eligibility | Storno has accounting and payment-history risk; keep domain implementation isolated. |
+| BUNDLE-STORNO-02 | `STORNO-001B` | MEDIUM | Manager billing Storno tab, storno documents, restored values UI | UI should consume the settled storno domain. |
+| BUNDLE-AUDIT-01 | `AUDIT-001A`, `AUDIT-001B` | HIGH | Audit services, audit viewer, final mutation coverage | Coverage and manager visibility share audit read/write metadata, but should run after most final mutations exist. |
+| BUNDLE-REPORTING-01 | `REPORTING-001A` | MEDIUM | Route history, earnings intervals, billing history, pagination/indexes | Performance/history hardening depends on final route, billing and earnings shapes. |
+| BUNDLE-DEMO-01 | `DEMO-E2E-001A` | MEDIUM | Demo seeds, final roles, catalog, workflow examples | Demo data should be updated after functional domains stabilize. |
+| BUNDLE-E2E-01 | `E2E-REALIGN-001A` | HIGH | Playwright/smoke flows, final acceptance scenario, mobile critical paths | Final acceptance is broad by design and belongs at the end. |
+
+### BUNDLE-DISCOUNT-01
+
+### Scope
+`DISCOUNT-001A`.
+
+### Read first
+Target task section; billing calculation service; discount/adjustment DTOs; issue snapshot logic; direct tests. Do not audit the repository. Search outside these targets only when a compiler/test failure or direct dependency requires it.
+
+### Execution notes
+Discounts never mutate catalog/agreement/base work prices. Validate percentage/fixed modes and prevent negative totals.
+
+### Validation checkpoint
+Focused discount calculation/snapshot immutability tests, changed package typecheck.
+
+### BUNDLE-PAYMENT-01
+
+### Scope
+`PAYMENT-001A`.
+
+### Read first
+Target task section; invoice payment models/services; invoice status rules; Payment Note arrears read model; direct tests. Do not audit the repository. Search outside these targets only when a compiler/test failure or direct dependency requires it.
+
+### Execution notes
+Payments are against issued invoices only. Partial payments reduce arrears; storno'd invoices are excluded from active arrears.
+
+### Validation checkpoint
+Focused payment/remaining/arrears tests, changed package typecheck.
+
+### BUNDLE-DOCUMENT-SHARE-01
+
+### Scope
+`DOCUMENT-SHARE-001A`.
+
+### Read first
+Target task section; billing document export/download code; audit service; file/link security helpers; email/WhatsApp integration boundaries; direct tests. Do not audit the repository. Search outside these targets only when a compiler/test failure or direct dependency requires it.
+
+### Execution notes
+Use opaque references or secure temporary links. Do not expose internal DB IDs and do not hard-wire future fiscal/provider integrations into core billing.
+
+### Validation checkpoint
+Focused download/share authorization and audit tests, changed package typecheck.
+
+### BUNDLE-STORNO-01
+
+### Scope
+`STORNO-001A`.
+
+### Read first
+Target task section; billing document/payment models; commercial snapshots; re-invoicing eligibility rules; audit service; direct tests. Do not audit the repository. Search outside these targets only when a compiler/test failure or direct dependency requires it.
+
+### Execution notes
+Original invoices and historical payments remain immutable. Storno creates a linked reversing effect and restores work/value eligibility without moving payments.
+
+### Validation checkpoint
+Focused storno domain tests for unpaid, partial and fully paid invoices, changed package typecheck.
+
+### BUNDLE-STORNO-02
+
+### Scope
+`STORNO-001B`.
+
+### Read first
+Target task section; manager billing UI; storno APIs/documents; invoice search/list components; direct tests. Do not audit the repository. Search outside these targets only when a compiler/test failure or direct dependency requires it.
+
+### Execution notes
+UI must not edit or delete original invoices. Show paid-before-storno and preserved payment history.
+
+### Validation checkpoint
+Focused storno UI/document tests, changed package typecheck.
+
+### BUNDLE-AUDIT-01
+
+### Scope
+`AUDIT-001A`, `AUDIT-001B`.
+
+### Read first
+Target task sections; audit service/model/API; manager audit UI; final mutation points only as needed; direct tests. Do not audit the repository. Search outside these targets only when a compiler/test failure or direct dependency requires it.
+
+### Execution notes
+Audit should include who/what/when/entity/before/after where safe, without duplicating sensitive payloads.
+
+### Validation checkpoint
+Representative audit coverage tests and manager audit viewer tests, changed package typecheck.
+
+### BUNDLE-REPORTING-01
+
+### Scope
+`REPORTING-001A`.
+
+### Read first
+Target task section; route history queries; earnings interval queries; billing history queries; pagination/index patterns; direct tests. Do not audit the repository. Search outside these targets only when a compiler/test failure or direct dependency requires it.
+
+### Execution notes
+Add only justified indexes and server-side pagination/filtering needed for final workflows.
+
+### Validation checkpoint
+Focused query/history tests where practical, changed package typecheck.
+
+### BUNDLE-DEMO-01
+
+### Scope
+`DEMO-E2E-001A`.
+
+### Read first
+Target task section; demo seed files; final catalog/rates/pickups/routes/billing examples; direct seed tests. Do not audit the repository. Search outside these targets only when a compiler/test failure or direct dependency requires it.
+
+### Execution notes
+Seeds must be idempotent and should exercise final role flows without resetting production-like history.
+
+### Validation checkpoint
+Focused demo seed validation, changed package typecheck.
+
+### BUNDLE-E2E-01
+
+### Scope
+`E2E-REALIGN-001A`.
+
+### Read first
+Target task section; Playwright/smoke tests; route registry/sidebar; final acceptance scenario; direct test utilities. Do not audit the repository. Search outside these targets only when a compiler/test failure or direct dependency requires it.
+
+### Execution notes
+This is the broad final checkpoint. Run wider validation here than in feature bundles.
+
+### Validation checkpoint
+Final smoke/E2E path, `pnpm test`, `pnpm typecheck`, and `pnpm build` unless an environment blocker is documented.
 
 ## Final E2E Acceptance Scenario
 
@@ -617,9 +793,13 @@ Manual checks: mobile critical paths for intake, teeth, manopere, status, courie
 15. Manager can use `Emite factura` directly from calculated values, or `Revizuieste valorile` for exceptional edits before issue.
 16. Adjustments can be percentage or fixed amount at work, patient-within-invoice, or invoice level; catalog/agreement/work base price remains unchanged.
 17. Issuing creates one immutable commercial snapshot shared by simplified invoice and detailed payment note.
-18. Invoice line is `Lucrari protetice`; payment note contains detailed works/patients/prices/adjustments/total; totals always agree.
-19. Payments are recorded per issued invoice and show total, paid and remaining amounts.
-20. Storno links to the original invoice whether it was unpaid, partially paid or fully paid; preserves original amount/history and paid-before-storno amount; creates net zero effect; restores related works/value for re-invoicing; does not automatically move historical payments to the replacement invoice; and audits the operation.
+18. Invoice line is `Lucrari protetice`; payment note contains detailed current works/patients/prices/adjustments/current invoice amount; invoice total and payment-note current invoice amount always agree.
+19. Payments are recorded per issued invoice and show total, paid and remaining amounts; partial payment of a previous overdue invoice reduces the remaining arrear amount.
+20. Payment Note shows `Restante existente` for the same billing customer/context using real issued invoice/payment data, including invoice number, invoice date, due date, original total, paid amount and remaining overdue amount.
+21. Payment Note separates current invoice amount, previous arrears total and total currently due; previous arrears remain informational and do not change the new invoice total or add invoice lines.
+22. Storno links to the original invoice whether it was unpaid, partially paid or fully paid; preserves original amount/history and paid-before-storno amount; creates net zero effect; restores related works/value for re-invoicing; does not automatically move historical payments to the replacement invoice; excludes the storno'd invoice from active arrears; and audits the operation.
+23. Manager can download Invoice and Payment Note PDFs and initiate email/WhatsApp sharing for both documents.
+24. Document sharing uses opaque/non-predictable references or secure temporary links where needed, never exposes internal DB IDs, and audits app-initiated download/email/WhatsApp/share attempts with known success/failure state.
 
 Negative acceptance: after Reception creates a valid work, no `Trimite la tehnician`, `Aloca`, `Porneste` or `Muta` step may be required before the technician claimable-work API returns it.
 
@@ -636,7 +816,9 @@ Negative acceptance: after Reception creates a valid work, no `Trimite la tehnic
 | Logistics | work with attachments, pickup exact/range, five cards, advanced filters, route builder. |
 | Courier | assigned routes, ordered stops, outcomes, duplicate prevention/correction. |
 | Manager | rates, earnings, audit UI, review values, discounts/adjustments, storno, billing docs. |
-| Billing | CDT/CD and NG/NG automatic series, direct issue, editable commercial draft, simplified invoice, detailed payment note, shared immutable snapshot, invoice payments, storno payment-history preservation. |
+| Billing | CDT/CD and NG/NG automatic series, direct issue, editable commercial draft, simplified invoice, detailed payment note, shared immutable snapshot for current invoice values, invoice payments, current invoice amount vs previous arrears separation, storno payment-history preservation. |
+| Payment Note Arrears | real issued overdue invoices only, same billing customer/context scope, invoice number/date/due date/original total/paid/remaining rows, partial-payment reduction, storno exclusion, previous arrears not added to invoice total. |
+| Document Sharing | PDF download, email sharing/sending, WhatsApp/native share/deep-link, secure opaque/time-limited links, recipient prefill/edit, sharing audit, provider adapter boundaries. |
 | Discounts | work, patient-within-invoice and invoice levels; percentage and fixed amount; reset-to-calculated; no base price mutation. |
 | Storno | immutable original invoice, linked reversing effect, unpaid/partial/full paid eligibility, historical payments preserved on original invoice, no automatic payment transfer to replacement invoice, net zero display, re-invoicing eligibility restored. |
 | RBAC | all mutations server-enforced; UI hiding is not sufficient. |
@@ -670,11 +852,12 @@ For every implementation subepic unless explicitly not applicable:
 | Proforma | Client does not use proforma in final flow, but legacy backend support may exist. | Remove from final user-facing workflow; avoid destructive cleanup for MVP unless it blocks billing UX. |
 | Invoice series UI | Existing/admin concepts may expose series management. | Final product must not expose series as a normal separate page/tab; active company context selects CDT/CD or NG/NG automatically. |
 | Storno legal details | Exact accounting representation may need accountant confirmation. | Model immutable source relation and reversing net effect; flag numbering/line sign decisions before implementation. |
+| Billing customer matching for arrears | Work clinic/doctor can be optional, so matching previous overdue invoices by work fields can be ambiguous. | Reuse the existing billing customer/context used to issue invoices; keep a single authoritative billing identity rule inside billing implementation and do not add a second customer model. |
 | Fiscal integrations | Future e-Factura/external billing adapters may be needed. | Preserve clean export/adapter boundary; do not implement e-Factura in MVP. |
 | Settlement | Earned vs paid may not exist. | Show earned; do not imply paid unless settlement is implemented. |
 
-## Recommended First Subepic
+## Recommended Next Execution Bundle
 
-Start with `REALIGN-001A - Domain Audit Checkpoint`.
+No remaining implementation bundle.
 
-Reason: several early changes are schema-sensitive (`clinicId`/`doctorId` nullability, work code sequence, WorkType symbol backfill, company series). A short audit checkpoint prevents destructive migrations, duplicate catalog rows and broken QR/billing history before implementation starts.
+Reason: `E2E-REALIGN-001A` is complete. The cross-role smoke test is committed; execution is environment-dependent where local server binding is permitted.

@@ -84,9 +84,9 @@ describe("BillingStatementPrintPage", () => {
             {
               balanceMinor: 30000,
               documentId: "doc_2",
-              documentNumber: "PF-2026-000222",
-              documentType: "PROFORMA",
-              dueDate: null,
+              documentNumber: "FACT-2026-000222",
+              documentType: "INVOICE",
+              dueDate: "2026-08-18T00:00:00.000Z",
               issueDate: "2026-08-18T00:00:00.000Z",
               paidMinor: 0,
               status: "ISSUED",
@@ -188,20 +188,23 @@ describe("BillingStatementPrintPage", () => {
 
     renderWithProviders(
       <BillingStatementPrintPage />,
-      "/billing/statements/clinic/print?clinicId=clinic_1&dateFrom=2026-08-01&dateTo=2026-08-31&documentIds=doc_1,doc_2",
+      "/billing/statements/clinic/print?clinicId=clinic_1&dateFrom=2026-08-01&dateTo=2026-08-31&documentIds=doc_1",
     );
 
-    expect(await screen.findAllByText("Catre:")).toHaveLength(2);
-    expect(screen.getAllByTitle("Antet notă de plată A4")).toHaveLength(2);
+    expect(await screen.findAllByText("Catre:")).toHaveLength(1);
+    expect(screen.getAllByTitle("Antet notă de plată A4")).toHaveLength(1);
     expect(screen.queryByText("Perioadă")).toBeNull();
     expect(screen.queryByText("2 documente selectate din perioadă")).toBeNull();
-    expect(screen.getAllByText("Anexa la factura PF-2026-000222")).toHaveLength(2);
+    expect(screen.getByText("Anexa la factura FACT-2026-000123")).toBeDefined();
     for (const label of ["Data intr.", "Nr. fișa lab GSI", "Nume pacient", "Tip lucrare", "Poziție arcadă", "Nr. elem.", "Preț / elem.", "Valoare lei"] as const) {
-      expect(screen.getAllByText(label)).toHaveLength(2);
+      expect(screen.getByText(label)).toBeDefined();
     }
-    expect(screen.getByText("WO-2026-000002")).toBeDefined();
-    expect(screen.queryByText("WO-2026-000001")).toBeNull();
-    expect(screen.getByText("Total:")).toBeDefined();
+    expect(screen.getByText("WO-2026-000001")).toBeDefined();
+    expect(screen.queryByText("WO-2026-000002")).toBeNull();
+    expect(screen.getByText("Restante existente")).toBeDefined();
+    expect(screen.getByText("FACT-2026-000222")).toBeDefined();
+    expect(screen.getByText("Suma factura curenta:")).toBeDefined();
+    expect(screen.getByText("Total de plata curent:")).toBeDefined();
     expect(screen.getByRole("button", { name: "Export PDF" })).toBeDefined();
   });
 

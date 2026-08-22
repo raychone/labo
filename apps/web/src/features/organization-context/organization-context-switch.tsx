@@ -1,4 +1,5 @@
-import { formatLegalEntityOption, type LegalEntityCode, type OrganizationContextView } from "@dental-lab/shared";
+import type { LegalEntityCode, OrganizationContextView } from "@dental-lab/shared";
+import { formatLegalEntityOption } from "@dental-lab/shared";
 import { Button, ConfirmActionModal, ErrorState, LoadingState, Select, Tooltip, useToast } from "@dental-lab/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CSSProperties, ReactNode } from "react";
@@ -12,10 +13,11 @@ import { getOrganizationContextSwitchBlockMessage } from "./organization-context
 
 interface OrganizationContextSwitchProps {
   readonly canRead: boolean;
+  readonly canSwitch?: boolean;
   readonly compact?: boolean;
 }
 
-export function OrganizationContextSwitch({ canRead, compact = false }: OrganizationContextSwitchProps): ReactNode {
+export function OrganizationContextSwitch({ canRead, canSwitch = true, compact = false }: OrganizationContextSwitchProps): ReactNode {
   const queryClient = useQueryClient();
   const toast = useToast();
   const [pendingSwitch, setPendingSwitch] = useState<{ readonly code: LegalEntityCode; readonly message: string } | null>(null);
@@ -82,11 +84,12 @@ export function OrganizationContextSwitch({ canRead, compact = false }: Organiza
   }
 
   const requestSwitch = (code: LegalEntityCode): void => {
-    if (code === context.active?.code) {
+    const canonicalCode = toCanonicalCompanyCode(code);
+    if (canonicalCode === toCanonicalCompanyCode(context.active?.code ?? "CDT")) {
       return;
     }
 
-    const next = context.available.find((option) => option.code === code);
+    const next = context.available.find((option) => toCanonicalCompanyCode(option.code) === canonicalCode);
 
     if (!next) {
       return;
@@ -98,17 +101,18 @@ export function OrganizationContextSwitch({ canRead, compact = false }: Organiza
     });
 
     if (message) {
-      setPendingSwitch({ code, message });
+      setPendingSwitch({ code: canonicalCode, message });
       return;
     }
 
-    switchMutation.mutate(code);
+    switchMutation.mutate(canonicalCode);
   };
 
+  const canSwitchContext = canSwitch && context.canSwitch;
   const content = compact ? (
-    <MobileOrganizationContext context={context} isPending={switchMutation.isPending} onSwitch={requestSwitch} />
+    <MobileOrganizationContext canSwitch={canSwitchContext} context={context} isPending={switchMutation.isPending} onSwitch={requestSwitch} />
   ) : (
-    <DesktopOrganizationContext context={context} isPending={switchMutation.isPending} onSwitch={requestSwitch} />
+    <DesktopOrganizationContext canSwitch={canSwitchContext} context={context} isPending={switchMutation.isPending} onSwitch={requestSwitch} />
   );
 
   return (
@@ -137,10 +141,12 @@ export function OrganizationContextSwitch({ canRead, compact = false }: Organiza
 }
 
 function DesktopOrganizationContext({
+  canSwitch,
   context,
   isPending,
   onSwitch,
 }: {
+  readonly canSwitch: boolean;
   readonly context: OrganizationContextView;
   readonly isPending: boolean;
   readonly onSwitch: (code: LegalEntityCode) => void;
@@ -151,7 +157,7 @@ function DesktopOrganizationContext({
 
   return (
     <section className="organization-context organization-context--compact" aria-label="Firmă activă">
-      {context.canSwitch ? (
+      {canSwitch ? (
         <div className="organization-context__segments" aria-label="Schimbă firma" role="radiogroup" style={{ "--active-index": activeIndex } as CSSProperties}>
           <span aria-hidden="true" className="organization-context__track" />
           <span aria-hidden="true" className="organization-context__thumb" />
@@ -159,7 +165,7 @@ function DesktopOrganizationContext({
             <Tooltip content={option.displayName} key={option.code}>
               <button
                 aria-checked={activeCode === option.code}
-                aria-label={option.code}
+                aria-label={`${toPublicCompanyCode(option.code)} — ${option.displayName}`}
                 className={`organization-context__segment${activeCode === option.code ? " organization-context__segment--active" : ""}`}
                 disabled={isPending || activeCode === option.code}
                 onClick={() => onSwitch(option.code)}
@@ -167,7 +173,7 @@ function DesktopOrganizationContext({
                 role="radio"
                 type="button"
               >
-                <span>{option.code}</span>
+                <span>{toPublicCompanyCode(option.code)}</span>
               </button>
             </Tooltip>
           ))}
@@ -179,16 +185,26 @@ function DesktopOrganizationContext({
   );
 }
 
+function toPublicCompanyCode(code: string): string {
+  return code === "NC" ? "CDT" : code;
+}
+
+function toCanonicalCompanyCode(code: string): "CDT" | "NG" {
+  return code === "NC" ? "CDT" : code === "NG" ? "NG" : "CDT";
+}
+
 function MobileOrganizationContext({
+  canSwitch,
   context,
   isPending,
   onSwitch,
 }: {
+  readonly canSwitch: boolean;
   readonly context: OrganizationContextView;
   readonly isPending: boolean;
   readonly onSwitch: (code: LegalEntityCode) => void;
 }): ReactNode {
-  if (!context.canSwitch) {
+  if (!canSwitch) {
     return (
       <section className="organization-context organization-context--mobile organization-context--compact" aria-label="Firmă activă">
         <ContextReadOnly context={context} />
@@ -204,7 +220,7 @@ function MobileOrganizationContext({
         label="Firmă activă"
         onChange={(event) => onSwitch(event.target.value as LegalEntityCode)}
         options={context.available.map((option) => ({
-          label: formatLegalEntityOption(option),
+          label: `${toPublicCompanyCode(option.code)} — ${option.displayName}`,
           value: option.code,
         }))}
         value={context.active?.code ?? ""}
@@ -216,7 +232,7 @@ function MobileOrganizationContext({
 function ContextReadOnly({ context }: { readonly context: OrganizationContextView }): ReactNode {
   return (
     <div className="organization-context__readonly">
-      <strong>{context.active?.code ?? "-"}</strong>
+      <strong>{context.active ? toPublicCompanyCode(context.active.code) : "-"}</strong>
       <span>{context.active?.displayName ?? "Fără firmă activă"}</span>
     </div>
   );

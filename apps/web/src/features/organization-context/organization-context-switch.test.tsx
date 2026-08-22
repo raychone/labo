@@ -42,11 +42,11 @@ describe("OrganizationContextSwitch", () => {
   it("renders read-only active context for users without switch permission", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(createJsonResponse({
       active: {
-        code: "NC",
+        code: "CDT",
         displayName: "Nicolaie Cristina",
       },
       available: [
-        { code: "NC", displayName: "Nicolaie Cristina" },
+        { code: "CDT", displayName: "Nicolaie Cristina" },
         { code: "NG", displayName: "Nicolaie Gabriel" },
       ],
       canSwitch: false,
@@ -54,9 +54,9 @@ describe("OrganizationContextSwitch", () => {
 
     renderWithProviders();
 
-    expect(await screen.findByText("NC")).toBeDefined();
+    expect(await screen.findByText("CDT")).toBeDefined();
     expect(screen.getAllByText("Nicolaie Cristina")).toHaveLength(1);
-    expect(screen.queryByRole("radio", { name: "NG" })).toBeNull();
+    expect(screen.queryByRole("radio", { name: "NG — Nicolaie Gabriel" })).toBeNull();
   });
 
   it("does not fetch or render when read permission is missing", async () => {
@@ -79,7 +79,7 @@ describe("OrganizationContextSwitch", () => {
         return Promise.resolve(createJsonResponse({
           active: { code: "NG", displayName: "Nicolaie Gabriel" },
           available: [
-            { code: "NC", displayName: "Nicolaie Cristina" },
+            { code: "CDT", displayName: "Nicolaie Cristina" },
             { code: "NG", displayName: "Nicolaie Gabriel" },
           ],
           canSwitch: true,
@@ -87,9 +87,9 @@ describe("OrganizationContextSwitch", () => {
       }
 
       return Promise.resolve(createJsonResponse({
-        active: { code: "NC", displayName: "Nicolaie Cristina" },
+        active: { code: "CDT", displayName: "Nicolaie Cristina" },
         available: [
-          { code: "NC", displayName: "Nicolaie Cristina" },
+          { code: "CDT", displayName: "Nicolaie Cristina" },
           { code: "NG", displayName: "Nicolaie Gabriel" },
         ],
         canSwitch: true,
@@ -100,15 +100,15 @@ describe("OrganizationContextSwitch", () => {
     const queryClient = renderWithProviders();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
 
-    fireEvent.click(await screen.findByRole("radio", { name: "NG" }));
+    fireEvent.click(await screen.findByRole("radio", { name: "NG — Nicolaie Gabriel" }));
     expect(await screen.findByText("Ai modificări nesalvate pentru Nicolaie Cristina. Schimbi firma și pierzi modificările?")).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Renunță" }));
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringMatching(/\/organization-context$/), expect.objectContaining({ method: "PUT" }));
 
-    fireEvent.click(screen.getByRole("radio", { name: "NG" }));
+    fireEvent.click(await screen.findByRole("radio", { name: "NG — Nicolaie Gabriel" }));
     fireEvent.click(await screen.findByRole("button", { name: "Schimbă firma" }));
 
-    await waitFor(() => expect(screen.getByRole("radio", { name: "NG" }).getAttribute("aria-checked")).toBe("true"));
+    await waitFor(() => expect(screen.getByRole("radio", { name: "NG — Nicolaie Gabriel" }).getAttribute("aria-checked")).toBe("true"));
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["settings"] });
     expect(invalidateSpy).not.toHaveBeenCalledWith();
     unregister();

@@ -11,7 +11,8 @@ import {
   Textarea,
 } from "@dental-lab/ui";
 import {
-  FDI_TOOTH_CODES,
+  FDI_ADULT_TOOTH_QUADRANTS,
+  normalizeFdiAdultToothSelection,
   toWorkFormDisplayValues,
   type WorkFormFieldDefinition,
   type WorkFormFieldType,
@@ -242,26 +243,33 @@ export function ToothField({
     } else {
       next.add(value);
     }
-    form.setValue(`workFormValues.${field.key}`, [...next], { shouldDirty: true, shouldValidate: true });
+    form.setValue(`workFormValues.${field.key}`, [...normalizeFdiAdultToothSelection([...next])], { shouldDirty: true, shouldValidate: true });
   }
 
   return (
     <fieldset className="works-page__tooth-field" id={`workFormValues.${field.key}`}>
       <legend>{field.label}{field.required ? " *" : ""}</legend>
       {field.helpText ? <p>{field.helpText}</p> : null}
-      <div className="works-page__tooth-grid">
-        {FDI_TOOTH_CODES.map((tooth) => (
-          <button
-            aria-pressed={selected.has(tooth)}
-            className="works-page__tooth-button"
-            disabled={isDisabled}
-            key={tooth}
-            onClick={() => toggle(tooth)}
-            type="button"
-          >
-            {tooth}
-          </button>
+      <div className="works-page__tooth-quadrants">
+        {FDI_ADULT_TOOTH_QUADRANTS.map((quadrant) => (
+          <section aria-label={`FDI ${quadrant.teeth[0]}-${quadrant.teeth[quadrant.teeth.length - 1]}`} className={`works-page__tooth-quadrant works-page__tooth-quadrant--${quadrant.key}`} key={quadrant.key}>
+            <div className="works-page__tooth-grid">
+              {quadrant.teeth.map((tooth) => (
+                <button
+                  aria-pressed={selected.has(tooth)}
+                  className="works-page__tooth-button"
+                  disabled={isDisabled}
+                  key={tooth}
+                  onClick={() => toggle(tooth)}
+                  type="button"
+                >
+                  {tooth}
+                </button>
+              ))}
+            </div>
+          </section>
         ))}
+        <span aria-hidden="true" className="works-page__tooth-center">+</span>
       </div>
       {getFieldError(form, field.key) ? <p className="dl-field-error">{getFieldError(form, field.key)}</p> : null}
     </fieldset>

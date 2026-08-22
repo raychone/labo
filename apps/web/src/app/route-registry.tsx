@@ -16,7 +16,7 @@ export const workReadPermissions = ["works.read_all", "works.read_assigned"] as 
 export const operationalStatusReadPermissions = workReadPermissions;
 export const scanPermissions = ["scan.use"] as const;
 export const deliveryReadPermissions = ["delivery.read", "delivery.read_own"] as const;
-const managerWorkspacePermissions = ["finance.read", "finance.read_reports", "invoice.read", "invoice.create", "pricing.read", "settings.read", "users.read"] as const;
+const managerWorkspacePermissions = ["finance.read", "finance.read_reports", "invoice.read", "invoice.create", "pricing.read", "settings.read", "technician.earnings.read_all", "technician.rates.manage", "users.read"] as const;
 
 function isManagerWorkspace(permissionKeys: readonly string[]): boolean {
   return managerWorkspacePermissions.some((permission) => permissionKeys.includes(permission));
@@ -30,7 +30,7 @@ export const appRoutes = [
     path: "/deliveries",
     permissionMode: "any",
     requiredPermissions: deliveryReadPermissions,
-    showInNavigation: true,
+    showInNavigation: false,
   },
   {
     icon: "DB",
@@ -87,12 +87,39 @@ export const appRoutes = [
     showInNavigation: true,
   },
   {
+    icon: "CA",
+    label: "Câștiguri",
+    navigationGroup: "Tehnician",
+    path: "/earnings",
+    permissionMode: "any",
+    requiredPermissions: ["technician.earnings.read_own"],
+    showInNavigation: true,
+  },
+  {
     icon: "LO",
     label: "Centru operațional",
     navigationGroup: "Logistică",
     path: "/logistics",
     permissionMode: "any",
     requiredPermissions: ["logistics.center.read"],
+    showInNavigation: true,
+  },
+  {
+    icon: "TR",
+    label: "Trasee",
+    navigationGroup: "Logistică",
+    path: "/routes",
+    permissionMode: "any",
+    requiredPermissions: ["routes.create", "routes.read", "logistics.center.read"],
+    showInNavigation: true,
+  },
+  {
+    icon: "TM",
+    label: "Traseul meu",
+    navigationGroup: "Curier",
+    path: "/my-route",
+    permissionMode: "any",
+    requiredPermissions: ["routes.read"],
     showInNavigation: true,
   },
   {
@@ -132,12 +159,21 @@ export const appRoutes = [
     showInNavigation: false,
   },
   {
-    icon: "PR",
-    label: "Prețuri și termene",
+    icon: "SW",
+    label: "Setări lucrări",
     navigationGroup: "Management",
-    path: "/pricing",
+    path: "/work-settings",
     permissionMode: "any",
     requiredPermissions: ["pricing.read"],
+    showInNavigation: true,
+  },
+  {
+    icon: "TE",
+    label: "Tehnicieni",
+    navigationGroup: "Management",
+    path: "/technicians",
+    permissionMode: "any",
+    requiredPermissions: ["technician.earnings.read_all"],
     showInNavigation: true,
   },
   {
@@ -159,15 +195,6 @@ export const appRoutes = [
     showInNavigation: true,
   },
   {
-    icon: "WT",
-    label: "Tipuri de lucrări",
-    navigationGroup: "Management",
-    path: "/work-types",
-    permissionMode: "any",
-    requiredPermissions: ["pricing.read"],
-    showInNavigation: true,
-  },
-  {
     icon: "US",
     label: "Utilizatori",
     navigationGroup: "Management",
@@ -185,6 +212,15 @@ export const appRoutes = [
     requiredPermissions: ["settings.read"],
     showInNavigation: true,
   },
+  {
+    icon: "AU",
+    label: "Audit",
+    navigationGroup: "Management",
+    path: "/audit",
+    permissionMode: "any",
+    requiredPermissions: ["audit.read"],
+    showInNavigation: true,
+  },
 ] as const satisfies readonly AppRouteConfig[];
 
 function shouldShowInNavigation(permissionKeys: readonly string[], route: AppRouteConfig): boolean {
@@ -197,12 +233,13 @@ function shouldShowInNavigation(permissionKeys: readonly string[], route: AppRou
       || route.path === "/status"
       || route.path === "/billing"
       || route.path === "/billing/archive"
-      || route.path === "/pricing"
+      || route.path === "/work-settings"
+      || route.path === "/technicians"
       || route.path === "/patients"
       || route.path === "/clinics"
-      || route.path === "/work-types"
       || route.path === "/users"
-      || route.path === "/settings";
+      || route.path === "/settings"
+      || route.path === "/audit";
   }
 
   if (route.path === "/works") {
@@ -211,8 +248,23 @@ function shouldShowInNavigation(permissionKeys: readonly string[], route: AppRou
 
   if (route.path === "/logistics") {
     return permissionKeys.includes("logistics.center.read")
-      && !permissionKeys.includes("works.create")
+      && (permissionKeys.includes("logistics.plan") || permissionKeys.includes("pickup.create"))
       && !permissionKeys.includes("technician.workbench.read");
+  }
+
+  // CourierRoute is the courier workflow. Keep the legacy delivery page
+  // addressable for history, but do not expose it as the primary navigation.
+  if (route.path === "/deliveries") {
+    return false;
+  }
+
+  if (route.path === "/routes") {
+    return (permissionKeys.includes("routes.create") || permissionKeys.includes("logistics.manage_groups"))
+      && !permissionKeys.includes("technician.workbench.read");
+  }
+
+  if (route.path === "/my-route") {
+    return permissionKeys.includes("routes.read") && !permissionKeys.includes("routes.create");
   }
 
   if (route.path === "/clinics" || route.path === "/doctors") {

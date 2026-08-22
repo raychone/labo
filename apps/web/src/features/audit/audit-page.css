@@ -1,0 +1,35 @@
+.audit-page__filters {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.audit-page__pagination {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+
+.audit-page__pagination span {
+  color: var(--dl-color-text-muted, #667085);
+  font-size: 0.875rem;
+}
+
+@media (max-width: 900px) {
+  .audit-page__filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .audit-page__filters {
+    grid-template-columns: 1fr;
+  }
+
+  .audit-page__pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

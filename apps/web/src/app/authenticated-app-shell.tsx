@@ -41,6 +41,7 @@ export function AuthenticatedAppShell(): ReactNode {
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const canReadSettings = auth.permissionKeys.includes("settings.read");
   const canReadOrganizationContext = auth.permissionKeys.includes("organization_context.read");
+  const canSwitchOrganizationContext = auth.permissionKeys.includes("organization_context.switch");
   const settingsQuery = useSettings(canReadSettings);
   const laboratoryName = settingsQuery.data?.laboratoryName ?? fallbackLaboratoryName;
   const brandColor = getSafeBrandColor(settingsQuery.data?.primaryColor);
@@ -104,6 +105,7 @@ export function AuthenticatedAppShell(): ReactNode {
         isLoggingOut={logoutMutation.isPending}
         laboratoryName={laboratoryName}
         canReadOrganizationContext={canReadOrganizationContext}
+        canSwitchOrganizationContext={canSwitchOrganizationContext}
         onLogout={() => setIsLogoutConfirmOpen(true)}
         routes={routes}
         userEmail={auth.user?.email ?? ""}
@@ -148,7 +150,7 @@ export function AuthenticatedAppShell(): ReactNode {
         >
         <div className="app-shell__mobile-drawer">
           <BrandBlock laboratoryName={laboratoryName} />
-          <OrganizationContextSwitch canRead={canReadOrganizationContext} compact />
+          {canSwitchOrganizationContext ? <OrganizationContextSwitch canRead={canReadOrganizationContext} canSwitch compact /> : null}
           <NavigationList currentPath={location.pathname} routes={routes} />
           <div className="app-shell__drawer-user">
             <UserSummary email={auth.user?.email ?? ""} name={auth.user?.displayName ?? ""} roleLabel={roleLabel} />
@@ -157,6 +159,7 @@ export function AuthenticatedAppShell(): ReactNode {
         </div>
       </Drawer>
       <ConfirmActionModal
+        className="logout-confirm-modal"
         confirmLabel="Deconectează-te"
         description="Veți ieși din aplicație și va trebui să vă autentificați din nou pentru a continua."
         isLoading={logoutMutation.isPending}
@@ -175,6 +178,7 @@ export function AuthenticatedAppShell(): ReactNode {
 function AppSidebar({
   currentPath,
   canReadOrganizationContext,
+  canSwitchOrganizationContext,
   isLoggingOut,
   laboratoryName,
   onLogout,
@@ -185,6 +189,7 @@ function AppSidebar({
 }: {
   readonly currentPath: string;
   readonly canReadOrganizationContext: boolean;
+  readonly canSwitchOrganizationContext: boolean;
   readonly isLoggingOut: boolean;
   readonly laboratoryName: string;
   readonly onLogout: () => void;
@@ -196,7 +201,7 @@ function AppSidebar({
   return (
     <aside className="app-shell__sidebar">
       <BrandBlock laboratoryName={laboratoryName} />
-      <OrganizationContextSwitch canRead={canReadOrganizationContext} />
+      {canSwitchOrganizationContext ? <OrganizationContextSwitch canRead={canReadOrganizationContext} canSwitch /> : null}
       <NavigationList currentPath={currentPath} routes={routes} />
       <div className="app-shell__sidebar-footer">
         <UserSummary email={userEmail} name={userName} roleLabel={userRole} />

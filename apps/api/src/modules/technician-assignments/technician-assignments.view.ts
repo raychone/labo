@@ -17,8 +17,8 @@ export interface TechnicianWorkbenchItem {
     readonly assignedUser: { readonly displayName: string; readonly email: string; readonly id: string } | null;
   };
   readonly categories: readonly TechnicianQueueCategory[];
-  readonly clinic: { readonly id: string; readonly name: string };
-  readonly doctor: { readonly displayName: string; readonly id: string };
+  readonly clinic: { readonly id: string; readonly name: string } | null;
+  readonly doctor: { readonly displayName: string; readonly id: string } | null;
   readonly dueDate: string;
   readonly id: string;
   readonly patientName: string;
@@ -167,14 +167,18 @@ export function toTechnicianWorkbenchItem(stage: TechnicianWorkbenchStageRecord,
         : null,
     },
     categories: deriveQueueCategories({ dueDate, priority: work.priority, status: stage.status }, now),
-    clinic: {
-      id: work.clinic.id,
-      name: work.clinic.name,
-    },
-    doctor: {
-      displayName: work.doctor.displayName,
-      id: work.doctor.id,
-    },
+    clinic: work.clinic
+      ? {
+          id: work.clinic.id,
+          name: work.clinic.name,
+        }
+      : null,
+    doctor: work.doctor
+      ? {
+          displayName: work.doctor.displayName,
+          id: work.doctor.id,
+        }
+      : null,
     dueDate,
     id: stage.id,
     patientName: work.patientName,

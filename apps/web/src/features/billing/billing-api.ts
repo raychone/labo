@@ -180,6 +180,11 @@ function parseDownloadFilename(contentDisposition: string | null): string | null
 }
 
 async function downloadPdf(path: string, fallbackFilename: string, query: PdfQueryParams = {}): Promise<void> {
+  const { blob, filename } = await fetchPdfBlob(path, fallbackFilename, query);
+  triggerBrowserDownload(blob, filename);
+}
+
+export async function fetchPdfBlob(path: string, fallbackFilename: string, query: PdfQueryParams = {}): Promise<{ readonly blob: Blob; readonly filename: string }> {
   const queryString = toQueryString(Object.entries(query as Record<string, boolean | number | string | undefined>));
   const response = await apiFetch(queryString ? `${path}?${queryString}` : path);
   if (!response.ok) {
@@ -188,7 +193,7 @@ async function downloadPdf(path: string, fallbackFilename: string, query: PdfQue
 
   const blob = await response.blob();
   const filename = parseDownloadFilename(response.headers.get("content-disposition")) ?? fallbackFilename;
-  triggerBrowserDownload(blob, filename);
+  return { blob, filename };
 }
 
 export async function downloadBillingDocumentPdf(documentId: string): Promise<void> {
@@ -215,8 +220,16 @@ export async function createInvoice(input: CreateBillingDocumentInput): Promise<
   return sendJson<BillingDocumentDetail>("/billing-documents/invoices", "POST", input);
 }
 
+export async function createAndIssueInvoice(input: CreateBillingDocumentInput): Promise<BillingDocumentDetail> {
+  return sendJson<BillingDocumentDetail>("/billing-documents/invoices/issue", "POST", input);
+}
+
 export async function issueDocument(documentId: string): Promise<BillingDocumentDetail> {
   return sendJson<BillingDocumentDetail>(`/billing-documents/${documentId}/issue`, "POST");
+}
+
+export async function createStorno(documentId: string): Promise<BillingDocumentDetail> {
+  return sendJson<BillingDocumentDetail>(`/billing-documents/${documentId}/storno`, "POST");
 }
 
 export async function convertProforma(documentId: string): Promise<BillingDocumentDetail> {
@@ -225,6 +238,10 @@ export async function convertProforma(documentId: string): Promise<BillingDocume
 
 export async function recordPayment(documentId: string, input: RecordPaymentInput): Promise<BillingDocumentDetail> {
   return sendJson<BillingDocumentDetail>(`/billing-documents/${documentId}/payments`, "POST", input);
+}
+
+export async function recordDocumentShareAttempt(documentId: string, input: { readonly channel: "EMAIL" | "WHATSAPP" | "SHARE"; readonly recipient?: string }): Promise<void> {
+  await sendJson(`/billing-documents/${documentId}/share-attempt`, "POST", input);
 }
 
 export async function fetchPayments(): Promise<BillingPaymentsResponse> {
@@ -342,12 +359,20 @@ export function useCreateInvoice() {
   return useBillingMutation(createInvoice);
 }
 
+export function useCreateAndIssueInvoice() {
+  return useBillingMutation(createAndIssueInvoice);
+}
+
 export function useIssueDocument() {
   return useBillingMutation(issueDocument);
 }
 
 export function useConvertProforma() {
   return useBillingMutation(convertProforma);
+}
+
+export function useCreateStorno() {
+  return useBillingMutation(createStorno);
 }
 
 export function useRecordPayment() {

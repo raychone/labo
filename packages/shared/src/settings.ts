@@ -36,10 +36,10 @@ export interface LegalEntitySettingsView {
 
 export interface ContextualSettingsView extends LegalEntitySettingsView {
   readonly legalEntity: {
-    readonly code: "NC" | "NG";
+    readonly code: "CDT" | "NG";
     readonly displayName: string;
   };
-  readonly legalEntityCode: "NC" | "NG";
+  readonly legalEntityCode: "CDT" | "NG";
   readonly legalEntityDisplayName: string;
 }
 

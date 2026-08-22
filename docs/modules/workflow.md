@@ -18,7 +18,7 @@ Template, ordered stages, optional stage, cycle-scoped runtime execution, stage 
 
 ## Business Rules
 
-Only confirmed behavior should be used: templates have ordered stages and runtime work execution supports stage start/complete and assignment on the active work cycle. When a new runtime workflow is created from an eligible creator, the initial stage is auto-assigned to that creator so ownership-based start/complete permissions can be exercised without introducing a parallel lifecycle. Registering a returned work opens a new active cycle with a new runtime workflow execution; previous cycle workflow executions remain historical. Pause/resume/skip/reopen are permission concepts and future/partial behavior unless confirmed by task code.
+Only confirmed behavior should be used: templates have ordered stages and runtime work execution supports stage start/complete and assignment on the active work cycle. Persisted `WorkOrder.status` is the final operational state (`RECEPTIE`, `IN_LUCRU`, `IN_ASTEPTARE`, `FINALIZATA`) and remains separate from workflow stage execution state. When a new runtime workflow is created from an eligible creator, the initial stage is auto-assigned to that creator so ownership-based start/complete permissions can be exercised without introducing a parallel lifecycle. Registering a returned work opens a new active cycle with a new runtime workflow execution; previous cycle workflow executions remain historical. Pause/resume/skip/reopen are permission concepts and future/partial behavior unless confirmed by task code.
 
 ## Data Model
 
@@ -46,7 +46,7 @@ Archived template, existing runtime from older template, stage already started/c
 
 ## Implemented Tasks
 
-WORKFLOW-001, WORKFLOW-002, TECH-001, STATUS-001A read-model integration, WORK-CYCLES-001A, WORK-CYCLES-001B, TECH-EXECUTION-001.
+WORKFLOW-001, WORKFLOW-002, TECH-001, STATUS-001A read-model integration, WORK-CYCLES-001A, WORK-CYCLES-001B, TECH-EXECUTION-001, STATE-001A.
 
 ## Planned Tasks
 

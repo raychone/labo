@@ -183,6 +183,18 @@ const WORK_DETAIL_INCLUDE = {
       templateKind: "GENERIC",
     },
   },
+  attachments: {
+    orderBy: {
+      uploadedAt: "asc",
+    },
+    select: {
+      fileName: true,
+      id: true,
+      mimeType: true,
+      sizeBytes: true,
+      uploadedAt: true,
+    },
+  },
   workType: true,
 } as const satisfies Prisma.WorkOrderInclude;
 

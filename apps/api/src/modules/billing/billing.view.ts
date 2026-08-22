@@ -62,6 +62,8 @@ export interface BillingDocumentSummary {
   readonly status: BillingDocumentStatus;
   readonly totalMinor: number;
   readonly type: BillingDocumentType;
+  readonly stornoOfDocumentId?: string | null;
+  readonly stornoDocumentId?: string | null;
   readonly workCodes: readonly string[];
   readonly workCount: number;
 }
@@ -81,12 +83,12 @@ export interface BillingDocumentDetail extends BillingDocumentSummary {
 
 export interface BillableWork {
   readonly baseUnitPriceMinor: number | null;
-  readonly clinicId: string;
+  readonly clinicId: string | null;
   readonly clinicName: string;
   readonly code: string;
   readonly createdAt: string;
   readonly currency: string | null;
-  readonly doctorId: string;
+  readonly doctorId: string | null;
   readonly doctorName: string;
   readonly id: string;
   readonly invoicedDocumentId: string | null;
@@ -142,6 +144,8 @@ export interface BillingOverview {
   readonly to: string;
   readonly totalIssuedMinor: number;
   readonly unpaidInvoiceCount: number;
+  readonly unpaidOutstandingMinor: number;
+  readonly partialOutstandingMinor: number;
   readonly uninvoicedMinor: number;
   readonly uninvoicedWorkCount: number;
   readonly workValueMinor: number;
@@ -163,6 +167,8 @@ export type BillingDocumentRecord = Prisma.BillingDocumentGetPayload<{
       };
     };
     payments: true;
+    stornoDocument: true;
+    stornoOfDocument: true;
   };
 }>;
 
@@ -189,6 +195,26 @@ export interface BillingAmounts {
   readonly balanceMinor: number;
   readonly paidMinor: number;
   readonly paymentStatus: PaymentStatus;
+}
+
+export function isActiveOverdueInvoice(
+  document: {
+    readonly type: BillingDocumentType;
+    readonly status: BillingDocumentStatus;
+    readonly dueDate: Date | null;
+    readonly stornoDocumentId?: string | null;
+    readonly payments: readonly { readonly amountMinor: number; readonly cancelledAt: Date | null }[];
+    readonly totalMinor: number;
+  },
+  now = new Date(),
+): boolean {
+  if (document.type !== "INVOICE" || document.stornoDocumentId !== undefined && document.stornoDocumentId !== null || !["ISSUED", "PARTIALLY_PAID"].includes(document.status) || !document.dueDate) {
+    return false;
+  }
+
+  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const dueUtc = Date.UTC(document.dueDate.getUTCFullYear(), document.dueDate.getUTCMonth(), document.dueDate.getUTCDate());
+  return dueUtc < todayUtc && calculateBillingAmounts(document).balanceMinor > 0;
 }
 
 export function calculateBillingAmounts(document: { readonly payments: readonly { readonly amountMinor: number; readonly cancelledAt: Date | null }[]; readonly totalMinor: number }): BillingAmounts {
@@ -224,6 +250,8 @@ export function toBillingDocumentSummary(document: BillingDocumentRecord): Billi
     status: document.status as BillingDocumentStatus,
     totalMinor: document.totalMinor,
     type: document.type as BillingDocumentType,
+    stornoOfDocumentId: document.stornoOfDocumentId,
+    stornoDocumentId: document.stornoDocument?.id ?? null,
     workCodes: document.lines.map((line) => line.workCode),
     workCount: document.lines.length,
   };
@@ -309,12 +337,12 @@ export function toBillableWorkView(workOrder: BillableWorkRecord, includeMoney: 
   return {
     baseUnitPriceMinor: includeMoney ? snapshot?.pricingUnitPriceMinor ?? null : null,
     clinicId: workOrder.clinicId,
-    clinicName: workOrder.clinic.name,
+    clinicName: workOrder.clinic?.name ?? "-",
     code: workOrder.code,
     createdAt: workOrder.createdAt.toISOString(),
     currency: includeMoney ? workOrder.currency : null,
     doctorId: workOrder.doctorId,
-    doctorName: workOrder.doctor.displayName,
+    doctorName: workOrder.doctor?.displayName ?? "-",
     id: workOrder.id,
     invoicedDocumentId: activeInvoiceLine?.billingDocumentId ?? workOrder.invoicedDocumentId,
     isBillable,
@@ -367,6 +395,8 @@ export function createEmptyBillingOverview(from: string, to: string, currency: s
     to,
     totalIssuedMinor: 0,
     unpaidInvoiceCount: 0,
+    unpaidOutstandingMinor: 0,
+    partialOutstandingMinor: 0,
     uninvoicedMinor: 0,
     uninvoicedWorkCount: 0,
     workValueMinor: 0,

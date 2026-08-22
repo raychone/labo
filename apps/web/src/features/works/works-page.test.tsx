@@ -68,7 +68,7 @@ function createPngResponse(): Response {
     status: "UNCLAIMED",
     technician: null,
   },
-  code: "WO-2026-000001",
+  code: "WO-26-0001",
   createdAt: "2026-07-22T12:00:00.000Z",
   currency: null,
   deadline: {
@@ -122,6 +122,7 @@ function createPngResponse(): Response {
   priority: "NORMAL",
   quantity: 1,
   requestedDeliveryDate: "2026-08-01T00:00:00.000Z",
+  shade: "A2",
   status: "REGISTERED",
   totalPriceMinor: null,
   updatedAt: "2026-07-22T12:00:00.000Z",
@@ -259,7 +260,7 @@ const qrResponse = {
     quantity: 1,
     workTypeName: "Coroana zirconiu",
   },
-  workCode: "WO-2026-000001",
+  workCode: "WO-26-0001",
   workId: "work_order_1",
 };
 
@@ -381,6 +382,30 @@ const dynamicFieldTestDefinitions: readonly WorkFormFieldDefinition[] = [
     sortOrder: 2,
     sourceKind: "USER_ENTERED",
     type: "RADIO",
+    validation: {},
+  },
+];
+
+const toothFieldTestDefinitions: readonly WorkFormFieldDefinition[] = [
+  {
+    copyToNextCyclePolicy: "NEVER",
+    cycleScope: "WORK",
+    defaultValue: null,
+    editableUntil: "NEVER",
+    helpText: null,
+    id: "field_teeth",
+    isActive: true,
+    key: "teeth",
+    label: "Dinți",
+    options: [],
+    placeholder: null,
+    printable: true,
+    required: false,
+    roleOwner: "SHARED",
+    sectionLabel: "Secțiune test",
+    sortOrder: 1,
+    sourceKind: "USER_ENTERED",
+    type: "TOOTH",
     validation: {},
   },
 ];
@@ -510,20 +535,21 @@ describe("WorksPage", () => {
     renderWithProviders(<WorksPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Adaugă lucrare" }));
-    const clinicSelect = screen.getAllByLabelText("Cabinet").at(-1);
-    const doctorSelect = screen.getAllByLabelText("Medic").at(-1);
+    const clinicInput = screen.getAllByLabelText("Clinică").at(-1);
+    const doctorInput = screen.getAllByLabelText("Medic").at(-1);
 
-    if (!(clinicSelect instanceof HTMLSelectElement) || !(doctorSelect instanceof HTMLSelectElement)) {
-      throw new Error("Expected form selects to be rendered.");
+    if (!(clinicInput instanceof HTMLInputElement) || !(doctorInput instanceof HTMLInputElement)) {
+      throw new Error("Expected searchable clinic and doctor inputs to be rendered.");
     }
 
-    fireEvent.change(clinicSelect, { target: { value: "clinic_1" } });
+    fireEvent.change(clinicInput, { target: { value: "clinic_1" } });
+    fireEvent.focus(doctorInput);
     await screen.findByRole("option", { name: "Dr. Ana Popescu" });
-    fireEvent.change(doctorSelect, { target: { value: "doctor_1" } });
-    expect(doctorSelect.value).toBe("doctor_1");
+    fireEvent.change(doctorInput, { target: { value: "doctor_1" } });
+    expect(doctorInput.value).toBe("Dr. Ana Popescu");
 
-    fireEvent.change(clinicSelect, { target: { value: "clinic_2" } });
-    await waitFor(() => expect(doctorSelect.value).toBe(""));
+    fireEvent.change(clinicInput, { target: { value: "clinic_2" } });
+    await waitFor(() => expect(doctorInput.value).toBe(""));
   });
 
   it("shows a small searchable suggestion list for patients and work types in the create form", async () => {
@@ -590,6 +616,108 @@ describe("WorksPage", () => {
     expect(within(workTypeListbox).getByText("PZr · Bucată")).toBeDefined();
   });
 
+  it("submits canonical reception intake fields from the create form", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/auth/permissions")) {
+        return Promise.resolve(createJsonResponse({
+          permissions: [
+            { key: "clinics.read", scopes: ["ALL"] },
+            { key: "doctors.read", scopes: ["ALL"] },
+            { key: "works.create", scopes: ["ALL"] },
+            { key: "works.deadline.preview", scopes: ["ALL"] },
+            { key: "works.deadline.set_manual", scopes: ["ALL"] },
+            { key: "works.read_all", scopes: ["ALL"] },
+          ],
+        }));
+      }
+      if (url.endsWith("/auth/csrf")) {
+        return Promise.resolve(createJsonResponse({ csrfToken: "csrf-token" }));
+      }
+      if (url.includes("/works/work-type-options")) {
+        return Promise.resolve(createJsonResponse(workTypeOptionsResponse));
+      }
+      if (url.includes("/clinics/options")) {
+        return Promise.resolve(createJsonResponse(clinicOptionsResponse));
+      }
+      if (url.includes("/doctors/options")) {
+        return Promise.resolve(createJsonResponse(doctorOptionsResponse));
+      }
+      if (url.includes("/patients/options")) {
+        return Promise.resolve(createJsonResponse(patientOptionsResponse));
+      }
+      if (url.includes("/work-types/") && url.includes("/form-template")) {
+        return Promise.resolve(createJsonResponse(null));
+      }
+      if (url.includes("/works/deadline-preview")) {
+        return Promise.resolve(createJsonResponse({
+          badge: "Manual",
+          calculatedDueAt: null,
+          color: "green",
+          countdown: "manual",
+          effectiveDueAt: "2026-08-20T09:30:00.000Z",
+          executionDays: null,
+          explanation: "Termen manual.",
+          manualDueAt: "2026-08-20T09:30:00.000Z",
+          mode: "MANUAL",
+          status: "ON_TIME",
+          tooltip: "Termen manual.",
+        }));
+      }
+      if (url.endsWith("/works") && init?.method === "POST") {
+        return Promise.resolve(createJsonResponse({
+          ...workSummary,
+          clinicalNotes: "Lucrare prioritară",
+          quantity: 3,
+          requestedDeliveryDate: "2026-08-20T00:00:00.000Z",
+          shade: "A2",
+        }));
+      }
+      if (url.includes("/works?")) {
+        return Promise.resolve(createJsonResponse(worksListResponse));
+      }
+
+      return Promise.resolve(createJsonResponse({}, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(<WorksPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Adaugă lucrare" }));
+
+    const patientInput = await screen.findByLabelText("Pacient");
+    fireEvent.focus(patientInput);
+    fireEvent.click(within(await screen.findByRole("listbox")).getByRole("option", { name: /Ion Pop/ }));
+
+    const workTypeInput = await screen.findByLabelText("Tip lucrare");
+    fireEvent.focus(workTypeInput);
+    fireEvent.click(within(await screen.findByRole("listbox")).getByRole("option", { name: /Punte zirconiu/ }));
+
+    fireEvent.change(screen.getByLabelText("Clinică"), { target: { value: "clinic_1" } });
+    fireEvent.change(await screen.findByLabelText("Medic"), { target: { value: "doctor_1" } });
+    fireEvent.change(screen.getByLabelText("Elemente"), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("Culoare"), { target: { value: "A2" } });
+    fireEvent.change(screen.getByLabelText("Data termenului"), { target: { value: "2026-08-20" } });
+    fireEvent.change(screen.getByLabelText("Ora termenului"), { target: { value: "09:30" } });
+    fireEvent.change(screen.getByLabelText("Note"), { target: { value: "Lucrare prioritară" } });
+    fireEvent.click(screen.getByRole("button", { name: "Creează lucrare" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/works"), expect.objectContaining({ method: "POST" })));
+    const createCall = fetchMock.mock.calls.find(([input, init]) => String(input).endsWith("/works") && (init as RequestInit | undefined)?.method === "POST");
+    expect(createCall).toBeDefined();
+    const body = JSON.parse(String((createCall?.[1] as RequestInit).body));
+    expect(body).toMatchObject({
+      clinicId: "clinic_1",
+      clinicalNotes: "Lucrare prioritară",
+      doctorId: "doctor_1",
+      patientId: "patient_1",
+      quantity: 3,
+      requestedDeliveryDate: "2026-08-20",
+      shade: "A2",
+      workTypeId: "work_type_2",
+    });
+    expect(body.manualDueAt).toEqual(expect.stringMatching(/^2026-08-20T/));
+  });
+
   it("submits boolean and radio dynamic fields through the create form contract", async () => {
     function Harness({ onSubmit }: { readonly onSubmit: (values: WorkFormValues) => void }): ReactNode {
       const form = useForm<WorkFormValues>({
@@ -618,6 +746,42 @@ describe("WorksPage", () => {
     expect(onSubmit.mock.calls[0]?.[0].workFormValues).toEqual({
       choice: "FIRST",
       confirm: true,
+    });
+  });
+
+  it("renders tooth selections by quadrant and submits them in canonical order", async () => {
+    function Harness({ onSubmit }: { readonly onSubmit: (values: WorkFormValues) => void }): ReactNode {
+      const form = useForm<WorkFormValues>({
+        defaultValues: {
+          ...defaultWorkFormValues,
+          workFormValues: {},
+        },
+      });
+
+      return (
+        <form onSubmit={(event) => void form.handleSubmit(onSubmit)(event)}>
+          <WorkFormFields fields={toothFieldTestDefinitions} form={form} isDisabled={false} />
+          <button type="submit">Salvează</button>
+        </form>
+      );
+    }
+
+    const onSubmit = vi.fn();
+    render(<Harness onSubmit={onSubmit} />);
+
+    expect(screen.getByRole("region", { name: "FDI 18-11" })).toBeDefined();
+    expect(screen.getByRole("region", { name: "FDI 21-28" })).toBeDefined();
+    expect(screen.getByRole("region", { name: "FDI 31-38" })).toBeDefined();
+    expect(screen.getByRole("region", { name: "FDI 48-41" })).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "22" }));
+    fireEvent.click(screen.getByRole("button", { name: "11" }));
+    fireEvent.click(screen.getByRole("button", { name: "18" }));
+    fireEvent.click(screen.getByRole("button", { name: "Salvează" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0]?.[0].workFormValues).toEqual({
+      teeth: ["18", "11", "22"],
     });
   });
 
@@ -709,9 +873,9 @@ describe("WorksPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Vezi QR" }));
 
     const dialog = await screen.findByRole("dialog", { name: "QR lucrare" });
-    expect((await within(dialog).findByRole("img", { name: "QR WO-2026-000001" })).getAttribute("src")).toBe("blob:http://localhost/qr-image");
+    expect((await within(dialog).findByRole("img", { name: "QR WO-26-0001" })).getAttribute("src")).toBe("blob:http://localhost/qr-image");
     expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob));
-    await waitFor(() => expect(within(dialog).getAllByText("WO-2026-000001")).toHaveLength(2));
+    await waitFor(() => expect(within(dialog).getAllByText("WO-26-0001")).toHaveLength(2));
     expect(await within(dialog).findByText("P-100")).toBeDefined();
     expect(screen.queryByText("dl-work:secure_token_12345678901234567890")).toBeNull();
     revokeObjectUrl.mockRestore();

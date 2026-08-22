@@ -37,6 +37,8 @@ model User {
   archivedWorkTypes                   WorkType[]                 @relation("WorkTypeArchivedBy")
   createdWorkOrders                   WorkOrder[]                @relation("WorkOrderCreatedBy")
   updatedWorkOrders                   WorkOrder[]                @relation("WorkOrderUpdatedBy")
+  statusChangedWorkOrders             WorkOrder[]                @relation("WorkOrderStatusChangedBy")
+  completedWorkOrders                 WorkOrder[]                @relation("WorkOrderCompletedBy")
   createdWorkCycles                   WorkCycle[]                @relation("WorkCycleCreatedBy")
   assignedClaimedWorkOrders           WorkOrder[]                @relation("WorkOrderAssignedTechnician")
   claimedWorkOrders                   WorkOrder[]                @relation("WorkOrderClaimedBy")
@@ -74,6 +76,10 @@ model User {
   packingStartedWorkLogisticsStates   WorkLogisticsState[]       @relation("WorkLogisticsPackingStartedBy")
   readyForDeliveryWorkLogisticsStates WorkLogisticsState[]       @relation("WorkLogisticsReadyForDeliveryBy")
   updatedWorkLogisticsStates          WorkLogisticsState[]       @relation("WorkLogisticsUpdatedBy")
+  uploadedWorkAttachments             WorkAttachment[]           @relation("WorkAttachmentUploadedBy")
+  createdPickupRequests               PickupRequest[]            @relation("PickupRequestCreatedBy")
+  updatedPickupRequests               PickupRequest[]            @relation("PickupRequestUpdatedBy")
+  cancelledPickupRequests             PickupRequest[]            @relation("PickupRequestCancelledBy")
   logisticsEvents                     LogisticsEvent[]           @relation("LogisticsEventActor")
   createdDeliveryPreparationGroups    DeliveryPreparationGroup[] @relation("DeliveryPreparationGroupCreatedBy")
   updatedDeliveryPreparationGroups    DeliveryPreparationGroup[] @relation("DeliveryPreparationGroupUpdatedBy")
@@ -87,6 +93,12 @@ model User {
   createdDeliveries                   Delivery[]                 @relation("DeliveryCreatedBy")
   updatedDeliveries                   Delivery[]                 @relation("DeliveryUpdatedBy")
   deliveryEvents                      DeliveryEvent[]            @relation("DeliveryEventActor")
+  courierRoutes                       CourierRoute[]             @relation("CourierRouteCourier")
+  createdCourierRoutes                CourierRoute[]             @relation("CourierRouteCreatedBy")
+  updatedCourierRoutes                CourierRoute[]             @relation("CourierRouteUpdatedBy")
+  cancelledCourierRoutes              CourierRoute[]             @relation("CourierRouteCancelledBy")
+  routeStopOutcomes                   CourierRouteStop[]         @relation("CourierRouteStopOutcomeBy")
+  courierRouteEvents                  CourierRouteEvent[]        @relation("CourierRouteEventActor")
   confirmedDeliveryProofs             DeliveryProof[]            @relation("DeliveryProofConfirmedBy")
   createdPriceCatalogItems            PriceCatalogItem[]         @relation("PriceCatalogItemCreatedBy")
   updatedPriceCatalogItems            PriceCatalogItem[]         @relation("PriceCatalogItemUpdatedBy")
@@ -96,6 +108,16 @@ model User {
   createdPricingAgreements            PricingAgreement[]         @relation("PricingAgreementCreatedBy")
   updatedPricingAgreements            PricingAgreement[]         @relation("PricingAgreementUpdatedBy")
   archivedPricingAgreements           PricingAgreement[]         @relation("PricingAgreementArchivedBy")
+  createdTechnicianOperations         TechnicianOperation[]      @relation("TechnicianOperationCreatedBy")
+  updatedTechnicianOperations         TechnicianOperation[]      @relation("TechnicianOperationUpdatedBy")
+  archivedTechnicianOperations        TechnicianOperation[]      @relation("TechnicianOperationArchivedBy")
+  technicianOperationRates            TechnicianOperationRate[]   @relation("TechnicianOperationRateTechnician")
+  createdTechnicianOperationRates     TechnicianOperationRate[]   @relation("TechnicianOperationRateCreatedBy")
+  performedTechnicianOperations       TechnicianPerformedOperation[] @relation("TechnicianPerformedOperationTechnician")
+  createdTechnicianPerformedOperations TechnicianPerformedOperation[] @relation("TechnicianPerformedOperationCreatedBy")
+  removedTechnicianPerformedOperations TechnicianPerformedOperation[] @relation("TechnicianPerformedOperationRemovedBy")
+  technicianPaymentsReceived          TechnicianPayment[]            @relation("TechnicianPaymentTechnician")
+  createdTechnicianPayments            TechnicianPayment[]            @relation("TechnicianPaymentCreatedBy")
 
   @@index([isActive])
   @@index([createdAt])
@@ -236,6 +258,14 @@ enum PatientSex {
   UNSPECIFIED
 }
 
+enum LogisticsMarker {
+  MARKER_1
+  MARKER_2
+  MARKER_3
+  MARKER_4
+  MARKER_5
+}
+
 model Clinic {
   id                        String                     @id @default(cuid())
   code                      String                     @unique @db.VarChar(20)
@@ -286,6 +316,7 @@ model Clinic {
   deliveryPreparationGroups DeliveryPreparationGroup[]
   deliveries                Delivery[]
   patients                  Patient[]
+  pickupRequests            PickupRequest[]
 
   @@index([name])
   @@index([city])
@@ -319,6 +350,7 @@ model Doctor {
   billingDocuments  BillingDocument[]
   pricingAgreements PricingAgreement[]
   patients          Patient[]
+  pickupRequests    PickupRequest[]
 
   @@index([clinicId])
   @@index([clinicId, isActive])
@@ -361,6 +393,107 @@ model WorkType {
   @@index([updatedByUserId])
   @@index([archivedByUserId])
   @@map("work_types")
+}
+
+model TechnicianOperation {
+  id               String                    @id @default(cuid())
+  code             String                    @unique @db.VarChar(40)
+  name             String                    @db.VarChar(160)
+  description      String?                   @db.VarChar(1000)
+  isActive         Boolean                   @default(true) @map("is_active")
+  archivedAt       DateTime?                 @map("archived_at")
+  createdByUserId  String?                   @map("created_by_user_id")
+  updatedByUserId  String?                   @map("updated_by_user_id")
+  archivedByUserId String?                   @map("archived_by_user_id")
+  createdAt        DateTime                  @default(now()) @map("created_at")
+  updatedAt        DateTime                  @updatedAt @map("updated_at")
+  version          Int                       @default(1)
+  sortOrder        Int                       @default(0) @map("sort_order")
+  createdBy        User?                     @relation("TechnicianOperationCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy        User?                     @relation("TechnicianOperationUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  archivedBy       User?                     @relation("TechnicianOperationArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
+  rates            TechnicianOperationRate[]
+  performedOperations TechnicianPerformedOperation[]
+
+  @@index([name])
+  @@index([sortOrder])
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@index([archivedByUserId])
+  @@map("technician_operations")
+}
+
+model TechnicianOperationRate {
+  id             String              @id @default(cuid())
+  technicianId   String              @map("technician_id")
+  operationId    String              @map("operation_id")
+  rateMinor      Int                 @map("rate_minor")
+  currency       String              @default("RON") @db.Char(3)
+  effectiveFrom  DateTime            @default(now()) @map("effective_from")
+  validUntil     DateTime?           @map("valid_until")
+  createdByUserId String             @map("created_by_user_id")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  technician     User                @relation("TechnicianOperationRateTechnician", fields: [technicianId], references: [id], onDelete: Restrict)
+  operation      TechnicianOperation @relation(fields: [operationId], references: [id], onDelete: Restrict)
+  createdBy      User                @relation("TechnicianOperationRateCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  performedOperations TechnicianPerformedOperation[]
+
+  @@index([technicianId])
+  @@index([operationId])
+  @@index([technicianId, operationId, effectiveFrom])
+  @@index([technicianId, operationId, validUntil])
+  @@index([createdByUserId])
+  @@map("technician_operation_rates")
+}
+
+model TechnicianPerformedOperation {
+  id              String                  @id @default(cuid())
+  workOrderId     String                  @map("work_order_id")
+  technicianId    String                  @map("technician_id")
+  operationId     String                  @map("operation_id")
+  rateId          String                  @map("rate_id")
+  earningMinor    Int                     @map("earning_minor")
+  currency        String                  @default("RON") @db.Char(3)
+  performedAt     DateTime                @default(now()) @map("performed_at")
+  removedAt       DateTime?               @map("removed_at")
+  removedByUserId String?                 @map("removed_by_user_id")
+  removalReason   String?                 @map("removal_reason") @db.VarChar(500)
+  createdByUserId String                  @map("created_by_user_id")
+  createdAt       DateTime                @default(now()) @map("created_at")
+  workOrder       WorkOrder               @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  technician      User                    @relation("TechnicianPerformedOperationTechnician", fields: [technicianId], references: [id], onDelete: Restrict)
+  operation       TechnicianOperation     @relation(fields: [operationId], references: [id], onDelete: Restrict)
+  rate            TechnicianOperationRate @relation(fields: [rateId], references: [id], onDelete: Restrict)
+  createdBy       User                    @relation("TechnicianPerformedOperationCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  removedBy       User?                   @relation("TechnicianPerformedOperationRemovedBy", fields: [removedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([workOrderId, removedAt])
+  @@index([technicianId, performedAt])
+  @@index([operationId])
+  @@index([rateId])
+  @@index([createdByUserId])
+  @@index([removedByUserId])
+  @@map("technician_performed_operations")
+}
+
+model TechnicianPayment {
+  id              String   @id @default(cuid())
+  technicianId    String   @map("technician_id")
+  amountMinor     Int      @map("amount_minor")
+  currency        String   @default("RON") @db.Char(3)
+  paidAt          DateTime @default(now()) @map("paid_at")
+  notes           String?  @db.VarChar(500)
+  createdByUserId String   @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  technician      User     @relation("TechnicianPaymentTechnician", fields: [technicianId], references: [id], onDelete: Restrict)
+  createdBy       User     @relation("TechnicianPaymentCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([technicianId, paidAt])
+  @@index([createdByUserId])
+  @@map("technician_payments")
 }
 
 enum WorkTypeUnit {
@@ -729,12 +862,14 @@ enum WorkCycleReason {
 model WorkOrder {
   id                       String                    @id @default(cuid())
   code                     String                    @unique @db.VarChar(24)
-  clinicId                 String                    @map("clinic_id")
-  doctorId                 String                    @map("doctor_id")
+  clinicId                 String?                   @map("clinic_id")
+  doctorId                 String?                   @map("doctor_id")
   workTypeId               String                    @map("work_type_id")
   patientId                String?                   @map("patient_id")
   patientName              String                    @map("patient_name") @db.VarChar(120)
   patientReference         String?                   @map("patient_reference") @db.VarChar(80)
+  shade                    String?                   @db.VarChar(80)
+  implantPlatform          String?                   @map("implant_platform") @db.VarChar(80)
   qrToken                  String                    @unique @map("qr_token") @db.VarChar(64)
   qrCreatedAt              DateTime                  @default(now()) @map("qr_created_at")
   quantity                 Int                       @default(1)
@@ -742,7 +877,12 @@ model WorkOrder {
   totalPriceMinor          Int                       @map("total_price_minor")
   currency                 String                    @db.Char(3)
   priority                 WorkPriority              @default(NORMAL)
-  status                   WorkStatus                @default(REGISTERED)
+  status                   WorkStatus                @default(RECEPTIE)
+  statusChangedAt          DateTime?                 @map("status_changed_at")
+  statusChangedByUserId    String?                   @map("status_changed_by_user_id")
+  waitingStartedAt         DateTime?                 @map("waiting_started_at")
+  completedAt              DateTime?                 @map("completed_at")
+  completedByUserId        String?                   @map("completed_by_user_id")
   requestedDeliveryDate    DateTime                  @map("requested_delivery_date")
   deadlineMode             WorkDeadlineMode?         @map("deadline_mode")
   calculatedDueAt          DateTime?                 @map("calculated_due_at")
@@ -776,6 +916,11 @@ model WorkOrder {
   externalReference        String?                   @map("external_reference") @db.VarChar(120)
   internalNotes            String?                   @map("internal_notes") @db.VarChar(2000)
   clinicalNotes            String?                   @map("clinical_notes") @db.VarChar(2000)
+  technicalCodeNotes       String?                   @map("technical_code_notes") @db.VarChar(4000)
+  logisticsNote            String?                   @map("logistics_note") @db.VarChar(2000)
+  logisticsMarker           LogisticsMarker?          @map("logistics_marker")
+  requiresDelivery          Boolean                   @default(false) @map("requires_delivery")
+  requiresPickup            Boolean                   @default(false) @map("requires_pickup")
   createdByUserId          String?                   @map("created_by_user_id")
   updatedByUserId          String?                   @map("updated_by_user_id")
   createdAt                DateTime                  @default(now()) @map("created_at")
@@ -783,12 +928,14 @@ model WorkOrder {
   version                  Int                       @default(1)
   invoicedDocumentId       String?                   @map("invoiced_document_id")
   activeCycleId            String?                   @unique @map("active_cycle_id")
-  clinic                   Clinic                    @relation(fields: [clinicId], references: [id], onDelete: Restrict)
-  doctor                   Doctor                    @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  clinic                   Clinic?                   @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  doctor                   Doctor?                   @relation(fields: [doctorId], references: [id], onDelete: Restrict)
   patient                  Patient?                  @relation(fields: [patientId], references: [id], onDelete: Restrict)
   workType                 WorkType                  @relation(fields: [workTypeId], references: [id], onDelete: Restrict)
   createdBy                User?                     @relation("WorkOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   updatedBy                User?                     @relation("WorkOrderUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  statusChangedBy          User?                     @relation("WorkOrderStatusChangedBy", fields: [statusChangedByUserId], references: [id], onDelete: SetNull)
+  completedBy              User?                     @relation("WorkOrderCompletedBy", fields: [completedByUserId], references: [id], onDelete: SetNull)
   assignedTechnician       User?                     @relation("WorkOrderAssignedTechnician", fields: [assignedTechnicianId], references: [id], onDelete: SetNull)
   executionLegalEntity     LegalEntity?              @relation("WorkOrderExecutionLegalEntity", fields: [executionLegalEntityId], references: [id], onDelete: SetNull)
   activeCycle              WorkCycle?                @relation("ActiveWorkCycle", fields: [activeCycleId], references: [id], onDelete: SetNull)
@@ -804,6 +951,9 @@ model WorkOrder {
   deliveryPreparationItems DeliveryPreparationItem[]
   assignmentEvents         WorkAssignmentEvent[]
   executionSnapshots       WorkExecutionSnapshot[]
+  performedTechnicianOperations TechnicianPerformedOperation[]
+  attachments              WorkAttachment[]
+  courierRouteStops        CourierRouteStop[]       @relation("CourierRouteStopWorkOrder")
 
   @@index([clinicId])
   @@index([doctorId])
@@ -811,6 +961,11 @@ model WorkOrder {
   @@index([patientId])
   @@index([qrCreatedAt])
   @@index([status])
+  @@index([statusChangedAt])
+  @@index([statusChangedByUserId])
+  @@index([waitingStartedAt])
+  @@index([completedAt])
+  @@index([completedByUserId])
   @@index([priority])
   @@index([requestedDeliveryDate])
   @@index([effectiveDueAt])
@@ -828,6 +983,168 @@ model WorkOrder {
   @@index([invoicedDocumentId])
   @@index([activeCycleId])
   @@map("work_orders")
+}
+
+model WorkAttachment {
+  id               String    @id @default(cuid())
+  workOrderId      String    @map("work_order_id")
+  fileName         String    @map("file_name") @db.VarChar(255)
+  mimeType         String    @map("mime_type") @db.VarChar(120)
+  sizeBytes        Int       @map("size_bytes")
+  content          Bytes
+  uploadedByUserId String    @map("uploaded_by_user_id")
+  uploadedAt       DateTime  @default(now()) @map("uploaded_at")
+  workOrder        WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  uploadedBy       User      @relation("WorkAttachmentUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([workOrderId])
+  @@index([uploadedByUserId])
+  @@map("work_attachments")
+}
+
+model PickupRequest {
+  id              String                @id @default(cuid())
+  clinicId        String                @map("clinic_id")
+  doctorId        String                @map("doctor_id")
+  scheduledDate   DateTime              @map("scheduled_date") @db.Date
+  scheduleType    PickupScheduleType    @map("schedule_type")
+  exactTime       String?               @map("exact_time") @db.VarChar(5)
+  windowStartTime String?               @map("window_start_time") @db.VarChar(5)
+  windowEndTime   String?               @map("window_end_time") @db.VarChar(5)
+  address         String?               @db.VarChar(300)
+  phone           String?               @db.VarChar(40)
+  status          PickupRequestStatus   @default(SCHEDULED)
+  notes           String?               @db.VarChar(1000)
+  createdByUserId String                @map("created_by_user_id")
+  updatedByUserId String?               @map("updated_by_user_id")
+  cancelledByUserId String?             @map("cancelled_by_user_id")
+  cancelledAt     DateTime?             @map("cancelled_at")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+  version         Int                   @default(1)
+  clinic          Clinic                @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  doctor          Doctor                @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  createdBy       User                  @relation("PickupRequestCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  updatedBy       User?                 @relation("PickupRequestUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  cancelledBy     User?                 @relation("PickupRequestCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
+  routeStops      CourierRouteStop[]    @relation("CourierRouteStopPickupRequest")
+
+  @@index([clinicId])
+  @@index([doctorId])
+  @@index([status, scheduledDate])
+  @@index([scheduledDate])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@index([cancelledByUserId])
+  @@map("pickup_requests")
+}
+
+model CourierRoute {
+  id                String              @id @default(cuid())
+  routeNumber       String              @unique @map("route_number") @db.VarChar(32)
+  name              String              @db.VarChar(120)
+  routeDate         DateTime            @map("route_date") @db.Date
+  courierUserId     String?             @map("courier_user_id")
+  status            CourierRouteStatus  @default(DRAFT)
+  startedAt         DateTime?           @map("started_at")
+  completedAt       DateTime?           @map("completed_at")
+  cancelledAt       DateTime?           @map("cancelled_at")
+  cancelledByUserId String?             @map("cancelled_by_user_id")
+  notes             String?             @db.VarChar(1000)
+  createdByUserId   String?             @map("created_by_user_id")
+  updatedByUserId   String?             @map("updated_by_user_id")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+  version           Int                 @default(1)
+  courier           User?               @relation("CourierRouteCourier", fields: [courierUserId], references: [id], onDelete: SetNull)
+  createdBy         User?               @relation("CourierRouteCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy         User?               @relation("CourierRouteUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  cancelledBy       User?               @relation("CourierRouteCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
+  stops             CourierRouteStop[]
+  events            CourierRouteEvent[]
+
+  @@index([routeDate])
+  @@index([courierUserId, routeDate])
+  @@index([status, routeDate])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@map("courier_routes")
+}
+
+model CourierRouteStop {
+  id              String                  @id @default(cuid())
+  routeId         String                  @map("route_id")
+  stopOrder       Int                     @map("stop_order")
+  type            CourierRouteStopType
+  workOrderId     String?                 @map("work_order_id")
+  pickupRequestId String?                 @map("pickup_request_id")
+  outcomeStatus   CourierRouteStopOutcome @default(PENDING) @map("outcome_status")
+  outcomeNotes    String?                 @map("outcome_notes") @db.VarChar(1000)
+  outcomeAt       DateTime?               @map("outcome_at")
+  outcomeByUserId String?                 @map("outcome_by_user_id")
+  failureReason   String?                 @map("failure_reason") @db.VarChar(120)
+  addressOverride String?                 @map("address_override") @db.VarChar(300)
+  phoneOverride   String?                 @map("phone_override") @db.VarChar(40)
+  stopNotes       String?                 @map("stop_notes") @db.VarChar(500)
+  createdAt       DateTime                @default(now()) @map("created_at")
+  updatedAt       DateTime                @updatedAt @map("updated_at")
+  route           CourierRoute            @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  workOrder       WorkOrder?              @relation("CourierRouteStopWorkOrder", fields: [workOrderId], references: [id], onDelete: Restrict)
+  pickupRequest   PickupRequest?          @relation("CourierRouteStopPickupRequest", fields: [pickupRequestId], references: [id], onDelete: Restrict)
+  outcomeBy       User?                   @relation("CourierRouteStopOutcomeBy", fields: [outcomeByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([routeId, stopOrder])
+  @@index([routeId])
+  @@index([workOrderId])
+  @@index([pickupRequestId])
+  @@index([outcomeStatus])
+  @@map("courier_route_stops")
+}
+
+model CourierRouteEvent {
+  id          String                @id @default(cuid())
+  routeId     String                @map("route_id")
+  type        CourierRouteEventType
+  actorUserId String?               @map("actor_user_id")
+  occurredAt  DateTime              @default(now()) @map("occurred_at")
+  metadata    Json?
+  createdAt   DateTime              @default(now()) @map("created_at")
+  route       CourierRoute          @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  actor       User?                 @relation("CourierRouteEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([routeId, occurredAt])
+  @@index([type])
+  @@index([actorUserId])
+  @@map("courier_route_events")
+}
+
+enum CourierRouteStatus {
+  DRAFT
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum CourierRouteStopType {
+  DELIVERY
+  PICKUP
+}
+
+enum CourierRouteStopOutcome {
+  PENDING
+  DELIVERED
+  NOT_DELIVERED
+  PICKED_UP
+  NOT_PICKED_UP
+}
+
+enum CourierRouteEventType {
+  ROUTE_CREATED
+  ROUTE_UPDATED
+  ROUTE_CANCELLED
+  STOP_OUTCOME_RECORDED
+  STOP_OUTCOME_CORRECTED
 }
 
 model WorkOrderCodeCounter {
@@ -850,7 +1167,7 @@ model WorkCycle {
   createdByUserId                   String?                 @map("created_by_user_id")
   createdAt                         DateTime                @default(now()) @map("created_at")
   updatedAt                         DateTime                @updatedAt @map("updated_at")
-  clinicId                          String                  @map("clinic_id")
+  clinicId                          String?                 @map("clinic_id")
   doctorId                          String?                 @map("doctor_id")
   executionLegalEntityId            String?                 @map("execution_legal_entity_id")
   executionLegalEntityCodeSnapshot  String?                 @map("execution_legal_entity_code_snapshot") @db.VarChar(8)
@@ -863,7 +1180,7 @@ model WorkCycle {
   deadlineSnapshotJson              Json?                   @map("deadline_snapshot_json")
   workOrder                         WorkOrder               @relation("WorkOrderCycles", fields: [workOrderId], references: [id], onDelete: Cascade)
   activeForWorkOrder                WorkOrder?              @relation("ActiveWorkCycle")
-  clinic                            Clinic                  @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  clinic                            Clinic?                 @relation(fields: [clinicId], references: [id], onDelete: Restrict)
   doctor                            Doctor?                 @relation(fields: [doctorId], references: [id], onDelete: SetNull)
   executionLegalEntity              LegalEntity?            @relation(fields: [executionLegalEntityId], references: [id], onDelete: SetNull)
   createdBy                         User?                   @relation("WorkCycleCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
@@ -1041,6 +1358,7 @@ model BillingDocument {
   notes                            String?               @db.VarChar(2000)
   cancelledAt                      DateTime?             @map("cancelled_at")
   cancelledByUserId                String?               @map("cancelled_by_user_id")
+  stornoOfDocumentId               String?               @unique @map("storno_of_document_id")
   issuedAt                         DateTime?             @map("issued_at")
   issuedByUserId                   String?               @map("issued_by_user_id")
   createdByUserId                  String?               @map("created_by_user_id")
@@ -1055,6 +1373,8 @@ model BillingDocument {
   updatedBy                        User?                 @relation("BillingDocumentUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   issuedBy                         User?                 @relation("BillingDocumentIssuedBy", fields: [issuedByUserId], references: [id], onDelete: SetNull)
   cancelledBy                      User?                 @relation("BillingDocumentCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
+  stornoOfDocument                 BillingDocument?       @relation("BillingDocumentStorno", fields: [stornoOfDocumentId], references: [id], onDelete: Restrict)
+  stornoDocument                   BillingDocument?       @relation("BillingDocumentStorno")
   lines                            BillingDocumentLine[]
   payments                         Payment[]
   invoicedWorkOrders               WorkOrder[]           @relation("WorkOrderInvoicedDocument")
@@ -1222,8 +1542,22 @@ enum PaymentMethod {
   OTHER
 }
 
+enum PickupScheduleType {
+  EXACT
+  RANGE
+}
+
+enum PickupRequestStatus {
+  SCHEDULED
+  CANCELLED
+}
+
 enum WorkStatus {
   REGISTERED
+  RECEPTIE
+  IN_LUCRU
+  IN_ASTEPTARE
+  FINALIZATA
 }
 
 enum WorkPriority {

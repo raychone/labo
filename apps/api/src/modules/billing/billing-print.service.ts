@@ -41,6 +41,8 @@ type PrintableDocumentRecord = Prisma.BillingDocumentGetPayload<{
       };
     };
     payments: true;
+    stornoDocument: true;
+    stornoOfDocument: true;
   };
 }>;
 
@@ -59,6 +61,8 @@ const PRINT_DOCUMENT_INCLUDE = {
     },
   },
   payments: true,
+  stornoDocument: true,
+  stornoOfDocument: true,
 } as const satisfies Prisma.BillingDocumentInclude;
 
 const COMPLIANCE_NOTICE = "Document intern neintegrat cu RO e-Factura.";

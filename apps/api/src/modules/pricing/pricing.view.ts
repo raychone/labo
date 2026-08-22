@@ -10,8 +10,10 @@ export const priceCatalogItemInclude = {
   workType: {
     select: {
       code: true,
+      description: true,
       id: true,
       name: true,
+      symbol: true,
     },
   },
 } as const satisfies Prisma.PriceCatalogItemInclude;
@@ -69,8 +71,10 @@ export interface PriceCatalogItemSummaryView {
   readonly updatedAt: string;
   readonly workType: {
     readonly code: string;
+    readonly description: string | null;
     readonly id: string;
     readonly name: string;
+    readonly symbol: string;
   };
 }
 

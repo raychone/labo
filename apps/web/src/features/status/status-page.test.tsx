@@ -52,6 +52,7 @@ const operationalStatusResponse: OperationalStatusResponse = {
   items: [
     {
       claimStatus: "CLAIMED",
+      claimedAt: "2026-08-04T07:30:00.000Z",
       clinic: { id: "clinic_1", name: "Clinica Test" },
       createdAt: "2026-08-04T07:00:00.000Z",
       currentCycle: { code: "CYCLE_2", id: "cycle_2", label: "Ciclul 2", number: 2, reason: "ADJUSTMENT", status: "ACTIVE" },
@@ -67,6 +68,7 @@ const operationalStatusResponse: OperationalStatusResponse = {
       executionCompany: { code: "NC", displayName: "Nicolaie Cristina" },
       id: "work_1",
       logistics: { status: "IN_PRODUCTION" },
+      operationalStatus: "IN_LUCRU",
       patient: { id: "patient_1", name: "Maria Ionescu", reference: "MI-1" },
       priority: "URGENT",
       realLabSheet: {
@@ -76,6 +78,7 @@ const operationalStatusResponse: OperationalStatusResponse = {
         lastModifiedAt: "2026-08-04T08:00:00.000Z",
         status: "IN_PROGRESS",
       },
+      shade: "A2",
       updatedAt: "2026-08-04T08:00:00.000Z",
       workCode: "WO-2026-000001",
       workOwner: { displayName: "Tehnician Ana", preferredColor: "#0f766e", publicId: "tech_1" },
@@ -144,10 +147,18 @@ describe("StatusPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Status" })).toBeDefined();
     await waitFor(() => expect(screen.getAllByText("Maria Ionescu").length).toBeGreaterThan(0));
-    expect(screen.getAllByText("1/4").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Ceramică").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Urgent").length).toBeGreaterThan(0);
-    expect(screen.queryByText("Tehnician Ana")).toBeNull();
+    expect(screen.getByRole("columnheader", { name: "Clinica sau Medic" })).toBeDefined();
+    expect(screen.getByRole("columnheader", { name: "Pacient" })).toBeDefined();
+    expect(screen.getByRole("columnheader", { name: "Tip lucrare" })).toBeDefined();
+    expect(screen.getByRole("columnheader", { name: "Culoare" })).toBeDefined();
+    expect(screen.getByRole("columnheader", { name: "Tehnician" })).toBeDefined();
+    expect(screen.getByRole("columnheader", { name: "Preluare" })).toBeDefined();
+    expect(screen.getByRole("columnheader", { name: "Termen" })).toBeDefined();
+    expect(screen.getByRole("columnheader", { name: "Stare" })).toBeDefined();
+    expect(screen.getByRole("columnheader", { name: "Alerte" })).toBeDefined();
+    expect(screen.getByRole("columnheader", { name: "Livrare/Ridicare" })).toBeDefined();
+    expect(screen.getAllByText("A2").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Tehnician Ana").length).toBeGreaterThan(0);
     expect(screen.getByText(/rezultate limitate la 1000/)).toBeDefined();
     expect(screen.queryByText(/120,00|RON|factură|preț/i)).toBeNull();
   });
@@ -166,8 +177,8 @@ describe("StatusPage", () => {
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("sortDirection=desc"), expect.anything());
 
     fireEvent.click(screen.getByRole("button", { name: "Afișează filtrele" }));
-    fireEvent.change(screen.getByLabelText("NC / NG"), { target: { value: "NC" } });
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("executionLegalEntityCode=NC"), expect.anything()));
+    fireEvent.change(screen.getByLabelText("CDT / NG"), { target: { value: "CDT" } });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("executionLegalEntityCode=CDT"), expect.anything()));
   });
 
   it("opens the existing works detail flow from a status row", async () => {

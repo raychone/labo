@@ -99,8 +99,8 @@ export class WorkDeadlineService {
   }
 
   public async preview(input: {
-    readonly clinicId: string;
-    readonly doctorId: string;
+    readonly clinicId: string | null;
+    readonly doctorId: string | null;
     readonly includeStartDay?: boolean;
     readonly legalEntity: LegalEntityContext;
     readonly manualDueAt?: string | null;
@@ -129,8 +129,8 @@ export class WorkDeadlineService {
 
   public async resolveForWork(input: {
     readonly client?: WorkDeadlineClient;
-    readonly clinicId: string;
-    readonly doctorId: string;
+    readonly clinicId: string | null;
+    readonly doctorId: string | null;
     readonly includeStartDay?: boolean;
     readonly legalEntity: LegalEntityContext;
     readonly manualDueAt?: Date | null;
@@ -157,8 +157,8 @@ export class WorkDeadlineService {
 
   private async resolveDeadline(input: {
     readonly client?: WorkDeadlineClient;
-    readonly clinicId: string;
-    readonly doctorId: string;
+    readonly clinicId: string | null;
+    readonly doctorId: string | null;
     readonly includeStartDay: boolean;
     readonly legalEntity: LegalEntityContext;
     readonly manualDueAt: Date | null;
@@ -275,8 +275,8 @@ export class WorkDeadlineService {
   }
 
   private async resolvePricingForDeadline(client: WorkDeadlineClient, input: {
-    readonly clinicId: string;
-    readonly doctorId: string;
+    readonly clinicId: string | null;
+    readonly doctorId: string | null;
     readonly evaluationDate: Date;
     readonly legalEntityCode: string;
     readonly legalEntityId: string;

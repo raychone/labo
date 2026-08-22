@@ -183,6 +183,9 @@ describe("BillingPrintPage", () => {
     expect(screen.getAllByText("Cabinet Stomatologic Central").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Export PDF" })).toBeDefined();
     expect(screen.getAllByText("Document intern neintegrat cu RO e-Factura.").length).toBeGreaterThan(0);
+    expect(within(documentPanel).getByText("Lucrari protetice")).toBeDefined();
+    expect(within(documentPanel).queryByText("Coroană zirconiu")).toBeNull();
+    expect(within(documentPanel).queryByText("WO-2026-000001")).toBeNull();
     expect(screen.getAllByText("bucată").length).toBeGreaterThan(0);
     expect(screen.queryByText("Nicolaie Gabriel")).toBeNull();
   });
@@ -278,7 +281,7 @@ describe("BillingPrintPage", () => {
     expect(screen.getByRole("button", { name: "Export PDF" })).toBeDefined();
   });
 
-  it("splits long invoice line lists across printable pages", async () => {
+  it("keeps invoice output simplified even when the snapshot has many detailed lines", async () => {
     const lines = Array.from({ length: 11 }, (_, index) => ({
       cycleNumber: 1,
       description: `Lucrare ${index + 1}`,
@@ -398,8 +401,10 @@ describe("BillingPrintPage", () => {
     renderWithProviders(<BillingPrintPage />, "/billing/documents/doc_1/print");
 
     await screen.findAllByRole("heading", { name: "FACTURA" });
-    expect(screen.getAllByRole("heading", { name: "FACTURA" })).toHaveLength(2);
-    expect(document.querySelectorAll(".billing-print__paper--invoice")).toHaveLength(2);
-    expect(screen.getByText("Lucrare 11")).toBeDefined();
+    expect(screen.getAllByRole("heading", { name: "FACTURA" })).toHaveLength(1);
+    expect(document.querySelectorAll(".billing-print__paper--invoice")).toHaveLength(1);
+    expect(screen.getByText("Lucrari protetice")).toBeDefined();
+    expect(screen.queryByText("Lucrare 11")).toBeNull();
+    expect(screen.queryByText("WO-2026-000011")).toBeNull();
   });
 });

@@ -144,12 +144,13 @@ export interface OperationalStatusPersonView {
 }
 
 export interface OperationalStatusRowView {
+  readonly claimedAt: string | null;
   readonly claimStatus: WorkClaimStatus;
   readonly createdAt: string;
   readonly clinic: {
     readonly id: string;
     readonly name: string;
-  };
+  } | null;
   readonly currentCycle: {
     readonly code: string;
     readonly id: string;
@@ -173,7 +174,7 @@ export interface OperationalStatusRowView {
   readonly doctor: {
     readonly id: string;
     readonly name: string;
-  };
+  } | null;
   readonly executionCompany: {
     readonly code: string;
     readonly displayName: string;
@@ -182,6 +183,7 @@ export interface OperationalStatusRowView {
   readonly logistics: {
     readonly status: WorkLogisticsStatus | null;
   };
+  readonly operationalStatus: "RECEPTIE" | "IN_LUCRU" | "IN_ASTEPTARE" | "FINALIZATA";
   readonly patient: {
     readonly id: string | null;
     readonly name: string;
@@ -196,6 +198,7 @@ export interface OperationalStatusRowView {
     readonly status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETE" | "FINALIZED";
   };
   readonly updatedAt: string;
+  readonly shade: string | null;
   readonly workCode: string;
   readonly workOwner: OperationalStatusPersonView | null;
   readonly workflow: {
@@ -259,10 +262,14 @@ export function matchesOperationalStatusTab(row: OperationalStatusRowView, tab: 
     return row.deadline.state === "DUE_TODAY";
   }
   if (tab === "IN_PROGRESS") {
-    return row.workflow.currentStage?.status === "IN_PROGRESS" || row.claimStatus === "CLAIMED";
+    return row.operationalStatus !== "FINALIZATA"
+      && (row.workflow.currentStage?.status === "IN_PROGRESS" || row.claimStatus === "CLAIMED");
   }
   if (tab === "AVAILABLE") {
-    return row.claimStatus === "UNCLAIMED" && row.delivery.status !== "DELIVERED" && row.logistics.status !== "DELIVERED";
+    return row.operationalStatus !== "FINALIZATA"
+      && row.claimStatus === "UNCLAIMED"
+      && row.delivery.status !== "DELIVERED"
+      && row.logistics.status !== "DELIVERED";
   }
   if (tab === "LATE") {
     return row.deadline.state === "LATE";
@@ -277,7 +284,10 @@ export function matchesOperationalStatusTab(row: OperationalStatusRowView, tab: 
   if (tab === "RETURNED") {
     return row.currentCycle !== null && row.currentCycle.number > 1 && row.delivery.status !== "DELIVERED";
   }
-  return row.workflow.status === "COMPLETED" || row.logistics.status === "DELIVERED" || row.delivery.status === "DELIVERED";
+  return row.operationalStatus === "FINALIZATA"
+    || row.workflow.status === "COMPLETED"
+    || row.logistics.status === "DELIVERED"
+    || row.delivery.status === "DELIVERED";
 }
 
 export function compareOperationalStatusRows(
@@ -305,12 +315,15 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
   const progressTotal = workflowExecution?.stages.length ?? 0;
 
   return {
+    claimedAt: work.claimedAt?.toISOString() ?? null,
     claimStatus: work.claimStatus,
     createdAt: work.createdAt.toISOString(),
-    clinic: {
-      id: work.clinic.id,
-      name: work.clinic.name,
-    },
+    clinic: work.clinic
+      ? {
+          id: work.clinic.id,
+          name: work.clinic.name,
+        }
+      : null,
     currentCycle: work.activeCycle ? {
       code: `CYCLE_${work.activeCycle.cycleNumber}`,
       id: work.activeCycle.id,
@@ -331,10 +344,12 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
       plannedDate: latestDelivery?.plannedDate.toISOString() ?? null,
       status: latestDelivery?.status ?? null,
     },
-    doctor: {
-      id: work.doctor.id,
-      name: work.doctor.displayName,
-    },
+    doctor: work.doctor
+      ? {
+          id: work.doctor.id,
+          name: work.doctor.displayName,
+        }
+      : null,
     executionCompany: work.executionLegalEntity ? {
       code: work.executionLegalEntity.code,
       displayName: work.executionLegalEntity.displayName,
@@ -343,6 +358,7 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
     logistics: {
       status: logisticsState?.status ?? null,
     },
+    operationalStatus: work.status === "REGISTERED" ? "RECEPTIE" : work.status,
     patient: {
       id: work.patient?.id ?? null,
       name: work.patientName,
@@ -350,6 +366,7 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
     },
     priority: work.priority,
     realLabSheet,
+    shade: work.shade,
     updatedAt: work.updatedAt.toISOString(),
     workCode: work.code,
     workOwner: work.claimedBy ? toPerson(work.claimedBy) : work.assignedTechnician ? toPerson(work.assignedTechnician) : null,
@@ -419,7 +436,7 @@ function getSortValue(row: OperationalStatusRowView, sortBy: OperationalStatusSo
     return row.workCode;
   }
   if (sortBy === "clinicName") {
-    return row.clinic.name;
+    return row.clinic?.name ?? "";
   }
   return row.patient.name;
 }

@@ -82,7 +82,10 @@ const expectedPermissionKeys = [
   "technician.rates.read",
   "technician.rates.manage",
   "technician.earnings.read_own",
-  "technician.earnings.read_all",
+    "technician.earnings.read_all",
+    "technician.payments.create",
+    "technician.payments.read_all",
+    "technician.payments.read_own",
   "logistics.read",
   "logistics.plan",
   "logistics.assign",
@@ -215,6 +218,9 @@ describe("PERMISSION_REGISTRY", () => {
   it("keeps representative matrix permissions with expected scopes", () => {
     expect(ROLE_PERMISSION_MATRIX.MANAGER["users.create"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["works.read_all"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["works.create"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["clinics.read"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["doctors.read"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["workflow.complete_stage"]).toBe("OWN_STAGE");
     expect(ROLE_PERMISSION_MATRIX.CURIER["delivery.complete"]).toBe("OWN_DELIVERY");
     expect(ROLE_PERMISSION_MATRIX.CURIER["delivery.start_transit"]).toBe("OWN_DELIVERY");

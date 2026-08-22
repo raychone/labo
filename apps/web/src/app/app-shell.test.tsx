@@ -36,7 +36,7 @@ function createJsonResponse(body: unknown, status = 200): Response {
 }
 
 function createFetchMock(permissions: readonly string[]) {
-  let activeCode = "NC";
+  let activeCode = "CDT";
 
   return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -73,7 +73,7 @@ function createFetchMock(permissions: readonly string[]) {
           displayName: activeCode === "NG" ? "Nicolaie Gabriel" : "Nicolaie Cristina",
         },
         available: [
-          { code: "NC", displayName: "Nicolaie Cristina" },
+          { code: "CDT", displayName: "Nicolaie Cristina" },
           { code: "NG", displayName: "Nicolaie Gabriel" },
         ],
         canSwitch: true,
@@ -86,7 +86,7 @@ function createFetchMock(permissions: readonly string[]) {
           displayName: activeCode === "NG" ? "Nicolaie Gabriel" : "Nicolaie Cristina",
         },
         available: [
-          { code: "NC", displayName: "Nicolaie Cristina" },
+          { code: "CDT", displayName: "Nicolaie Cristina" },
           { code: "NG", displayName: "Nicolaie Gabriel" },
         ],
         canSwitch: true,
@@ -235,11 +235,11 @@ describe("AuthenticatedAppShell", () => {
       </Routes>,
     );
 
-    expect(await screen.findByRole("radio", { name: "NC" })).toBeDefined();
-    expect((await screen.findByRole("radio", { name: "NC" })).getAttribute("aria-checked")).toBe("true");
-    fireEvent.click(screen.getByRole("radio", { name: "NG" }));
+    expect(await screen.findByRole("radio", { name: "CDT — Nicolaie Cristina" })).toBeDefined();
+    expect((await screen.findByRole("radio", { name: "CDT — Nicolaie Cristina" })).getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(screen.getByRole("radio", { name: "NG — Nicolaie Gabriel" }));
 
-    await waitFor(() => expect(screen.getByRole("radio", { name: "NG" }).getAttribute("aria-checked")).toBe("true"));
+    await waitFor(() => expect(screen.getByRole("radio", { name: "NG — Nicolaie Gabriel" }).getAttribute("aria-checked")).toBe("true"));
     expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/organization-context$/), expect.objectContaining({
       method: "PUT",
     }));

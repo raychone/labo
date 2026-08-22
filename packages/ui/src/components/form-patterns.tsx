@@ -158,6 +158,7 @@ export const FormActions = forwardRef<HTMLDivElement, FormActionsProps>(function
 });
 
 export interface ConfirmActionModalProps {
+  readonly className?: string;
   readonly confirmLabel: string;
   readonly description: ReactNode;
   readonly isLoading?: boolean;
@@ -169,6 +170,7 @@ export interface ConfirmActionModalProps {
 }
 
 export function ConfirmActionModal({
+  className,
   confirmLabel,
   description,
   isLoading = false,
@@ -191,11 +193,13 @@ export function ConfirmActionModal({
         </div>
       )}
       isOpen={isOpen}
+      className={className}
       onOpenChange={(nextIsOpen) => {
         if (!nextIsOpen && !isLoading) {
           onCancel();
         }
       }}
+      size="sm"
       title={title}
     >
       <p>{description}</p>

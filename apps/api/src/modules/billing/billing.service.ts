@@ -17,6 +17,7 @@ import type {
   CreateBillingDocumentDto,
   ListBillingDocumentsQueryDto,
   RecordPaymentDto,
+  DocumentShareAttemptDto,
   ReplaceBillingLinesDto,
   SearchBillingQueryDto,
   UpdateBillingDocumentDto,
@@ -24,6 +25,7 @@ import type {
 } from "./dto/billing.dto.js";
 import {
   calculateBillingAmounts,
+  isActiveOverdueInvoice,
   createEmptyBillingOverview,
   type BillingGroup,
   type BillingOverview,
@@ -36,6 +38,14 @@ import {
 } from "./billing.view.js";
 
 type PaymentStatus = "UNPAID" | "PARTIALLY_PAID" | "PAID";
+type BillingAdjustmentInput = NonNullable<CreateBillingDocumentDto["adjustments"]>[number];
+
+interface DraftPricing {
+  readonly discountMinor: number;
+  readonly lines: readonly Prisma.BillingDocumentLineUncheckedCreateWithoutBillingDocumentInput[];
+  readonly subtotalMinor: number;
+  readonly totalMinor: number;
+}
 
 export interface PaginatedBillingDocumentsResponse {
   readonly items: readonly ReturnType<typeof toBillingDocumentSummary>[];
@@ -70,6 +80,8 @@ const BILLING_DOCUMENT_INCLUDE = {
     },
   },
   payments: true,
+  stornoDocument: true,
+  stornoOfDocument: true,
 } as const satisfies Prisma.BillingDocumentInclude;
 
 const BILLABLE_WORK_INCLUDE = {
@@ -133,6 +145,14 @@ export class BillingService {
     const proformas = activeDocuments.filter((document) => document.type === "PROFORMA");
     const paidMinor = invoices.reduce((total, document) => total + calculateBillingAmounts(document).paidMinor, 0);
     const outstandingMinor = invoices.reduce((total, document) => total + calculateBillingAmounts(document).balanceMinor, 0);
+    const unpaidOutstandingMinor = invoices.reduce((total, document) => {
+      const amounts = calculateBillingAmounts(document);
+      return total + (amounts.paymentStatus === "UNPAID" ? amounts.balanceMinor : 0);
+    }, 0);
+    const partialOutstandingMinor = invoices.reduce((total, document) => {
+      const amounts = calculateBillingAmounts(document);
+      return total + (amounts.paymentStatus === "PARTIALLY_PAID" ? amounts.balanceMinor : 0);
+    }, 0);
     const unpaidInvoiceCount = invoices.filter((document) => calculateBillingAmounts(document).paymentStatus === "UNPAID").length;
     const partialInvoiceCount = invoices.filter((document) => calculateBillingAmounts(document).paymentStatus === "PARTIALLY_PAID").length;
     const paidInvoiceCount = invoices.filter((document) => calculateBillingAmounts(document).paymentStatus === "PAID").length;
@@ -155,6 +175,8 @@ export class BillingService {
       to: toDateOnly(range.to),
       totalIssuedMinor: invoices.reduce((total, document) => total + document.totalMinor, 0),
       unpaidInvoiceCount,
+      unpaidOutstandingMinor,
+      partialOutstandingMinor,
       uninvoicedMinor,
       uninvoicedWorkCount: uninvoicedWorks.length,
       workValueMinor,
@@ -221,18 +243,21 @@ export class BillingService {
     const pageSize = Math.min(query.pageSize, 100);
     const page = Math.max(query.page, 1);
     const where = this.createDocumentsListWhere(legalEntity, query);
-    const documents = await this.prisma.billingDocument.findMany({
-      include: BILLING_DOCUMENT_INCLUDE,
-      orderBy: {
-        [query.sortBy]: query.sortDirection,
-      },
-      where,
-    });
-    const filteredItems = documents.filter((document) => this.matchesDocumentPaymentFilter(document, query));
-    const total = filteredItems.length;
+    const [total, documents] = await Promise.all([
+      this.prisma.billingDocument.count({ where }),
+      this.prisma.billingDocument.findMany({
+        include: BILLING_DOCUMENT_INCLUDE,
+        orderBy: {
+          [query.sortBy]: query.sortDirection,
+        },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        where,
+      }),
+    ]);
 
     return {
-      items: filteredItems.slice((page - 1) * pageSize, page * pageSize).map(toBillingDocumentSummary),
+      items: documents.map(toBillingDocumentSummary),
       page,
       pageCount: Math.max(1, Math.ceil(total / pageSize)),
       pageSize,
@@ -316,6 +341,11 @@ export class BillingService {
     const document = await this.createDraftDocument(context, legalEntity, "INVOICE", dto);
     await this.recordDocumentAudit(context, BILLING_AUDIT_ACTIONS.invoiceCreated, document);
     return toBillingDocumentDetail(document);
+  }
+
+  public async createAndIssueInvoice(context: ActorContext, legalEntity: LegalEntityContext, dto: CreateBillingDocumentDto) {
+    const draft = await this.createInvoice(context, legalEntity, dto);
+    return this.issueDocument(legalEntity, context, draft.id);
   }
 
   public async updateDraft(legalEntity: LegalEntityContext, context: ActorContext, documentId: string, dto: UpdateBillingDocumentDto) {
@@ -437,6 +467,7 @@ export class BillingService {
           taxMinor: proforma.taxMinor,
           totalMinor: proforma.totalMinor,
           type: "INVOICE",
+          stornoOfDocumentId: null,
           updatedByUserId: context.actorUserId,
           lines: {
             create: proforma.lines.map((line) => ({
@@ -507,6 +538,78 @@ export class BillingService {
     return toBillingDocumentDetail(cancelled);
   }
 
+  public async createStorno(legalEntity: LegalEntityContext, context: ActorContext, documentId: string) {
+    const storno = await this.prisma.$transaction(async (tx) => {
+      const original = await tx.billingDocument.findUnique({ include: BILLING_DOCUMENT_INCLUDE, where: { id: documentId, legalEntityId: legalEntity.id } });
+      if (!original) {
+        throw new NotFoundException("Factura nu a fost gasita.");
+      }
+      if (original.type !== "INVOICE" || !["ISSUED", "PARTIALLY_PAID", "PAID"].includes(original.status)) {
+        throw new BadRequestException("Storno este disponibil doar pentru facturi emise active.");
+      }
+      if (original.stornoDocument) {
+        throw new ConflictException("Factura are deja storno.");
+      }
+
+      const created = await tx.billingDocument.create({
+        data: {
+          clinicId: original.clinicId,
+          clinicAddressSnapshot: original.clinicAddressSnapshot,
+          clinicEmailSnapshot: original.clinicEmailSnapshot,
+          clinicLegalNameSnapshot: original.clinicLegalNameSnapshot,
+          clinicNameSnapshot: original.clinicNameSnapshot,
+          clinicPhoneSnapshot: original.clinicPhoneSnapshot,
+          clinicRegistrationNumberSnapshot: original.clinicRegistrationNumberSnapshot,
+          clinicTaxIdSnapshot: original.clinicTaxIdSnapshot,
+          companyAssignmentNotes: original.companyAssignmentNotes,
+          companyAssignmentStatus: original.companyAssignmentStatus,
+          currency: original.currency,
+          discountMinor: -original.discountMinor,
+          doctorId: original.doctorId,
+          issueDate: new Date(),
+          legalEntityCodeSnapshot: original.legalEntityCodeSnapshot,
+          legalEntityId: original.legalEntityId,
+          legalEntityNameSnapshot: original.legalEntityNameSnapshot,
+          notes: `Storno pentru ${original.formattedNumber ?? original.id}`,
+          status: "DRAFT",
+          stornoOfDocumentId: original.id,
+          subtotalMinor: -original.subtotalMinor,
+          taxMinor: -original.taxMinor,
+          totalMinor: -original.totalMinor,
+          type: "INVOICE",
+          createdByUserId: context.actorUserId,
+          updatedByUserId: context.actorUserId,
+          lines: {
+            create: original.lines.map((line) => ({
+              description: `Storno ${line.description}`,
+              doctorNameSnapshot: line.doctorNameSnapshot,
+              legalEntityCodeSnapshot: line.legalEntityCodeSnapshot,
+              legalEntityId: line.legalEntityId,
+              lineTotalMinor: -line.lineTotalMinor,
+              patientNameSnapshot: line.patientNameSnapshot,
+              quantity: line.quantity,
+              sortOrder: line.sortOrder,
+              toothPositionSnapshot: line.toothPositionSnapshot,
+              unitPriceMinor: -line.unitPriceMinor,
+              workCode: line.workCode,
+              workCreatedAtSnapshot: line.workCreatedAtSnapshot,
+              workCycleId: line.workCycleId,
+              workOrderId: line.workOrderId,
+              workTypeNameSnapshot: line.workTypeNameSnapshot,
+            })),
+          },
+        },
+        include: BILLING_DOCUMENT_INCLUDE,
+      });
+      const numbered = await this.assignDocumentNumber(tx, created, context.actorUserId);
+      await tx.workOrder.updateMany({ data: { invoicedDocumentId: null }, where: { invoicedDocumentId: original.id } });
+      return numbered;
+    });
+
+    await this.recordDocumentAudit(context, BILLING_AUDIT_ACTIONS.stornoCreated, storno);
+    return toBillingDocumentDetail(storno);
+  }
+
   public async recordPayment(legalEntity: LegalEntityContext, context: ActorContext, documentId: string, dto: RecordPaymentDto) {
     const document = await this.prisma.$transaction(async (tx) => {
       const invoice = await tx.billingDocument.findUnique({
@@ -516,7 +619,7 @@ export class BillingService {
       if (!invoice) {
         throw new NotFoundException("Invoice was not found.");
       }
-      if (invoice.type !== "INVOICE" || invoice.status === "DRAFT" || invoice.status === "CANCELLED") {
+      if (invoice.type !== "INVOICE" || !["ISSUED", "PARTIALLY_PAID"].includes(invoice.status)) {
         throw new BadRequestException("Platile pot fi inregistrate doar pe facturi emise active.");
       }
 
@@ -543,7 +646,7 @@ export class BillingService {
       });
 
       return this.updateDocumentPaymentStatus(tx, invoice.id, context.actorUserId);
-    });
+    }, { isolationLevel: "Serializable" });
 
     await this.recordDocumentAudit(context, BILLING_AUDIT_ACTIONS.paymentRecorded, document);
     return toBillingDocumentDetail(document);
@@ -598,6 +701,23 @@ export class BillingService {
         reference: payment.reference,
       })),
     };
+  }
+
+  public async recordDocumentShareAttempt(legalEntity: LegalEntityContext, context: ActorContext, documentId: string, dto: DocumentShareAttemptDto) {
+    const document = await this.findDocumentOrThrow(legalEntity, documentId);
+    await this.auditService.record({
+      action: BILLING_AUDIT_ACTIONS.documentShareAttempted,
+      actorUserId: context.actorUserId,
+      metadata: {
+        channel: dto.channel,
+        documentNumber: document.formattedNumber,
+        recipient: dto.recipient ?? null,
+      },
+      requestMetadata: context.requestMetadata,
+      resourceId: document.id,
+      resourceType: BILLING_RESOURCE_TYPES.billingDocument,
+    });
+    return { channel: dto.channel, documentId: document.id, recorded: true };
   }
 
   public async search(legalEntity: LegalEntityContext, query: SearchBillingQueryDto) {
@@ -708,8 +828,7 @@ export class BillingService {
       throw new BadRequestException("Selecteaza cel putin o lucrare.");
     }
     const currency = await this.getCurrency(legalEntity);
-    const lines = this.createLineInputs(works);
-    const totalMinor = lines.reduce((total, line) => total + line.lineTotalMinor, 0);
+    const pricing = this.createDraftPricing(works, dto.adjustments ?? []);
 
     return this.prisma.billingDocument.create({
       data: {
@@ -727,12 +846,13 @@ export class BillingService {
         legalEntityNameSnapshot: legalEntity.displayName,
         notes: dto.notes ?? null,
         status: "DRAFT",
-        subtotalMinor: totalMinor,
-        totalMinor,
+        discountMinor: pricing.discountMinor,
+        subtotalMinor: pricing.subtotalMinor,
+        totalMinor: pricing.totalMinor,
         type,
         updatedByUserId: context.actorUserId,
         lines: {
-          create: [...lines],
+          create: [...pricing.lines],
         },
       },
       include: BILLING_DOCUMENT_INCLUDE,
@@ -793,7 +913,7 @@ export class BillingService {
       return {
         cycleNumberSnapshot: cycle.cycleNumber,
         description: `${work.workType.name} - ${work.patientName}`,
-        doctorNameSnapshot: work.doctor.displayName,
+        doctorNameSnapshot: work.doctor?.displayName ?? "-",
         legalEntityCodeSnapshot: cycle.executionLegalEntityCodeSnapshot,
         legalEntityId: cycle.executionLegalEntityId,
         lineTotalMinor: snapshot.pricingTotalMinor ?? 0,
@@ -808,6 +928,103 @@ export class BillingService {
         workOrderId: work.id,
         workTypeNameSnapshot: work.workType.name,
       };
+    });
+  }
+
+  private createDraftPricing(works: readonly BillableWorkRecord[], adjustments: readonly BillingAdjustmentInput[]): DraftPricing {
+    const lines = this.createLineInputs(works).map((line) => ({ ...line }));
+    const subtotalMinor = lines.reduce((total, line) => total + line.lineTotalMinor, 0);
+    this.assertBillingAdjustments(lines, adjustments);
+
+    for (const adjustment of adjustments) {
+      const lineIndexes = this.resolveAdjustmentLineIndexes(lines, adjustment);
+      if (lineIndexes.length === 0) {
+        continue;
+      }
+
+      if (adjustment.mode === "PERCENTAGE") {
+        const percentage = adjustment.percentage ?? 0;
+        for (const lineIndex of lineIndexes) {
+          const currentLine = lines[lineIndex];
+          if (!currentLine) {
+            continue;
+          }
+          const discountMinor = Math.min(currentLine.lineTotalMinor, Math.round(currentLine.lineTotalMinor * (percentage / 100)));
+          currentLine.lineTotalMinor -= discountMinor;
+          currentLine.unitPriceMinor = currentLine.quantity > 0 ? Math.round(currentLine.lineTotalMinor / currentLine.quantity) : 0;
+        }
+        continue;
+      }
+
+      const amountMinor = adjustment.amountMinor ?? 0;
+      this.distributeFixedDiscount(lines, lineIndexes, amountMinor);
+    }
+
+    const totalMinor = lines.reduce((total, line) => total + line.lineTotalMinor, 0);
+    return {
+      discountMinor: Math.max(0, subtotalMinor - totalMinor),
+      lines,
+      subtotalMinor,
+      totalMinor,
+    };
+  }
+
+  private assertBillingAdjustments(lines: readonly Prisma.BillingDocumentLineUncheckedCreateWithoutBillingDocumentInput[], adjustments: readonly BillingAdjustmentInput[]): void {
+    for (const adjustment of adjustments) {
+      if (adjustment.scope === "WORK" && !adjustment.workOrderId) {
+        throw new BadRequestException("Ajustarea pe lucrare necesita workOrderId.");
+      }
+      if (adjustment.scope === "PATIENT" && !adjustment.patientName) {
+        throw new BadRequestException("Ajustarea pe pacient necesita patientName.");
+      }
+      if (adjustment.mode === "PERCENTAGE" && adjustment.percentage === undefined) {
+        throw new BadRequestException("Ajustarea procentuala necesita percentage.");
+      }
+      if (adjustment.mode === "FIXED" && adjustment.amountMinor === undefined) {
+        throw new BadRequestException("Ajustarea fixa necesita amountMinor.");
+      }
+      if (adjustment.scope === "WORK" && adjustment.workOrderId && !lines.some((line) => line.workOrderId === adjustment.workOrderId)) {
+        throw new BadRequestException("Lucrarea ajustata nu exista in document.");
+      }
+      if (adjustment.scope === "PATIENT" && adjustment.patientName && !lines.some((line) => line.patientNameSnapshot === adjustment.patientName)) {
+        throw new BadRequestException("Pacientul ajustat nu exista in document.");
+      }
+    }
+  }
+
+  private resolveAdjustmentLineIndexes(lines: readonly Prisma.BillingDocumentLineUncheckedCreateWithoutBillingDocumentInput[], adjustment: BillingAdjustmentInput): number[] {
+    if (adjustment.scope === "DOCUMENT") {
+      return lines.map((_, index) => index);
+    }
+
+    if (adjustment.scope === "PATIENT") {
+      return lines.flatMap((line, index) => line.patientNameSnapshot === adjustment.patientName ? [index] : []);
+    }
+
+    return lines.flatMap((line, index) => line.workOrderId === adjustment.workOrderId ? [index] : []);
+  }
+
+  private distributeFixedDiscount(lines: Prisma.BillingDocumentLineUncheckedCreateWithoutBillingDocumentInput[], lineIndexes: readonly number[], amountMinor: number): void {
+    const currentTotalMinor = lineIndexes.reduce((total, lineIndex) => total + (lines[lineIndex]?.lineTotalMinor ?? 0), 0);
+    let remainingDiscountMinor = Math.min(amountMinor, currentTotalMinor);
+    if (remainingDiscountMinor <= 0 || currentTotalMinor <= 0) {
+      return;
+    }
+
+    lineIndexes.forEach((lineIndex, index) => {
+      const currentLine = lines[lineIndex];
+      if (!currentLine) {
+        return;
+      }
+      const isLastLine = index === lineIndexes.length - 1;
+      const proportionalDiscountMinor = isLastLine
+        ? remainingDiscountMinor
+        : Math.min(currentLine.lineTotalMinor, Math.floor((amountMinor * currentLine.lineTotalMinor) / currentTotalMinor));
+      const appliedDiscountMinor = Math.min(currentLine.lineTotalMinor, proportionalDiscountMinor, remainingDiscountMinor);
+
+      currentLine.lineTotalMinor -= appliedDiscountMinor;
+      currentLine.unitPriceMinor = currentLine.quantity > 0 ? Math.round(currentLine.lineTotalMinor / currentLine.quantity) : 0;
+      remainingDiscountMinor -= appliedDiscountMinor;
     });
   }
 
@@ -847,10 +1064,22 @@ export class BillingService {
   }
 
   private hasActiveInvoiceLine(work: BillableWorkRecord): boolean {
-    return this.getBillableCycle(work)?.billingLines.some((line) => line.billingDocument.type === "INVOICE" && line.billingDocument.status !== "CANCELLED") ?? false;
+    return this.getBillableCycle(work)?.billingLines.some((line) => line.billingDocument.type === "INVOICE" && line.billingDocument.status !== "CANCELLED" && line.billingDocument.stornoOfDocumentId === null) ?? false;
   }
 
   private createClinicSnapshot(clinic: BillableWorkRecord["clinic"]): Pick<Prisma.BillingDocumentUncheckedCreateInput, "clinicAddressSnapshot" | "clinicEmailSnapshot" | "clinicLegalNameSnapshot" | "clinicNameSnapshot" | "clinicPhoneSnapshot" | "clinicRegistrationNumberSnapshot" | "clinicTaxIdSnapshot"> {
+    if (!clinic) {
+      return {
+        clinicAddressSnapshot: null,
+        clinicEmailSnapshot: null,
+        clinicLegalNameSnapshot: null,
+        clinicNameSnapshot: "-",
+        clinicPhoneSnapshot: null,
+        clinicRegistrationNumberSnapshot: null,
+        clinicTaxIdSnapshot: null,
+      };
+    }
+
     const addressParts = [
       clinic.billingAddressLine1 ?? clinic.addressLine1,
       clinic.billingAddressLine2 ?? clinic.addressLine2,
@@ -878,15 +1107,17 @@ export class BillingService {
 
   private async assignDocumentNumber(tx: Prisma.TransactionClient, document: BillingDocumentRecord, actorUserId: string): Promise<BillingDocumentRecord> {
     const year = document.issueDate.getUTCFullYear();
-    const series = await tx.billingSeries.findFirst({
-      orderBy: { createdAt: "asc" },
-      where: {
-        documentType: document.type,
-        isActive: true,
-        legalEntityId: document.legalEntityId,
-        year,
-      },
-    });
+    const series = document.type === "INVOICE" && document.legalEntityId
+      ? await this.ensureAutomaticInvoiceSeries(tx, document.legalEntityId, document.legalEntityCodeSnapshot, year)
+      : await tx.billingSeries.findFirst({
+        orderBy: { createdAt: "asc" },
+        where: {
+          documentType: document.type,
+          isActive: true,
+          legalEntityId: document.legalEntityId,
+          year,
+        },
+      });
     if (!series) {
       throw new BadRequestException("Nu exista serie activa pentru tipul documentului si anul selectat.");
     }
@@ -910,6 +1141,22 @@ export class BillingService {
       },
       include: BILLING_DOCUMENT_INCLUDE,
       where: { id: document.id },
+    });
+  }
+
+  private async ensureAutomaticInvoiceSeries(tx: Prisma.TransactionClient, legalEntityId: string, legalEntityCode: string | null, year: number) {
+    const prefix = legalEntityCode === "NG" ? "NG" : "CD";
+    return tx.billingSeries.upsert({
+      create: { currentNumber: 0, documentType: "INVOICE", isActive: true, legalEntityId, prefix, year },
+      update: { isActive: true },
+      where: {
+        legalEntityId_documentType_prefix_year: {
+          documentType: "INVOICE",
+          legalEntityId,
+          prefix,
+          year,
+        },
+      },
     });
   }
 
@@ -937,6 +1184,7 @@ export class BillingService {
           ...(exceptDocumentId ? { id: { not: exceptDocumentId } } : {}),
           status: { not: "CANCELLED" },
           type: "INVOICE",
+          stornoOfDocumentId: null,
         },
         workCycleId: { in: [...workCycleIds] },
       },
@@ -1039,6 +1287,16 @@ export class BillingService {
           },
         }
       : {};
+    const paymentFilter = query.paymentFilter ?? query.paymentStatus ?? "ALL";
+    const paymentFilterWhere: Prisma.BillingDocumentWhereInput = paymentFilter === "CANCELLED"
+      ? { status: "CANCELLED" }
+      : paymentFilter === "OUTSTANDING" || paymentFilter === "DUE"
+        ? { status: { in: ["ISSUED", "PARTIALLY_PAID"] }, type: "INVOICE", ...(paymentFilter === "DUE" ? { dueDate: { not: null } } : {}) }
+        : paymentFilter === "OVERDUE"
+          ? { dueDate: { lt: new Date() }, status: { in: ["ISSUED", "PARTIALLY_PAID"] }, type: "INVOICE" }
+          : paymentFilter === "UNPAID" || paymentFilter === "PARTIALLY_PAID" || paymentFilter === "PAID"
+            ? { status: paymentFilter === "UNPAID" ? "ISSUED" : paymentFilter, type: "INVOICE" }
+            : {};
 
     return {
       ...this.createDocumentWhere(legalEntity, query, range),
@@ -1046,7 +1304,7 @@ export class BillingService {
       ...(query.amountMinMinor !== undefined || query.amountMaxMinor !== undefined
         ? { totalMinor: { ...(query.amountMinMinor !== undefined ? { gte: query.amountMinMinor } : {}), ...(query.amountMaxMinor !== undefined ? { lte: query.amountMaxMinor } : {}) } }
         : {}),
-      ...(filters.length > 0 ? { AND: filters } : {}),
+      ...(filters.length > 0 || Object.keys(paymentFilterWhere).length > 0 ? { AND: [...filters, paymentFilterWhere] } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.type ? { type: query.type } : {}),
       ...(search
@@ -1149,7 +1407,7 @@ export class BillingService {
 
   private getWorkGroupKey(groupBy: BillingRangeQueryDto["groupBy"], work: BillableWorkRecord): { readonly key: string; readonly label: string } {
     if (groupBy === "doctor") {
-      return { key: work.doctorId, label: work.doctor.displayName };
+      return { key: work.doctorId ?? "no-doctor", label: work.doctor?.displayName ?? "Fără medic" };
     }
     if (groupBy === "patient") {
       return { key: work.patientName, label: work.patientName };
@@ -1167,7 +1425,7 @@ export class BillingService {
       return this.hasActiveInvoiceLine(work) ? { key: "invoiced", label: "Facturate" } : { key: "uninvoiced", label: "Nefacturate" };
     }
 
-    return { key: work.clinicId, label: work.clinic.name };
+    return { key: work.clinicId ?? "no-clinic", label: work.clinic?.name ?? "Fără clinică" };
   }
 
   private getDocumentGroupKey(groupBy: BillingRangeQueryDto["groupBy"], document: BillingDocumentRecord): { readonly key: string; readonly label: string } {
@@ -1230,7 +1488,7 @@ export class BillingService {
   }
 
   private isOverdueInvoice(document: BillingDocumentRecord): boolean {
-    return document.type === "INVOICE" && document.status !== "CANCELLED" && calculateBillingAmounts(document).balanceMinor > 0 && this.getDaysOverdue(document) > 0;
+    return isActiveOverdueInvoice(document);
   }
 
   private getDaysOverdue(document: Pick<BillingDocumentRecord, "dueDate">): number {

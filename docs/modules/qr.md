@@ -46,7 +46,7 @@ Invalid token, expired/replaced token, camera unavailable, manual fallback.
 
 ## Implemented Tasks
 
-QR-001, SCAN-002, WORKFORM-REAL-001B scan integration, WORK-ID-001A compatibility.
+QR-001, SCAN-002, WORKFORM-REAL-001B scan integration, WORK-ID-001A compatibility, WORK-ID-001B regression coverage.
 
 ## Planned Tasks
 

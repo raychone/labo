@@ -1,9 +1,11 @@
 import type { CreateWorkFormSubmissionInput, WorkFormSubmissionView, WorkFormValues } from "./work-forms.js";
 import type { DeadlineDashboardSummary, DeadlineFilter } from "./work-deadline-visual-state.js";
 import type { LegalEntityCode } from "./organization-context.js";
+import type { WorkAttachmentSummary } from "./logistics.js";
 import type { WorkWorkflowExecutionView, WorkflowExecutionStatus } from "./workflow-execution.js";
 
-export const WORK_STATUSES = ["REGISTERED"] as const;
+export const WORK_STATUSES = ["REGISTERED", "RECEPTIE", "IN_LUCRU", "IN_ASTEPTARE", "FINALIZATA"] as const;
+export const FINAL_WORK_STATUSES = ["RECEPTIE", "IN_LUCRU", "IN_ASTEPTARE", "FINALIZATA"] as const;
 export const WORK_PRIORITIES = ["NORMAL", "URGENT"] as const;
 export const WORK_SORT_FIELDS = ["code", "createdAt", "effectiveDueAt", "priority", "requestedDeliveryDate", "status", "totalPriceMinor", "updatedAt"] as const;
 export const WORK_QR_PAYLOAD_PREFIX = "dl-work:" as const;
@@ -165,18 +167,20 @@ export type ExecutionSnapshotView = {
 };
 
 export interface WorkSummary {
-  readonly clinic: WorkClinicSummary;
+  readonly clinic: WorkClinicSummary | null;
   readonly code: string;
   readonly createdAt: string;
   readonly currency: string | null;
   readonly claim: WorkClaimSummary;
-  readonly doctor: WorkDoctorSummary;
+  readonly doctor: WorkDoctorSummary | null;
   readonly id: string;
   readonly invoicedDocumentId: string | null;
   readonly deadline: WorkDeadlineSummary;
   readonly executionSnapshot: ExecutionSnapshotView;
   readonly patientName: string;
   readonly patientReference: string | null;
+  readonly shade: string | null;
+  readonly implantPlatform: string | null;
   readonly patient: {
     readonly firstName: string;
     readonly fullName: string;
@@ -189,6 +193,10 @@ export interface WorkSummary {
   readonly quantity: number;
   readonly requestedDeliveryDate: string;
   readonly status: WorkStatus;
+  readonly statusChangedAt: string | null;
+  readonly waitingStartedAt: string | null;
+  readonly completedAt: string | null;
+  readonly completedByUserId: string | null;
   readonly totalPriceMinor: number | null;
   readonly updatedAt: string;
   readonly workflow: WorkWorkflowSummary | null;
@@ -196,12 +204,14 @@ export interface WorkSummary {
 }
 
 export interface WorkDetail extends Omit<WorkSummary, "workflow"> {
+  readonly attachments: readonly WorkAttachmentSummary[];
   readonly assignmentHistory: readonly WorkAssignmentEventSummary[];
   readonly baseUnitPriceMinor: number | null;
   readonly clinicalNotes: string | null;
   readonly createdByUserId: string | null;
   readonly externalReference: string | null;
   readonly internalNotes: string | null;
+  readonly technicalCodeNotes: string | null;
   readonly updatedByUserId: string | null;
   readonly version: number;
   readonly workForm: WorkFormSubmissionView | null;
@@ -217,7 +227,7 @@ export interface WorkCycleView {
   readonly openedAt: string;
   readonly closedAt: string | null;
   readonly createdBy: WorkClaimUserSummary | null;
-  readonly clinic: WorkClinicSummary;
+  readonly clinic: WorkClinicSummary | null;
   readonly doctor: WorkDoctorSummary | null;
   readonly executionCompany: WorkClaimLegalEntitySummary | null;
   readonly workflow: {
@@ -248,9 +258,9 @@ export interface WorkCyclesHistory {
   readonly activeCycleId: string | null;
   readonly cycles: readonly WorkCycleView[];
   readonly work: {
-    readonly clinicId: string;
+    readonly clinicId: string | null;
     readonly code: string;
-    readonly doctorId: string;
+    readonly doctorId: string | null;
     readonly id: string;
     readonly patientId: string | null;
     readonly patientName: string;
@@ -258,23 +268,26 @@ export interface WorkCyclesHistory {
 }
 
 export interface CreateNextWorkCycleInput {
-  readonly clinicId: string;
-  readonly doctorId: string;
+  readonly clinicId?: string | null;
+  readonly doctorId?: string | null;
   readonly reason: Exclude<WorkCycleReason, "INITIAL">;
   readonly notes?: string | null;
   readonly expectedActiveCycleId?: string;
 }
 
 export interface CreateWorkInput {
-  readonly clinicId: string;
+  readonly clinicId?: string | null;
   readonly clinicalNotes?: string | null;
-  readonly doctorId: string;
+  readonly doctorId?: string | null;
   readonly externalReference?: string | null;
   readonly expectedWorkflowTemplateId?: string | null;
   readonly expectedWorkflowTemplateVersion?: number;
   readonly internalNotes?: string | null;
+  readonly technicalCodeNotes?: string | null;
+  readonly implantPlatform?: string | null;
   readonly patientId: string;
   readonly patientReference?: string | null;
+  readonly shade?: string | null;
   readonly priority: WorkPriority;
   readonly quantity: number;
   readonly requestedDeliveryDate: string;
@@ -339,9 +352,20 @@ export type ReassignWorkInput = {
   readonly technicianId: string;
 };
 
+export type SetWorkStatusInput = {
+  readonly reason?: string | null;
+  readonly status: Exclude<WorkStatus, "REGISTERED">;
+};
+
+export type UpdateTechnicianWorkDetailsInput = {
+  readonly clinicalNotes?: string | null;
+  readonly internalNotes?: string | null;
+  readonly technicalCodeNotes?: string | null;
+};
+
 export interface WorkDeadlinePreviewInput {
-  readonly clinicId: string;
-  readonly doctorId: string;
+  readonly clinicId?: string | null;
+  readonly doctorId?: string | null;
   readonly manualDueAt?: string | null;
   readonly quantity: number;
   readonly startAt?: string;

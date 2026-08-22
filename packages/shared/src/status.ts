@@ -2,7 +2,7 @@ import type { DeliveryStatus } from "./delivery.js";
 import type { LogisticsStatus } from "./logistics.js";
 import type { LegalEntityCode } from "./organization-context.js";
 import type { DeadlineVisualState } from "./work-deadline-visual-state.js";
-import type { WorkClaimStatus, WorkPriority } from "./works.js";
+import { FINAL_WORK_STATUSES, type WorkClaimStatus, type WorkPriority } from "./works.js";
 import type { RealLabSheetOperationalStatus } from "./work-forms.js";
 import type { WorkflowExecutionStatus, WorkStageExecutionStatus } from "./workflow-execution.js";
 
@@ -73,12 +73,13 @@ export interface OperationalStatusCurrentCycle {
 }
 
 export interface OperationalStatusRow {
+  readonly claimedAt: string | null;
   readonly claimStatus: WorkClaimStatus;
   readonly createdAt: string;
   readonly clinic: {
     readonly id: string;
     readonly name: string;
-  };
+  } | null;
   readonly currentCycle: OperationalStatusCurrentCycle | null;
   readonly currentStageTechnician: OperationalStatusPerson | null;
   readonly deadline: OperationalStatusDeadline;
@@ -90,12 +91,13 @@ export interface OperationalStatusRow {
   readonly doctor: {
     readonly id: string;
     readonly name: string;
-  };
+  } | null;
   readonly executionCompany: {
     readonly code: LegalEntityCode;
     readonly displayName: string;
   } | null;
   readonly id: string;
+  readonly operationalStatus: (typeof FINAL_WORK_STATUSES)[number];
   readonly logistics: {
     readonly status: LogisticsStatus | null;
   };
@@ -112,6 +114,7 @@ export interface OperationalStatusRow {
     readonly lastModifiedAt: string | null;
     readonly status: RealLabSheetOperationalStatus;
   };
+  readonly shade: string | null;
   readonly updatedAt: string;
   readonly workCode: string;
   readonly workOwner: OperationalStatusPerson | null;

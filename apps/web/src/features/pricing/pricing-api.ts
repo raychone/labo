@@ -22,6 +22,7 @@ export const pricingQueryKeys = {
   all: ["pricing"] as const,
   catalog: (params: PricingCatalogListParams) => ["pricing", "catalog", params] as const,
   catalogDetail: (id: string | null) => ["pricing", "catalog", id] as const,
+  agreementDetail: (id: string | null) => ["pricing", "agreement", id] as const,
 };
 
 function appendOptional(query: URLSearchParams, key: string, value: boolean | number | string | undefined): void {
@@ -91,8 +92,17 @@ export async function fetchPricingAgreements(params: PricingAgreementListParams)
   return parseApiResponse<PaginatedPricingAgreementsResponse>(response);
 }
 
+export async function fetchPricingAgreement(id: string): Promise<PricingAgreementDetail> {
+  const response = await apiFetch(`/pricing/agreements/${id}`);
+  return parseApiResponse<PricingAgreementDetail>(response);
+}
+
 export async function createPricingAgreement(input: PricingAgreementInput): Promise<PricingAgreementDetail> {
   return sendJson<PricingAgreementDetail>("/pricing/agreements", "POST", input);
+}
+
+export async function updatePricingAgreement(id: string, input: PricingAgreementInput): Promise<PricingAgreementDetail> {
+  return sendJson<PricingAgreementDetail>(`/pricing/agreements/${id}`, "PATCH", input);
 }
 
 export async function replacePricingAgreementRules(id: string, rules: readonly PricingAgreementRuleInput[]): Promise<PricingAgreementDetail> {
@@ -101,6 +111,10 @@ export async function replacePricingAgreementRules(id: string, rules: readonly P
 
 export async function archivePricingAgreement(id: string): Promise<PricingAgreementDetail> {
   return sendJson<PricingAgreementDetail>(`/pricing/agreements/${id}/archive`, "POST");
+}
+
+export async function restorePricingAgreement(id: string): Promise<PricingAgreementDetail> {
+  return sendJson<PricingAgreementDetail>(`/pricing/agreements/${id}/restore`, "POST");
 }
 
 export async function resolvePricingPreview(input: PricingResolvePreviewInput): Promise<PricingResolvePreviewResult> {
@@ -122,6 +136,10 @@ export function usePricingCatalogItem(id: string | null, enabled: boolean) {
 
 export function usePricingAgreements(params: PricingAgreementListParams, enabled: boolean) {
   return useQuery({ enabled, queryFn: () => fetchPricingAgreements(params), queryKey: pricingQueryKeys.agreements(params), retry: false });
+}
+
+export function usePricingAgreement(id: string | null, enabled: boolean) {
+  return useQuery({ enabled: enabled && id !== null, queryFn: () => fetchPricingAgreement(id ?? ""), queryKey: pricingQueryKeys.agreementDetail(id), retry: false });
 }
 
 function usePricingMutation<TVariables, TResponse>(mutationFn: (variables: TVariables) => Promise<TResponse>) {
@@ -160,6 +178,10 @@ export function useCreatePricingAgreement() {
   return usePricingMutation(createPricingAgreement);
 }
 
+export function useUpdatePricingAgreement() {
+  return usePricingMutation(({ id, input }: { readonly id: string; readonly input: PricingAgreementInput }) => updatePricingAgreement(id, input));
+}
+
 export function useReplacePricingAgreementRules() {
   return usePricingMutation(({ id, rules }: { readonly id: string; readonly rules: readonly PricingAgreementRuleInput[] }) =>
     replacePricingAgreementRules(id, rules),
@@ -168,6 +190,10 @@ export function useReplacePricingAgreementRules() {
 
 export function useArchivePricingAgreement() {
   return usePricingMutation(archivePricingAgreement);
+}
+
+export function useRestorePricingAgreement() {
+  return usePricingMutation(restorePricingAgreement);
 }
 
 export function useResolvePricingPreview() {

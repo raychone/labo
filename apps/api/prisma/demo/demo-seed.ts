@@ -3,6 +3,12 @@ import {
   DeliveryFailureReasonCode,
   DeliveryPreparationGroupStatus,
   DeliveryStatus,
+  CourierRouteEventType,
+  CourierRouteStatus,
+  PickupRequestStatus,
+  PickupScheduleType,
+  CourierRouteStopOutcome,
+  CourierRouteStopType,
   LogisticsBlockReasonCode,
   LogisticsLocationCode,
   WorkLogisticsStatus,
@@ -39,9 +45,13 @@ export async function seedDemoData(prisma: PrismaClient, now = new Date()): Prom
   await seedDemoWorkflowTemplates(prisma);
   await seedDemoPatients(prisma, dataset);
   await seedDemoWorks(prisma, dataset);
+  await seedDemoOptionalIntakeWorks(prisma, now);
+  await seedDemoTechnicianOperations(prisma, now);
   await seedDemoWorkflowExecutions(prisma, dataset);
   await seedDemoBilling(prisma, dataset);
+  await seedDemoStornoAndSharing(prisma, now);
   await seedDemoLogistics(prisma);
+  await seedDemoPickupsAndRoutes(prisma, now);
 
   return dataset;
 }
@@ -79,7 +89,7 @@ const shadeOptions = [
 ] as const;
 
 const commonIntakeFields = () => [
-  field("teeth", "Dinți", "Selectează codurile FDI relevante.", "TOOTH", true, 1),
+  field("teeth", "Dinți", "Selectează codurile FDI relevante.", "TOOTH", false, 1),
   field("shade", "Culoare", null, "SHADE", true, 2, null, null, shadeOptions),
   field("phase_1", "Faza 1", null, "TEXT", false, 3, "Ex. model, scanare, verificare"),
   field("phase_1_due_date", "Termen faza 1", null, "DATE", false, 4),
@@ -272,6 +282,12 @@ const demoWorkflowTemplates: readonly DemoWorkflowTemplateSeed[] = [
 ];
 
 async function seedDemoWorkFormTemplates(prisma: PrismaClient): Promise<void> {
+  // Keep existing demo databases aligned with the canonical optional teeth rule.
+  await prisma.workFormFieldDefinition.updateMany({
+    data: { required: false },
+    where: { type: "TOOTH" },
+  });
+
   for (const template of demoCustomFormTemplates) {
     await prisma.workFormTemplate.create({
       data: {
@@ -549,17 +565,17 @@ async function seedDemoSettings(prisma: PrismaClient): Promise<void> {
 
   for (const settings of [
     {
-      addressLine1: "Strada Nicolaie Cristina Demo nr. 12",
-      bankName: "Banca Demo NC",
+      addressLine1: "Strada CDT Demo nr. 12",
+      bankName: "Banca Demo CDT",
       city: "Bucuresti",
       companyRegistrationNumber: "J40/900001/2026",
-      documentFooter: "Document demonstrativ NC. Date fictive.",
-      email: "contact.nc@demo.local",
+      documentFooter: "Document demonstrativ CDT. Date fictive.",
+      email: "contact.cdt@demo.local",
       iban: "RO49AAAA1B31007593840000",
-      legalName: "NC Demo Tehnică Dentară",
+      legalName: "CDT Demo Tehnică Dentară",
       postalCode: "010901",
       taxId: "RO90000001",
-      code: "NC",
+      code: "CDT",
     },
     {
       addressLine1: "Strada Nicolaie Gabriel Demo nr. 18",
@@ -711,12 +727,14 @@ async function seedDemoWorkTypes(prisma: PrismaClient, dataset: DemoDataset): Pr
   for (const workType of dataset.workTypes) {
     await prisma.workType.create({
       data: {
-        archivedAt: workType.isActive ? null : new Date(),
+        // These legacy demo-only types remain available for historical demo works,
+        // but must not compete with the canonical manager catalog in selectors.
+        archivedAt: new Date(),
         basePriceMinor: workType.basePriceMinor,
         code: workType.code,
         description: workType.description,
         id: workType.id,
-        isActive: workType.isActive,
+        isActive: false,
         name: workType.name,
         symbol: workType.symbol,
         unit: "UNIT",
@@ -736,7 +754,7 @@ async function seedDemoPricing(prisma: PrismaClient): Promise<void> {
         id: toDemoPricingWorkTypeId(item.key),
         isActive: true,
         name: item.displayName,
-        symbol: item.workTypeCode,
+        symbol: item.symbol,
         unit: item.unit,
       },
     });
@@ -748,7 +766,7 @@ async function seedDemoPricing(prisma: PrismaClient): Promise<void> {
   });
   const legalEntities = await prisma.legalEntity.findMany({
     select: { code: true, id: true },
-    where: { code: { in: ["NC", "NG"] } },
+    where: { code: { in: ["CDT", "NG"] } },
   });
 
   for (const legalEntity of legalEntities) {
@@ -843,12 +861,12 @@ async function seedDemoExecutionTimeRules(
 }
 
 async function seedDemoPricingAgreements(prisma: PrismaClient, managerUserId: string): Promise<void> {
-  const nc = await prisma.legalEntity.findUniqueOrThrow({ select: { id: true }, where: { code: "NC" } });
+  const cdt = await prisma.legalEntity.findUniqueOrThrow({ select: { id: true }, where: { code: "CDT" } });
   const ng = await prisma.legalEntity.findUniqueOrThrow({ select: { id: true }, where: { code: "NG" } });
 
   await createDemoPricingAgreement(prisma, {
     id: "demo_pricing_agreement_nc_clinic_aurora",
-    legalEntityId: nc.id,
+    legalEntityId: cdt.id,
     managerUserId,
     name: "Aurora Demo - discount clinică 10%",
     rules: [
@@ -865,7 +883,7 @@ async function seedDemoPricingAgreements(prisma: PrismaClient, managerUserId: st
 
   await createDemoPricingAgreement(prisma, {
     id: "demo_pricing_agreement_nc_clinic_smile",
-    legalEntityId: nc.id,
+    legalEntityId: cdt.id,
     managerUserId,
     name: "Smile Avenue Demo - zirconiu +50 RON",
     rules: [
@@ -900,14 +918,14 @@ async function seedDemoPricingAgreements(prisma: PrismaClient, managerUserId: st
 
   await createDemoPricingAgreement(prisma, {
     id: "demo_pricing_agreement_nc_doctor_ana",
-    legalEntityId: nc.id,
+    legalEntityId: cdt.id,
     managerUserId,
-    name: "Dr. Ana Popescu - preț fix zirconiu multistrat",
+        name: "Dr. Ana Popescu - preț fix zirconia FULL anatomic",
     rules: [
       {
         adjustmentType: "OVERRIDE_PRICE",
         overridePriceMinor: 28_000,
-        priceCatalogItemId: toDemoPriceCatalogItemId("NC", "cor-zirconia-multistrat"),
+        priceCatalogItemId: toDemoPriceCatalogItemId("CDT", "zr"),
         scope: "ITEM",
       },
     ],
@@ -918,7 +936,7 @@ async function seedDemoPricingAgreements(prisma: PrismaClient, managerUserId: st
 
   await createDemoPricingAgreement(prisma, {
     id: "demo_pricing_agreement_nc_doctor_mihai",
-    legalEntityId: nc.id,
+    legalEntityId: cdt.id,
     managerUserId,
     name: "Dr. Mihai Ionescu - +30 RON",
     rules: [
@@ -1125,7 +1143,8 @@ async function seedDemoWorks(prisma: PrismaClient, dataset: DemoDataset): Promis
         qrToken: work.qrToken,
         quantity: work.quantity,
         requestedDeliveryDate: work.requestedDeliveryDate,
-        status: "REGISTERED",
+        status: "RECEPTIE",
+        statusChangedAt: work.createdAt,
         totalPriceMinor: work.totalPriceMinor,
         workTypeId: work.workTypeId,
         ...(submission
@@ -1163,17 +1182,145 @@ async function seedDemoWorks(prisma: PrismaClient, dataset: DemoDataset): Promis
   await seedDemoWorkClaims(prisma, dataset);
 }
 
+async function seedDemoOptionalIntakeWorks(prisma: PrismaClient, now: Date): Promise<void> {
+  const cases = [
+    { id: "demo_work_optional_clinic", clinicId: "demo_clinic_aurora", doctorId: null, code: "WO-26-9050" },
+    { id: "demo_work_optional_doctor", clinicId: null, doctorId: "demo_doctor_smile_radu", code: "WO-26-9051" },
+    { id: "demo_work_optional_none", clinicId: null, doctorId: null, code: "WO-26-9052" },
+  ] as const;
+
+  for (const [index, item] of cases.entries()) {
+    const createdAt = addDemoDays(now, -index - 1);
+    const cycleId = toDemoWorkCycleId(item.id);
+    await prisma.workOrder.create({
+      data: {
+        baseUnitPriceMinor: 65_000,
+        clinicId: item.clinicId,
+        code: item.code,
+        createdAt,
+        currency: "RON",
+        doctorId: item.doctorId,
+        id: item.id,
+        internalNotes: "Scenariu demo pentru clinică/medic opțional.",
+        patientName: `Pacient intake ${index + 1}`,
+        patientReference: `OPTIONAL-${index + 1}`,
+        qrCreatedAt: createdAt,
+        qrToken: `demo_qr_optional_${index + 1}_stable`,
+        quantity: 1,
+        requestedDeliveryDate: addDemoDays(now, 5 + index),
+        status: "RECEPTIE",
+        statusChangedAt: createdAt,
+        totalPriceMinor: 65_000,
+        workTypeId: "demo_wt_zirconiu",
+        cycles: {
+          create: {
+            clinicId: item.clinicId,
+            doctorId: item.doctorId,
+            cycleNumber: 1,
+            id: cycleId,
+            openedAt: createdAt,
+            reason: WorkCycleReason.INITIAL,
+            status: WorkCycleStatus.ACTIVE,
+          },
+        },
+      },
+    });
+    await prisma.workOrder.update({ data: { activeCycleId: cycleId }, where: { id: item.id } });
+  }
+}
+
+async function seedDemoTechnicianOperations(prisma: PrismaClient, now: Date): Promise<void> {
+  const operations = [
+    { code: "TF", id: "demo_operation_tf", name: "TF", sortOrder: 1 },
+    { code: "SF", id: "demo_operation_sf", name: "SF", sortOrder: 2 },
+    { code: "PLACARE_CERAMICA", id: "demo_operation_placare", name: "Placare ceramica", sortOrder: 3 },
+    { code: "GLAZURA", id: "demo_operation_glazura", name: "Glazura", sortOrder: 4 },
+    { code: "MIYO", id: "demo_operation_miyo", name: "Miyo", sortOrder: 5 },
+    { code: "RCR", id: "demo_operation_rcr", name: "RCR", sortOrder: 6 },
+    { code: "LINGURA_IMPLANT", id: "demo_operation_lingura_implant", name: "Lingura implant", sortOrder: 7 },
+    { code: "GLAZURARE", id: "demo_operation_glazurare", name: "Glazurare", sortOrder: 8 },
+    { code: "SCANARE", id: "demo_operation_scanare", name: "Scanare", sortOrder: 9 },
+    { code: "DESIGN", id: "demo_operation_design", name: "Design", sortOrder: 10 },
+    { code: "PRELUCRARE_ZR", id: "demo_operation_prelucrare_zr", name: "Prelucrare zr", sortOrder: 11 },
+    { code: "FREZARE_ZR", id: "demo_operation_frezare_zr", name: "Frezare zr", sortOrder: 12 },
+    { code: "PROTEZA_SCHELETATA", id: "demo_operation_scheletata", name: "Proteza scheletata", sortOrder: 13 },
+    { code: "IBAR", id: "demo_operation_ibar", name: "IBar", sortOrder: 14 },
+    { code: "PF_TCS_VERTEX", id: "demo_operation_pf_tcs", name: "PF TCS/Vertex", sortOrder: 15 },
+    { code: "PTA", id: "demo_operation_pta", name: "PTA", sortOrder: 16 },
+    { code: "PPA", id: "demo_operation_ppa", name: "PPA", sortOrder: 17 },
+    { code: "REPARATIE_PROTEZA", id: "demo_operation_reparatie", name: "Reparatie proteza", sortOrder: 18 },
+    { code: "BARA_PLASA_PROTEZA", id: "demo_operation_bara_plasa", name: "BAra/plasa proteza", sortOrder: 19 },
+    { code: "KEMENY", id: "demo_operation_kemeny", name: "Kemeny", sortOrder: 20 },
+    { code: "GUTIERA", id: "demo_operation_gutiera", name: "Gutiera", sortOrder: 21 },
+  ] as const;
+  await prisma.technicianOperation.updateMany({
+    data: { isActive: false, sortOrder: 999 },
+    where: { id: { in: ["demo_operation_model", "demo_operation_cad", "demo_operation_ceramica"] } },
+  });
+  for (const operation of operations) {
+    await prisma.technicianOperation.upsert({
+      create: {
+        code: operation.code,
+        createdByUserId: "demo_user_manager",
+        description: "Manoperă demonstrativă pentru câștiguri.",
+        id: operation.id,
+        name: operation.name,
+        sortOrder: "sortOrder" in operation ? operation.sortOrder : 0,
+        updatedByUserId: "demo_user_manager",
+      },
+      update: {
+        code: operation.code,
+        description: "Manoperă demonstrativă pentru câștiguri.",
+        isActive: true,
+        name: operation.name,
+        sortOrder: operation.sortOrder,
+        updatedByUserId: "demo_user_manager",
+      },
+      where: { id: operation.id },
+    });
+  }
+
+  for (const operation of operations) {
+    const operationKey = operation.id.replace("demo_operation_", "");
+    const technicianRates = [
+      [`demo_rate_t1_${operationKey}`, "demo_user_tehnician_1", 3_000 + (operation.id === "demo_operation_tf" ? 0 : operation.sortOrder * 250)],
+      [`demo_rate_t2_${operationKey}`, "demo_user_tehnician_2", 3_500 + (operation.id === "demo_operation_sf" ? 0 : operation.id === "demo_operation_glazura" ? 1_500 : operation.sortOrder * 250)],
+    ] as const;
+    for (const [id, technicianId, rateMinor] of technicianRates) {
+      await prisma.technicianOperationRate.upsert({
+        create: { createdByUserId: "demo_user_manager", effectiveFrom: addDemoDays(now, -30), id, operationId: operation.id, rateMinor, technicianId },
+        update: { effectiveFrom: addDemoDays(now, -30), operationId: operation.id, rateMinor, technicianId },
+        where: { id },
+      });
+    }
+  }
+
+  const performed = [
+    ["demo_performed_001", "demo_work_001", "demo_user_tehnician_1", "demo_operation_tf", "demo_rate_t1_tf", 3_000],
+    ["demo_performed_002", "demo_work_001", "demo_user_tehnician_1", "demo_operation_placare", "demo_rate_t1_placare", 4_500],
+    ["demo_performed_003", "demo_work_002", "demo_user_tehnician_2", "demo_operation_sf", "demo_rate_t2_sf", 3_500],
+    ["demo_performed_004", "demo_work_002", "demo_user_tehnician_2", "demo_operation_glazura", "demo_rate_t2_glazura", 5_000],
+  ] as const;
+  for (const [id, workOrderId, technicianId, operationId, rateId, earningMinor] of performed) {
+    await prisma.technicianPerformedOperation.upsert({
+      create: { createdByUserId: technicianId, earningMinor, id, operationId, performedAt: addDemoDays(now, -2), rateId, technicianId, workOrderId },
+      update: { earningMinor, operationId, performedAt: addDemoDays(now, -2), rateId, technicianId, workOrderId },
+      where: { id },
+    });
+  }
+}
+
 async function seedDemoWorkClaims(prisma: PrismaClient, dataset: DemoDataset): Promise<void> {
-  const [nc, ng] = await Promise.all([
-    prisma.legalEntity.findUniqueOrThrow({ select: { id: true }, where: { code: "NC" } }),
+  const [cdt, ng] = await Promise.all([
+    prisma.legalEntity.findUniqueOrThrow({ select: { id: true }, where: { code: "CDT" } }),
     prisma.legalEntity.findUniqueOrThrow({ select: { id: true }, where: { code: "NG" } }),
   ]);
   const scenarios = [
-    claimScenario(dataset, 1, "demo_user_tehnician_1", nc.id, "CLAIMED", "TECHNICIAN_CLAIM", 1),
+    claimScenario(dataset, 1, "demo_user_tehnician_1", cdt.id, "CLAIMED", "TECHNICIAN_CLAIM", 1),
     claimScenario(dataset, 2, "demo_user_tehnician_2", ng.id, "CLAIMED", "MANAGER_ASSIGNMENT", 1),
-    claimScenario(dataset, 3, "demo_user_tehnician_2", nc.id, "CLAIMED", "MANAGER_REASSIGNMENT", 2),
+    claimScenario(dataset, 3, "demo_user_tehnician_2", cdt.id, "CLAIMED", "MANAGER_REASSIGNMENT", 2),
     claimScenario(dataset, 4, null, ng.id, "UNCLAIMED", "TECHNICIAN_RELEASE", 2),
-    ...createDemoBillingClaimScenarios(dataset, nc.id, ng.id),
+    ...createDemoBillingClaimScenarios(dataset, cdt.id, ng.id),
   ] as const;
 
   for (const scenario of scenarios) {
@@ -1206,7 +1353,7 @@ async function seedDemoWorkClaims(prisma: PrismaClient, dataset: DemoDataset): P
     eventType: "CLAIMED",
     executionSnapshotStatus: "LOCKED",
     executionSnapshotVersion: 1,
-    newLegalEntityId: nc.id,
+    newLegalEntityId: cdt.id,
     newTechnicianId: "demo_user_tehnician_1",
     revision: 1,
   });
@@ -1225,7 +1372,7 @@ async function seedDemoWorkClaims(prisma: PrismaClient, dataset: DemoDataset): P
     eventType: "ASSIGNED",
     executionSnapshotStatus: "LOCKED",
     executionSnapshotVersion: 1,
-    newLegalEntityId: nc.id,
+    newLegalEntityId: cdt.id,
     newTechnicianId: "demo_user_tehnician_1",
     reason: "Demo: asignare inițială.",
     revision: 1,
@@ -1235,9 +1382,9 @@ async function seedDemoWorkClaims(prisma: PrismaClient, dataset: DemoDataset): P
     eventType: "REASSIGNED",
     executionSnapshotStatus: "LOCKED",
     executionSnapshotVersion: 1,
-    newLegalEntityId: nc.id,
+    newLegalEntityId: cdt.id,
     newTechnicianId: "demo_user_tehnician_2",
-    previousLegalEntityId: nc.id,
+    previousLegalEntityId: cdt.id,
     previousTechnicianId: "demo_user_tehnician_1",
     reason: "Demo: transfer către alt tehnician.",
     revision: 2,
@@ -1390,10 +1537,10 @@ async function createDemoExecutionSnapshot(prisma: PrismaClient, scenario: DemoC
         technician: { displayName: technician.displayName, publicId: technician.id },
         version: 1,
         work: {
-          clinicName: work.clinic.name,
-          clinicPublicId: work.clinic.id,
-          doctorName: work.doctor.displayName,
-          doctorPublicId: work.doctor.id,
+          clinicName: work.clinic?.name ?? "-",
+          clinicPublicId: work.clinic?.id ?? null,
+          doctorName: work.doctor?.displayName ?? "-",
+          doctorPublicId: work.doctor?.id ?? null,
           quantity: work.quantity,
           workCode: work.code,
           workTypeCode: work.workType.code,
@@ -1490,10 +1637,10 @@ async function createDemoExecutionSnapshot(prisma: PrismaClient, scenario: DemoC
         technician: { displayName: technician.displayName, publicId: technician.id },
         version: 1,
         work: {
-          clinicName: work.clinic.name,
-          clinicPublicId: work.clinic.id,
-          doctorName: work.doctor.displayName,
-          doctorPublicId: work.doctor.id,
+          clinicName: work.clinic?.name ?? "-",
+          clinicPublicId: work.clinic?.id ?? null,
+          doctorName: work.doctor?.displayName ?? "-",
+          doctorPublicId: work.doctor?.id ?? null,
           quantity: work.quantity,
           workCode: work.code,
           workTypeCode: work.workType.code,
@@ -2061,6 +2208,170 @@ async function seedDemoBilling(prisma: PrismaClient, dataset: DemoDataset): Prom
   }
 }
 
+async function seedDemoStornoAndSharing(prisma: PrismaClient, now: Date): Promise<void> {
+  const original = await prisma.billingDocument.findUniqueOrThrow({
+    include: { lines: true },
+    where: { id: "demo_invoice_paid_3" },
+  });
+  const stornoId = "demo_invoice_storno_paid_3";
+  await prisma.billingDocument.create({
+    data: {
+      clinicAddressSnapshot: original.clinicAddressSnapshot,
+      clinicEmailSnapshot: original.clinicEmailSnapshot,
+      clinicId: original.clinicId,
+      clinicLegalNameSnapshot: original.clinicLegalNameSnapshot,
+      clinicNameSnapshot: original.clinicNameSnapshot,
+      clinicPhoneSnapshot: original.clinicPhoneSnapshot,
+      clinicRegistrationNumberSnapshot: original.clinicRegistrationNumberSnapshot,
+      clinicTaxIdSnapshot: original.clinicTaxIdSnapshot,
+      companyAssignmentNotes: "Demo: efect de reversare legat de factura achitată.",
+      companyAssignmentStatus: original.companyAssignmentStatus,
+      currency: original.currency,
+      discountMinor: original.discountMinor,
+      doctorId: original.doctorId,
+      formattedNumber: `FACTD-${now.getUTCFullYear()}-000009`,
+      id: stornoId,
+      issueDate: now,
+      issuedAt: now,
+      legalEntityCodeSnapshot: original.legalEntityCodeSnapshot,
+      legalEntityId: original.legalEntityId,
+      legalEntityNameSnapshot: original.legalEntityNameSnapshot,
+      notes: `Storno pentru ${original.formattedNumber ?? original.id}`,
+      number: 9,
+      series: DEMO_INVOICE_SERIES,
+      status: "ISSUED",
+      stornoOfDocumentId: original.id,
+      subtotalMinor: original.subtotalMinor,
+      taxMinor: original.taxMinor,
+      totalMinor: original.totalMinor,
+      type: "INVOICE",
+      lines: {
+        create: original.lines.map((line) => ({
+          description: `Storno ${line.description}`,
+          doctorNameSnapshot: line.doctorNameSnapshot,
+          legalEntityCodeSnapshot: line.legalEntityCodeSnapshot,
+          legalEntityId: line.legalEntityId,
+          lineTotalMinor: line.lineTotalMinor,
+          patientNameSnapshot: line.patientNameSnapshot,
+          quantity: line.quantity,
+          sortOrder: line.sortOrder,
+          toothPositionSnapshot: line.toothPositionSnapshot,
+          unitPriceMinor: line.unitPriceMinor,
+          workCode: line.workCode,
+          workCreatedAtSnapshot: line.workCreatedAtSnapshot,
+          workCycleId: line.workCycleId,
+          workOrderId: line.workOrderId,
+          workTypeNameSnapshot: line.workTypeNameSnapshot,
+        })),
+      },
+    },
+  });
+  await prisma.billingSeries.updateMany({
+    data: { currentNumber: 9 },
+    where: { documentType: "INVOICE", legalEntityId: original.legalEntityId, year: now.getUTCFullYear() },
+  });
+  await prisma.workOrder.updateMany({ data: { invoicedDocumentId: null }, where: { invoicedDocumentId: original.id } });
+
+  for (const [index, channel] of (["DOWNLOAD", "EMAIL", "WHATSAPP"] as const).entries()) {
+    await prisma.auditLog.create({
+      data: {
+        action: `billing.document_share_${channel.toLowerCase()}`,
+        actorUserId: "demo_user_manager",
+        metadata: { channel, demo: true, result: "SUCCESS", documentId: original.id, documentReference: original.formattedNumber },
+        resourceId: original.id,
+        resourceType: "billing_document",
+      createdAt: addDemoDays(now, -index),
+      },
+    });
+  }
+}
+
+async function seedDemoPickupsAndRoutes(prisma: PrismaClient, now: Date): Promise<void> {
+  await prisma.pickupRequest.create({
+    data: {
+      clinicId: "demo_clinic_aurora",
+      createdByUserId: "demo_user_logistica",
+      doctorId: "demo_doctor_aurora_ana",
+      exactTime: "10:30",
+      id: "demo_pickup_exact_1",
+      notes: "Ridicare exactă pentru demonstrație.",
+      scheduledDate: addDemoDays(now, 1),
+      scheduleType: PickupScheduleType.EXACT,
+      status: PickupRequestStatus.SCHEDULED,
+    },
+  });
+  await prisma.pickupRequest.create({
+    data: {
+      clinicId: "demo_clinic_smile",
+      createdByUserId: "demo_user_logistica",
+      doctorId: "demo_doctor_smile_radu",
+      id: "demo_pickup_range_1",
+      notes: "Fereastră de ridicare pentru traseu mixt.",
+      scheduledDate: addDemoDays(now, 2),
+      scheduleType: PickupScheduleType.RANGE,
+      status: PickupRequestStatus.SCHEDULED,
+      windowEndTime: "16:00",
+      windowStartTime: "14:00",
+    },
+  });
+
+  const routes = [
+    {
+      id: "demo_route_mixed_1",
+      name: "Traseu demo mixt 1",
+      number: "RT-2026-DEMO-01",
+      routeDate: addDemoDays(now, 1),
+      stops: [
+        { type: CourierRouteStopType.DELIVERY, workOrderId: "demo_work_006" },
+        { type: CourierRouteStopType.PICKUP, pickupRequestId: "demo_pickup_exact_1" },
+        { type: CourierRouteStopType.DELIVERY, workOrderId: "demo_work_010" },
+      ],
+    },
+    {
+      id: "demo_route_mixed_2",
+      name: "Traseu demo mixt 2",
+      number: "RT-2026-DEMO-02",
+      routeDate: addDemoDays(now, 2),
+      stops: [
+        { type: CourierRouteStopType.PICKUP, pickupRequestId: "demo_pickup_range_1" },
+        { type: CourierRouteStopType.DELIVERY, workOrderId: "demo_work_014", outcomeStatus: CourierRouteStopOutcome.NOT_DELIVERED },
+      ],
+    },
+  ] as const;
+  for (const route of routes) {
+    await prisma.courierRoute.create({
+      data: {
+        courierUserId: "demo_user_curier",
+        createdByUserId: "demo_user_logistica",
+        id: route.id,
+        name: route.name,
+        notes: "Ordinea stopurilor este selectată manual în demo.",
+        routeDate: route.routeDate,
+        routeNumber: route.number,
+        status: CourierRouteStatus.ASSIGNED,
+        stops: {
+          create: route.stops.map((stop, index) => ({
+            id: `${route.id}_stop_${index + 1}`,
+            stopOrder: index + 1,
+            type: stop.type,
+            workOrderId: "workOrderId" in stop ? stop.workOrderId : null,
+            pickupRequestId: "pickupRequestId" in stop ? stop.pickupRequestId : null,
+            outcomeStatus: "outcomeStatus" in stop ? stop.outcomeStatus : CourierRouteStopOutcome.PENDING,
+          })),
+        },
+        events: {
+          create: {
+            actorUserId: "demo_user_logistica",
+            id: `${route.id}_created_event`,
+            metadata: { demo: true, stopOrderPersisted: true },
+            type: CourierRouteEventType.ROUTE_CREATED,
+          },
+        },
+      },
+    });
+  }
+}
+
 async function seedDemoLogistics(prisma: PrismaClient): Promise<void> {
   const logisticsSeeds = [
     logisticsState("001", WorkLogisticsStatus.RECEIVED, LogisticsLocationCode.RECEPTIE),
@@ -2290,7 +2601,7 @@ function createDemoSignature(seed: string): Prisma.InputJsonObject {
 
 async function seedDemoSeries(prisma: PrismaClient, year: number): Promise<void> {
   const legalEntities = await prisma.legalEntity.findMany({
-    where: { code: { in: ["NC", "NG"] } },
+    where: { code: { in: ["CDT", "NG"] } },
   });
 
   for (const legalEntity of legalEntities) {

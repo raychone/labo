@@ -7,7 +7,7 @@ import { PrismaService } from "../database/prisma.service.js";
 import type { LegalEntityContext } from "../organization-context/organization-context.view.js";
 import { BILLING_AUDIT_ACTIONS, BILLING_RESOURCE_TYPES } from "./billing.constants.js";
 import { endOfDateOnly, getDefaultBillingRange, getMonthBillingRange, parseDateOnly, toDateOnly } from "./billing.helpers.js";
-import { calculateBillingAmounts } from "./billing.view.js";
+import { calculateBillingAmounts, isActiveOverdueInvoice } from "./billing.view.js";
 import type { BillingRangeQueryDto, ClinicStatementQueryDto, DoctorStatementQueryDto } from "./dto/billing.dto.js";
 
 interface ActorContext {
@@ -446,6 +446,7 @@ function toStatementRow(document: StatementDocumentRecord) {
     documentType: document.type,
     dueDate: document.dueDate?.toISOString() ?? null,
     issueDate: document.issueDate.toISOString(),
+    isOverdue: isActiveOverdueInvoice(document),
     paidMinor: amounts.paidMinor,
     status: document.status,
     totalMinor: document.totalMinor,
@@ -514,10 +515,10 @@ function parseArchiveSnapshot(snapshot: Prisma.JsonValue): { readonly registry: 
 
 function toUninvoicedWorkRow(work: UninvoicedWorkRecord) {
   return {
-    clinicName: work.clinic.name,
+    clinicName: work.clinic?.name ?? "-",
     code: work.code,
     createdAt: work.createdAt.toISOString(),
-    doctorName: work.doctor.displayName,
+    doctorName: work.doctor?.displayName ?? "-",
     patientName: work.patientName,
     totalPriceMinor: getWorkSnapshotTotal(work),
     workTypeName: work.workType.name,

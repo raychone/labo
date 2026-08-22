@@ -23,6 +23,7 @@ import {
   BillingRangeQueryDto,
   ClinicStatementQueryDto,
   CreateBillingDocumentDto,
+  DocumentShareAttemptDto,
   DoctorStatementQueryDto,
   ListBillingDocumentsQueryDto,
   RecordPaymentDto,
@@ -234,6 +235,13 @@ export class BillingController {
     return this.billingService.createInvoice({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, legalEntity, dto);
   }
 
+  @Post("billing-documents/invoices/issue")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("invoice.create", "ALL")
+  public createAndIssueInvoice(@CurrentLegalEntity() legalEntity: LegalEntityContext, @Body() dto: CreateBillingDocumentDto, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
+    return this.billingService.createAndIssueInvoice({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, legalEntity, dto);
+  }
+
   @Patch("billing-documents/:id")
   @UseGuards(CsrfGuard)
   @RequirePermission("invoice.create", "ALL")
@@ -281,6 +289,13 @@ export class BillingController {
     return this.billingService.cancelDocument(legalEntity, { actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, documentId);
   }
 
+  @Post("billing-documents/:id/storno")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("invoice.storno.create", "ALL")
+  public createStorno(@CurrentLegalEntity() legalEntity: LegalEntityContext, @Param("id") documentId: string, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
+    return this.billingService.createStorno(legalEntity, { actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, documentId);
+  }
+
   @Post("billing-documents/:id/payments")
   @UseGuards(CsrfGuard)
   @RequirePermission("finance.record_payment", "ALL")
@@ -292,6 +307,19 @@ export class BillingController {
     @Req() request: Request,
   ) {
     return this.billingService.recordPayment(legalEntity, { actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, documentId, dto);
+  }
+
+  @Post("billing-documents/:id/share-attempt")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("invoice.download", "ALL")
+  public recordDocumentShareAttempt(
+    @CurrentLegalEntity() legalEntity: LegalEntityContext,
+    @Param("id") documentId: string,
+    @Body() dto: DocumentShareAttemptDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Req() request: Request,
+  ) {
+    return this.billingService.recordDocumentShareAttempt(legalEntity, { actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, documentId, dto);
   }
 
   @Get("payments")

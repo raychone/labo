@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   AssignStageInput,
+  PerformedTechnicianOperationInput,
+  PerformedTechnicianOperationView,
+  RemovePerformedTechnicianOperationInput,
+  TechnicianOperationOption,
   TechnicianOption,
   TechnicianWorkbenchFilter,
   TechnicianWorkbenchResponse,
@@ -15,6 +19,8 @@ import { worksQueryKeys } from "../works/works-api.js";
 export const technicianWorkbenchQueryKeys = {
   all: ["technician-workbench"] as const,
   list: (params: TechnicianWorkbenchFilter) => ["technician-workbench", "list", params] as const,
+  operationOptions: ["technician-operations", "options"] as const,
+  performedOperations: (workOrderId: string | null) => ["technician-operations", "performed", workOrderId] as const,
   options: ["technicians", "options"] as const,
   workload: ["technician-workload"] as const,
 };
@@ -71,12 +77,30 @@ export async function fetchTechnicianOptions(): Promise<readonly TechnicianOptio
   return parseApiResponse<readonly TechnicianOption[]>(response);
 }
 
+export async function fetchTechnicianOperationOptions(): Promise<readonly TechnicianOperationOption[]> {
+  const response = await apiFetch("/technician-operations/options");
+  return parseApiResponse<readonly TechnicianOperationOption[]>(response);
+}
+
+export async function fetchPerformedTechnicianOperations(workOrderId: string): Promise<readonly PerformedTechnicianOperationView[]> {
+  const response = await apiFetch(`/technician-operations/performed?${new URLSearchParams({ workOrderId }).toString()}`);
+  return parseApiResponse<readonly PerformedTechnicianOperationView[]>(response);
+}
+
 export async function assignWorkflowStage(workOrderId: string, stageExecutionId: string, input: AssignStageInput): Promise<unknown> {
   return sendJson(`/works/${workOrderId}/workflow/stages/${stageExecutionId}/assign`, input);
 }
 
 export async function unassignWorkflowStage(workOrderId: string, stageExecutionId: string, input: UnassignStageInput): Promise<unknown> {
   return sendJson(`/works/${workOrderId}/workflow/stages/${stageExecutionId}/unassign`, input);
+}
+
+export async function performTechnicianOperation(input: PerformedTechnicianOperationInput): Promise<PerformedTechnicianOperationView> {
+  return sendJson("/technician-operations/performed", input);
+}
+
+export async function removePerformedTechnicianOperation(performedOperationId: string, input: RemovePerformedTechnicianOperationInput): Promise<PerformedTechnicianOperationView> {
+  return sendJson(`/technician-operations/performed/${performedOperationId}/remove`, input);
 }
 
 export function useTechnicianWorkbench(params: TechnicianWorkbenchFilter, enabled: boolean) {
@@ -102,6 +126,24 @@ export function useTechnicianOptions(enabled: boolean) {
     enabled,
     queryFn: fetchTechnicianOptions,
     queryKey: technicianWorkbenchQueryKeys.options,
+    retry: false,
+  });
+}
+
+export function useTechnicianOperationOptions(enabled: boolean) {
+  return useQuery({
+    enabled,
+    queryFn: fetchTechnicianOperationOptions,
+    queryKey: technicianWorkbenchQueryKeys.operationOptions,
+    retry: false,
+  });
+}
+
+export function usePerformedTechnicianOperations(workOrderId: string | null, enabled: boolean) {
+  return useQuery({
+    enabled: enabled && workOrderId !== null,
+    queryFn: () => fetchPerformedTechnicianOperations(workOrderId ?? ""),
+    queryKey: technicianWorkbenchQueryKeys.performedOperations(workOrderId),
     retry: false,
   });
 }
@@ -133,6 +175,33 @@ export function useUnassignWorkflowStage() {
         queryClient.invalidateQueries({ queryKey: technicianWorkbenchQueryKeys.workload }),
         queryClient.invalidateQueries({ queryKey: worksQueryKeys.all }),
         queryClient.invalidateQueries({ queryKey: worksQueryKeys.workflow(variables.workOrderId) }),
+      ]);
+    },
+  });
+}
+
+export function usePerformTechnicianOperation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: performTechnicianOperation,
+    onSuccess: async (performedOperation) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: technicianWorkbenchQueryKeys.performedOperations(performedOperation.workOrderId) }),
+        queryClient.invalidateQueries({ queryKey: technicianWorkbenchQueryKeys.all }),
+      ]);
+    },
+  });
+}
+
+export function useRemovePerformedTechnicianOperation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ input, performedOperationId }: { readonly input: RemovePerformedTechnicianOperationInput; readonly performedOperationId: string }) =>
+      removePerformedTechnicianOperation(performedOperationId, input),
+    onSuccess: async (performedOperation) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: technicianWorkbenchQueryKeys.performedOperations(performedOperation.workOrderId) }),
+        queryClient.invalidateQueries({ queryKey: technicianWorkbenchQueryKeys.all }),
       ]);
     },
   });

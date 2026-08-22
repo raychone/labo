@@ -189,6 +189,19 @@ export class PatientsService {
         },
       });
 
+      await tx.workOrder.updateMany({
+        data: {
+          patientName: `${after.firstName} ${after.lastName}`.trim(),
+          updatedByUserId: context.actorUserId,
+          version: {
+            increment: 1,
+          },
+        },
+        where: {
+          patientId,
+        },
+      });
+
       await this.recordAudit(tx, {
         action: PATIENT_AUDIT_ACTIONS.updated,
         actorUserId: context.actorUserId,

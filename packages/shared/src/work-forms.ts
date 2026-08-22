@@ -237,16 +237,28 @@ export const RESERVED_WORK_FORM_FIELD_KEYS = [
 
 export const FORBIDDEN_WORK_FORM_VALUE_KEYS = ["__proto__", "constructor", "prototype"] as const;
 
-export const FDI_TOOTH_CODES = [
-  "11", "12", "13", "14", "15", "16", "17", "18",
-  "21", "22", "23", "24", "25", "26", "27", "28",
-  "31", "32", "33", "34", "35", "36", "37", "38",
-  "41", "42", "43", "44", "45", "46", "47", "48",
-  "51", "52", "53", "54", "55",
-  "61", "62", "63", "64", "65",
-  "71", "72", "73", "74", "75",
-  "81", "82", "83", "84", "85",
+export const FDI_ADULT_TOOTH_QUADRANTS = [
+  {
+    key: "upper_right",
+    teeth: ["18", "17", "16", "15", "14", "13", "12", "11"],
+  },
+  {
+    key: "upper_left",
+    teeth: ["21", "22", "23", "24", "25", "26", "27", "28"],
+  },
+  {
+    key: "lower_left",
+    teeth: ["31", "32", "33", "34", "35", "36", "37", "38"],
+  },
+  {
+    key: "lower_right",
+    teeth: ["48", "47", "46", "45", "44", "43", "42", "41"],
+  },
 ] as const;
+
+export const FDI_ADULT_TOOTH_CODES = FDI_ADULT_TOOTH_QUADRANTS.flatMap((quadrant) => quadrant.teeth);
+
+export const FDI_TOOTH_CODES = FDI_ADULT_TOOTH_CODES;
 
 export function isWorkFormFieldKey(value: string): boolean {
   return WORK_FORM_FIELD_KEY_PATTERN.test(value) && !RESERVED_WORK_FORM_FIELD_KEYS.includes(value as never);
@@ -257,7 +269,12 @@ export function isForbiddenWorkFormValueKey(key: string): boolean {
 }
 
 export function isFdiToothCode(value: string): boolean {
-  return FDI_TOOTH_CODES.includes(value as never);
+  return FDI_ADULT_TOOTH_CODES.includes(value as never);
+}
+
+export function normalizeFdiAdultToothSelection(values: readonly string[]): readonly string[] {
+  const selected = new Set(values);
+  return FDI_ADULT_TOOTH_CODES.filter((tooth) => selected.has(tooth));
 }
 
 export function isDateOnlyString(value: string): boolean {

@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router";
 import { useMemo, type ReactNode } from "react";
 
-import { downloadClinicStatementPdf, downloadDoctorStatementPdf, fetchBillingDocumentAttachment, fetchClinicStatement, fetchDoctorStatement, type BillingStatementParams } from "./billing-api.js";
+import { downloadClinicStatementPdf, downloadDoctorStatementPdf, fetchBillingDocumentAttachment, fetchClinicStatement, fetchDoctorStatement, recordDocumentShareAttempt, type BillingStatementParams } from "./billing-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
 import "./billing-page.css";
 
@@ -35,6 +35,16 @@ interface StatementNoteLine {
   readonly workCode: string;
   readonly workCreatedAtSnapshot: string;
   readonly workTypeNameSnapshot: string;
+}
+
+interface StatementArrearLine {
+  readonly balanceMinor: number;
+  readonly documentId: string;
+  readonly documentNumber: string | null;
+  readonly dueDate: string | null;
+  readonly issueDate: string;
+  readonly paidMinor: number;
+  readonly totalMinor: number;
 }
 
 const STATEMENT_TEMPLATE_SOURCES: Record<NoteFormat, string> = {
@@ -176,7 +186,7 @@ export function BillingStatementPrintPage(): ReactNode {
 
     const selectedDocumentIdSet = new Set(selectedDocumentIds);
     return statementQuery.data.documents
-      .filter((document) => document.balanceMinor > 0 && (selectedDocumentIds.length === 0 || selectedDocumentIdSet.has(document.documentId)))
+      .filter((document) => selectedDocumentIds.length === 0 ? document.balanceMinor > 0 : selectedDocumentIdSet.has(document.documentId))
       .map((document) => document.documentId);
   }, [selectedDocumentIds, source, statementQuery.data]);
 
@@ -215,6 +225,25 @@ export function BillingStatementPrintPage(): ReactNode {
   }, [attachments, selectedWorkPayload, source, statementQuery.data]);
 
   const totalMinor = noteRows.reduce((total, row) => total + row.lineTotalMinor, 0);
+  const arrearRows = useMemo<readonly StatementArrearLine[]>(() => {
+    if (source !== "documents" || selectedDocumentIds.length === 0 || !statementQuery.data) {
+      return [];
+    }
+
+    const currentDocumentIds = new Set(selectedDocumentIds);
+    return statementQuery.data.documents
+      .filter((document) => document.documentType === "INVOICE" && document.balanceMinor > 0 && document.dueDate !== null && new Date(document.dueDate).getTime() < Date.now() && !currentDocumentIds.has(document.documentId))
+      .map((document) => ({
+        balanceMinor: document.balanceMinor,
+        documentId: document.documentId,
+        documentNumber: document.documentNumber,
+        dueDate: document.dueDate,
+        issueDate: document.issueDate,
+        paidMinor: document.paidMinor,
+        totalMinor: document.totalMinor,
+      }));
+  }, [selectedDocumentIds, source, statementQuery.data]);
+  const previousArrearsTotalMinor = arrearRows.reduce((total, row) => total + row.balanceMinor, 0);
   const pages = useMemo(() => chunkRows(noteRows, format === "a4" ? 10 : 6), [format, noteRows]);
   const attachmentLabel = source === "works"
     ? "Anexa la factura"
@@ -265,6 +294,8 @@ export function BillingStatementPrintPage(): ReactNode {
     <main className={`billing-print-page billing-print-page--statement billing-print-page--statement-${format}`}>
       <div className="billing-print-page__actions">
         <Button onClick={() => void exportPdf()}>Export PDF</Button>
+        <Button onClick={() => void shareStatement("EMAIL")} variant="outline">Trimite email</Button>
+        <Button onClick={() => void shareStatement("WHATSAPP")} variant="outline">WhatsApp</Button>
         <span className="billing-print-page__format-badge">Format {format.toUpperCase()}</span>
         <Link className="billing-print-page__back-link" to="/billing">Înapoi la facturare</Link>
       </div>
@@ -274,10 +305,24 @@ export function BillingStatementPrintPage(): ReactNode {
         pages={pages}
         scope={scope}
         statement={statementQuery.data}
+        arrearRows={arrearRows}
+        previousArrearsTotalMinor={previousArrearsTotalMinor}
         totalMinor={totalMinor}
       />
     </main>
   );
+
+  async function shareStatement(channel: "EMAIL" | "WHATSAPP"): Promise<void> {
+    const recipient = window.prompt(channel === "EMAIL" ? "Adresă email" : "Număr WhatsApp", "")?.trim() ?? "";
+    await Promise.all(selectedDocumentIds.map((documentId) => recordDocumentShareAttempt(documentId, { channel, ...(recipient ? { recipient } : {}) })));
+    const url = window.location.href;
+    const text = encodeURIComponent(`Nota de plată: ${url}`);
+    if (channel === "EMAIL") {
+      window.location.href = `mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent("Nota de plată")}&body=${text}`;
+      return;
+    }
+    window.open(`https://wa.me/${encodeURIComponent(recipient.replace(/\D/g, ""))}?text=${text}`, "_blank", "noopener,noreferrer");
+  }
 }
 
 function StatementPrintView({
@@ -286,6 +331,8 @@ function StatementPrintView({
   pages,
   scope,
   statement,
+  arrearRows,
+  previousArrearsTotalMinor,
   totalMinor,
 }: {
   readonly attachmentLabel: string;
@@ -293,6 +340,8 @@ function StatementPrintView({
   readonly pages: readonly StatementNoteLine[][];
   readonly scope: "clinic" | "doctor";
   readonly statement: ClinicBillingStatement | DoctorBillingStatement;
+  readonly arrearRows: readonly StatementArrearLine[];
+  readonly previousArrearsTotalMinor: number;
   readonly totalMinor: number;
 }): ReactNode {
   const recipientName = scope === "clinic"
@@ -329,9 +378,22 @@ function StatementPrintView({
 
                     {isLastPage ? (
                       <footer className="billing-statement__footer">
+                        {arrearRows.length > 0 ? (
+                          <section className="billing-statement__section">
+                            <div className="billing-statement__section-header">
+                              <strong>Restante existente</strong>
+                              <span>{formatMoneyMinorCompact(previousArrearsTotalMinor, statement.currency)}</span>
+                            </div>
+                            <ArrearsTable currency={statement.currency} rows={arrearRows} />
+                          </section>
+                        ) : null}
                         <div className="billing-statement__footer-total">
-                          <span>Total:</span>
+                          <span>Suma factura curenta:</span>
                           <strong>{formatMoneyMinorCompact(totalMinor, statement.currency)}</strong>
+                        </div>
+                        <div className="billing-statement__footer-total">
+                          <span>Total de plata curent:</span>
+                          <strong>{formatMoneyMinorCompact(totalMinor + previousArrearsTotalMinor, statement.currency)}</strong>
                         </div>
                       </footer>
                     ) : null}
@@ -343,6 +405,35 @@ function StatementPrintView({
         })}
       </div>
     </article>
+  );
+}
+
+function ArrearsTable({ currency, rows }: { readonly currency: string; readonly rows: readonly StatementArrearLine[] }): ReactNode {
+  return (
+    <table className="billing-print__table billing-print__table--attachment">
+      <thead>
+        <tr>
+          <th>Factura</th>
+          <th>Data factură</th>
+          <th>Scadență</th>
+          <th>Total inițial</th>
+          <th>Încasat</th>
+          <th>Restant</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.documentId}>
+            <td>{row.documentNumber ?? "-"}</td>
+            <td>{formatDate(row.issueDate)}</td>
+            <td>{row.dueDate ? formatDate(row.dueDate) : "-"}</td>
+            <td>{formatMoneyMinorCompact(row.totalMinor, currency)}</td>
+            <td>{formatMoneyMinorCompact(row.paidMinor, currency)}</td>
+            <td>{formatMoneyMinorCompact(row.balanceMinor, currency)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

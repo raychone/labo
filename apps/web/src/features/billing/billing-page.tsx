@@ -18,6 +18,7 @@ import {
   type DataTableColumn,
 } from "@dental-lab/ui";
 import {
+  type BillingAdjustmentInput,
   formatMoneyMinor,
   type AmbiguousLegacyBillingRecord,
   type BillableWork,
@@ -49,28 +50,42 @@ import {
   useBillableWorks,
   useBillingDocuments,
   useBillingOverview,
-  useBillingSeries,
   useClinicStatement,
+  useCreateAndIssueInvoice,
   useCreateInvoice,
-  useCreateProforma,
-  useConvertProforma,
+  useCreateStorno,
   useIssueDocument,
   useMonthRegistry,
   usePayments,
   useRecordPayment,
   useReceivables,
   useDoctorStatement,
-  useAmbiguousLegacyRecords,
   closeMonthRegistry,
+  fetchBillingDocument,
+  fetchPdfBlob,
   downloadMonthRegistryCsv,
+  recordDocumentShareAttempt,
   type BillingWorkspaceParams,
 } from "./billing-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
+import { fetchClinic, fetchDoctor } from "../clinics/clinics-api.js";
 import "./billing-page.css";
 
 const pageSize = 20;
-type BillingTabId = "overview" | "uninvoiced" | "proformas" | "invoices" | "payments" | "receivables" | "statements" | "month-close" | "series";
+type BillingTabId = "overview" | "uninvoiced" | "proformas" | "invoices" | "storno" | "payments" | "receivables" | "statements" | "month-close" | "series";
 type StatementSource = "documents" | "works";
+type AdjustmentScope = BillingAdjustmentInput["scope"];
+type AdjustmentMode = BillingAdjustmentInput["mode"];
+
+interface DraftAdjustmentFormState {
+  readonly adjustments: readonly BillingAdjustmentInput[];
+  readonly amount: string;
+  readonly mode: AdjustmentMode;
+  readonly patientName: string;
+  readonly percentage: string;
+  readonly scope: AdjustmentScope;
+  readonly workOrderId: string;
+}
 const paymentFilterOptions: readonly { readonly label: string; readonly value: DocumentPaymentFilter }[] = [
   { label: "Toate", value: "ALL" },
   { label: "Neachitate", value: "UNPAID" },
@@ -81,6 +96,119 @@ const paymentFilterOptions: readonly { readonly label: string; readonly value: D
   { label: "Depășite", value: "OVERDUE" },
   { label: "Anulate", value: "CANCELLED" },
 ];
+
+function createEmptyDraftAdjustmentFormState(): DraftAdjustmentFormState {
+  return {
+    adjustments: [],
+    amount: "",
+    mode: "PERCENTAGE",
+    patientName: "",
+    percentage: "",
+    scope: "DOCUMENT",
+    workOrderId: "",
+  };
+}
+
+function parseDraftAdjustment(form: DraftAdjustmentFormState): BillingAdjustmentInput | null {
+  const patientTarget =
+    form.scope === "PATIENT" && form.patientName.trim().length > 0
+      ? { patientName: form.patientName.trim() }
+      : {};
+  const workTarget =
+    form.scope === "WORK" && form.workOrderId.trim().length > 0
+      ? { workOrderId: form.workOrderId.trim() }
+      : {};
+
+  if (form.mode === "PERCENTAGE") {
+    const percentage = Number(form.percentage.replace(",", "."));
+    if (!Number.isFinite(percentage) || percentage <= 0) {
+      return null;
+    }
+    return {
+      mode: "PERCENTAGE",
+      percentage,
+      scope: form.scope,
+      ...patientTarget,
+      ...workTarget,
+    };
+  }
+
+  const amount = Number(form.amount.replace(",", "."));
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return null;
+  }
+
+  return {
+    amountMinor: Math.round(amount * 100),
+    mode: "FIXED",
+    scope: form.scope,
+    ...patientTarget,
+    ...workTarget,
+  };
+}
+
+function describeDraftAdjustment(adjustment: BillingAdjustmentInput): string {
+  const target = adjustment.scope === "DOCUMENT"
+    ? "Factură"
+    : adjustment.scope === "PATIENT"
+      ? `Pacient ${adjustment.patientName ?? "-"}`
+      : `Lucrare ${adjustment.workOrderId ?? "-"}`;
+  const value = adjustment.mode === "PERCENTAGE"
+    ? `${adjustment.percentage ?? 0}%`
+    : `${((adjustment.amountMinor ?? 0) / 100).toFixed(2)} lei`;
+  return `${target} · ${value}`;
+}
+
+function previewAdjustedTotals(works: readonly BillableWork[], adjustments: readonly BillingAdjustmentInput[]) {
+  const lines = works.map((work) => ({
+    patientName: work.patientName,
+    totalMinor: work.totalPriceMinor ?? 0,
+    workOrderId: work.id,
+  }));
+  const subtotalMinor = lines.reduce((total, line) => total + line.totalMinor, 0);
+
+  for (const adjustment of adjustments) {
+    const indexes = lines.flatMap((line, index) => {
+      if (adjustment.scope === "DOCUMENT") {
+        return [index];
+      }
+      if (adjustment.scope === "PATIENT") {
+        return line.patientName === adjustment.patientName ? [index] : [];
+      }
+      return line.workOrderId === adjustment.workOrderId ? [index] : [];
+    });
+
+    if (adjustment.mode === "PERCENTAGE") {
+      const percentage = adjustment.percentage ?? 0;
+      for (const index of indexes) {
+        const line = lines[index];
+        if (!line) {
+          continue;
+        }
+        line.totalMinor -= Math.min(line.totalMinor, Math.round(line.totalMinor * (percentage / 100)));
+      }
+      continue;
+    }
+
+    const poolMinor = indexes.reduce((total, index) => total + (lines[index]?.totalMinor ?? 0), 0);
+    let remainingMinor = Math.min(adjustment.amountMinor ?? 0, poolMinor);
+    indexes.forEach((index, lineIndex) => {
+      const line = lines[index];
+      if (!line) {
+        return;
+      }
+      const proportionalMinor = lineIndex === indexes.length - 1
+        ? remainingMinor
+        : Math.min(line.totalMinor, Math.floor(((adjustment.amountMinor ?? 0) * line.totalMinor) / Math.max(1, poolMinor)));
+      const appliedMinor = Math.min(line.totalMinor, proportionalMinor, remainingMinor);
+      line.totalMinor -= appliedMinor;
+      remainingMinor -= appliedMinor;
+    });
+  }
+
+  const totalMinor = lines.reduce((total, line) => total + line.totalMinor, 0);
+  return { discountMinor: Math.max(0, subtotalMinor - totalMinor), subtotalMinor, totalMinor };
+}
 
 interface BillingPeriod {
   readonly month: number;
@@ -120,11 +248,11 @@ function currentMonthRange(now = new Date()): { readonly dateFrom: string; reado
 }
 
 function isBillingTabId(value: string | null): value is BillingTabId {
-  return value === "overview"
-    || value === "uninvoiced"
+  return value === "uninvoiced"
     || value === "proformas"
     || value === "invoices"
     || value === "payments"
+    || value === "storno"
     || value === "receivables"
     || value === "statements"
     || value === "month-close"
@@ -296,6 +424,37 @@ function toPaymentMethodLabel(method: PaymentMethod | string): string {
   return method in labels ? labels[method as PaymentMethod] : "Altă metodă";
 }
 
+async function shareBillingDocument(billingDocument: BillingDocumentSummary, channel: "EMAIL" | "WHATSAPP" | "SHARE"): Promise<void> {
+  const detail = await fetchBillingDocument(billingDocument.id);
+  const number = billingDocument.formattedNumber ?? "documentul";
+  const label = billingDocument.type === "INVOICE" ? "Factura" : "Proforma";
+  const subject = `${label} ${number} este gata`;
+  const message = `${label} ${number} este gata.`;
+  const printUrl = `${window.location.origin}/billing/documents/${billingDocument.id}/print`;
+  const recipient = detail.clinicSnapshot.email?.trim() ?? "";
+  const phone = detail.clinicSnapshot.phone?.replace(/\D/g, "") ?? "";
+  const { blob, filename } = await fetchPdfBlob(`/billing-documents/${billingDocument.id}/pdf`, `document-${billingDocument.id}.pdf`);
+  const download = (): void => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  await recordDocumentShareAttempt(billingDocument.id, { channel, ...(recipient ? { recipient } : {}) });
+  if (channel === "EMAIL") {
+    download();
+    window.location.href = `mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(`${message}\n\nPDF-ul a fost descărcat și poate fi atașat mesajului.\n${printUrl}`)}`;
+  } else if (channel === "WHATSAPP") {
+    download();
+    window.open(`https://wa.me/${encodeURIComponent(phone)}?text=${encodeURIComponent(`${message}\n${printUrl}`)}`, "_blank", "noopener,noreferrer");
+  } else if (typeof navigator.share === "function") {
+    await navigator.share({ title: subject, text: message, url: printUrl });
+  }
+}
+
 function toDocumentCsvRow(document: BillingDocumentSummary, currency: string): Readonly<Record<string, string | number | null>> {
   return {
     "Număr": document.formattedNumber,
@@ -322,7 +481,6 @@ export function BillingPage(): ReactNode {
   const canReadReports = hasPermission(permissionsQuery.data, "finance.read_reports");
   const canCreateInvoice = hasPermission(permissionsQuery.data, "invoice.create");
   const canRecordPayment = hasPermission(permissionsQuery.data, "finance.record_payment");
-  const canConfigureSeries = hasPermission(permissionsQuery.data, "invoice.configure_series");
   const canUseBilling = canReadFinance || canReadInvoices || canCreateInvoice;
   const settingsQuery = useSettings(canUseBilling);
   const currency = settingsQuery.data?.currency ?? "RON";
@@ -342,14 +500,16 @@ export function BillingPage(): ReactNode {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<BillingTabId>(() => {
     const urlTab = searchParams.get("tab");
-    return isBillingTabId(urlTab) ? urlTab : "overview";
+    return isBillingTabId(urlTab) ? urlTab : "uninvoiced";
   });
   const [paymentForm, setPaymentForm] = useState<ManualPaymentFormState>(createEmptyPaymentForm(range.dateTo));
   const [selectedWorkIds, setSelectedWorkIds] = useState<readonly string[]>([]);
-  const [selectedProformaIds, setSelectedProformaIds] = useState<readonly string[]>([]);
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<readonly string[]>([]);
+  const [selectedStornoIds, setSelectedStornoIds] = useState<readonly string[]>([]);
   const [selectedReceivableIds, setSelectedReceivableIds] = useState<readonly string[]>([]);
   const [selectedStatementDocumentIds, setSelectedStatementDocumentIds] = useState<readonly string[]>([]);
+  const [isDraftReviewOpen, setIsDraftReviewOpen] = useState(false);
+  const [draftAdjustmentForm, setDraftAdjustmentForm] = useState<DraftAdjustmentFormState>(createEmptyDraftAdjustmentFormState);
   const [statementScope, setStatementScope] = useState<"clinic" | "doctor">("clinic");
   const [clinicStatementId, setClinicStatementId] = useState("");
   const [doctorStatementId, setDoctorStatementId] = useState("");
@@ -368,20 +528,18 @@ export function BillingPage(): ReactNode {
     ...(search ? { search } : {}),
     ...(workCodeFilter ? { workCode: workCodeFilter } : {}),
   };
-  const proformaParams: BillingListQuery = { ...baseDocumentParams, paymentFilter: "ALL", type: "PROFORMA" };
   const invoiceParams: BillingListQuery = { ...baseDocumentParams, type: "INVOICE" };
+  const stornoParams: BillingListQuery = { ...baseDocumentParams, paymentFilter: "ALL", type: "INVOICE" };
   const receivablesParams: BillingListQuery = { ...baseDocumentParams, paymentFilter: paymentFilter === "ALL" ? "OUTSTANDING" : paymentFilter, type: "INVOICE" };
   const overviewQuery = useBillingOverview(overviewParams, canReadFinance);
   const monthCloseClinicOverviewQuery = useBillingOverview({ ...monthRegistryParams, groupBy: "clinic" }, canReadReports);
   const monthCloseDoctorOverviewQuery = useBillingOverview({ ...monthRegistryParams, groupBy: "doctor" }, canReadReports);
   const billableWorksQuery = useBillableWorks(billableParams, canCreateInvoice || canReadReports);
-  const proformasQuery = useBillingDocuments(proformaParams, canReadInvoices);
   const invoicesQuery = useBillingDocuments(invoiceParams, canReadInvoices);
+  const stornoQuery = useBillingDocuments(stornoParams, canReadInvoices);
   const paymentsQuery = usePayments(canReadFinance);
   const receivablesQuery = useReceivables(receivablesParams, canReadReports);
   const monthRegistryQuery = useMonthRegistry(monthRegistryParams, canReadReports);
-  const ambiguousLegacyQuery = useAmbiguousLegacyRecords(canReadReports);
-  const seriesQuery = useBillingSeries(canConfigureSeries);
   const closeMonthRegistryMutation = useMutation({
     mutationFn: () => closeMonthRegistry(monthRegistryParams),
     onSuccess: async () => {
@@ -405,7 +563,9 @@ export function BillingPage(): ReactNode {
     const items = billableWorksQuery.data?.items ?? [];
     const clinics = new Map<string, string>();
     for (const item of items) {
-      clinics.set(item.clinicId, item.clinicName);
+      if (item.clinicId) {
+        clinics.set(item.clinicId, item.clinicName);
+      }
     }
     return Array.from(clinics.entries()).map(([value, label]) => ({ label, value }));
   }, [billableWorksQuery.data?.items]);
@@ -413,7 +573,9 @@ export function BillingPage(): ReactNode {
     const items = billableWorksQuery.data?.items ?? [];
     const doctors = new Map<string, string>();
     for (const item of items) {
-      doctors.set(item.doctorId, item.doctorName);
+      if (item.doctorId) {
+        doctors.set(item.doctorId, item.doctorName);
+      }
     }
     return Array.from(doctors.entries()).map(([value, label]) => ({ label, value }));
   }, [billableWorksQuery.data?.items]);
@@ -454,11 +616,11 @@ export function BillingPage(): ReactNode {
     : { dateFrom: range.dateFrom, dateTo: range.dateTo };
   const clinicStatementQuery = useClinicStatement(clinicStatementParams, canReadReports && clinicStatementId !== "");
   const doctorStatementQuery = useDoctorStatement(doctorStatementParams, canReadReports && doctorStatementId !== "");
-  const createProformaMutation = useCreateProforma();
   const createInvoiceMutation = useCreateInvoice();
+  const createAndIssueInvoiceMutation = useCreateAndIssueInvoice();
   const issueMutation = useIssueDocument();
-  const convertMutation = useConvertProforma();
   const recordPaymentMutation = useRecordPayment();
+  const createStornoMutation = useCreateStorno();
 
   const selectedWorks = useMemo(
     () => (billableWorksQuery.data?.items ?? []).filter((work) => selectedWorkIds.includes(work.id)),
@@ -470,6 +632,18 @@ export function BillingPage(): ReactNode {
   );
   const selectedClinicId = selectedWorks[0]?.clinicId ?? null;
   const selectedTotal = selectedWorks.reduce((total, work) => total + (work.totalPriceMinor ?? 0), 0);
+  const draftReviewTotals = previewAdjustedTotals(selectedWorks, draftAdjustmentForm.adjustments);
+  const patientAdjustmentOptions = Array.from(new Set(selectedWorks.map((work) => work.patientName))).map((patientName) => ({ label: patientName, value: patientName }));
+  const workAdjustmentOptions = selectedWorks.map((work) => ({ label: `${work.code} · ${work.patientName}`, value: work.id }));
+
+  useEffect(() => {
+    if (draftAdjustmentForm.scope === "PATIENT" && !patientAdjustmentOptions.some((option) => option.value === draftAdjustmentForm.patientName)) {
+      setDraftAdjustmentForm((current) => ({ ...current, patientName: patientAdjustmentOptions[0]?.value ?? "" }));
+    }
+    if (draftAdjustmentForm.scope === "WORK" && !workAdjustmentOptions.some((option) => option.value === draftAdjustmentForm.workOrderId)) {
+      setDraftAdjustmentForm((current) => ({ ...current, workOrderId: workAdjustmentOptions[0]?.value ?? "" }));
+    }
+  }, [draftAdjustmentForm.patientName, draftAdjustmentForm.scope, draftAdjustmentForm.workOrderId, patientAdjustmentOptions, workAdjustmentOptions]);
 
   function toggleWork(work: BillableWork): void {
     if (!work.isBillable) {
@@ -482,32 +656,52 @@ export function BillingPage(): ReactNode {
     setSelectedWorkIds((current) => current.includes(work.id) ? current.filter((id) => id !== work.id) : [...current, work.id]);
   }
 
-  async function createDocument(kind: "invoice" | "proforma"): Promise<void> {
-    const mutation = kind === "invoice" ? createInvoiceMutation : createProformaMutation;
+
+  async function createReviewedInvoiceDraft(): Promise<void> {
     try {
-      await mutation.mutateAsync({
+      await createInvoiceMutation.mutateAsync({
+        adjustments: draftAdjustmentForm.adjustments,
         issueDate: range.dateTo,
         workOrderIds: selectedWorkIds,
       });
       setSelectedWorkIds([]);
-      toast.showToast({ message: kind === "invoice" ? "Factura draft a fost creată." : "Proforma draft a fost creată.", variant: "success" });
+      setDraftAdjustmentForm(createEmptyDraftAdjustmentFormState());
+      setIsDraftReviewOpen(false);
+      toast.showToast({ message: "Factura draft a fost creată cu valorile revizuite.", variant: "success" });
     } catch (error) {
       toast.showToast({ message: getErrorMessage(error), variant: "error" });
     }
   }
 
-  async function issueDocumentsById(documentsToIssue: readonly BillingDocumentSummary[]): Promise<void> {
-    if (documentsToIssue.length === 0) {
+  function addDraftAdjustment(): void {
+    const adjustment = parseDraftAdjustment(draftAdjustmentForm);
+    if (!adjustment) {
+      toast.showToast({ message: "Completează o ajustare validă.", variant: "error" });
+      return;
+    }
+    if (adjustment.scope === "WORK" && !adjustment.workOrderId) {
+      toast.showToast({ message: "Selectează o lucrare pentru ajustare.", variant: "error" });
+      return;
+    }
+    if (adjustment.scope === "PATIENT" && !adjustment.patientName) {
+      toast.showToast({ message: "Selectează un pacient pentru ajustare.", variant: "error" });
       return;
     }
 
+    setDraftAdjustmentForm({
+      ...createEmptyDraftAdjustmentFormState(),
+      adjustments: [...draftAdjustmentForm.adjustments, adjustment],
+    });
+  }
+
+  async function createAndIssueInvoice(): Promise<void> {
     try {
-      for (const document of documentsToIssue) {
-        if (document.status === "DRAFT") {
-          await issueMutation.mutateAsync(document.id);
-        }
-      }
-      toast.showToast({ message: "Documentele selectate au fost emise.", variant: "success" });
+      await createAndIssueInvoiceMutation.mutateAsync({
+        issueDate: range.dateTo,
+        workOrderIds: selectedWorkIds,
+      });
+      setSelectedWorkIds([]);
+      toast.showToast({ message: "Factura a fost emisă.", variant: "success" });
     } catch (error) {
       toast.showToast({ message: getErrorMessage(error), variant: "error" });
     }
@@ -524,6 +718,16 @@ export function BillingPage(): ReactNode {
       await recordPaymentMutation.mutateAsync({ documentId, input });
       setPaymentForm(createEmptyPaymentForm(range.dateTo));
       toast.showToast({ message: "Încasarea a fost înregistrată manual.", variant: "success" });
+    } catch (error) {
+      toast.showToast({ message: getErrorMessage(error), variant: "error" });
+    }
+  }
+
+  async function createStornoForDocument(documentId: string): Promise<void> {
+    try {
+      const storno = await createStornoMutation.mutateAsync(documentId);
+      setSelectedStornoIds([]);
+      toast.showToast({ message: `Storno ${storno.formattedNumber ?? ""} a fost creat.`, variant: "success" });
     } catch (error) {
       toast.showToast({ message: getErrorMessage(error), variant: "error" });
     }
@@ -549,6 +753,52 @@ export function BillingPage(): ReactNode {
     await downloadDoctorStatementPdf(downloadParams);
   }
 
+  async function shareStatementPdf(scope: "clinic" | "doctor", source: StatementSource, channel: "EMAIL" | "WHATSAPP"): Promise<void> {
+    const statement = scope === "clinic" ? clinicStatementQuery.data : doctorStatementQuery.data;
+    const recipient = scope === "clinic" ? await fetchClinic(clinicStatementId) : await fetchDoctor(doctorStatementId);
+    const params = {
+      dateFrom: range.dateFrom,
+      dateTo: range.dateTo,
+      format: "a4",
+      source,
+      ...(scope === "clinic" ? { clinicId: clinicStatementId } : { doctorId: doctorStatementId }),
+      ...(source === "documents" && selectedStatementDocumentIds.length > 0 ? { documentIds: selectedStatementDocumentIds.join(",") } : {}),
+      ...(source === "works" && statement ? { workPayload: JSON.stringify(statement.uninvoicedWorks.map((work) => ({
+        baseUnitPriceMinor: null,
+        code: work.code,
+        createdAt: work.createdAt,
+        doctorName: work.doctorName,
+        id: work.code,
+        patientName: work.patientName,
+        patientReference: null,
+        quantity: 1,
+        totalPriceMinor: work.totalPriceMinor,
+        workCycleNumber: null,
+        workTypeName: work.workTypeName,
+      }))) } : {}),
+    };
+    const path = scope === "clinic" ? "/billing/statements/clinic/pdf" : "/billing/statements/doctor/pdf";
+    const { blob, filename } = await fetchPdfBlob(path, scope === "clinic" ? "nota-de-plata-clinica.pdf" : "nota-de-plata-medic.pdf", params);
+    const download = (): void => {
+      const url = URL.createObjectURL(blob);
+      const link = window.document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    };
+    const title = `Nota de plată ${scope === "clinic" ? "a clinicii" : "a medicului"} este gata`;
+    const email = recipient.email?.trim() ?? "";
+    const phone = recipient.phone?.replace(/\D/g, "") ?? "";
+    if (channel === "EMAIL") {
+      download();
+      window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(`${title}.\n\nPDF-ul cu antet a fost descărcat și poate fi atașat mesajului.`)}`;
+    } else {
+      download();
+      window.open(`https://wa.me/${encodeURIComponent(phone)}?text=${encodeURIComponent(`${title}.`)}`, "_blank", "noopener,noreferrer");
+    }
+  }
+
   async function exportMonthRegistryPdf(): Promise<void> {
     const periodRange = monthRange(selectedPeriod);
     await downloadMonthRegistryPdf({
@@ -569,7 +819,7 @@ export function BillingPage(): ReactNode {
         <div>
           <p className="billing-page__eyebrow">Workspace financiar</p>
           <h1>Facturare</h1>
-          <p>{activeCompanyLabel} · Registru lunar pentru lucrări, proforme, facturi, încasări și solduri.</p>
+          <p>{activeCompanyLabel} · Registru lunar pentru lucrări, facturi, încasări și solduri.</p>
         </div>
         <div className="billing-page__quick-actions">
           <Button onClick={() => updateSelectedPeriod(currentBillingPeriod())} variant="secondary">Luna curentă</Button>
@@ -624,47 +874,30 @@ export function BillingPage(): ReactNode {
           setPaymentFilter(nextFilter);
         }
       }} /> : null}
-
       <Tabs
-        onValueChange={(value) => setActiveTab(isBillingTabId(value) ? value : "overview")}
+        onValueChange={(value) => setActiveTab(isBillingTabId(value) ? value : "uninvoiced")}
         value={activeTab}
         tabs={[
-          {
-            id: "overview",
-            label: "Prezentare generală",
-            content: (
-              <OverviewTab
-                ambiguousLegacy={ambiguousLegacyQuery.data?.items ?? []}
-                currency={currency}
-                locale={locale}
-                onPrint={() => window.print()}
-                overview={overviewQuery.data}
-              />
-            ),
-          },
-          {
-            id: "guide",
-            label: "Ghid facturare",
-            content: <BillingGuideTab />,
-          },
           {
             id: "uninvoiced",
             label: "Lucrări nefacturate",
             content: (
               <BillableWorksTab
                 canCreateInvoice={canCreateInvoice}
-                canCreateNote={canReadFinance || canReadReports}
                 currency={currency}
-                isCreating={createProformaMutation.isPending || createInvoiceMutation.isPending}
+                isCreating={createInvoiceMutation.isPending || createAndIssueInvoiceMutation.isPending}
                 locale={locale}
-                onCreateNote={() => void exportStatementPdf("clinic", "works", selectedWorks)}
-                onCreateProforma={() => void createDocument("proforma")}
-                onCreateInvoice={() => void createDocument("invoice")}
+                onCreateInvoice={() => void createAndIssueInvoice()}
+                onReviewInvoice={() => setIsDraftReviewOpen(true)}
                 onExport={() => downloadCsv("lucrari-nefacturate.csv", toCsv((billableWorksQuery.data?.items ?? []).map((work) => ({
-                  "Cod lucrare": work.code,
                   "Clinică": work.clinicName,
                   "Medic": work.doctorName,
                   "Pacient": work.patientName,
+                  "Data intrare": formatDate(work.createdAt),
+                  "Cod": work.code,
+                  "Tip": work.workTypeName,
+                  "Elemente": work.quantity,
+                  "Facturare": work.isBillable ? "Nefacturat" : work.unavailableReason,
                   "Valoare": work.totalPriceMinor === null ? "" : (work.totalPriceMinor / 100).toFixed(2),
                   "Monedă": currency,
                 }))))}
@@ -676,60 +909,22 @@ export function BillingPage(): ReactNode {
             ),
           },
           {
-            id: "proformas",
-            label: "Proforme",
-            content: (
-              <DocumentsTab
-                canConvertSelected
-                canRecordPayment={false}
-                currency={currency}
-                documents={proformasQuery.data?.items ?? []}
-                error={proformasQuery.error}
-                isLoading={proformasQuery.isLoading}
-                isMutating={issueMutation.isPending || convertMutation.isPending || recordPaymentMutation.isPending}
-                locale={locale}
-                onExport={() => downloadCsv("proforme.csv", toCsv((proformasQuery.data?.items ?? []).map((document) => toDocumentCsvRow(document, currency))))}
-                onIssueSelected={issueDocumentsById}
-                onConvertSelected={async (documents) => {
-                  const selectedDocument = documents[0];
-                  if (!selectedDocument || documents.length !== 1 || selectedDocument.type !== "PROFORMA") {
-                    return;
-                  }
-                  try {
-                    await convertMutation.mutateAsync(selectedDocument.id);
-                    setSelectedProformaIds([]);
-                    toast.showToast({ message: "Proforma a fost transformată în factură.", variant: "success" });
-                  } catch (error) {
-                    toast.showToast({ message: getErrorMessage(error), variant: "error" });
-                  }
-                }}
-                onDownloadPdf={(documentId) => void downloadBillingDocumentPdf(documentId)}
-                onOpenPreview={(documentId) => window.open(`/billing/documents/${documentId}/print`, "_blank", "noopener,noreferrer")}
-                onRecordPaymentSelected={recordPaymentForDocument}
-                paymentForm={paymentForm}
-                setPaymentForm={setPaymentForm}
-                selectedDocumentIds={selectedProformaIds}
-                onSelectionChange={setSelectedProformaIds}
-                selectionLabel="proforme"
-              />
-            ),
-          },
-          {
             id: "invoices",
             label: "Facturi",
             content: (
               <DocumentsTab
-                canConvertSelected={false}
                 canRecordPayment={canRecordPayment}
                 currency={currency}
                 documents={invoicesQuery.data?.items ?? []}
                 error={invoicesQuery.error}
                 isLoading={invoicesQuery.isLoading}
-                isMutating={issueMutation.isPending || convertMutation.isPending || recordPaymentMutation.isPending}
+                isMutating={issueMutation.isPending || recordPaymentMutation.isPending}
                 locale={locale}
                 onExport={() => downloadCsv("facturi.csv", toCsv((invoicesQuery.data?.items ?? []).map((document) => toDocumentCsvRow(document, currency))))}
-                onIssueSelected={issueDocumentsById}
                 onDownloadPdf={(documentId) => void downloadBillingDocumentPdf(documentId)}
+                onShareDocument={(document, channel) => void shareBillingDocument(document, channel).catch((error) => {
+                  toast.showToast({ message: getErrorMessage(error), variant: "error" });
+                })}
                 onOpenPreview={(documentId) => window.open(`/billing/documents/${documentId}/print`, "_blank", "noopener,noreferrer")}
                 onRecordPaymentSelected={recordPaymentForDocument}
                 paymentForm={paymentForm}
@@ -737,6 +932,34 @@ export function BillingPage(): ReactNode {
                 selectedDocumentIds={selectedInvoiceIds}
                 onSelectionChange={setSelectedInvoiceIds}
                 selectionLabel="facturi"
+              />
+            ),
+          },
+          {
+            id: "statements",
+            label: "Note de plată",
+            content: (
+              <StatementsTab
+                clinicOptions={billableItemClinics}
+                clinicStatement={clinicStatementQuery.data}
+                doctorOptions={billableItemDoctors}
+                doctorStatement={doctorStatementQuery.data}
+                isClinicLoading={clinicStatementQuery.isLoading}
+                isDoctorLoading={doctorStatementQuery.isLoading}
+                selectedClinicId={clinicStatementId}
+                selectedDoctorId={doctorStatementId}
+                onClinicChange={setClinicStatementId}
+                onDoctorChange={setDoctorStatementId}
+                onOpenPrint={(scope, source) => void exportStatementPdf(scope, source, selectedWorks)}
+                onShare={(scope, source, channel) => void shareStatementPdf(scope, source, channel).catch((error) => {
+                  toast.showToast({ message: getErrorMessage(error), variant: "error" });
+                })}
+                selectedDocumentIds={selectedStatementDocumentIds}
+                onSelectionChange={setSelectedStatementDocumentIds}
+                scope={statementScope}
+                setScope={setStatementScope}
+                source={statementSource}
+                setSource={setStatementSource}
               />
             ),
           },
@@ -795,27 +1018,19 @@ export function BillingPage(): ReactNode {
             ),
           },
           {
-            id: "statements",
-            label: "Note de plată",
+            id: "storno",
+            label: "Storno",
             content: (
-              <StatementsTab
-                clinicOptions={billableItemClinics}
-                clinicStatement={clinicStatementQuery.data}
-                doctorOptions={billableItemDoctors}
-                doctorStatement={doctorStatementQuery.data}
-                isClinicLoading={clinicStatementQuery.isLoading}
-                isDoctorLoading={doctorStatementQuery.isLoading}
-                selectedClinicId={clinicStatementId}
-                selectedDoctorId={doctorStatementId}
-                onClinicChange={setClinicStatementId}
-                onDoctorChange={setDoctorStatementId}
-                onOpenPrint={(scope, source) => void exportStatementPdf(scope, source, selectedWorks)}
-                selectedDocumentIds={selectedStatementDocumentIds}
-                onSelectionChange={setSelectedStatementDocumentIds}
-                scope={statementScope}
-                setScope={setStatementScope}
-                source={statementSource}
-                setSource={setStatementSource}
+              <StornoTab
+                documents={stornoQuery.data?.items ?? []}
+                error={stornoQuery.error}
+                isLoading={stornoQuery.isLoading}
+                isMutating={createStornoMutation.isPending}
+                locale={locale}
+                onCreateStorno={createStornoForDocument}
+                onDownloadPdf={(documentId) => void downloadBillingDocumentPdf(documentId)}
+                selectedDocumentIds={selectedStornoIds}
+                onSelectionChange={setSelectedStornoIds}
               />
             ),
           },
@@ -846,16 +1061,69 @@ export function BillingPage(): ReactNode {
               selectedPeriod={selectedPeriod}
             />,
           },
-          {
-            id: "series",
-            label: "Serii",
-            content: <SeriesTab canConfigure={canConfigureSeries} isLoading={seriesQuery.isLoading} series={seriesQuery.data?.items ?? []} />,
-          },
         ]}
       />
+      <Modal
+        description={`Calculat ${formatMoneyMinor(draftReviewTotals.subtotalMinor, currency, locale)} · ajustări ${formatMoneyMinor(draftReviewTotals.discountMinor, currency, locale)} · final ${formatMoneyMinor(draftReviewTotals.totalMinor, currency, locale)}`}
+        footer={<Button disabled={selectedWorkIds.length === 0 || createInvoiceMutation.isPending} isLoading={createInvoiceMutation.isPending} onClick={() => void createReviewedInvoiceDraft()}>Creează draftul revizuit</Button>}
+        isOpen={isDraftReviewOpen}
+        onOpenChange={(open) => {
+          setIsDraftReviewOpen(open);
+          if (!open) {
+            setDraftAdjustmentForm(createEmptyDraftAdjustmentFormState());
+          }
+        }}
+        title="Revizuiește valorile"
+      >
+        <section className="billing-page__payment-form" aria-label="Revizuiește valorile">
+          <div className="billing-page__review-summary" aria-live="polite">
+            <strong>{selectedWorkIds.length} lucrări selectate</strong>
+            <span>Subtotal: {formatMoneyMinor(draftReviewTotals.subtotalMinor, currency, locale)}</span>
+            <span>Ajustări: {formatMoneyMinor(draftReviewTotals.discountMinor, currency, locale)}</span>
+            <strong>Total revizuit: {formatMoneyMinor(draftReviewTotals.totalMinor, currency, locale)}</strong>
+          </div>
+          <div>
+            <h3>Ajustări comerciale</h3>
+            <p>Ajustările modifică doar draftul comercial. Valorile de catalog și snapshoturile de execuție rămân neschimbate.</p>
+          </div>
+          <Select
+            label="Nivel ajustare"
+            options={[
+              { label: "Toată factura", value: "DOCUMENT" },
+              { label: "Pacient", value: "PATIENT" },
+              { label: "Lucrare", value: "WORK" },
+            ]}
+            value={draftAdjustmentForm.scope}
+            onChange={(event) => setDraftAdjustmentForm((current) => ({ ...current, scope: event.target.value as AdjustmentScope }))}
+          />
+          {draftAdjustmentForm.scope === "PATIENT" ? <Select label="Pacient" options={patientAdjustmentOptions} placeholder="Selectează pacientul" value={draftAdjustmentForm.patientName} onChange={(event) => setDraftAdjustmentForm((current) => ({ ...current, patientName: event.target.value }))} /> : null}
+          {draftAdjustmentForm.scope === "WORK" ? <Select label="Lucrare" options={workAdjustmentOptions} placeholder="Selectează lucrarea" value={draftAdjustmentForm.workOrderId} onChange={(event) => setDraftAdjustmentForm((current) => ({ ...current, workOrderId: event.target.value }))} /> : null}
+          <Select
+            label="Mod ajustare"
+            options={[
+              { label: "Procent", value: "PERCENTAGE" },
+              { label: "Sumă fixă", value: "FIXED" },
+            ]}
+            value={draftAdjustmentForm.mode}
+            onChange={(event) => setDraftAdjustmentForm((current) => ({ ...current, mode: event.target.value as AdjustmentMode }))}
+          />
+          {draftAdjustmentForm.mode === "PERCENTAGE"
+            ? <TextInput inputMode="decimal" label="Procent" placeholder="10" value={draftAdjustmentForm.percentage} onChange={(event) => setDraftAdjustmentForm((current) => ({ ...current, percentage: event.target.value }))} />
+            : <TextInput inputMode="decimal" label="Sumă fixă" placeholder="150.00" value={draftAdjustmentForm.amount} onChange={(event) => setDraftAdjustmentForm((current) => ({ ...current, amount: event.target.value }))} />}
+          <Button onClick={addDraftAdjustment} variant="secondary">Adaugă ajustarea</Button>
+          <div>
+            <h3>Ajustări adăugate</h3>
+            <p>{draftAdjustmentForm.adjustments.length === 0 ? "Nu există ajustări." : draftAdjustmentForm.adjustments.map(describeDraftAdjustment).join(" | ")}</p>
+          </div>
+        </section>
+      </Modal>
     </main>
   );
 }
+
+// Aceste componente nu sunt taburi; KPI-urile rămân accesibile deasupra taburilor.
+void OverviewTab;
+void BillingGuideTab;
 
 function OverviewCards({
   currency,
@@ -870,14 +1138,11 @@ function OverviewCards({
 }): ReactNode {
   const cards = [
     { count: overview.uninvoicedWorkCount, label: "Lucrări nefacturate", tab: "uninvoiced", tone: "money", value: overview.uninvoicedMinor },
-    { count: overview.openProformaCount, label: "Proforme deschise", tab: "proformas", tone: "money", value: overview.proformaMinor },
-    { count: overview.unpaidInvoiceCount, label: "Facturi neachitate", filter: "UNPAID", tab: "receivables", tone: "money", value: overview.outstandingMinor },
-    { count: overview.partialInvoiceCount, label: "Facturi parțial achitate", filter: "PARTIALLY_PAID", tab: "receivables", tone: "money", value: overview.outstandingMinor },
+    { count: overview.unpaidInvoiceCount, label: "Facturi neachitate", filter: "UNPAID", tab: "receivables", tone: "money", value: overview.unpaidOutstandingMinor ?? overview.outstandingMinor },
+    { count: overview.partialInvoiceCount, label: "Facturi parțial achitate", filter: "PARTIALLY_PAID", tab: "receivables", tone: "money", value: overview.partialOutstandingMinor ?? overview.outstandingMinor },
     { count: overview.paidInvoiceCount, label: "Facturi achitate", filter: "PAID", tab: "invoices", tone: "money", value: overview.paidMinor },
     { count: overview.invoiceCount, label: "Total emis", tab: "invoices", tone: "money", value: overview.totalIssuedMinor },
-    { count: overview.documentCount, label: "Total documente", tab: "overview", tone: "money", value: overview.paidMinor },
     { count: overview.unpaidInvoiceCount, label: "Sold restant", filter: "OUTSTANDING", tab: "receivables", tone: "money", value: overview.outstandingMinor },
-    { count: overview.ambiguousLegacyCount, label: "Documente legacy de revizuit", tab: "overview", tone: "count", value: overview.ambiguousLegacyCount },
   ] as const;
 
   return (
@@ -891,7 +1156,7 @@ function OverviewCards({
           >
           <span className="billing-page__kpi-label">{card.label}</span>
           <strong className="billing-page__kpi-value">
-            {card.tone === "count" ? card.value : formatKpiMoneyMinor(card.value, currency, locale)}
+            {formatKpiMoneyMinor(card.value, currency, locale)}
           </strong>
           <small className="billing-page__kpi-meta">{card.count} înregistrări</small>
         </button>
@@ -947,6 +1212,7 @@ function StatementsTab({
   onClinicChange,
   onDoctorChange,
   onOpenPrint,
+  onShare,
   onSelectionChange,
   scope,
   source,
@@ -965,6 +1231,7 @@ function StatementsTab({
   readonly onClinicChange: (value: string) => void;
   readonly onDoctorChange: (value: string) => void;
   readonly onOpenPrint: (scope: "clinic" | "doctor", source: StatementSource) => void;
+  readonly onShare: (scope: "clinic" | "doctor", source: StatementSource, channel: "EMAIL" | "WHATSAPP") => void;
   readonly onSelectionChange: (ids: readonly string[]) => void;
   readonly scope: "clinic" | "doctor";
   readonly source: StatementSource;
@@ -974,6 +1241,8 @@ function StatementsTab({
   readonly setScope: (scope: "clinic" | "doctor") => void;
   readonly setSource: (source: StatementSource) => void;
 }): ReactNode {
+  const [clinicSearch, setClinicSearch] = useState("");
+  const [doctorSearch, setDoctorSearch] = useState("");
   const statement = scope === "clinic" ? clinicStatement : doctorStatement;
   const isLoading = scope === "clinic" ? isClinicLoading : isDoctorLoading;
   const selectedValue = scope === "clinic" ? selectedClinicId : selectedDoctorId;
@@ -984,10 +1253,12 @@ function StatementsTab({
   const hasSelection = selectedDocumentIds.length > 0;
   const hasWorks = Boolean(statement?.uninvoicedWorks.length);
   const activeSource = source === "works" && hasWorks ? "works" : "documents";
+  const filteredClinicOptions = clinicOptions.filter((option) => option.label.toLocaleLowerCase("ro-RO").includes(clinicSearch.trim().toLocaleLowerCase("ro-RO")));
+  const filteredDoctorOptions = doctorOptions.filter((option) => option.label.toLocaleLowerCase("ro-RO").includes(doctorSearch.trim().toLocaleLowerCase("ro-RO")));
 
   return (
     <section className="billing-page__tab">
-      <div className="billing-page__toolbar billing-page__toolbar--inline">
+      <div className="billing-page__toolbar billing-page__toolbar--actions">
         <Button onClick={() => setScope("clinic")} variant={scope === "clinic" ? "primary" : "secondary"}>Clinică</Button>
         <Button onClick={() => setScope("doctor")} variant={scope === "doctor" ? "primary" : "secondary"}>Medic</Button>
         <Button onClick={() => setSource("documents")} variant={activeSource === "documents" ? "primary" : "secondary"}>Documente restante</Button>
@@ -996,12 +1267,16 @@ function StatementsTab({
           {activeSource === "documents" && hasSelection ? "Exportă selecția PDF" : "Export PDF"}
         </Button>
         {hasSelection ? <Button onClick={() => onSelectionChange([])} variant="secondary">Golește selecția</Button> : null}
+        <Button disabled={!statement} onClick={() => onShare(scope, activeSource, "EMAIL")} variant="outline">Trimite email</Button>
+        <Button disabled={!statement} onClick={() => onShare(scope, activeSource, "WHATSAPP")} variant="outline">Trimite WhatsApp</Button>
       </div>
       <div className="billing-page__filters">
+        <TextInput label="Caută clinica" placeholder="Nume clinică" value={clinicSearch} onChange={(event) => setClinicSearch(event.target.value)} />
+        <TextInput label="Caută medicul" placeholder="Nume medic" value={doctorSearch} onChange={(event) => setDoctorSearch(event.target.value)} />
         {scope === "clinic" ? (
           <Select
             label="Clinică"
-            options={clinicOptions}
+            options={filteredClinicOptions}
             placeholder="Alege clinica"
             value={selectedValue}
             onChange={(event) => onClinicChange(event.target.value)}
@@ -1009,7 +1284,7 @@ function StatementsTab({
         ) : (
           <Select
             label="Medic"
-            options={doctorOptions}
+            options={filteredDoctorOptions}
             placeholder="Alege medicul"
             value={selectedValue}
             onChange={(event) => onDoctorChange(event.target.value)}
@@ -1164,13 +1439,11 @@ function StatementWorksTable({ currency, rows }: { readonly currency: string; re
 
 function BillableWorksTab({
   canCreateInvoice,
-  canCreateNote,
   currency,
   isCreating,
   locale,
-  onCreateNote,
-  onCreateProforma,
   onCreateInvoice,
+  onReviewInvoice,
   onExport,
   onToggleWork,
   query,
@@ -1178,13 +1451,11 @@ function BillableWorksTab({
   selectedWorkIds,
 }: {
   readonly canCreateInvoice: boolean;
-  readonly canCreateNote: boolean;
   readonly currency: string;
   readonly isCreating: boolean;
   readonly locale: string;
-  readonly onCreateNote: () => void;
-  readonly onCreateProforma: () => void;
   readonly onCreateInvoice: () => void;
+  readonly onReviewInvoice: () => void;
   readonly onExport: () => void;
   readonly onToggleWork: (work: BillableWork) => void;
   readonly query: ReturnType<typeof useBillableWorks>;
@@ -1193,35 +1464,83 @@ function BillableWorksTab({
 }): ReactNode {
   const columns = useMemo<readonly DataTableColumn<BillableWork>[]>(() => [
     { id: "select", header: "", renderCell: (work) => <input aria-label={`Selectează ${work.code}`} checked={selectedWorkIds.includes(work.id)} disabled={!work.isBillable} onChange={() => onToggleWork(work)} type="checkbox" /> },
-    { id: "code", header: "Cod", renderCell: (work) => work.code },
-    { id: "createdAt", header: "Intrare", renderCell: (work) => formatDate(work.createdAt) },
     { id: "clinic", header: "Clinică", renderCell: (work) => work.clinicName },
-    { id: "company", header: "Firmă", renderCell: (work) => work.legalEntityCode ?? "-" },
-    { id: "cycle", header: "Ciclu", renderCell: (work) => work.workCycleNumber ? `Ciclul ${work.workCycleNumber}` : "-" },
     { id: "doctor", header: "Medic", renderCell: (work) => work.doctorName },
     { id: "patient", header: "Pacient", renderCell: (work) => work.patientName },
+    { id: "createdAt", header: "Data intrare", renderCell: (work) => formatDate(work.createdAt) },
+    { id: "code", header: "Cod", renderCell: (work) => work.code },
     { id: "type", header: "Tip", renderCell: (work) => work.workTypeName },
     { id: "quantity", header: "Elemente", align: "right", renderCell: (work) => work.quantity },
-    { id: "total", header: "Valoare", align: "right", renderCell: (work) => work.totalPriceMinor === null ? "Restricționat" : formatMoneyMinor(work.totalPriceMinor, work.currency ?? currency, locale) },
     { id: "status", header: "Facturare", renderCell: (work) => work.isBillable ? "Nefacturat" : work.unavailableReason },
+    { id: "total", header: "Valoare", align: "right", renderCell: (work) => work.totalPriceMinor === null ? "Restricționat" : formatMoneyMinor(work.totalPriceMinor, work.currency ?? currency, locale) },
   ], [currency, locale, onToggleWork, selectedWorkIds]);
 
   return (
     <section className="billing-page__tab">
-      <div className="billing-page__toolbar">
+      <div className="billing-page__toolbar billing-page__toolbar--actions">
         <p>{selectedWorkIds.length} lucrări selectate · {formatMoneyMinor(selectedTotal, currency, locale)}</p>
         <Button onClick={onExport} variant="outline">Export CSV</Button>
-        {canCreateNote ? <Button disabled={selectedWorkIds.length === 0 || isCreating} onClick={onCreateNote} variant="secondary">Creează notă de plată</Button> : null}
-        {canCreateNote ? <Button disabled={selectedWorkIds.length === 0 || isCreating} onClick={onCreateProforma} variant="secondary">Creează proformă</Button> : null}
-        {canCreateInvoice ? <Button disabled={selectedWorkIds.length === 0 || isCreating} onClick={onCreateInvoice} variant="secondary">Creează factură</Button> : null}
+        {canCreateInvoice ? <Button disabled={selectedWorkIds.length === 0 || isCreating} onClick={onReviewInvoice} variant="secondary">Revizuiește valorile</Button> : null}
+        {canCreateInvoice ? <Button disabled={selectedWorkIds.length === 0 || isCreating} onClick={onCreateInvoice}>Emite factura</Button> : null}
       </div>
       <DataTable columns={columns} emptyMessage="Nu există lucrări nefacturate în perioada selectată." error={query.error ? getErrorMessage(query.error) : undefined} getRowKey={(work) => work.id} isLoading={query.isLoading} rows={query.data?.items ?? []} />
     </section>
   );
 }
 
+function StornoTab({
+  documents,
+  error,
+  isLoading,
+  isMutating,
+  locale,
+  onCreateStorno,
+  onDownloadPdf,
+  onSelectionChange,
+  selectedDocumentIds,
+}: {
+  readonly documents: readonly BillingDocumentSummary[];
+  readonly error: unknown;
+  readonly isLoading: boolean;
+  readonly isMutating: boolean;
+  readonly locale: string;
+  readonly onCreateStorno: (documentId: string) => Promise<void>;
+  readonly onDownloadPdf: (documentId: string) => void;
+  readonly onSelectionChange: (ids: readonly string[]) => void;
+  readonly selectedDocumentIds: readonly string[];
+}): ReactNode {
+  const eligibleDocuments = documents.filter((document) => (
+    document.stornoOfDocumentId === null
+    && document.status !== "DRAFT"
+    && document.status !== "CANCELLED"
+  ));
+  const selected = eligibleDocuments.find((document) => selectedDocumentIds.includes(document.id)) ?? null;
+  const eligible = selected && selected.status !== "DRAFT" && selected.status !== "CANCELLED" && !selected.stornoDocumentId;
+  const columns = useMemo<readonly DataTableColumn<BillingDocumentSummary>[]>(() => [
+    { id: "select", header: "", renderCell: (document) => <input aria-label={`Selectează ${document.formattedNumber ?? document.id}`} checked={selectedDocumentIds.includes(document.id)} onChange={() => onSelectionChange(toggleSelectedId(selectedDocumentIds, document.id))} type="checkbox" /> },
+    { id: "number", header: "Factură", renderCell: (document) => document.formattedNumber ?? "-" },
+    { id: "status", header: "Status", renderCell: (document) => toDocumentStatusLabel(document.status) },
+    { id: "clinic", header: "Clinică", renderCell: (document) => document.clinicName },
+    { id: "issueDate", header: "Data", renderCell: (document) => formatDate(document.issueDate) },
+    { id: "total", header: "Total", align: "right", renderCell: (document) => formatMoneyMinor(document.totalMinor, document.currency, locale) },
+    { id: "paid", header: "Plătit înainte", align: "right", renderCell: (document) => formatMoneyMinor(document.paidMinor, document.currency, locale) },
+    { id: "storno", header: "Storno", renderCell: (document) => document.stornoDocumentId ? "Creat" : "Disponibil" },
+  ], [locale, onSelectionChange, selectedDocumentIds]);
+
+  return (
+    <section className="billing-page__tab">
+      <div className="billing-page__toolbar billing-page__toolbar--wrap">
+        <p>{selected ? `Plătit înainte de storno: ${formatMoneyMinor(selected.paidMinor, selected.currency, locale)}` : "Selectează o factură emisă."}</p>
+        <Button disabled={!eligible || isMutating} isLoading={isMutating} onClick={() => selected && void onCreateStorno(selected.id)}>Creează storno</Button>
+        <Button disabled={!selected} onClick={() => selected && onDownloadPdf(selected.id)} variant="outline">Export PDF</Button>
+      </div>
+      <DataTable columns={columns} emptyMessage="Nu există facturi eligibile pentru storno." error={error ? getErrorMessage(error) : undefined} getRowKey={(document) => document.id} isLoading={isLoading} rows={eligibleDocuments} />
+      {selected ? <section className="billing-page__print-preview" aria-label="Istoric factură originală"><h2>{selected.formattedNumber ?? "Factura"}</h2><p>Factura originală rămâne nemodificată. Plătit înainte de storno: {formatMoneyMinor(selected.paidMinor, selected.currency, locale)}. Plățile istorice rămân asociate facturii originale.</p></section> : null}
+    </section>
+  );
+}
+
 function DocumentsTab({
-  canConvertSelected,
   canRecordPayment,
   currency,
   documents,
@@ -1231,8 +1550,7 @@ function DocumentsTab({
   locale,
   onExport,
   onDownloadPdf,
-  onIssueSelected,
-  onConvertSelected,
+  onShareDocument,
   onOpenPreview,
   onRecordPaymentSelected,
   onSelectionChange,
@@ -1241,7 +1559,6 @@ function DocumentsTab({
   selectedDocumentIds,
   selectionLabel,
 }: {
-  readonly canConvertSelected: boolean;
   readonly canRecordPayment: boolean;
   readonly currency: string;
   readonly documents: readonly BillingDocumentSummary[];
@@ -1251,8 +1568,7 @@ function DocumentsTab({
   readonly locale: string;
   readonly onExport: () => void;
   readonly onDownloadPdf: (documentId: string) => void;
-  readonly onIssueSelected: (documents: readonly BillingDocumentSummary[]) => Promise<void>;
-  readonly onConvertSelected?: (documents: readonly BillingDocumentSummary[]) => Promise<void>;
+  readonly onShareDocument: (document: BillingDocumentSummary, channel: "EMAIL" | "WHATSAPP" | "SHARE") => void;
   readonly onOpenPreview: (documentId: string) => void;
   readonly onRecordPaymentSelected: (documentId: string) => Promise<void>;
   readonly onSelectionChange: (ids: readonly string[]) => void;
@@ -1261,7 +1577,6 @@ function DocumentsTab({
   readonly selectedDocumentIds: readonly string[];
   readonly selectionLabel: string;
 }): ReactNode {
-  const toast = useToast();
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const selectedDocuments = documents.filter((document) => selectedDocumentIds.includes(document.id));
   const selectedDocument = selectedDocuments[0] ?? null;
@@ -1297,30 +1612,6 @@ function DocumentsTab({
     });
   }, [canUsePaymentForm, isPaymentOpen, selectedDocument?.balanceMinor, selectedDocument?.id, setPaymentForm]);
 
-  async function issueSelected(): Promise<void> {
-    if (selectedDocuments.length === 0) {
-      return;
-    }
-
-    const issueableDocuments = selectedDocuments.filter((document) => document.status === "DRAFT");
-    if (issueableDocuments.length === 0) {
-      toast.showToast({ message: "Documentele selectate sunt deja emise.", variant: "error" });
-      return;
-    }
-
-    await onIssueSelected(issueableDocuments);
-    if (issueableDocuments.length !== selectedDocuments.length) {
-      toast.showToast({ message: `Au fost emise doar ${issueableDocuments.length} documente draft selectate.`, variant: "success" });
-    }
-  }
-
-  async function convertSelected(): Promise<void> {
-    if (!onConvertSelected || selectedDocuments.length !== 1) {
-      return;
-    }
-    await onConvertSelected(selectedDocuments);
-  }
-
   async function recordSelectedPayment(): Promise<void> {
     if (!selectedDocument) {
       return;
@@ -1331,17 +1622,17 @@ function DocumentsTab({
 
   return (
     <section className="billing-page__tab">
-      <div className="billing-page__toolbar billing-page__toolbar--wrap">
+      <div className="billing-page__toolbar billing-page__toolbar--actions">
         <p>{selectedCount} {selectionLabel} selectate · {formatMoneyMinor(selectedTotalMinor, currency, locale)}</p>
         <Button onClick={onExport} variant="outline">Export CSV</Button>
-        <Button disabled={selectedCount === 0 || isMutating} onClick={() => void issueSelected()} variant="secondary">Emite selectate</Button>
-        {canConvertSelected ? <Button disabled={selectedCount !== 1 || selectedDocument?.type !== "PROFORMA" || isMutating} onClick={() => void convertSelected()} variant="secondary">Transformă în factură</Button> : null}
-        {canRecordPayment ? <Button disabled={!canUsePaymentForm || selectedCount !== 1 || isMutating} onClick={() => setIsPaymentOpen(true)} variant="secondary">Înregistrează încasare</Button> : null}
+        {canRecordPayment ? <Button disabled={!canUsePaymentForm || selectedCount !== 1 || isMutating} onClick={() => setIsPaymentOpen(true)} variant="secondary">Încasează</Button> : null}
         <Button disabled={selectedCount === 0} onClick={() => onDownloadPdf(selectedDocument ? selectedDocument.id : "")} variant="outline">Export PDF</Button>
+        <Button disabled={!selectedDocument} onClick={() => selectedDocument && onShareDocument(selectedDocument, "EMAIL")} variant="outline">Trimite email</Button>
+        <Button disabled={!selectedDocument} onClick={() => selectedDocument && onShareDocument(selectedDocument, "WHATSAPP")} variant="outline">Trimite WhatsApp</Button>
       </div>
       <DataTable
         columns={columns}
-        emptyMessage="Nu există proforme sau facturi."
+        emptyMessage="Nu există facturi."
         error={error ? getErrorMessage(error) : undefined}
         getRowKey={(document) => document.id}
         isLoading={isLoading}
@@ -1647,17 +1938,12 @@ function BillingGuideTab(): ReactNode {
     {
       id: "uninvoiced",
       title: "Lucrări nefacturate",
-      content: "Aici selectezi lucrările eligibile și folosești butoanele Creează notă de plată, Creează proformă sau Creează factură.",
+      content: "Aici selectezi lucrările eligibile și folosești Emite factura pentru fluxul normal sau Revizuiește valorile pentru draftul editabil.",
     },
     {
       id: "statement",
       title: "Notă de plată",
       content: "În fila Note de plată alegi Clinică sau Medic, schimbi sursa între documente și lucrări nefacturate și exporți PDF-ul anexă.",
-    },
-    {
-      id: "proforma",
-      title: "Proformă",
-      content: "Proforma rămâne document de lucru până la emitere. Din fila Proforme poți deschide, emite, transforma sau încasa documentul.",
     },
     {
       id: "invoice",
@@ -1687,7 +1973,7 @@ function BillingGuideTab(): ReactNode {
     {
       id: "companies",
       title: "NC vs NG",
-      content: "Firma activă din sidebar separă strict documentele și arhivele. Ce este închis pe NC nu apare pe NG și invers.",
+      content: "Firma activă din sidebar separă strict documentele și arhivele. Ce este închis pe CDT nu apare pe NG și invers.",
     },
   ] as const;
 
@@ -1750,24 +2036,6 @@ function MonthCloseGroupAccordion({
           ),
         }))}
       />
-    </section>
-  );
-}
-
-function SeriesTab({ canConfigure, isLoading, series }: { readonly canConfigure: boolean; readonly isLoading: boolean; readonly series: readonly { readonly currentNumber: number; readonly documentType: string; readonly id: string; readonly isActive: boolean; readonly legalEntityCode: string | null; readonly prefix: string; readonly year: number }[] }): ReactNode {
-  const columns = useMemo<readonly DataTableColumn<(typeof series)[number]>[]>(() => [
-    { id: "type", header: "Tip", renderCell: (row) => row.documentType },
-    { id: "company", header: "Firmă", renderCell: (row) => row.legalEntityCode ?? "-" },
-    { id: "prefix", header: "Serie", renderCell: (row) => row.prefix },
-    { id: "year", header: "An", renderCell: (row) => row.year },
-    { id: "current", header: "Ultimul număr", align: "right", renderCell: (row) => row.currentNumber },
-    { id: "active", header: "Status", renderCell: (row) => row.isActive ? "Activă" : "Inactivă" },
-  ], []);
-
-  return (
-    <section className="billing-page__tab">
-      <p className="billing-page__readonly">Seriile controlează numerotarea documentelor pe firmă. {canConfigure ? "Le poți configura." : "Ai acces de citire, dar nu poți configura seriile."}</p>
-      <DataTable columns={columns} emptyMessage="Nu există serii configurate." getRowKey={(row) => row.id} isLoading={isLoading} rows={series} />
     </section>
   );
 }

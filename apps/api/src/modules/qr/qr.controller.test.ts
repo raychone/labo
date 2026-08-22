@@ -24,7 +24,7 @@ const qrResponse = {
     quantity: 1,
     workTypeName: "Coroana zirconiu",
   },
-  workCode: "WO-2026-000001",
+  workCode: "WO-26-0001",
   workId: "work_order_1",
 };
 
@@ -52,7 +52,7 @@ describe("QrController", () => {
     });
     resolveQr.mockResolvedValue({
       work: {
-        code: "WO-2026-000001",
+        code: "WO-26-0001",
         id: "work_order_1",
       },
     });
@@ -161,7 +161,18 @@ describe("QrController", () => {
       .expect(403);
   });
 
-  it("resolves QR payloads with CSRF", async () => {
+  it("resolves short work-code fallback payloads with CSRF", async () => {
+    await request(app.getHttpServer() as App)
+      .post("/works/resolve-qr")
+      .set("Cookie", ["dl_session=session-token", "dl_csrf=csrf-token"])
+      .set("x-csrf-token", "csrf-token")
+      .send({ payload: "WO-26-0001", source: "manual" })
+      .expect(200);
+
+    expect(resolveQr).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ payload: "WO-26-0001", source: "manual" }));
+  });
+
+  it("keeps resolving legacy work-code fallback payloads with CSRF", async () => {
     await request(app.getHttpServer() as App)
       .post("/works/resolve-qr")
       .set("Cookie", ["dl_session=session-token", "dl_csrf=csrf-token"])

@@ -5,12 +5,16 @@ import { BILLING_DOCUMENT_SORT_FIELDS, BILLING_GROUP_BY, BILLING_SORT_DIRECTIONS
 
 const BILLING_DOCUMENT_TYPES = ["PROFORMA", "INVOICE"] as const;
 const BILLING_DOCUMENT_STATUSES = ["DRAFT", "ISSUED", "PARTIALLY_PAID", "PAID", "CANCELLED"] as const;
+const BILLING_ADJUSTMENT_SCOPES = ["WORK", "PATIENT", "DOCUMENT"] as const;
+const BILLING_ADJUSTMENT_MODES = ["PERCENTAGE", "FIXED"] as const;
 const PAYMENT_METHODS = ["CASH", "BANK_TRANSFER", "CARD", "OTHER"] as const;
 const PAYMENT_STATUSES = ["UNPAID", "PARTIALLY_PAID", "PAID"] as const;
 const DOCUMENT_PAYMENT_FILTERS = ["ALL", "UNPAID", "PARTIALLY_PAID", "PAID", "OUTSTANDING", "DUE", "OVERDUE", "CANCELLED"] as const;
 
 type BillingDocumentType = (typeof BILLING_DOCUMENT_TYPES)[number];
 type BillingDocumentStatus = (typeof BILLING_DOCUMENT_STATUSES)[number];
+type BillingAdjustmentScope = (typeof BILLING_ADJUSTMENT_SCOPES)[number];
+type BillingAdjustmentMode = (typeof BILLING_ADJUSTMENT_MODES)[number];
 type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 type DocumentPaymentFilter = (typeof DOCUMENT_PAYMENT_FILTERS)[number];
@@ -222,6 +226,37 @@ export class ListBillingDocumentsQueryDto {
   public readonly sortDirection: (typeof BILLING_SORT_DIRECTIONS)[number] = "desc";
 }
 
+export class BillingAdjustmentDto {
+  @IsIn(BILLING_ADJUSTMENT_SCOPES)
+  public readonly scope!: BillingAdjustmentScope;
+
+  @IsIn(BILLING_ADJUSTMENT_MODES)
+  public readonly mode!: BillingAdjustmentMode;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  public readonly workOrderId?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(160)
+  public readonly patientName?: string | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  public readonly amountMinor?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @Min(0.01)
+  @Max(100)
+  public readonly percentage?: number;
+}
+
 export class CreateBillingDocumentDto {
   @Transform(({ value }) => trimRequiredString(value))
   @IsISO8601({ strict: true })
@@ -243,6 +278,12 @@ export class CreateBillingDocumentDto {
   @ArrayMaxSize(100)
   @IsString({ each: true })
   public readonly workOrderIds!: readonly string[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @Type(() => BillingAdjustmentDto)
+  public readonly adjustments?: readonly BillingAdjustmentDto[];
 }
 
 export class UpdateBillingDocumentDto {
@@ -305,6 +346,17 @@ export class RecordPaymentDto {
   @IsString()
   @MaxLength(1000)
   public readonly notes?: string | null;
+}
+
+export class DocumentShareAttemptDto {
+  @IsIn(["EMAIL", "WHATSAPP", "SHARE"])
+  public readonly channel!: "EMAIL" | "WHATSAPP" | "SHARE";
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(320)
+  public readonly recipient?: string | null;
 }
 
 export class SearchBillingQueryDto {

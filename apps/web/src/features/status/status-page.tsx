@@ -159,8 +159,8 @@ function readQuery(searchParams: URLSearchParams): OperationalStatusQuery {
     tab: isOperationalTab(tab) ? tab : defaultQuery.tab,
     ...(searchParams.get("clinicId") ? { clinicId: searchParams.get("clinicId") } : {}),
     ...(searchParams.get("doctorId") ? { doctorId: searchParams.get("doctorId") } : {}),
-    ...(searchParams.get("executionLegalEntityCode") === "NC" || searchParams.get("executionLegalEntityCode") === "NG"
-      ? { executionLegalEntityCode: searchParams.get("executionLegalEntityCode") as "NC" | "NG" }
+    ...(searchParams.get("executionLegalEntityCode") === "CDT" || searchParams.get("executionLegalEntityCode") === "NG"
+      ? { executionLegalEntityCode: searchParams.get("executionLegalEntityCode") as "CDT" | "NG" }
       : {}),
     ...(searchParams.get("ownerUserId") ? { ownerUserId: searchParams.get("ownerUserId") } : {}),
     ...(searchParams.get("patientId") ? { patientId: searchParams.get("patientId") } : {}),
@@ -191,6 +191,25 @@ function getWorkTypeCompactLabel(workType: OperationalStatusRow["workType"]): st
   return workType.symbol.trim() || workType.name;
 }
 
+function getClinicDoctorDisplay(row: OperationalStatusRow): string {
+  return row.clinic?.name ?? row.doctor?.name ?? "-";
+}
+
+function getRouteMarker(row: OperationalStatusRow): string {
+  if (!row.delivery.status) {
+    return "-";
+  }
+  return row.delivery.status === "PICKED_UP" ? "Ridicare" : "Livrare";
+}
+
+function getDeadlineDisplay(row: OperationalStatusRow): ReactNode {
+  return (
+    <span className="status-page__metric-inline">
+      <span>{row.deadline.effectiveDueAt ? formatDateTime(row.deadline.effectiveDueAt) : "-"}</span>
+    </span>
+  );
+}
+
 function toDataSort(query: OperationalStatusQuery): DataTableSort {
   return {
     columnId: query.sortBy,
@@ -213,35 +232,17 @@ function toStatusVariant(row: OperationalStatusRow): "awaiting" | "closed" | "de
   if (row.deadline.state === "LATE") {
     return "rejected";
   }
-  if (row.delivery.status === "DELIVERED" || row.logistics.status === "DELIVERED") {
-    return "delivered";
-  }
-  if (row.workflow.currentStage?.status === "IN_PROGRESS" || row.claimStatus === "CLAIMED") {
-    return "production";
-  }
-  if (row.workflow.status === "COMPLETED") {
-    return "closed";
-  }
-  if (row.claimStatus === "UNCLAIMED") {
-    return "awaiting";
-  }
+  if (row.operationalStatus === "FINALIZATA") return "closed";
+  if (row.operationalStatus === "IN_LUCRU") return "production";
+  if (row.operationalStatus === "IN_ASTEPTARE") return "awaiting";
   return "registered";
 }
 
 function toOperationalLabel(row: OperationalStatusRow): string {
-  if (row.delivery.status === "DELIVERED" || row.logistics.status === "DELIVERED") {
-    return "Plecată la medic";
-  }
-  if (row.deadline.state === "LATE") {
-    return "Întârziată";
-  }
-  if (row.workflow.currentStage?.status === "IN_PROGRESS" || row.claimStatus === "CLAIMED") {
-    return "În lucru";
-  }
-  if (row.claimStatus === "UNCLAIMED") {
-    return "Disponibilă";
-  }
-  return row.workflow.status === "COMPLETED" ? "Finalizată" : "Înregistrată";
+  return row.operationalStatus === "RECEPTIE" ? "Recepție"
+    : row.operationalStatus === "IN_LUCRU" ? "În lucru"
+      : row.operationalStatus === "IN_ASTEPTARE" ? "În așteptare"
+        : "Finalizată";
 }
 
 function toStageFilterOptions(rows: readonly OperationalStatusRow[]): readonly SelectOption[] {
@@ -320,7 +321,7 @@ const priorityOptions: readonly SelectOption[] = [
 
 const legalEntityOptions: readonly SelectOption[] = [
   { label: "Toate", value: "" },
-  { label: "NC", value: "NC" },
+  { label: "CDT", value: "CDT" },
   { label: "NG", value: "NG" },
 ];
 
@@ -391,22 +392,9 @@ export function StatusPage(): ReactNode {
 
   const columns = useMemo<readonly DataTableColumn<OperationalStatusRow>[]>(() => [
     {
-      header: "Tehnician",
-      id: "technician",
-      renderCell: (row) => (
-        <div className="status-page__technician">
-          {row.workOwner?.preferredColor ? (
-            <span
-              aria-label={row.workOwner.displayName}
-              className="status-page__technician-badge"
-              title={row.workOwner.displayName}
-              style={{ backgroundColor: getSafeColor(row.workOwner.preferredColor) ?? "transparent" }}
-            />
-          ) : (
-            <span className="status-page__technician-badge status-page__technician-badge--empty" title="Fără tehnician" />
-          )}
-        </div>
-      ),
+      header: "Clinica sau Medic",
+      id: "clinicDoctor",
+      renderCell: (row) => getClinicDoctorDisplay(row),
     },
     {
       header: "Pacient",
@@ -415,22 +403,35 @@ export function StatusPage(): ReactNode {
       renderCell: (row) => <strong>{row.patient.name}</strong>,
     },
     {
-      header: "Tip",
+      header: "Tip lucrare",
       id: "workType",
       renderCell: (row) => <BadgePill label={getWorkTypeCompactLabel(row.workType)} tone="neutral" />,
     },
     {
-      header: "Flux",
-      id: "workflow",
+      header: "Culoare",
+      id: "shade",
+      renderCell: (row) => row.shade ?? "-",
+    },
+    {
+      header: "Tehnician",
+      id: "technician",
       renderCell: (row) => (
-        <div className="status-page__badge-stack">
-          <BadgePill
-            label={row.workflow.currentStage?.name ?? (row.workflow.status === "COMPLETED" ? "Flux finalizat" : "Fără etapă")}
-            tone={row.workflow.status === "COMPLETED" ? "success" : row.workflow.currentStage?.status === "IN_PROGRESS" ? "info" : "neutral"}
-          />
-          <span className="status-page__muted">{row.workflow.progress ?? `${row.workflow.progressCompleted}/${row.workflow.progressTotal}`}</span>
-        </div>
+        <span className="status-page__metric-inline">
+          {row.workOwner?.preferredColor ? <span className="status-page__color-dot" style={{ backgroundColor: getSafeColor(row.workOwner.preferredColor) ?? "transparent" }} /> : null}
+          <span>{row.workOwner?.displayName ?? "-"}</span>
+        </span>
       ),
+    },
+    {
+      header: "Preluare",
+      id: "claimedAt",
+      renderCell: (row) => row.claimedAt ? formatDateTime(row.claimedAt) : "-",
+    },
+    {
+      header: "Termen",
+      id: "effectiveDueAt",
+      isSortable: true,
+      renderCell: getDeadlineDisplay,
     },
     {
       header: "Stare",
@@ -443,22 +444,14 @@ export function StatusPage(): ReactNode {
       ),
     },
     {
-      header: "Prioritate",
-      id: "priority",
-      isSortable: true,
-      renderCell: (row) => <PriorityBadge label={toPriorityLabel(row.priority)} variant={row.priority === "URGENT" ? "urgent" : "normal"} />,
+      header: "Alerte",
+      id: "alerts",
+      renderCell: () => "-",
     },
     {
-      header: "Acțiuni",
-      id: "actions",
-      renderCell: (row) => (
-        <div className="status-page__row-actions">
-          <Button onClick={() => setSelectedRow(row)} size="small" variant="outline">Detalii</Button>
-          <Link className="status-page__open-link" to={`/works?workId=${encodeURIComponent(row.id)}`}>
-            Deschide
-          </Link>
-        </div>
-      ),
+      header: "Livrare/Ridicare",
+      id: "deliveryPickup",
+      renderCell: getRouteMarker,
     },
   ], []);
 
@@ -525,8 +518,8 @@ export function StatusPage(): ReactNode {
                 value={query.search ?? ""}
               />
               <Select
-                label="NC / NG"
-                onChange={(event) => patchQuery({ executionLegalEntityCode: event.target.value === "NC" || event.target.value === "NG" ? event.target.value : undefined })}
+                  label="CDT / NG"
+                  onChange={(event) => patchQuery({ executionLegalEntityCode: event.target.value === "CDT" || event.target.value === "NG" ? event.target.value : undefined })}
                 options={legalEntityOptions}
                 value={query.executionLegalEntityCode ?? ""}
               />
@@ -697,20 +690,14 @@ function StatusCards({ error, isLoading, onOpenDetails, rows }: { readonly error
           <div className="status-page__card-grid">
             <Metric
               label="Tehnician"
-              value={row.workOwner?.preferredColor ? <span className="status-page__technician-badge" aria-label={row.workOwner.displayName} title={row.workOwner.displayName} style={{ backgroundColor: getSafeColor(row.workOwner.preferredColor) ?? "transparent" }} /> : <span className="status-page__technician-badge status-page__technician-badge--empty" title="Fără tehnician" />}
+              value={row.workOwner ? <span className="status-page__metric-inline">{row.workOwner.preferredColor ? <span className="status-page__color-dot" style={{ backgroundColor: getSafeColor(row.workOwner.preferredColor) ?? "transparent" }} /> : null}{row.workOwner.displayName}</span> : "-"}
             />
-            <Metric label="Tip" value={<BadgePill label={getWorkTypeCompactLabel(row.workType)} tone="neutral" />} />
-            <Metric
-              label="Flux"
-              value={
-                <span className="status-page__metric-inline">
-                  <BadgePill label={row.workflow.currentStage?.name ?? "Fără etapă"} tone={row.workflow.status === "COMPLETED" ? "success" : row.workflow.currentStage?.status === "IN_PROGRESS" ? "info" : "neutral"} />
-                  <span>{row.workflow.progress ?? `${row.workflow.progressCompleted}/${row.workflow.progressTotal}`}</span>
-                </span>
-              }
-            />
+            <Metric label="Clinica sau Medic" value={getClinicDoctorDisplay(row)} />
+            <Metric label="Culoare" value={row.shade ?? "-"} />
+            <Metric label="Preluare" value={row.claimedAt ? formatDateTime(row.claimedAt) : "-"} />
+            <Metric label="Termen" value={getDeadlineDisplay(row)} />
             <Metric label="Stare" value={<BadgePill label={toOperationalLabel(row)} tone={toStatusVariant(row) === "closed" ? "success" : toStatusVariant(row) === "production" ? "info" : toStatusVariant(row) === "rejected" ? "danger" : toStatusVariant(row) === "awaiting" ? "warning" : "neutral"} />} />
-            <Metric label="Prioritate" value={<PriorityBadge label={toPriorityLabel(row.priority)} variant={row.priority === "URGENT" ? "urgent" : "normal"} />} />
+            <Metric label="Livrare/Ridicare" value={getRouteMarker(row)} />
           </div>
           <div className="status-page__card-actions">
             <Button onClick={() => onOpenDetails(row)} variant="outline">Detalii</Button>
@@ -734,8 +721,8 @@ function StatusDetailDrawer({ onOpenChange, row }: { readonly onOpenChange: (ope
         <div className="status-page__drawer-grid">
           <Metric label="Cod" value={row.workCode} />
           <Metric label="Pacient" value={row.patient.name} />
-          <Metric label="Cabinet" value={row.clinic.name} />
-          <Metric label="Medic" value={row.doctor.name} />
+          <Metric label="Cabinet" value={row.clinic?.name ?? "-"} />
+          <Metric label="Medic" value={row.doctor?.name ?? "-"} />
           <Metric label="Tip" value={getWorkTypeCompactLabel(row.workType)} />
           <Metric
             label="Tehnician"

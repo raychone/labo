@@ -1,4 +1,6 @@
-import { Body, Controller, ForbiddenException, Get, Inject, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, ForbiddenException, Get, Inject, Param, Patch, Post, Query, Req, Res, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FilesInterceptor } from "@nestjs/platform-express";
+import type { Response } from "express";
 import type { Request } from "express";
 
 import { AuthGuard } from "../auth/auth.guard.js";
@@ -23,12 +25,16 @@ import {
   ReassignWorkDto,
   RecalculateWorkDeadlineDto,
   ReleaseWorkDto,
+  SetWorkStatusDto,
   SetManualWorkDeadlineDto,
+  UpdateTechnicianWorkDetailsDto,
   UpdateWorkDto,
   UpsertRealLabSheetDto,
   WorkDeadlinePreviewDto,
 } from "./dto/works.dto.js";
 import { WorksService } from "./works.service.js";
+import { LOGISTICS_ATTACHMENT_LIMITS } from "../logistics/logistics.constants.js";
+import type { UploadedAttachmentFile } from "../logistics/logistics.service.js";
 
 @Controller("works")
 @RequireLegalEntityContext()
@@ -78,6 +84,33 @@ export class WorksController {
   public async getWork(@CurrentUser() actor: AuthenticatedUser, @Param("id") workOrderId: string) {
     await this.ensureCanReadWorks(actor.id);
     return this.worksService.getWork(actor.id, workOrderId, await this.canReadPricing(actor.id));
+  }
+
+  @Get(":id/attachments")
+  @RequirePermission("files.read", "ASSIGNED")
+  public listAttachments(@CurrentUser() actor: AuthenticatedUser, @Param("id") workOrderId: string) {
+    return this.worksService.getWork(actor.id, workOrderId, false).then((work) => work.attachments);
+  }
+
+  @Get(":id/attachments/:attachmentId")
+  @RequirePermission("files.read", "ASSIGNED")
+  public async downloadAttachment(@CurrentUser() actor: AuthenticatedUser, @Param("id") workOrderId: string, @Param("attachmentId") attachmentId: string, @Res() response: Response) {
+    const attachment = await this.worksService.getAttachment(actor.id, workOrderId, attachmentId);
+    const fileName = attachment.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+    response
+      .status(200)
+      .setHeader("Content-Type", attachment.mimeType)
+      .setHeader("Content-Length", String(attachment.content.length))
+      .setHeader("Content-Disposition", `${attachment.mimeType.startsWith("image/") ? "inline" : "attachment"}; filename="${fileName}"`)
+      .send(Buffer.from(attachment.content));
+  }
+
+  @Post(":id/attachments")
+  @UseGuards(CsrfGuard)
+  @UseInterceptors(FilesInterceptor("attachments", LOGISTICS_ATTACHMENT_LIMITS.maxFiles, { limits: { fileSize: LOGISTICS_ATTACHMENT_LIMITS.maxFileBytes, files: LOGISTICS_ATTACHMENT_LIMITS.maxFiles } }))
+  @RequirePermission("files.upload", "ASSIGNED")
+  public addAttachments(@Param("id") workOrderId: string, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request, @UploadedFiles() files: UploadedAttachmentFile[] = []) {
+    return this.worksService.addAttachments({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, workOrderId, files);
   }
 
   @Get(":id/cycles")
@@ -158,6 +191,20 @@ export class WorksController {
   @UseGuards(CsrfGuard)
   public reassignWork(@Param("id") workOrderId: string, @Body() dto: ReassignWorkDto, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
     return this.worksService.reassignWork({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, workOrderId, dto);
+  }
+
+  @Post(":id/status")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("works.change_status", "OWN_STAGE")
+  public setWorkStatus(@Param("id") workOrderId: string, @Body() dto: SetWorkStatusDto, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
+    return this.worksService.setWorkStatus({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, workOrderId, dto);
+  }
+
+  @Patch(":id/technician-details")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("works.technical_details.update", "ASSIGNED")
+  public updateTechnicianDetails(@Param("id") workOrderId: string, @Body() dto: UpdateTechnicianWorkDetailsDto, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
+    return this.worksService.updateTechnicianDetails({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, workOrderId, dto);
   }
 
   @Post()

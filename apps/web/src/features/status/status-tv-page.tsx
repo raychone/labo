@@ -111,8 +111,8 @@ function readQuery(searchParams: URLSearchParams): OperationalStatusQuery {
     tab: isOperationalTab(tab) ? tab : defaultQuery.tab,
     ...(searchParams.get("clinicId") ? { clinicId: searchParams.get("clinicId") } : {}),
     ...(searchParams.get("doctorId") ? { doctorId: searchParams.get("doctorId") } : {}),
-    ...(searchParams.get("executionLegalEntityCode") === "NC" || searchParams.get("executionLegalEntityCode") === "NG"
-      ? { executionLegalEntityCode: searchParams.get("executionLegalEntityCode") as "NC" | "NG" }
+    ...(searchParams.get("executionLegalEntityCode") === "CDT" || searchParams.get("executionLegalEntityCode") === "NG"
+      ? { executionLegalEntityCode: searchParams.get("executionLegalEntityCode") as "CDT" | "NG" }
       : {}),
     ...(searchParams.get("ownerUserId") ? { ownerUserId: searchParams.get("ownerUserId") } : {}),
     ...(searchParams.get("patientId") ? { patientId: searchParams.get("patientId") } : {}),
@@ -181,21 +181,35 @@ function getWorkTypeCompactLabel(workType: OperationalStatusRow["workType"]): st
   return workType.symbol.trim() || workType.name;
 }
 
-function toOperationalLabel(row: OperationalStatusRow): string {
-  if (row.delivery.status === "DELIVERED" || row.logistics.status === "DELIVERED") {
-    return "Plecată la medic";
-  }
-  if (row.deadline.state === "LATE") {
-    return "Întârziată";
-  }
-  if (row.workflow.currentStage?.status === "IN_PROGRESS" || row.claimStatus === "CLAIMED") {
-    return "În lucru";
-  }
-  if (row.claimStatus === "UNCLAIMED") {
-    return "Disponibilă";
-  }
+function getClinicDoctorLabel(row: OperationalStatusRow): string {
+  return row.clinic?.name ?? row.doctor?.name ?? "-";
+}
 
-  return row.workflow.status === "COMPLETED" ? "Finalizată" : "Înregistrată";
+function getPickupDeliveryLabel(row: OperationalStatusRow): string {
+  if (!row.delivery.status) {
+    return "-";
+  }
+  return row.delivery.status === "PICKED_UP" ? "Ridicare" : "Livrare";
+}
+
+function getClaimLabel(row: OperationalStatusRow): string {
+  return row.claimedAt
+    ? new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(row.claimedAt))
+    : "Nepreluată";
+}
+
+function getAlertLabel(row: OperationalStatusRow): string {
+  if (row.deadline.state === "LATE") {
+    return "Termen depășit";
+  }
+  return row.logistics.status ? LOGISTICS_STATUS_LABELS[row.logistics.status] : "-";
+}
+
+function toOperationalLabel(row: OperationalStatusRow): string {
+  return row.operationalStatus === "RECEPTIE" ? "Recepție"
+    : row.operationalStatus === "IN_LUCRU" ? "În lucru"
+      : row.operationalStatus === "IN_ASTEPTARE" ? "În așteptare"
+        : "Finalizată";
 }
 
 function BadgePill({ label, tone = "neutral" }: { readonly label: string; readonly tone?: "neutral" | "info" | "success" | "warning" | "danger" }): ReactNode {
@@ -203,27 +217,23 @@ function BadgePill({ label, tone = "neutral" }: { readonly label: string; readon
 }
 
 function getCompactDeadlineLabel(row: OperationalStatusRow): string {
-  if (!row.deadline.effectiveDueAt) {
+  const dueAtValue = row.delivery.plannedDate ?? row.deadline.effectiveDueAt;
+  if (!dueAtValue) {
     return row.deadline.badge ?? "Fără termen";
   }
 
-  const dueAt = new Date(row.deadline.effectiveDueAt);
-  const today = new Date();
-  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const startOfDue = new Date(dueAt.getFullYear(), dueAt.getMonth(), dueAt.getDate());
-  const daysUntilDue = Math.round((startOfDue.getTime() - startOfToday.getTime()) / 86_400_000);
+  const dueAt = new Date(dueAtValue);
+  return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(dueAt);
+}
 
-  if (daysUntilDue === 0) {
-    return "Azi";
+function getDeadlineTone(row: OperationalStatusRow): "info" | "warning" | "danger" {
+  if (row.deadline.state === "LATE") {
+    return "danger";
   }
-  if (daysUntilDue === 1) {
-    return "Mâine";
+  if (row.deadline.state === "DUE_TODAY") {
+    return "warning";
   }
-  if (daysUntilDue > 1) {
-    return `+${daysUntilDue} zile`;
-  }
-
-  return `${daysUntilDue} zile`;
+  return "info";
 }
 
 function getTvRowScore(row: OperationalStatusRow): number {
@@ -382,13 +392,16 @@ export function StatusTvPage(): ReactNode {
           <table className="status-tv-page__table">
             <thead>
               <tr>
+                <th>Clinica sau Medic</th>
                 <th>Pacient</th>
-                <th>Lucrare</th>
-                <th>Flux</th>
+                <th>Tip lucrare</th>
+                <th>Culoare</th>
                 <th>Tehnician</th>
+                <th>Preluare</th>
                 <th>Termen</th>
                 <th>Stare</th>
-                <th>Livrare</th>
+                <th>Alerte</th>
+                <th>Livrare/Ridicare</th>
               </tr>
             </thead>
             <tbody>
@@ -396,8 +409,12 @@ export function StatusTvPage(): ReactNode {
                 <tr key={row.id}>
                   <td>
                     <span className="status-tv-page__stack">
+                      <strong>{getClinicDoctorLabel(row)}</strong>
+                    </span>
+                  </td>
+                  <td>
+                    <span className="status-tv-page__stack">
                       <strong>{row.patient.name}</strong>
-                      <span className="status-tv-page__muted">{row.doctor.name}</span>
                     </span>
                   </td>
                   <td>
@@ -406,13 +423,7 @@ export function StatusTvPage(): ReactNode {
                     </span>
                   </td>
                   <td>
-                    <span className="status-tv-page__stack">
-                      <BadgePill
-                        label={row.workflow.currentStage?.name ?? (row.workflow.status === "COMPLETED" ? "Flux finalizat" : "Fără etapă")}
-                        tone={row.workflow.status === "COMPLETED" ? "success" : row.workflow.currentStage?.status === "IN_PROGRESS" ? "info" : "neutral"}
-                      />
-                      <span className="status-tv-page__muted">{row.workflow.progress ?? `${row.workflow.progressCompleted}/${row.workflow.progressTotal}`}</span>
-                    </span>
+                    <BadgePill label={row.shade ?? "-"} tone="neutral" />
                   </td>
                   <td>
                     <span className="status-tv-page__stack">
@@ -420,21 +431,24 @@ export function StatusTvPage(): ReactNode {
                     </span>
                   </td>
                   <td>
-                    <BadgePill
-                      label={getCompactDeadlineLabel(row)}
-                      tone={row.deadline.state === "LATE" ? "danger" : row.deadline.state === "DUE_TODAY" ? "warning" : "info"}
-                    />
-                  </td>
-                  <td>
                     <span className="status-tv-page__stack">
-                      <BadgePill
-                        label={toOperationalLabel(row)}
-                        tone={row.deadline.state === "LATE" ? "danger" : row.workflow.currentStage?.status === "IN_PROGRESS" || row.claimStatus === "CLAIMED" ? "info" : row.claimStatus === "UNCLAIMED" ? "warning" : row.workflow.status === "COMPLETED" ? "success" : "neutral"}
-                      />
+                      <span>{getClaimLabel(row)}</span>
                     </span>
                   </td>
                   <td>
-                    <BadgePill label={row.delivery.status ? DELIVERY_STATUS_LABELS[row.delivery.status] : row.logistics.status ? LOGISTICS_STATUS_LABELS[row.logistics.status] : "Fără livrare"} tone={row.delivery.status === "DELIVERED" || row.logistics.status === "DELIVERED" ? "success" : row.delivery.status || row.logistics.status ? "info" : "neutral"} />
+                    <BadgePill
+                      label={getCompactDeadlineLabel(row)}
+                      tone={getDeadlineTone(row)}
+                    />
+                  </td>
+                  <td>
+                    <BadgePill label={toOperationalLabel(row)} tone={row.deadline.state === "LATE" ? "danger" : row.workflow.currentStage?.status === "IN_PROGRESS" || row.claimStatus === "CLAIMED" ? "info" : row.claimStatus === "UNCLAIMED" ? "warning" : row.workflow.status === "COMPLETED" ? "success" : "neutral"} />
+                  </td>
+                  <td>
+                    <BadgePill label={getAlertLabel(row)} tone={row.deadline.state === "LATE" ? "danger" : row.logistics.status ? "warning" : "neutral"} />
+                  </td>
+                  <td>
+                    <BadgePill label={getPickupDeliveryLabel(row)} tone={row.delivery.status ? "info" : "neutral"} />
                   </td>
                 </tr>
               ))}
@@ -447,35 +461,40 @@ export function StatusTvPage(): ReactNode {
             <article className="status-tv-page__card" key={row.id}>
               <div className="status-tv-page__card-header">
                 <div className="status-tv-page__stack">
+                  <span className="status-tv-page__muted">Clinica sau Medic</span>
+                  <strong>{getClinicDoctorLabel(row)}</strong>
+                  <span className="status-tv-page__muted">Pacient</span>
                   <strong>{row.patient.name}</strong>
-                  <span className="status-tv-page__muted">{row.doctor.name}</span>
                 </div>
                 <BadgePill label={toPriorityLabel(row.priority)} tone={row.priority === "URGENT" ? "warning" : "neutral"} />
               </div>
               <div className="status-tv-page__card-grid">
-                <div className="status-tv-page__card-field"><BadgePill label={getWorkTypeCompactLabel(row.workType)} tone="neutral" /></div>
+                <div className="status-tv-page__card-field"><span>Culoare</span><BadgePill label={row.shade ?? "-"} tone="neutral" /></div>
+                <div className="status-tv-page__card-field"><span>Tip lucrare</span><BadgePill label={getWorkTypeCompactLabel(row.workType)} tone="neutral" /></div>
                 <div className="status-tv-page__card-field">
-                  <BadgePill
-                    label={row.workflow.currentStage?.name ?? (row.workflow.status === "COMPLETED" ? "Flux finalizat" : "Fără etapă")}
-                    tone={row.workflow.status === "COMPLETED" ? "success" : row.workflow.currentStage?.status === "IN_PROGRESS" ? "info" : "neutral"}
-                  />
+                  <span>Tehnician</span>{renderTechnician(row)}
                 </div>
                 <div className="status-tv-page__card-field">
-                  {renderTechnician(row)}
+                  <span>Preluare</span><span>{getClaimLabel(row)}</span>
                 </div>
                 <div className="status-tv-page__card-field">
                   <strong>Termen</strong>
                   <span>{getCompactDeadlineLabel(row)}</span>
                 </div>
                 <div className="status-tv-page__card-field">
+                  <strong>Stare</strong>
                   <BadgePill
                     label={toOperationalLabel(row)}
                     tone={row.deadline.state === "LATE" ? "danger" : row.workflow.currentStage?.status === "IN_PROGRESS" || row.claimStatus === "CLAIMED" ? "info" : row.claimStatus === "UNCLAIMED" ? "warning" : row.workflow.status === "COMPLETED" ? "success" : "neutral"}
                   />
                 </div>
                 <div className="status-tv-page__card-field">
-                  <strong>Livrare</strong>
-                  <span>{row.delivery.status ? DELIVERY_STATUS_LABELS[row.delivery.status] : row.logistics.status ? LOGISTICS_STATUS_LABELS[row.logistics.status] : "Fără livrare"}</span>
+                  <strong>Alerte</strong>
+                  <BadgePill label={getAlertLabel(row)} tone={row.deadline.state === "LATE" ? "danger" : row.logistics.status ? "warning" : "neutral"} />
+                </div>
+                <div className="status-tv-page__card-field">
+                  <strong>Livrare/Ridicare</strong>
+                  <span>{getPickupDeliveryLabel(row)}</span>
                 </div>
               </div>
             </article>
@@ -543,9 +562,9 @@ export function StatusTvPage(): ReactNode {
                   value={query.tab}
                 />
                 <Select
-                  label="NC / NG"
-                  onChange={(event) => patchQuery({ executionLegalEntityCode: event.target.value === "NC" || event.target.value === "NG" ? event.target.value : undefined })}
-                  options={[{ label: "Toate", value: "" }, { label: "NC", value: "NC" }, { label: "NG", value: "NG" }]}
+                  label="CDT / NG"
+                  onChange={(event) => patchQuery({ executionLegalEntityCode: event.target.value === "CDT" || event.target.value === "NG" ? event.target.value : undefined })}
+                  options={[{ label: "Toate", value: "" }, { label: "CDT", value: "CDT" }, { label: "NG", value: "NG" }]}
                   value={query.executionLegalEntityCode ?? ""}
                 />
                 <Select

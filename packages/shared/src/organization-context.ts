@@ -1,6 +1,7 @@
-export const LEGAL_ENTITY_CODES = ["NC", "NG"] as const;
+export const LEGAL_ENTITY_CODES = ["CDT", "NG"] as const;
+export const LEGACY_LEGAL_ENTITY_CODES = ["NC"] as const;
 
-export type LegalEntityCode = (typeof LEGAL_ENTITY_CODES)[number];
+export type LegalEntityCode = (typeof LEGAL_ENTITY_CODES)[number] | (typeof LEGACY_LEGAL_ENTITY_CODES)[number];
 
 export interface LegalEntityOption {
   readonly code: LegalEntityCode;
@@ -18,8 +19,9 @@ export interface SelectOrganizationContextInput {
 }
 
 export const LEGAL_ENTITY_DISPLAY_NAMES: Readonly<Record<LegalEntityCode, string>> = {
-  NC: "Nicolaie Cristina",
+  CDT: "Nicolaie Cristina",
   NG: "Nicolaie Gabriel",
+  NC: "Nicolaie Cristina",
 };
 
 export function isLegalEntityCode(value: string): value is LegalEntityCode {

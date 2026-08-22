@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { WorkFormTemplateKind, WorkStageEventType, WorkStageExecutionStatus, type Prisma } from "@prisma/client";
+import { WorkFormTemplateKind, WorkStageEventType, WorkStageExecutionStatus, type Prisma, type WorkStatus } from "@prisma/client";
+import { Buffer } from "node:buffer";
 
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
@@ -23,7 +24,9 @@ import type {
   ReassignWorkDto,
   RecalculateWorkDeadlineDto,
   ReleaseWorkDto,
+  SetWorkStatusDto,
   SetManualWorkDeadlineDto,
+  UpdateTechnicianWorkDetailsDto,
   UpdateWorkDto,
   UpsertRealLabSheetDto,
   FinalizeRealLabSheetDto,
@@ -42,6 +45,8 @@ import {
 } from "./work-execution-snapshot.js";
 import { accumulateDeadlineDashboardSummary, createEmptyDeadlineDashboardSummary, isDeadlineInFilter } from "./work-deadline-visual.js";
 import { WorkOrderCodeService } from "./work-order-code.service.js";
+import { LOGISTICS_ATTACHMENT_LIMITS } from "../logistics/logistics.constants.js";
+import type { UploadedAttachmentFile } from "../logistics/logistics.service.js";
 import {
   type PaginatedWorksView,
   type WorkDetailView,
@@ -221,22 +226,41 @@ const WORK_ORDER_INCLUDE = {
     },
   },
   workType: true,
+  attachments: {
+    orderBy: {
+      uploadedAt: "asc",
+    },
+    select: {
+      fileName: true,
+      id: true,
+      mimeType: true,
+      sizeBytes: true,
+      uploadedAt: true,
+    },
+  },
 } as const satisfies Prisma.WorkOrderInclude;
 
 const WORK_ORDER_MUTATION_FIELDS = [
   "clinicId",
   "doctorId",
   "workTypeId",
-  "patientId",
-  "patientName",
   "patientReference",
+  "shade",
   "quantity",
   "priority",
   "requestedDeliveryDate",
   "externalReference",
   "internalNotes",
+  "implantPlatform",
   "clinicalNotes",
+  "technicalCodeNotes",
 ] as const satisfies readonly (keyof UpdateWorkDto)[];
+
+const TECHNICIAN_DETAIL_FIELDS = [
+  "clinicalNotes",
+  "internalNotes",
+  "technicalCodeNotes",
+] as const satisfies readonly (keyof UpdateTechnicianWorkDetailsDto)[];
 
 const REAL_LAB_SHEET_TEMPLATE_INCLUDE = {
   fields: {
@@ -425,6 +449,7 @@ export class WorksService {
               { code: { contains: search, mode: "insensitive" } },
               { patientName: { contains: search, mode: "insensitive" } },
               { patientReference: { contains: search, mode: "insensitive" } },
+              { shade: { contains: search, mode: "insensitive" } },
               { externalReference: { contains: search, mode: "insensitive" } },
             ],
           }
@@ -541,6 +566,58 @@ export class WorksService {
   public async getWork(actorUserId: string, workOrderId: string, includePricing: boolean): Promise<WorkDetailView> {
     const workOrder = await this.findVisibleWorkOrderOrThrow(actorUserId, workOrderId);
     return toWorkDetailView(workOrder, includePricing, await this.createClaimAccess(actorUserId));
+  }
+
+  public async addAttachments(context: ActorContext, workOrderId: string, files: readonly UploadedAttachmentFile[]) {
+    await this.findVisibleWorkOrderOrThrow(context.actorUserId, workOrderId);
+    if (files.length === 0 || files.length > LOGISTICS_ATTACHMENT_LIMITS.maxFiles || files.reduce((total, file) => total + file.size, 0) > LOGISTICS_ATTACHMENT_LIMITS.maxTotalBytes) {
+      throw new BadRequestException("Fișierele nu respectă limitele permise.");
+    }
+    for (const file of files) {
+      if (!file.originalname.trim() || file.size <= 0 || file.size > LOGISTICS_ATTACHMENT_LIMITS.maxFileBytes || !LOGISTICS_ATTACHMENT_LIMITS.allowedMimeTypes.includes(file.mimetype as (typeof LOGISTICS_ATTACHMENT_LIMITS.allowedMimeTypes)[number])) {
+        throw new BadRequestException("Fișierul nu este valid sau nu este permis.");
+      }
+    }
+
+    const attachments = await this.prisma.$transaction(async (tx) => {
+      const created = [] as Array<{ fileName: string; id: string; mimeType: string; sizeBytes: number; uploadedAt: Date }>;
+      for (const file of files) {
+        const content = Buffer.from(file.buffer);
+        const attachment = await tx.workAttachment.create({
+          data: {
+            content,
+            fileName: file.originalname.trim(),
+            mimeType: file.mimetype,
+            sizeBytes: file.size,
+            uploadedByUserId: context.actorUserId,
+            workOrderId,
+          },
+          select: { fileName: true, id: true, mimeType: true, sizeBytes: true, uploadedAt: true },
+        });
+        await tx.auditLog.create({
+          data: {
+            action: "logistics.attachment_uploaded",
+            actorUserId: context.actorUserId,
+            metadata: { fileName: attachment.fileName, mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes, workId: workOrderId },
+            resourceId: attachment.id,
+            resourceType: "work_attachment",
+          },
+        });
+        created.push(attachment);
+      }
+      return created;
+    });
+
+    return attachments.map((attachment) => ({ ...attachment, uploadedAt: attachment.uploadedAt.toISOString() }));
+  }
+
+  public async getAttachment(actorUserId: string, workOrderId: string, attachmentId: string) {
+    await this.findVisibleWorkOrderOrThrow(actorUserId, workOrderId);
+    const attachment = await this.prisma.workAttachment.findFirst({ where: { id: attachmentId, workOrderId } });
+    if (!attachment) {
+      throw new NotFoundException("Fișierul nu a fost găsit.");
+    }
+    return attachment;
   }
 
   public async listCycles(actorUserId: string, workOrderId: string, includePricing: boolean): Promise<WorkCyclesHistoryView> {
@@ -772,8 +849,10 @@ export class WorksService {
     if (dto.reason === "OTHER" && !returnNotes) {
       throw new BadRequestException("Notele sunt obligatorii pentru Alt motiv.");
     }
-    await this.validateClinic(this.prisma, dto.clinicId, true);
-    await this.validateDoctor(this.prisma, dto.doctorId, dto.clinicId, true);
+    const nextClinicId = dto.clinicId ?? null;
+    const nextDoctorId = dto.doctorId ?? null;
+    await this.validateClinic(this.prisma, nextClinicId, true);
+    await this.validateDoctor(this.prisma, nextDoctorId, nextClinicId, true);
 
     const history = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${workOrderId} FOR UPDATE`;
@@ -790,8 +869,8 @@ export class WorksService {
       if (dto.expectedActiveCycleId && dto.expectedActiveCycleId !== fresh.activeCycle.id) {
         throw new ConflictException("Ciclul activ s-a schimbat. Reîncarcă lucrarea.");
       }
-      await this.validateClinic(tx, dto.clinicId, true);
-      await this.validateDoctor(tx, dto.doctorId, dto.clinicId, true);
+      await this.validateClinic(tx, nextClinicId, true);
+      await this.validateDoctor(tx, nextDoctorId, nextClinicId, true);
       const operationNow = new Date();
       const latestCycle = await tx.workCycle.findFirst({
         orderBy: { cycleNumber: "desc" },
@@ -801,8 +880,8 @@ export class WorksService {
       const nextCycleNumber = (latestCycle?.cycleNumber ?? 0) + 1;
       const deadline = await this.workDeadlineService.resolveForWork({
         client: tx,
-        clinicId: dto.clinicId,
-        doctorId: dto.doctorId,
+        clinicId: nextClinicId,
+        doctorId: nextDoctorId,
         includeStartDay: false,
         legalEntity,
         now: operationNow,
@@ -825,11 +904,11 @@ export class WorksService {
         data: {
           createdByUserId: context.actorUserId,
           cycleNumber: nextCycleNumber,
-          clinicId: dto.clinicId,
+          clinicId: nextClinicId,
           deadlineEffectiveDueAtSnapshot: deadline.effectiveDueAt,
           deadlineModeSnapshot: deadline.deadlineMode,
           deadlineSnapshotJson: deadline.deadlineRuleSnapshot,
-          doctorId: dto.doctorId,
+          doctorId: nextDoctorId,
           openedAt: operationNow,
           reason: dto.reason,
           reasonNotes: returnNotes,
@@ -849,8 +928,8 @@ export class WorksService {
           claimRevision: { increment: 1 },
           claimSource: "MANAGER_RELEASE",
           claimStatus: "UNCLAIMED",
-          clinicId: dto.clinicId,
-          doctorId: dto.doctorId,
+          clinicId: nextClinicId,
+          doctorId: nextDoctorId,
           executionLegalEntityId: null,
           releaseReason: `Ciclu nou: ${dto.reason}`,
           releasedAt: operationNow,
@@ -902,10 +981,10 @@ export class WorksService {
         metadata: {
           cycleId: createdCycle.id,
           cycleNumber: createdCycle.cycleNumber,
-          clinicChanged: dto.clinicId !== fresh.clinicId,
-          doctorChanged: dto.doctorId !== fresh.doctorId,
-          clinicId: dto.clinicId,
-          doctorId: dto.doctorId,
+          clinicChanged: nextClinicId !== fresh.clinicId,
+          doctorChanged: nextDoctorId !== fresh.doctorId,
+          clinicId: nextClinicId,
+          doctorId: nextDoctorId,
           previousCycleId: fresh.activeCycle.id,
           reason: dto.reason,
           workCode: fresh.code,
@@ -968,12 +1047,18 @@ export class WorksService {
           claimRevision: { increment: 1 },
           claimSource: "TECHNICIAN_CLAIM",
           claimStatus: "CLAIMED",
+          completedAt: null,
+          completedByUserId: null,
           executionLegalEntityId: legalEntity.id,
           releaseReason: null,
           releasedAt: null,
           releasedByUserId: null,
+          status: "IN_LUCRU",
+          statusChangedAt: operationNow,
+          statusChangedByUserId: context.actorUserId,
           updatedByUserId: context.actorUserId,
           version: { increment: 1 },
+          waitingStartedAt: null,
         },
         where: {
           claimRevision: dto.expectedClaimRevision,
@@ -1139,19 +1224,30 @@ export class WorksService {
     const nextRevision = before.claimRevision + 1;
     const source = canReleaseAny.allowed && before.assignedTechnicianId !== context.actorUserId ? "MANAGER_RELEASE" : "TECHNICIAN_RELEASE";
     const after = await this.prisma.$transaction(async (tx) => {
+      const operationNow = new Date();
       const result = await tx.workOrder.updateMany({
         data: {
           assignedTechnicianId: null,
-          assignmentUpdatedAt: new Date(),
+          assignmentUpdatedAt: operationNow,
           claimedAt: null,
           claimedByUserId: null,
           claimRevision: { increment: 1 },
           claimSource: source,
           claimStatus: "UNCLAIMED",
+          completedAt: before.status === "FINALIZATA" ? before.completedAt : null,
+          completedByUserId: before.status === "FINALIZATA" ? before.completedByUserId : null,
           executionLegalEntityId: null,
-          releasedAt: new Date(),
+          releasedAt: operationNow,
           releasedByUserId: context.actorUserId,
           releaseReason: dto.reason,
+          ...(before.status === "FINALIZATA"
+            ? {}
+            : {
+                status: "RECEPTIE" as const,
+                statusChangedAt: operationNow,
+                statusChangedByUserId: context.actorUserId,
+                waitingStartedAt: null,
+              }),
           updatedByUserId: context.actorUserId,
           version: { increment: 1 },
         },
@@ -1245,12 +1341,18 @@ export class WorksService {
           claimRevision: { increment: 1 },
           claimSource: before.claimStatus === "CLAIMED" ? "MANAGER_REASSIGNMENT" : "MANAGER_ASSIGNMENT",
           claimStatus: "CLAIMED",
+          completedAt: null,
+          completedByUserId: null,
           executionLegalEntityId: legalEntity.id,
           releaseReason: null,
           releasedAt: null,
           releasedByUserId: null,
+          status: "IN_LUCRU",
+          statusChangedAt: operationNow,
+          statusChangedByUserId: context.actorUserId,
           updatedByUserId: context.actorUserId,
           version: { increment: 1 },
+          waitingStartedAt: null,
         },
         where: {
           claimRevision: dto.expectedClaimRevision,
@@ -1310,6 +1412,98 @@ export class WorksService {
     return toWorkDetailView(after, false, await this.createClaimAccess(context.actorUserId));
   }
 
+  public async setWorkStatus(context: ActorContext, workOrderId: string, dto: SetWorkStatusDto): Promise<WorkDetailView> {
+    const before = await this.findWorkOrderOrThrow(workOrderId);
+    await this.ensureCanChangeStatus(context.actorUserId, before);
+    this.assertAllowedStatusTransition(before.status, dto.status);
+    if ((dto.status === "IN_LUCRU" || dto.status === "IN_ASTEPTARE" || dto.status === "FINALIZATA") && before.claimStatus !== "CLAIMED") {
+      throw new BadRequestException("Lucrarea trebuie preluată înainte de această stare.");
+    }
+
+    const operationNow = new Date();
+    const after = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.workOrder.update({
+        data: {
+          completedAt: dto.status === "FINALIZATA" ? operationNow : null,
+          completedByUserId: dto.status === "FINALIZATA" ? context.actorUserId : null,
+          status: dto.status,
+          statusChangedAt: operationNow,
+          statusChangedByUserId: context.actorUserId,
+          updatedByUserId: context.actorUserId,
+          version: { increment: 1 },
+          waitingStartedAt: dto.status === "IN_ASTEPTARE" ? operationNow : null,
+        },
+        include: WORK_ORDER_INCLUDE,
+        where: { id: workOrderId },
+      });
+      await this.recordAudit(tx, {
+        action: WORK_ORDER_AUDIT_ACTIONS.statusChanged,
+        actorUserId: context.actorUserId,
+        metadata: {
+          completedAt: updated.completedAt?.toISOString() ?? null,
+          completedByUserId: updated.completedByUserId,
+          newStatus: updated.status,
+          previousStatus: before.status,
+          reason: dto.reason ?? null,
+          statusChangedAt: operationNow.toISOString(),
+          workCode: before.code,
+        },
+        requestMetadata: context.requestMetadata,
+        resourceId: workOrderId,
+      });
+      return updated;
+    });
+
+    return toWorkDetailView(after, false, await this.createClaimAccess(context.actorUserId));
+  }
+
+  public async updateTechnicianDetails(context: ActorContext, workOrderId: string, dto: UpdateTechnicianWorkDetailsDto): Promise<WorkDetailView> {
+    const before = await this.findWorkOrderOrThrow(workOrderId);
+    await this.ensureCanUpdateTechnicalDetails(context.actorUserId, before);
+
+    const hasClinicalNotes = Object.prototype.hasOwnProperty.call(dto, "clinicalNotes");
+    const hasInternalNotes = Object.prototype.hasOwnProperty.call(dto, "internalNotes");
+    const hasTechnicalCodeNotes = Object.prototype.hasOwnProperty.call(dto, "technicalCodeNotes");
+    if (!hasClinicalNotes && !hasInternalNotes && !hasTechnicalCodeNotes) {
+      throw new BadRequestException("No technician detail fields were provided.");
+    }
+
+    const data: Prisma.WorkOrderUpdateInput = {
+      updatedBy: { connect: { id: context.actorUserId } },
+      version: { increment: 1 },
+      ...(hasClinicalNotes ? { clinicalNotes: dto.clinicalNotes ?? null } : {}),
+      ...(hasInternalNotes ? { internalNotes: dto.internalNotes ?? null } : {}),
+      ...(hasTechnicalCodeNotes ? { technicalCodeNotes: dto.technicalCodeNotes ?? null } : {}),
+    };
+
+    const after = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.workOrder.update({
+        data,
+        include: WORK_ORDER_INCLUDE,
+        where: { id: workOrderId },
+      });
+
+      const changedFields = this.getTechnicianDetailChangedFields(before, updated);
+      if (changedFields.length > 0) {
+        await this.recordAudit(tx, {
+          action: WORK_ORDER_AUDIT_ACTIONS.technicalDetailsUpdated,
+          actorUserId: context.actorUserId,
+          metadata: {
+            changedFields,
+            code: before.code,
+            status: updated.status,
+          },
+          requestMetadata: context.requestMetadata,
+          resourceId: workOrderId,
+        });
+      }
+
+      return updated;
+    });
+
+    return toWorkDetailView(after, false, await this.createClaimAccess(context.actorUserId));
+  }
+
   public async listAssignmentHistory(actorUserId: string, workOrderId: string): Promise<readonly WorkAssignmentEventView[]> {
     const permission = await this.authorizationService.requirePermission({
       permission: "works.claim.history.read",
@@ -1325,16 +1519,18 @@ export class WorksService {
   }
 
   public async previewDeadline(legalEntity: LegalEntityContext, dto: WorkDeadlinePreviewDto, canSetManualDeadline: boolean) {
-    await this.validateClinic(this.prisma, dto.clinicId, true);
-    await this.validateDoctor(this.prisma, dto.doctorId, dto.clinicId, true);
+    const clinicId = dto.clinicId ?? null;
+    const doctorId = dto.doctorId ?? null;
+    await this.validateClinic(this.prisma, clinicId, true);
+    await this.validateDoctor(this.prisma, doctorId, clinicId, true);
     await this.validateWorkType(this.prisma, dto.workTypeId, true);
     if (dto.manualDueAt && !canSetManualDeadline) {
       throw new BadRequestException("Nu ai permisiunea necesară pentru termen manual.");
     }
 
     return this.workDeadlineService.preview({
-      clinicId: dto.clinicId,
-      doctorId: dto.doctorId,
+      clinicId,
+      doctorId,
       legalEntity,
       ...(dto.manualDueAt !== undefined ? { manualDueAt: dto.manualDueAt } : {}),
       now: new Date(),
@@ -1353,15 +1549,17 @@ export class WorksService {
     }
 
     const workOrder = await this.prisma.$transaction(async (tx) => {
-      await this.validateClinic(tx, dto.clinicId, true);
-      await this.validateDoctor(tx, dto.doctorId, dto.clinicId, true);
+      const clinicId = dto.clinicId ?? null;
+      const doctorId = dto.doctorId ?? null;
+      await this.validateClinic(tx, clinicId, true);
+      await this.validateDoctor(tx, doctorId, clinicId, true);
       this.rejectConflictingPatientPayload(dto.patientId, dto.patientName);
       const patient = await this.patientsService.findActivePatientOrThrow(tx, dto.patientId);
       const workType = await this.validateWorkType(tx, dto.workTypeId, true);
       const pricing = await this.createPricingSnapshot(tx, workType.basePriceMinor, dto.quantity);
       const deadline = await this.workDeadlineService.resolveForWork({
-        clinicId: dto.clinicId,
-        doctorId: dto.doctorId,
+        clinicId,
+        doctorId,
         legalEntity,
         manualDueAt,
         now: operationNow,
@@ -1374,6 +1572,7 @@ export class WorksService {
       const qrToken = await this.workQrTokenService.generate(tx);
       const preparedSubmission = await this.workFormSubmissionValidationService.prepareCreate(tx, {
         actorUserId: context.actorUserId,
+        enforceRequired: false,
         submission: dto.workFormSubmission,
         workCode: code,
         workTypeId: dto.workTypeId,
@@ -1381,19 +1580,21 @@ export class WorksService {
 
       const data: Prisma.WorkOrderUncheckedCreateInput = {
         baseUnitPriceMinor: pricing.baseUnitPriceMinor,
-        clinicId: dto.clinicId,
+        clinicId,
         code,
         createdByUserId: context.actorUserId,
         currency: pricing.currency,
         ...deadlineDataToPrisma(deadline, 1),
-        doctorId: dto.doctorId,
+        doctorId,
         patientId: patient.id,
         patientName: toPatientSnapshotName(patient),
         priority: dto.priority,
         qrToken,
         quantity: dto.quantity,
         requestedDeliveryDate,
-        status: "REGISTERED",
+        status: "RECEPTIE",
+        statusChangedAt: operationNow,
+        statusChangedByUserId: context.actorUserId,
         totalPriceMinor: pricing.totalPriceMinor,
         updatedByUserId: context.actorUserId,
         workTypeId: dto.workTypeId,
@@ -1402,7 +1603,10 @@ export class WorksService {
       assignNullableCreateValue(data, "clinicalNotes", dto.clinicalNotes);
       assignNullableCreateValue(data, "externalReference", dto.externalReference);
       assignNullableCreateValue(data, "internalNotes", dto.internalNotes);
+      assignNullableCreateValue(data, "technicalCodeNotes", dto.technicalCodeNotes);
       assignNullableCreateValue(data, "patientReference", dto.patientReference);
+      assignNullableCreateValue(data, "shade", dto.shade);
+      assignNullableCreateValue(data, "implantPlatform", dto.implantPlatform);
       if (preparedSubmission) {
         data.workFormSubmissions = {
           create: preparedSubmission.data,
@@ -1855,7 +2059,7 @@ export class WorksService {
 
   private getRealLabSheetDerivedValues(workOrder: RealLabSheetWorkRecord, cycle: RealLabSheetCycleRecord): WorkFormValues {
     return {
-      doctor: cycle.doctor?.displayName ?? workOrder.doctor.displayName,
+      doctor: cycle.doctor?.displayName ?? workOrder.doctor?.displayName ?? "-",
       lab_sheet_number: workOrder.code,
       patient: workOrder.patientName,
       work_type: workOrder.workType.name,
@@ -1923,17 +2127,19 @@ export class WorksService {
       },
     };
 
-    const nextClinicId = dto.clinicId ?? before.clinicId;
-    const nextDoctorId = dto.doctorId ?? before.doctorId;
+    const hasClinicId = Object.prototype.hasOwnProperty.call(dto, "clinicId");
+    const hasDoctorId = Object.prototype.hasOwnProperty.call(dto, "doctorId");
+    const nextClinicId = hasClinicId ? dto.clinicId ?? null : before.clinicId;
+    const nextDoctorId = hasDoctorId ? dto.doctorId ?? null : before.doctorId;
     const nextQuantity = dto.quantity ?? before.quantity;
 
-    if (dto.clinicId !== undefined) {
-      await this.validateClinic(this.prisma, dto.clinicId, true);
-      data.clinicId = dto.clinicId;
+    if (hasClinicId) {
+      await this.validateClinic(this.prisma, nextClinicId, true);
+      data.clinicId = nextClinicId;
     }
 
-    if (dto.doctorId !== undefined || dto.clinicId !== undefined) {
-      await this.validateDoctor(this.prisma, nextDoctorId, nextClinicId, dto.doctorId !== undefined);
+    if (hasDoctorId || hasClinicId) {
+      await this.validateDoctor(this.prisma, nextDoctorId, nextClinicId, hasDoctorId && nextDoctorId !== null);
       data.doctorId = nextDoctorId;
     }
 
@@ -1948,10 +2154,8 @@ export class WorksService {
       data.totalPriceMinor = calculateTotalPriceMinor(before.baseUnitPriceMinor, dto.quantity);
     }
 
-    if (dto.patientId !== undefined) {
-      const patient = await this.patientsService.findActivePatientOrThrow(this.prisma, dto.patientId);
-      data.patientId = patient.id;
-      data.patientName = toPatientSnapshotName(patient);
+    if (dto.patientId !== undefined || dto.patientName !== undefined) {
+      throw new BadRequestException("Pacientul se modifică din modulul Pacienți.");
     }
 
     for (const field of WORK_ORDER_MUTATION_FIELDS) {
@@ -1979,18 +2183,15 @@ export class WorksService {
       case "clinicId":
       case "doctorId":
       case "workTypeId":
-      case "patientId":
         return;
       case "clinicalNotes":
       case "externalReference":
       case "internalNotes":
+      case "technicalCodeNotes":
       case "patientReference":
+      case "shade":
+      case "implantPlatform":
         data[field] = typeof value === "number" ? null : value;
-        return;
-      case "patientName":
-        if (typeof value === "string") {
-          data.patientName = value;
-        }
         return;
       case "priority":
         if (value === "NORMAL" || value === "URGENT") {
@@ -2010,7 +2211,11 @@ export class WorksService {
     }
   }
 
-  private async validateClinic(client: Prisma.TransactionClient | PrismaService, clinicId: string, requireActive: boolean): Promise<void> {
+  private async validateClinic(client: Prisma.TransactionClient | PrismaService, clinicId: string | null | undefined, requireActive: boolean): Promise<void> {
+    if (!clinicId) {
+      return;
+    }
+
     const clinic = await client.clinic.findUnique({
       select: {
         isActive: true,
@@ -2031,10 +2236,14 @@ export class WorksService {
 
   private async validateDoctor(
     client: Prisma.TransactionClient | PrismaService,
-    doctorId: string,
-    clinicId: string,
+    doctorId: string | null | undefined,
+    clinicId: string | null | undefined,
     requireActive: boolean,
   ): Promise<void> {
+    if (!doctorId) {
+      return;
+    }
+
     const doctor = await client.doctor.findUnique({
       select: {
         clinicId: true,
@@ -2049,7 +2258,7 @@ export class WorksService {
       throw new BadRequestException("Doctor was not found.");
     }
 
-    if (doctor.clinicId !== clinicId) {
+    if (clinicId && doctor.clinicId !== clinicId) {
       throw new BadRequestException("Doctor must belong to the selected clinic.");
     }
 
@@ -2113,6 +2322,10 @@ export class WorksService {
     });
   }
 
+  private getTechnicianDetailChangedFields(before: WorkOrderRecord, after: WorkOrderRecord): readonly (typeof TECHNICIAN_DETAIL_FIELDS)[number][] {
+    return TECHNICIAN_DETAIL_FIELDS.filter((field) => before[field] !== after[field]);
+  }
+
   private createAuditMetadata(workOrder: WorkOrderRecord): Prisma.InputJsonObject {
     return {
       baseUnitPriceMinor: workOrder.baseUnitPriceMinor,
@@ -2122,6 +2335,7 @@ export class WorksService {
       doctorId: workOrder.doctorId,
       priority: workOrder.priority,
       quantity: workOrder.quantity,
+      shade: workOrder.shade,
       status: workOrder.status,
       patientId: workOrder.patientId,
       totalPriceMinor: workOrder.totalPriceMinor,
@@ -2163,7 +2377,7 @@ export class WorksService {
     input: {
       readonly actorUserId: string;
       readonly claimedAt: Date;
-      readonly legalEntity: { readonly code: "NC" | "NG"; readonly displayName: string; readonly id: string };
+      readonly legalEntity: { readonly code: "CDT" | "NG"; readonly displayName: string; readonly id: string };
       readonly nextClaimRevision: number;
       readonly requestMetadata: RequestMetadata;
       readonly source: ExecutionSnapshotSource;
@@ -2245,7 +2459,7 @@ export class WorksService {
         source: input.source,
       },
       legalEntity: {
-        code: input.legalEntity.code as "NC" | "NG",
+        code: input.legalEntity.code as "CDT" | "NG",
         displayName: input.legalEntity.displayName,
         publicId: input.legalEntity.id,
       },
@@ -2254,10 +2468,10 @@ export class WorksService {
         publicId: technician.id,
       },
       work: {
-        clinicName: input.workOrder.clinic.name,
-        clinicPublicId: input.workOrder.clinic.id,
-        doctorName: input.workOrder.doctor.displayName,
-        doctorPublicId: input.workOrder.doctor.id,
+        clinicName: input.workOrder.clinic?.name ?? "-",
+        clinicPublicId: input.workOrder.clinic?.id ?? null,
+        doctorName: input.workOrder.doctor?.displayName ?? "-",
+        doctorPublicId: input.workOrder.doctor?.id ?? null,
         quantity: input.workOrder.quantity,
         workCode: input.workOrder.code,
         workTypeCode: input.workOrder.workType.code,
@@ -2360,7 +2574,7 @@ export class WorksService {
     input: {
       readonly actorUserId: string;
       readonly claimedAt: Date;
-      readonly legalEntity: { readonly code: "NC" | "NG"; readonly id: string };
+      readonly legalEntity: { readonly code: "CDT" | "NG"; readonly id: string };
       readonly requestMetadata: RequestMetadata;
       readonly workOrder: WorkOrderRecord;
     },
@@ -2399,7 +2613,7 @@ export class WorksService {
     tx: Prisma.TransactionClient,
     input: {
       readonly claimedAt: Date;
-      readonly legalEntity: { readonly code: "NC" | "NG"; readonly displayName: string; readonly id: string };
+      readonly legalEntity: { readonly code: "CDT" | "NG"; readonly displayName: string; readonly id: string };
       readonly workOrder: WorkOrderRecord;
     },
   ): Promise<WorkDeadlineData> {
@@ -2499,6 +2713,59 @@ export class WorksService {
     });
   }
 
+  private async ensureCanChangeStatus(userId: string, workOrder: WorkOrderRecord): Promise<void> {
+    const permission = await this.authorizationService.hasPermission({
+      permission: "works.change_status",
+      userId,
+    });
+    if (!permission.allowed) {
+      throw new ForbiddenException("Nu ai permisiunea necesară pentru schimbarea stării lucrării.");
+    }
+    if (permission.effectiveScopes.includes("ALL")) {
+      return;
+    }
+    if (workOrder.assignedTechnicianId === userId || workOrder.claimedByUserId === userId) {
+      return;
+    }
+    throw new ForbiddenException("Poți schimba starea doar pentru lucrările proprii.");
+  }
+
+  private async ensureCanUpdateTechnicalDetails(userId: string, workOrder: WorkOrderRecord): Promise<void> {
+    const permission = await this.authorizationService.hasPermission({
+      permission: "works.technical_details.update",
+      userId,
+    });
+    if (!permission.allowed) {
+      throw new ForbiddenException("Nu ai permisiunea necesară pentru modificarea detaliilor tehnice.");
+    }
+    if (permission.effectiveScopes.includes("ALL")) {
+      return;
+    }
+    if (workOrder.assignedTechnicianId === userId || workOrder.claimedByUserId === userId) {
+      return;
+    }
+    throw new ForbiddenException("Poți modifica detaliile tehnice doar pentru lucrările proprii.");
+  }
+
+  private assertAllowedStatusTransition(currentStatus: WorkStatus, nextStatus: SetWorkStatusDto["status"]): void {
+    if (currentStatus === nextStatus) {
+      return;
+    }
+    if (currentStatus === "REGISTERED" && nextStatus === "RECEPTIE") {
+      return;
+    }
+    if (currentStatus === "RECEPTIE" && nextStatus === "IN_LUCRU") {
+      return;
+    }
+    if (currentStatus === "IN_LUCRU" && (nextStatus === "IN_ASTEPTARE" || nextStatus === "FINALIZATA")) {
+      return;
+    }
+    if (currentStatus === "IN_ASTEPTARE" && nextStatus === "IN_LUCRU") {
+      return;
+    }
+    throw new BadRequestException("Tranziția de stare nu este permisă.");
+  }
+
   private assertClaimRevision(workOrder: WorkOrderRecord, expectedRevision: number): void {
     if (workOrder.claimRevision !== expectedRevision) {
       throw new ConflictException("Responsabilitatea lucrării s-a schimbat. Reîncarcă detaliile.");
@@ -2520,8 +2787,8 @@ export class WorksService {
 
   private async validateExecutionLegalEntity(
     client: Prisma.TransactionClient | PrismaService,
-    legalEntityCode: "NC" | "NG",
-  ): Promise<{ readonly id: string; readonly code: "NC" | "NG"; readonly displayName: string }> {
+    legalEntityCode: "CDT" | "NG",
+  ): Promise<{ readonly id: string; readonly code: "CDT" | "NG"; readonly displayName: string }> {
     const legalEntity = await client.legalEntity.findUnique({
       select: {
         code: true,
@@ -2534,8 +2801,8 @@ export class WorksService {
       },
     });
 
-    if (!legalEntity || !legalEntity.isActive || (legalEntity.code !== "NC" && legalEntity.code !== "NG")) {
-      throw new BadRequestException("Alege o companie activă NC sau NG pentru execuție.");
+    if (!legalEntity || !legalEntity.isActive || (legalEntity.code !== "CDT" && legalEntity.code !== "NG")) {
+      throw new BadRequestException("Alege o companie activă CDT sau NG pentru execuție.");
     }
 
     return {
@@ -2665,7 +2932,7 @@ export function calculateTotalPriceMinor(baseUnitPriceMinor: number, quantity: n
 
 export function assignNullableCreateValue(
   data: Prisma.WorkOrderUncheckedCreateInput,
-  field: "clinicalNotes" | "externalReference" | "internalNotes" | "patientReference",
+  field: "clinicalNotes" | "externalReference" | "internalNotes" | "technicalCodeNotes" | "patientReference" | "shade" | "implantPlatform",
   value: string | null | undefined,
 ): void {
   if (value !== undefined) {
