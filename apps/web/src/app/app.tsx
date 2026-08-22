@@ -13,7 +13,17 @@ import { deliveryReadPermissions, operationalStatusReadPermissions, scanPermissi
 import { LoginPage } from "../features/auth/login-page.js";
 import { StylePreviewPage } from "../features/style-preview/style-preview-page.js";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Keep recently visited screens responsive without refetching every time
+      // the browser regains focus or the user navigates back to them.
+      staleTime: 45_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 const ClinicsPage = lazy(async () => {
   const module = await import("../features/clinics/clinics-page.js");
   return { default: module.ClinicsPage };

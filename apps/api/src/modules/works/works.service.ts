@@ -240,6 +240,27 @@ const WORK_ORDER_INCLUDE = {
   },
 } as const satisfies Prisma.WorkOrderInclude;
 
+const WORK_ORDER_DEADLINE_SELECT = {
+  activeCycle: {
+    select: {
+      workflowExecution: {
+        select: {
+          completedAt: true,
+        },
+      },
+    },
+  },
+  deadlineMode: true,
+  effectiveDueAt: true,
+  id: true,
+} as const satisfies Prisma.WorkOrderSelect;
+
+type WorkOrderDeadlineRecord = {
+  readonly activeCycle: { readonly workflowExecution: { readonly completedAt: Date | null } | null } | null;
+  readonly deadlineMode: WorkOrderRecord["deadlineMode"];
+  readonly effectiveDueAt: Date | null;
+};
+
 const WORK_ORDER_MUTATION_FIELDS = [
   "clinicId",
   "doctorId",
@@ -458,25 +479,37 @@ export class WorksService {
       ...enforcedWhere,
     };
 
-    const allMatchingWorkOrders = await this.prisma.workOrder.findMany({
-      include: WORK_ORDER_INCLUDE,
-      orderBy: {
-        [query.sortBy]: query.sortDirection,
-      },
+    const dashboardRows = await this.prisma.workOrder.findMany({
+      select: WORK_ORDER_DEADLINE_SELECT,
       where,
     });
-    const filteredWorkOrders = query.deadlineFilter
-      ? allMatchingWorkOrders.filter((workOrder) => isDeadlineInFilter({
+    const filteredDashboardRows = query.deadlineFilter
+      ? dashboardRows.filter((workOrder) => isDeadlineInFilter({
           effectiveDueAt: workOrder.effectiveDueAt?.toISOString() ?? null,
           mode: workOrder.deadlineMode,
           now: now.toISOString(),
         }, query.deadlineFilter ?? "ALL"))
-      : allMatchingWorkOrders;
-    const total = filteredWorkOrders.length;
-    const workOrders = filteredWorkOrders.slice((page - 1) * pageSize, page * pageSize);
+      : dashboardRows;
+    const total = query.deadlineFilter
+      ? filteredDashboardRows.length
+      : await this.prisma.workOrder.count({ where });
+    const pageIds = query.deadlineFilter
+      ? filteredDashboardRows.slice((page - 1) * pageSize, page * pageSize).map((workOrder) => workOrder.id)
+      : undefined;
+    const fetchedWorkOrders = await this.prisma.workOrder.findMany({
+      ...(pageIds ? { where: { id: { in: pageIds } } } : { where }),
+      include: WORK_ORDER_INCLUDE,
+      orderBy: {
+        [query.sortBy]: query.sortDirection,
+      },
+      ...(pageIds ? {} : { skip: (page - 1) * pageSize, take: pageSize }),
+    });
+    const workOrders = pageIds
+      ? fetchedWorkOrders.filter((workOrder) => pageIds.includes(workOrder.id))
+      : fetchedWorkOrders;
 
     return {
-      deadlineDashboard: this.createDeadlineDashboardSummary(allMatchingWorkOrders, now),
+      deadlineDashboard: this.createDeadlineDashboardSummary(dashboardRows, now),
       items: workOrders.map((workOrder) => toWorkSummaryView(workOrder, includePricing, access)),
       page,
       pageCount: Math.max(1, Math.ceil(total / pageSize)),
@@ -485,7 +518,7 @@ export class WorksService {
     };
   }
 
-  private createDeadlineDashboardSummary(workOrders: readonly WorkOrderRecord[], now: Date) {
+  private createDeadlineDashboardSummary(workOrders: readonly WorkOrderDeadlineRecord[], now: Date) {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
     return workOrders.reduce((summary, workOrder) => accumulateDeadlineDashboardSummary(summary, {
       effectiveDueAt: workOrder.effectiveDueAt?.toISOString() ?? null,
@@ -2993,7 +3026,7 @@ function getChangedWorkFormValueKeys(before: WorkFormValues, after: WorkFormValu
   return [...keys].filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key])).sort();
 }
 
-function isCompletedOnTimeInWindow(workOrder: WorkOrderRecord, windowStart: Date): boolean {
+function isCompletedOnTimeInWindow(workOrder: WorkOrderDeadlineRecord, windowStart: Date): boolean {
   const completedAt = workOrder.activeCycle?.workflowExecution?.completedAt;
   if (!completedAt || !workOrder.effectiveDueAt) {
     return false;

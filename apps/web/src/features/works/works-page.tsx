@@ -274,7 +274,7 @@ export function WorksPage(): ReactNode {
   const canEditTechnicalCode = hasPermission(permissionsQuery.data, "works.technical_details.update");
   const canUploadFiles = hasPermission(permissionsQuery.data, "files.upload");
   const canReadTechnicianOptions = hasPermission(permissionsQuery.data, "technician.workload.read");
-  const worksQuery = useWorks(params, canRead);
+  const worksQuery = useWorks(params, canRead, true);
   const selectedWorkQuery = useWork(selectedWorkId, canRead);
   const clinicOptionsQuery = useQuery({ enabled: canRead || canCreate, queryFn: fetchClinicOptions, queryKey: ["clinics", "options"], retry: false });
   const doctorOptionsQuery = useQuery({

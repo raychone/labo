@@ -534,14 +534,14 @@ export function BillingPage(): ReactNode {
   const stornoParams: BillingListQuery = { ...baseDocumentParams, paymentFilter: "ALL", type: "INVOICE" };
   const receivablesParams: BillingListQuery = { ...baseDocumentParams, paymentFilter: paymentFilter === "ALL" ? "OUTSTANDING" : paymentFilter, type: "INVOICE" };
   const overviewQuery = useBillingOverview(overviewParams, canReadFinance);
-  const monthCloseClinicOverviewQuery = useBillingOverview({ ...monthRegistryParams, groupBy: "clinic" }, canReadReports);
-  const monthCloseDoctorOverviewQuery = useBillingOverview({ ...monthRegistryParams, groupBy: "doctor" }, canReadReports);
-  const billableWorksQuery = useBillableWorks(billableParams, canCreateInvoice || canReadReports);
-  const invoicesQuery = useBillingDocuments(invoiceParams, canReadInvoices);
-  const stornoQuery = useBillingDocuments(stornoParams, canReadInvoices);
-  const paymentsQuery = usePayments(canReadFinance);
-  const receivablesQuery = useReceivables(receivablesParams, canReadReports);
-  const monthRegistryQuery = useMonthRegistry(monthRegistryParams, canReadReports);
+  const monthCloseClinicOverviewQuery = useBillingOverview({ ...monthRegistryParams, groupBy: "clinic" }, canReadReports && activeTab === "month-close");
+  const monthCloseDoctorOverviewQuery = useBillingOverview({ ...monthRegistryParams, groupBy: "doctor" }, canReadReports && activeTab === "month-close");
+  const billableWorksQuery = useBillableWorks(billableParams, (canCreateInvoice || canReadReports) && (activeTab === "uninvoiced" || activeTab === "statements"));
+  const invoicesQuery = useBillingDocuments(invoiceParams, canReadInvoices && activeTab === "invoices");
+  const stornoQuery = useBillingDocuments(stornoParams, canReadInvoices && activeTab === "storno");
+  const paymentsQuery = usePayments(canReadFinance && activeTab === "payments");
+  const receivablesQuery = useReceivables(receivablesParams, canReadReports && activeTab === "receivables");
+  const monthRegistryQuery = useMonthRegistry(monthRegistryParams, canReadReports && activeTab === "month-close");
   const closeMonthRegistryMutation = useMutation({
     mutationFn: () => closeMonthRegistry(monthRegistryParams),
     onSuccess: async () => {
@@ -616,8 +616,8 @@ export function BillingPage(): ReactNode {
   const doctorStatementParams = doctorStatementId
     ? { dateFrom: range.dateFrom, dateTo: range.dateTo, doctorId: doctorStatementId }
     : { dateFrom: range.dateFrom, dateTo: range.dateTo };
-  const clinicStatementQuery = useClinicStatement(clinicStatementParams, canReadReports && clinicStatementId !== "");
-  const doctorStatementQuery = useDoctorStatement(doctorStatementParams, canReadReports && doctorStatementId !== "");
+  const clinicStatementQuery = useClinicStatement(clinicStatementParams, canReadReports && activeTab === "statements" && clinicStatementId !== "");
+  const doctorStatementQuery = useDoctorStatement(doctorStatementParams, canReadReports && activeTab === "statements" && doctorStatementId !== "");
   const createInvoiceMutation = useCreateInvoice();
   const createAndIssueInvoiceMutation = useCreateAndIssueInvoice();
   const issueMutation = useIssueDocument();

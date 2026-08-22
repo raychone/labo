@@ -61,7 +61,7 @@ export function useOperationalStatus(
     ...(options?.refetchIntervalMs !== undefined
       ? {
           refetchInterval: options.refetchIntervalMs,
-          refetchIntervalInBackground: true,
+    refetchIntervalInBackground: false,
         }
       : {}),
   });

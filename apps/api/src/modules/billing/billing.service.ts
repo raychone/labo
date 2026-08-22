@@ -101,6 +101,49 @@ const BILLABLE_WORK_INCLUDE = {
   workType: true,
 } as const satisfies Prisma.WorkOrderInclude;
 
+// The overview only needs enough data to calculate KPI values and grouping.
+// Keep the full includes above for detail/list endpoints, but do not use them
+// for the first Billing request.
+const BILLING_OVERVIEW_WORK_SELECT = {
+  activeCycle: {
+    select: {
+      billingLines: {
+        select: {
+          billingDocument: {
+            select: { status: true, stornoOfDocumentId: true, type: true },
+          },
+        },
+      },
+      executionLegalEntityCodeSnapshot: true,
+      executionLegalEntityId: true,
+      executionSnapshot: {
+        select: { pricingTotalMinor: true, pricingUnitPriceMinor: true, status: true },
+      },
+    },
+  },
+  clinic: { select: { name: true } },
+  clinicId: true,
+  createdAt: true,
+  doctor: { select: { displayName: true } },
+  doctorId: true,
+  id: true,
+  patientName: true,
+  workType: { select: { name: true } },
+  workTypeId: true,
+} as const satisfies Prisma.WorkOrderSelect;
+
+const BILLING_OVERVIEW_DOCUMENT_SELECT = {
+  clinicId: true,
+  clinicNameSnapshot: true,
+  dueDate: true,
+  id: true,
+  issueDate: true,
+  payments: { select: { amountMinor: true, cancelledAt: true } },
+  status: true,
+  totalMinor: true,
+  type: true,
+} as const satisfies Prisma.BillingDocumentSelect;
+
 @Injectable()
 export class BillingService {
   public constructor(
@@ -116,11 +159,14 @@ export class BillingService {
 
     const [works, documents, ambiguousLegacyCount] = await this.prisma.$transaction([
       this.prisma.workOrder.findMany({
-        include: BILLABLE_WORK_INCLUDE,
+        // The cast keeps the existing billing helpers shared with the full
+        // work-order representation. Every property they read is selected
+        // above; detail endpoints continue using BILLABLE_WORK_INCLUDE.
+        select: BILLING_OVERVIEW_WORK_SELECT,
         where: workWhere,
       }),
       this.prisma.billingDocument.findMany({
-        include: BILLING_DOCUMENT_INCLUDE,
+        select: BILLING_OVERVIEW_DOCUMENT_SELECT,
         where: documentWhere,
       }),
       this.prisma.billingDocument.count({
@@ -128,9 +174,10 @@ export class BillingService {
       }),
     ]);
 
-    const billableWorks = works.filter((work) => this.isWorkCycleBillable(work));
+    const billableWorks = (works as unknown as BillableWorkRecord[]).filter((work) => this.isWorkCycleBillable(work));
+    const billingDocuments = documents as unknown as BillingDocumentRecord[];
 
-    if (billableWorks.length === 0 && documents.length === 0) {
+    if (billableWorks.length === 0 && billingDocuments.length === 0) {
       return {
         ...createEmptyBillingOverview(toDateOnly(range.from), toDateOnly(range.to), currency),
         ambiguousLegacyCount,
@@ -140,7 +187,7 @@ export class BillingService {
     const workValueMinor = billableWorks.reduce((total, work) => total + (this.getRequiredBillableSnapshot(work).pricingTotalMinor ?? 0), 0);
     const uninvoicedWorks = billableWorks.filter((work) => !this.hasActiveInvoiceLine(work));
     const uninvoicedMinor = uninvoicedWorks.reduce((total, work) => total + (this.getRequiredBillableSnapshot(work).pricingTotalMinor ?? 0), 0);
-    const activeDocuments = documents.filter((document) => document.status !== "CANCELLED");
+    const activeDocuments = billingDocuments.filter((document) => document.status !== "CANCELLED");
     const invoices = activeDocuments.filter((document) => document.type === "INVOICE");
     const proformas = activeDocuments.filter((document) => document.type === "PROFORMA");
     const paidMinor = invoices.reduce((total, document) => total + calculateBillingAmounts(document).paidMinor, 0);

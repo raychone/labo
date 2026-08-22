@@ -588,7 +588,7 @@ describe("WorksService", () => {
   it("filters by operational deadline state and returns dashboard totals", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-29T09:00:00.000Z"));
-    const findMany = vi.fn().mockResolvedValue([
+    const rows = [
       workOrder({
         code: "WO-2026-000001",
         effectiveDueAt: new Date("2026-07-29T14:00:00.000Z"),
@@ -605,9 +605,13 @@ describe("WorksService", () => {
         effectiveDueAt: new Date("2026-08-01T14:00:00.000Z"),
         id: "work_order_manual",
       }),
-    ]);
+    ];
+    const findMany = vi.fn()
+      .mockResolvedValueOnce(rows)
+      .mockResolvedValueOnce([rows[1]]);
     const service = createService({
       workOrder: {
+        count: vi.fn().mockResolvedValue(1),
         findMany,
       },
     });
@@ -665,6 +669,7 @@ describe("WorksService", () => {
     const findMany = vi.fn().mockResolvedValue([receptionCreatedWork]);
     const service = createService({
       workOrder: {
+        count: vi.fn().mockResolvedValue(1),
         findMany,
       },
     }, {

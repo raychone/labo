@@ -258,14 +258,12 @@ export async function recordWorkQrPrint(workOrderId: string): Promise<WorkQrView
   return sendJson<WorkQrView>(`/works/${workOrderId}/qr/print`, "POST");
 }
 
-export function useWorks(params: WorksListParams, enabled: boolean) {
+export function useWorks(params: WorksListParams, enabled: boolean, poll = false) {
   return useQuery({
     enabled,
     queryFn: () => fetchWorks(params),
     queryKey: worksQueryKeys.list(params),
-    refetchInterval: 10_000,
-    refetchIntervalInBackground: true,
-    refetchOnWindowFocus: true,
+    ...(poll ? { refetchInterval: 10_000, refetchIntervalInBackground: false } : {}),
     retry: false,
   });
 }
