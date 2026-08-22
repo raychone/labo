@@ -103,6 +103,8 @@ export function DashboardPage(): ReactNode {
   const showTechnicianWorkspace = isTechnicianWorkspace && !isManagerWorkspace;
   const showReceptionWorkspace = isReceptionWorkspace && !isManagerWorkspace;
   const showManagerWorkspace = isManagerWorkspace;
+  const canReadDashboardWorks = showReceptionWorkspace || showManagerWorkspace;
+  const canReadDashboardOperational = canReadOperational && canReadDashboardWorks;
   const settingsQuery = useSettings(permissionKeys.includes("settings.read"));
   const organizationQuery = useQuery({ enabled: canReadOrganization, queryFn: fetchOrganizationContext, queryKey: ["organization-context"], retry: false });
   const laboratoryName = settingsQuery.data?.laboratoryName ?? "Dental Lab Management";
@@ -123,10 +125,10 @@ export function DashboardPage(): ReactNode {
     sortDirection: "desc",
     status: undefined,
     workTypeId: undefined,
-  }, canReadWorks);
-  const operationalTodayQuery = useOperationalStatus(operationalQuery("TODAY", 8), canReadOperational);
-  const operationalLateQuery = useOperationalStatus(operationalQuery("LATE", 8), canReadOperational);
-  const operationalReturnedQuery = useOperationalStatus(operationalQuery("RETURNED", 8), canReadOperational);
+  }, canReadDashboardWorks);
+  const operationalTodayQuery = useOperationalStatus(operationalQuery("TODAY", 8), canReadDashboardOperational);
+  const operationalLateQuery = useOperationalStatus(operationalQuery("LATE", 8), canReadDashboardOperational);
+  const operationalReturnedQuery = useOperationalStatus(operationalQuery("RETURNED", 8), canReadDashboardOperational);
   const availableWorksQuery = useAvailableWorksForClaim(claimListParams, canReadAvailable);
   const myClaimedWorksQuery = useMyClaimedWorks(claimListParams, canReadOwnClaims);
   const allWorksQuery = useWorks({
@@ -143,7 +145,7 @@ export function DashboardPage(): ReactNode {
     sortDirection: "desc",
     status: undefined,
     workTypeId: undefined,
-  }, canReadWorks);
+  }, showManagerWorkspace);
   const technicianWorkbenchQuery = useTechnicianWorkbench({
     page: 1,
     pageSize: shortListSize,
