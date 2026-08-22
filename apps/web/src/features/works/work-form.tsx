@@ -136,8 +136,12 @@ export function toWorkMutationInput(values: WorkFormValues, template: WorkFormTe
 
 export function toPersistedWorkFormValues(values: WorkFormValues, template?: { readonly fields: readonly { readonly key: string }[] } | null): WorkFormValues["workFormValues"] {
   const workFormValues = { ...values.workFormValues };
-  if (values.restorationType) {
-    workFormValues.restoration_type = values.restorationType;
+  if (template?.fields.some((field) => field.key === "restoration_type")) {
+    if (values.restorationType) {
+      workFormValues.restoration_type = values.restorationType;
+    } else {
+      delete workFormValues.restoration_type;
+    }
   } else {
     delete workFormValues.restoration_type;
   }
