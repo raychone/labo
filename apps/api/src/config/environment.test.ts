@@ -12,6 +12,7 @@ describe("parseServerEnvironment", () => {
     expect(environment).toStrictEqual({
       csrfCookieName: "dl_csrf",
       csrfHeaderName: "x-csrf-token",
+      cookieSameSite: "lax",
       databaseUrl: "postgresql://user:password@localhost:5432/database",
       demoMode: false,
       demoLoginEnabled: false,

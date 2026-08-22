@@ -8,6 +8,7 @@ const serverEnvironmentSchema = z.object({
   AUTH_SEED_PASSWORD: z.string().optional(),
   CSRF_COOKIE_NAME: z.string().min(1).default("dl_csrf"),
   CSRF_HEADER_NAME: z.string().min(1).default("x-csrf-token"),
+  COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]).default("lax"),
   DATABASE_URL: z.string().url().startsWith("postgresql://"),
   DEMO_MODE: z.enum(["true", "false"]).default("false"),
   DEMO_LOGIN_ENABLED: z.enum(["true", "false"]).default("false"),
@@ -30,6 +31,7 @@ export interface ServerEnvironment {
   readonly sessionTtlSeconds: number;
   readonly csrfCookieName: string;
   readonly csrfHeaderName: string;
+  readonly cookieSameSite: "lax" | "strict" | "none";
   readonly webOrigins: readonly string[];
 }
 
@@ -49,6 +51,7 @@ export function parseServerEnvironment(
     sessionTtlSeconds: parsedEnvironment.SESSION_TTL_SECONDS,
     csrfCookieName: parsedEnvironment.CSRF_COOKIE_NAME,
     csrfHeaderName: parsedEnvironment.CSRF_HEADER_NAME.toLowerCase(),
+    cookieSameSite: parsedEnvironment.COOKIE_SAME_SITE,
     webOrigins: parseWebOrigins(parsedEnvironment.WEB_ORIGIN),
   };
 }

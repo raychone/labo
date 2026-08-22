@@ -6,12 +6,16 @@ function isProduction(): boolean {
   return process.env.NODE_ENV === "production";
 }
 
+function getSameSite(environment: ServerEnvironment): "lax" | "strict" | "none" {
+  return environment.cookieSameSite;
+}
+
 export function getSessionCookieOptions(environment: ServerEnvironment): CookieOptions {
   return {
     httpOnly: true,
     maxAge: environment.sessionTtlSeconds * 1000,
     path: "/",
-    sameSite: "lax",
+    sameSite: getSameSite(environment),
     secure: isProduction(),
   };
 }
@@ -21,7 +25,7 @@ export function getCsrfCookieOptions(environment: ServerEnvironment): CookieOpti
     httpOnly: false,
     maxAge: environment.sessionTtlSeconds * 1000,
     path: "/",
-    sameSite: "lax",
+    sameSite: getSameSite(environment),
     secure: isProduction(),
   };
 }
@@ -45,7 +49,7 @@ export function setCsrfCookie(
 export function clearSessionCookie(response: Response, environment: ServerEnvironment): void {
   response.clearCookie(environment.sessionCookieName, {
     path: "/",
-    sameSite: "lax",
+    sameSite: getSameSite(environment),
     secure: isProduction(),
   });
 }
