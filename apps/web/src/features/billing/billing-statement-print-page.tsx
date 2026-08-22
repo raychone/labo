@@ -56,6 +56,11 @@ function formatDate(value: string): string {
   return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium" }).format(new Date(value));
 }
 
+function formatShortDate(value: string): string {
+  const date = new Date(value);
+  return `${date.getDate()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getFullYear()).slice(-2)}`;
+}
+
 function formatMoneyMinorCompact(value: number, currency: string): string {
   return new Intl.NumberFormat("ro-RO", {
     currency,
@@ -244,7 +249,7 @@ export function BillingStatementPrintPage(): ReactNode {
       }));
   }, [selectedDocumentIds, source, statementQuery.data]);
   const previousArrearsTotalMinor = arrearRows.reduce((total, row) => total + row.balanceMinor, 0);
-  const pages = useMemo(() => chunkRows(noteRows, format === "a4" ? 10 : 6), [format, noteRows]);
+  const pages = useMemo(() => chunkRows(noteRows, format === "a4" ? 4 : 3), [format, noteRows]);
   const attachmentLabel = source === "works"
     ? "Anexa la factura"
     : attachments.length === 1
@@ -373,12 +378,11 @@ function StatementPrintView({
 
                   <div className="billing-statement__frame">
                     <section className="billing-statement__section">
-                      <NoteLinesTable currency={statement.currency} rows={pageRows} />
+                      <NoteLinesTable currency={statement.currency} rows={pageRows} totalMinor={isLastPage ? totalMinor : null} />
                     </section>
 
-                    {isLastPage ? (
-                      <footer className="billing-statement__footer">
-                        {arrearRows.length > 0 ? (
+                    <footer className="billing-statement__footer">
+                        {isLastPage && arrearRows.length > 0 ? (
                           <section className="billing-statement__section">
                             <div className="billing-statement__section-header">
                               <strong>Restante existente</strong>
@@ -387,16 +391,7 @@ function StatementPrintView({
                             <ArrearsTable currency={statement.currency} rows={arrearRows} />
                           </section>
                         ) : null}
-                        <div className="billing-statement__footer-total">
-                          <span>Suma factura curenta:</span>
-                          <strong>{formatMoneyMinorCompact(totalMinor, statement.currency)}</strong>
-                        </div>
-                        <div className="billing-statement__footer-total">
-                          <span>Total de plata curent:</span>
-                          <strong>{formatMoneyMinorCompact(totalMinor + previousArrearsTotalMinor, statement.currency)}</strong>
-                        </div>
-                      </footer>
-                    ) : null}
+                    </footer>
                   </div>
                 </section>
               </div>
@@ -437,13 +432,12 @@ function ArrearsTable({ currency, rows }: { readonly currency: string; readonly 
   );
 }
 
-function NoteLinesTable({ currency, rows }: { readonly currency: string; readonly rows: readonly StatementNoteLine[] }): ReactNode {
+function NoteLinesTable({ currency, rows, totalMinor }: { readonly currency: string; readonly rows: readonly StatementNoteLine[]; readonly totalMinor: number | null }): ReactNode {
   return (
     <table className="billing-print__table billing-print__table--attachment">
       <thead>
         <tr>
-          <th>Data intr.</th>
-          <th>Nr. fișa lab GSI</th>
+          <th>Data</th>
           <th>Nume pacient</th>
           <th>Tip lucrare</th>
           <th>Poziție arcadă</th>
@@ -455,8 +449,7 @@ function NoteLinesTable({ currency, rows }: { readonly currency: string; readonl
       <tbody>
         {rows.map((row) => (
           <tr key={row.id}>
-            <td>{formatDate(row.workCreatedAtSnapshot)}</td>
-            <td>{row.workCode}</td>
+            <td>{formatShortDate(row.workCreatedAtSnapshot)}</td>
             <td>{row.patientNameSnapshot}</td>
             <td>{row.workTypeNameSnapshot}</td>
             <td>{row.toothPositionSnapshot ?? "-"}</td>
@@ -466,6 +459,14 @@ function NoteLinesTable({ currency, rows }: { readonly currency: string; readonl
           </tr>
         ))}
       </tbody>
+      {totalMinor !== null ? (
+        <tfoot>
+          <tr>
+            <th colSpan={6}>Total</th>
+            <th>{formatMoneyMinorCompact(totalMinor, currency)}</th>
+          </tr>
+        </tfoot>
+      ) : null}
     </table>
   );
 }

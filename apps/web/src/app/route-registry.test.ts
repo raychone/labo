@@ -76,7 +76,10 @@ describe("route registry", () => {
     expect(technician).not.toContain("Facturare");
 
     const courier = getNavigationRoutes(["routes.read", "delivery.read", "delivery.read_own", "scan.use", "works.read_assigned"]).map((route) => route.label);
-    expect(courier).toEqual(expect.arrayContaining(["Acasă", "Traseul meu"]));
+    expect(courier).toEqual(["Trasee"]);
+    expect(courier).not.toContain("Acasă");
+    expect(courier).not.toContain("Status");
+    expect(courier).not.toContain("Scanare");
     expect(courier).not.toContain("Livrările mele");
     expect(courier).not.toContain("Traseu");
   });

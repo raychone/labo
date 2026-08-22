@@ -6,7 +6,7 @@ import { useState, type ReactNode } from "react";
 import { fetchPermissions } from "../auth/auth-api.js";
 import { hasPermission } from "../users/users-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
-import { useCourierRoutes, useRecordCourierRouteStopOutcome } from "../logistics/logistics-api.js";
+import { useCourierRoutes, useRecordCourierRouteStopOutcome, useStartCourierRoute } from "../logistics/logistics-api.js";
 import "../logistics/logistics-page.css";
 
 function today(): string {
@@ -24,6 +24,15 @@ export function CourierRoutePage(): ReactNode {
   const canExecute = hasPermission(permissionsQuery.data, "routes.execute_own");
   const routesQuery = useCourierRoutes({ dateFrom: today(), page: 1, pageSize: 30 }, canRead);
   const outcomeMutation = useRecordCourierRouteStopOutcome();
+  const startMutation = useStartCourierRoute();
+  const routes = (routesQuery.data?.items ?? [])
+    .filter((route) => route.status !== "CANCELLED")
+    .slice()
+    .sort((left, right) => left.routeNumber.localeCompare(right.routeNumber));
+  const inProgressRoute = routes.find((route) => route.status === "IN_PROGRESS");
+  const startableRoute = inProgressRoute
+    ? undefined
+    : routes.find((route, index) => route.status === "ASSIGNED" && routes.slice(0, index).every((previous) => previous.status === "COMPLETED" || previous.status === "CANCELLED"));
 
   function record(routeId: string, stop: CourierRouteStopView, outcomeStatus: CourierRouteStopOutcome, notes: string): void {
     outcomeMutation.mutate({ input: { notes, outcomeStatus }, routeId, stopId: stop.id }, {
@@ -32,39 +41,49 @@ export function CourierRoutePage(): ReactNode {
     });
   }
 
+  function start(routeId: string): void {
+    startMutation.mutate(routeId, {
+      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Traseul nu a putut fi pornit", variant: "error" }),
+      onSuccess: () => toast.showToast({ message: "Traseul a fost pornit.", variant: "success" }),
+    });
+  }
+
   if (permissionsQuery.isLoading) {
-    return <main className="logistics-page"><section className="dl-container logistics-page__layout"><LoadingState text="Se încarcă traseul" /></section></main>;
+    return <main className="logistics-page logistics-page--courier"><section className="dl-container logistics-page__layout"><LoadingState text="Se încarcă traseul" /></section></main>;
   }
   if (!canRead) {
-    return <main className="logistics-page"><section className="dl-container logistics-page__layout"><ErrorState title="Acces refuzat" description="Contul curent nu poate consulta trasee." /></section></main>;
+    return <main className="logistics-page logistics-page--courier"><section className="dl-container logistics-page__layout"><ErrorState title="Acces refuzat" description="Contul curent nu poate consulta trasee." /></section></main>;
   }
 
   return (
-    <main className="logistics-page">
+    <main className="logistics-page logistics-page--courier">
       <section className="dl-container logistics-page__layout" aria-labelledby="courier-route-title">
         <header className="logistics-page__header">
           <div>
-            <h1 id="courier-route-title">Traseul meu</h1>
-            <p>Rute asignate de azi înainte, cu livrări și ridicări în ordinea stabilită de logistică.</p>
+            <h1 id="courier-route-title">Trasee</h1>
+            <p>Alege traseul disponibil și parcurge opririle în ordinea stabilită de logistică.</p>
           </div>
         </header>
         {routesQuery.isLoading ? <LoadingState text="Se încarcă rutele" /> : null}
         {routesQuery.isError ? <ErrorState title="Rutele nu au fost încărcate" description={getErrorMessage(routesQuery.error)} /> : null}
         <div className="logistics-page__content">
-          {(routesQuery.data?.items ?? []).map((route) => <RouteCard canExecute={canExecute} key={route.id} onRecord={record} pending={outcomeMutation.isPending} route={route} />)}
-          {routesQuery.data && routesQuery.data.items.length === 0 ? <p className="logistics-page__empty">Nu ai trasee asignate.</p> : null}
+          {routes.map((route) => <RouteCard canExecute={canExecute && route.status === "IN_PROGRESS"} canStart={startableRoute?.id === route.id} key={route.id} onRecord={record} onStart={() => start(route.id)} pending={outcomeMutation.isPending || startMutation.isPending} route={route} />)}
+          {routesQuery.data && routes.length === 0 ? <p className="logistics-page__empty">Nu ai trasee asignate.</p> : null}
         </div>
       </section>
     </main>
   );
 }
 
-function RouteCard({ canExecute, onRecord, pending, route }: { readonly canExecute: boolean; readonly onRecord: (routeId: string, stop: CourierRouteStopView, outcomeStatus: CourierRouteStopOutcome, notes: string) => void; readonly pending: boolean; readonly route: CourierRouteView }): ReactNode {
+function RouteCard({ canExecute, canStart, onRecord, onStart, pending, route }: { readonly canExecute: boolean; readonly canStart: boolean; readonly onRecord: (routeId: string, stop: CourierRouteStopView, outcomeStatus: CourierRouteStopOutcome, notes: string) => void; readonly onStart: () => void; readonly pending: boolean; readonly route: CourierRouteView }): ReactNode {
   return (
     <Card>
       <CardHeader>
         <CardTitle>{route.routeNumber} · {route.name}</CardTitle>
         <CardDescription>{formatDate(route.routeDate)} · {route.stops.length} stopuri</CardDescription>
+        <StatusBadge label={route.status === "ASSIGNED" ? "Asignat" : route.status === "IN_PROGRESS" ? "În desfășurare" : route.status === "COMPLETED" ? "Finalizat" : route.status} variant={route.status === "COMPLETED" ? "delivered" : route.status === "IN_PROGRESS" ? "planned" : "awaiting"} />
+        {canStart ? <Button disabled={pending} onClick={onStart}>Începe traseul</Button> : null}
+        {route.status === "ASSIGNED" && !canStart ? <p className="logistics-page__route-waiting">Disponibil după finalizarea traseului anterior.</p> : null}
       </CardHeader>
       <CardContent className="logistics-page__route-stops">
         {route.stops.map((stop) => <RouteStop canExecute={canExecute} key={stop.id} onRecord={(outcome, notes) => onRecord(route.id, stop, outcome, notes)} pending={pending} stop={stop} />)}

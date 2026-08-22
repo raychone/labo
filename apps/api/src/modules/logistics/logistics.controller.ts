@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Param, Patch, Post, Query, Req, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query, Req, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FilesInterceptor } from "@nestjs/platform-express";
 import type { Request } from "express";
 
@@ -53,7 +53,9 @@ export class LogisticsController {
   }
 
   @Get("routes")
-  @RequirePermission("logistics.center.read", "ASSIGNED")
+  // Scope filtering is enforced in LogisticsService: logistics reads all routes,
+  // while a courier is restricted to routes assigned to the current user.
+  @RequirePermission("routes.read")
   public listRoutes(@CurrentUser() actor: AuthenticatedUser, @Query() query: CourierRoutesQueryDto) {
     return this.logisticsService.listRoutes(actor, query);
   }
@@ -78,11 +80,25 @@ export class LogisticsController {
     return this.logisticsService.recordRouteStopOutcome({ actor, requestMetadata: getRequestMetadata(request) }, routeId, stopId, dto);
   }
 
+  @Post("routes/:routeId/start")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("routes.execute_own", "OWN_DELIVERY")
+  public startRoute(@Param("routeId") routeId: string, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
+    return this.logisticsService.startRoute({ actor, requestMetadata: getRequestMetadata(request) }, routeId);
+  }
+
   @Patch("routes/:routeId")
   @UseGuards(CsrfGuard)
   @RequirePermission("routes.update", "ALL")
   public updateRoute(@Param("routeId") routeId: string, @Body() dto: UpdateCourierRouteDto, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
     return this.logisticsService.updateRoute({ actor, requestMetadata: getRequestMetadata(request) }, routeId, dto);
+  }
+
+  @Delete("routes/:routeId")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("routes.cancel", "ALL")
+  public deleteRoute(@Param("routeId") routeId: string, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
+    return this.logisticsService.deleteRoute({ actor, requestMetadata: getRequestMetadata(request) }, routeId);
   }
 
   @Post("logistics/works")

@@ -495,6 +495,7 @@ export function PricingPage(): ReactNode {
                   onActiveChange={(active) => setCatalogParams((current) => ({ ...current, active, page: 1 }))}
                   onRowAction={(item) => setSelectedCatalogId(item.id)}
                   onSearchChange={(search) => setCatalogParams((current) => ({ ...current, page: 1, search: search || undefined }))}
+                  printPrice={(item) => formatMoneyMinor(getEffectiveCatalogPrice(item, catalogAudience === "STANDARD" ? null : audienceAgreementQuery.data ?? null), currency, locale)}
                   search={catalogParams.search ?? ""}
                 />
               ),
@@ -526,7 +527,7 @@ export function PricingPage(): ReactNode {
               label: "Acorduri",
             },
             {
-              content: <CatalogTab active={archiveParams.active} archived audience="STANDARD" audienceId="" clinics={[]} doctors={[]} catalogQuery={archiveQuery} columns={catalogColumns} onActiveChange={() => undefined} onAudienceChange={() => undefined} onAudienceIdChange={() => undefined} onRestore={(id) => restoreCatalogMutation.mutate(id, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Tipul nu a fost reactivat", variant: "error" }), onSuccess: () => toast.showToast({ message: "Tipul de lucrare a fost reactivat.", variant: "success" }) })} onRowAction={(item) => setSelectedCatalogId(item.id)} onSearchChange={(search) => setArchiveParams((current) => ({ ...current, page: 1, search: search || undefined }))} search={archiveParams.search ?? ""} />,
+              content: <CatalogTab active={archiveParams.active} archived audience="STANDARD" audienceId="" clinics={[]} doctors={[]} catalogQuery={archiveQuery} columns={catalogColumns} onActiveChange={() => undefined} onAudienceChange={() => undefined} onAudienceIdChange={() => undefined} onRestore={(id) => restoreCatalogMutation.mutate(id, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Tipul nu a fost reactivat", variant: "error" }), onSuccess: () => toast.showToast({ message: "Tipul de lucrare a fost reactivat.", variant: "success" }) })} onRowAction={(item) => setSelectedCatalogId(item.id)} onSearchChange={(search) => setArchiveParams((current) => ({ ...current, page: 1, search: search || undefined }))} printPrice={(item) => formatMoneyMinor(item.standardPriceMinor, currency, locale)} search={archiveParams.search ?? ""} />,
               id: "archive",
               label: "Arhivă",
             },
@@ -687,6 +688,7 @@ function CatalogTab({
   onRestore,
   onRowAction,
   onSearchChange,
+  printPrice,
   search,
 }: {
   readonly active: boolean | undefined;
@@ -703,10 +705,13 @@ function CatalogTab({
   readonly onRestore?: (id: string) => void;
   readonly onRowAction: (item: PriceCatalogItemSummary) => void;
   readonly onSearchChange: (search: string) => void;
+  readonly printPrice: (item: PriceCatalogItemSummary) => string;
   readonly search: string;
 }): ReactNode {
   return (
-    <Card>
+    <>
+    <div className="pricing-page__catalog-print">
+      <Card>
       <CardHeader>
         <CardTitle>Catalog de prețuri</CardTitle>
         <CardDescription>Total: {catalogQuery.data?.total ?? 0}</CardDescription>
@@ -731,7 +736,20 @@ function CatalogTab({
           rows={catalogQuery.data?.items ?? []}
         />
       </CardContent>
-    </Card>
+      </Card>
+    </div>
+    <div className="pricing-page__catalog-print-view" aria-hidden="true">
+      <h1>Catalog</h1>
+      <div className="pricing-page__catalog-print-list">
+        {(catalogQuery.data?.items ?? []).map((item) => (
+          <div className="pricing-page__catalog-print-row" key={item.id}>
+            <strong>{item.workType.name}</strong>
+            <span>{printPrice(item)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+    </>
   );
 }
 

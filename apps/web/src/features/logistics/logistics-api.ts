@@ -86,7 +86,7 @@ function toCenterQuery(params: LogisticsCenterQuery): string {
   return query.toString();
 }
 
-async function sendJson<TResponse>(path: string, method: "PATCH" | "POST", body?: unknown): Promise<TResponse> {
+async function sendJson<TResponse>(path: string, method: "DELETE" | "PATCH" | "POST", body?: unknown): Promise<TResponse> {
   const csrfToken = await fetchCsrfToken();
   const init: RequestInit = {
     headers: {
@@ -170,6 +170,14 @@ export async function createCourierRoute(input: CreateCourierRouteInput): Promis
 
 export async function updateCourierRoute(routeId: string, input: CreateCourierRouteInput & { readonly version: number }): Promise<CourierRouteView> {
   return sendJson<CourierRouteView>(`/routes/${routeId}`, "PATCH", input);
+}
+
+export async function deleteCourierRoute(routeId: string): Promise<void> {
+  await sendJson<void>(`/routes/${routeId}`, "DELETE");
+}
+
+export async function startCourierRoute(routeId: string): Promise<CourierRouteView> {
+  return sendJson<CourierRouteView>(`/routes/${routeId}/start`, "POST");
 }
 
 export async function recordCourierRouteStopOutcome(routeId: string, stopId: string, input: RecordCourierRouteStopOutcomeInput): Promise<CourierRouteView> {
@@ -299,6 +307,22 @@ export function useUpdateCourierRoute() {
   return useMutation({
     mutationFn: ({ input, routeId }: { readonly input: CreateCourierRouteInput & { readonly version: number }; readonly routeId: string }) => updateCourierRoute(routeId, input),
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["logistics", "routes"] }); },
+  });
+}
+
+export function useDeleteCourierRoute() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteCourierRoute,
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: logisticsQueryKeys.all }); },
+  });
+}
+
+export function useStartCourierRoute() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: startCourierRoute,
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: logisticsQueryKeys.all }); },
   });
 }
 

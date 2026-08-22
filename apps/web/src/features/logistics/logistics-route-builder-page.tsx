@@ -8,7 +8,7 @@ import { fetchPermissions } from "../auth/auth-api.js";
 import { useCourierOptions } from "../deliveries/deliveries-api.js";
 import { hasPermission } from "../users/users-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
-import { useCourierRoutes, useCreateCourierRoute, useLogisticsCenter, usePickupRequests, useUpdateCourierRoute } from "./logistics-api.js";
+import { useCourierRoutes, useCreateCourierRoute, useDeleteCourierRoute, useLogisticsCenter, usePickupRequests, useUpdateCourierRoute } from "./logistics-api.js";
 import "./logistics-page.css";
 
 type SelectedStop =
@@ -37,6 +37,8 @@ export function LogisticsRouteBuilderPage(): ReactNode {
   const [selectedStops, setSelectedStops] = useState<readonly SelectedStop[]>([]);
   const [editingRouteId, setEditingRouteId] = useState<string | null>(null);
   const [editingVersion, setEditingVersion] = useState<number | null>(null);
+  const [assigningRouteId, setAssigningRouteId] = useState<string | null>(null);
+  const [assigningCourierId, setAssigningCourierId] = useState("");
   const [printRouteId, setPrintRouteId] = useState<string | null>(null);
   const [listDate, setListDate] = useState(today());
   const [listCourierId, setListCourierId] = useState("");
@@ -49,6 +51,7 @@ export function LogisticsRouteBuilderPage(): ReactNode {
   const canRead = canReadRoutes || canReadCenter || canReadPickups;
   const canCreate = hasPermission(permissionsQuery.data, "routes.create") || canReadCenter;
   const canAssign = hasPermission(permissionsQuery.data, "routes.assign");
+  const canCancel = hasPermission(permissionsQuery.data, "routes.cancel");
   const deliveryCandidatesQuery = useLogisticsCenter({
     category: "ALL",
     page: 1,
@@ -62,10 +65,15 @@ export function LogisticsRouteBuilderPage(): ReactNode {
   const allRoutesQuery = useCourierRoutes({ page: 1, pageSize: 100 }, canReadRoutes);
   const createRoute = useCreateCourierRoute();
   const updateRoute = useUpdateCourierRoute();
+  const deleteRoute = useDeleteCourierRoute();
   const selectedKeys = useMemo(() => new Set(selectedStops.map((stop) => stop.id)), [selectedStops]);
   const deliveryCandidates = deliveryCandidatesQuery.data?.items ?? [];
   const pickupCandidates = (pickupsQuery.data ?? []).filter((pickup) => pickup.status === "SCHEDULED");
-  const assignedStopKeys = useMemo(() => new Set((allRoutesQuery.data?.items ?? []).flatMap((route) => route.stops.map((stop) => `${stop.type}:${stop.workOrderId ?? stop.pickupRequestId ?? stop.id}`))), [allRoutesQuery.data?.items]);
+  const assignedStopKeys = useMemo(() => new Set((allRoutesQuery.data?.items ?? [])
+    .filter((route) => route.id !== editingRouteId)
+    .flatMap((route) => route.stops
+    .filter((stop) => stop.outcomeStatus === "PENDING" || stop.outcomeStatus === "DELIVERED" || stop.outcomeStatus === "PICKED_UP")
+    .map((stop) => `${stop.type}:${stop.workOrderId ?? stop.pickupRequestId ?? stop.id}`))), [allRoutesQuery.data?.items, editingRouteId]);
   const visibleRoutes = useMemo(() => (routesQuery.data?.items ?? []).filter((route) => {
     if (printRouteId && route.id !== printRouteId) return false;
     if (listRouteId && route.id !== listRouteId) return false;
@@ -89,6 +97,43 @@ export function LogisticsRouteBuilderPage(): ReactNode {
       ...(stop.workOrderId ? { workOrderId: stop.workOrderId } : {}),
     })) as SelectedStop[]);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function startAssigning(route: CourierRouteView): void {
+    setAssigningRouteId(route.id);
+    setAssigningCourierId(route.courier?.id ?? "");
+  }
+
+  function assignRoute(route: CourierRouteView): void {
+    if (!assigningCourierId) {
+      toast.showToast({ message: "Selectează un curier înainte de trimitere.", title: "Curier lipsă", variant: "error" });
+      return;
+    }
+    updateRoute.mutate({
+      routeId: route.id,
+      input: {
+        courierUserId: assigningCourierId,
+        name: route.name,
+        routeDate: route.routeDate,
+        stops: route.stops.map((stop) => ({ addressOverride: stop.addressOverride, phoneOverride: stop.phoneOverride, pickupRequestId: stop.pickupRequestId, stopNotes: stop.stopNotes, type: stop.type, workOrderId: stop.workOrderId })),
+      version: route.version,
+      },
+    }, {
+      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Traseul nu a fost asignat", variant: "error" }),
+      onSuccess: () => {
+        setAssigningRouteId(null);
+        setAssigningCourierId("");
+        toast.showToast({ message: "Traseul a fost trimis curierului.", title: "Traseu asignat", variant: "success" });
+      },
+    });
+  }
+
+  function removeRoute(route: CourierRouteView): void {
+    if (!window.confirm(`Ștergi traseul ${route.routeNumber}? Stopurile vor reveni în listele logistice.`)) return;
+    deleteRoute.mutate(route.id, {
+      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Traseul nu a fost șters", variant: "error" }),
+      onSuccess: () => toast.showToast({ message: "Traseul a fost șters, iar stopurile au revenit în liste.", title: "Traseu șters", variant: "success" }),
+    });
   }
 
   useEffect(() => {
@@ -244,40 +289,23 @@ export function LogisticsRouteBuilderPage(): ReactNode {
                   <CardDescription>{selectedStops.length} stopuri</CardDescription>
                 </CardHeader>
                 <CardContent className="logistics-page__route-stops">
-                  {(["DELIVERY", "PICKUP"] as const).map((type) => {
-                    const stops = selectedStops.filter((stop) => stop.type === type);
-                    const locations = [...new Set(stops.map((stop) => stop.location))];
-                    if (stops.length === 0) return null;
-                    return (
-                      <section className="logistics-page__route-stop-section" key={type}>
-                        <h4>{type === "DELIVERY" ? "De livrat" : "De ridicat"}</h4>
-                        {locations.map((location) => (
-                          <div key={`${type}:${location}`}>
-                            <strong className="logistics-page__route-location">{location}</strong>
-                            {stops.filter((stop) => stop.location === location).map((stop) => {
-                              const index = selectedStops.findIndex((candidate) => candidate.id === stop.id);
-                              return (
-                                <div className="logistics-page__route-stop" key={stop.id}>
-                                  <span>{index + 1}</span>
-                                  <strong>{stop.type === "DELIVERY" ? "Livrare" : "Ridicare"}</strong>
-                                  <p>{stop.label}</p>
-                                  <div className="logistics-page__route-stop-contact">
-                                    <input aria-label={`Adresa stop ${index + 1}`} onChange={(event) => setSelectedStops((current) => current.map((item) => item.id === stop.id ? { ...item, addressOverride: event.target.value } : item))} placeholder="Adresă (opțional)" value={stop.addressOverride ?? ""} />
-                                    <input aria-label={`Telefon stop ${index + 1}`} onChange={(event) => setSelectedStops((current) => current.map((item) => item.id === stop.id ? { ...item, phoneOverride: event.target.value } : item))} placeholder="Telefon (opțional)" value={stop.phoneOverride ?? ""} />
-                                  </div>
-                                  <div className="logistics-page__route-order-actions">
-                                    <Button disabled={index === 0} onClick={() => moveStop(stop.id, -1)} size="small" type="button" variant="ghost">Sus</Button>
-                                    <Button disabled={index === selectedStops.length - 1} onClick={() => moveStop(stop.id, 1)} size="small" type="button" variant="ghost">Jos</Button>
-                                  </div>
-                                  <Button onClick={() => removeStop(stop.id)} size="small" type="button" variant="ghost">Scoate</Button>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ))}
-                      </section>
-                    );
-                  })}
+                  {selectedStops.map((stop, index) => (
+                    <div className="logistics-page__route-stop" key={stop.id}>
+                      <span>{index + 1}</span>
+                      <strong>{stop.type === "DELIVERY" ? "Livrare" : "Ridicare"}</strong>
+                      <strong className="logistics-page__route-location">{stop.location}</strong>
+                      <p>{stop.label}</p>
+                      <div className="logistics-page__route-stop-contact">
+                        <input aria-label={`Adresa stop ${index + 1}`} onChange={(event) => setSelectedStops((current) => current.map((item) => item.id === stop.id ? { ...item, addressOverride: event.target.value } : item))} placeholder="Adresă (opțional)" value={stop.addressOverride ?? ""} />
+                        <input aria-label={`Telefon stop ${index + 1}`} onChange={(event) => setSelectedStops((current) => current.map((item) => item.id === stop.id ? { ...item, phoneOverride: event.target.value } : item))} placeholder="Telefon (opțional)" value={stop.phoneOverride ?? ""} />
+                      </div>
+                      <div className="logistics-page__route-order-actions">
+                        <Button disabled={index === 0} onClick={() => moveStop(stop.id, -1)} size="small" type="button" variant="ghost">Sus</Button>
+                        <Button disabled={index === selectedStops.length - 1} onClick={() => moveStop(stop.id, 1)} size="small" type="button" variant="ghost">Jos</Button>
+                      </div>
+                      <Button onClick={() => removeStop(stop.id)} size="small" type="button" variant="ghost">Scoate</Button>
+                    </div>
+                  ))}
                   {selectedStops.length === 0 ? <p className="logistics-page__empty">Selectează lucrări sau ridicări în ordinea dorită.</p> : null}
                   <Button disabled={!canCreate || selectedStops.length === 0 || createRoute.isPending} onClick={submit} type="button">
                     {editingRouteId ? "Salvează lista" : courierUserId ? "Expediază lista" : "Adaugă lista"}
@@ -333,6 +361,14 @@ export function LogisticsRouteBuilderPage(): ReactNode {
                 <span className="logistics-page__screen-only">{route.status} · versiunea {route.version}</span>
                 <ol className="logistics-page__print-stops">{route.stops.map((stop) => <li key={stop.id}><strong>{stop.type === "DELIVERY" ? "Livrare" : "Ridicare"}</strong><span>{stop.targetLabel}</span><span>Adresă: {stop.addressOverride || "-"}</span><span>Telefon: {stop.phoneOverride || "-"}</span></li>)}</ol>
                 <div className="logistics-page__group-actions">
+                  {canAssign ? <Button onClick={() => startAssigning(route)} size="small" type="button" variant="outline">{route.courier ? "Schimbă curierul" : "Asignează curier"}</Button> : null}
+                  {assigningRouteId === route.id ? (
+                    <>
+                      <Select aria-label={`Curier pentru ${route.routeNumber}`} label="Curier" onChange={(event) => setAssigningCourierId(event.target.value)} options={(couriersQuery.data ?? []).map((courier) => ({ label: courier.displayName, value: courier.id }))} placeholder="Selectează curierul" value={assigningCourierId} />
+                      <Button disabled={updateRoute.isPending} onClick={() => assignRoute(route)} size="small" type="button">Trimite traseul</Button>
+                    </>
+                  ) : null}
+                  {canCancel ? <Button disabled={deleteRoute.isPending} onClick={() => removeRoute(route)} size="small" type="button" variant="secondary">Șterge traseul</Button> : null}
                   <Tooltip content="Printează traseul">
                     <IconButton aria-label={`Printează traseul ${route.routeNumber}`} icon="⎙" onClick={() => printRoutes(route.id)} size="medium" variant="outline" />
                   </Tooltip>

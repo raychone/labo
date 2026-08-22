@@ -106,8 +106,6 @@ function PrintableDocumentView({ document }: { readonly document: PrintableBilli
                     <strong>{document.documentTitle}</strong>
                     <span>Nr. {document.formattedNumber ?? "Draft"}</span>
                     <span>Data: {formatDate(document.issueDate)}</span>
-                    <span>Generat la {formatDate(document.generatedAt)}</span>
-                    <span>{document.complianceNotice}</span>
                   </div>
                 </section>
 
@@ -122,8 +120,10 @@ function PrintableDocumentView({ document }: { readonly document: PrintableBilli
 
                 {isLastPage ? (
                   <>
-                    <InvoiceTotal currency={document.currency} totalMinor={document.totalMinor} />
-                    {document.notes ? <p className="billing-print__notes">{document.notes}</p> : null}
+                    {document.type !== "INVOICE" ? <InvoiceTotal currency={document.currency} totalMinor={document.totalMinor} /> : null}
+                    {document.type === "INVOICE" ? <InvoiceHandover /> : null}
+                    {document.type !== "INVOICE" && document.notes ? <p className="billing-print__notes">{document.notes}</p> : null}
+                    {document.type === "INVOICE" ? <p className="billing-print__legal-note">Factura circulă fără semnătură și ștampilă conform Codului fiscal art. 319 alin. (29).</p> : null}
                   </>
                 ) : null}
               </div>
@@ -132,6 +132,30 @@ function PrintableDocumentView({ document }: { readonly document: PrintableBilli
         })}
       </div>
     </article>
+  );
+}
+
+function InvoiceSimpleLine({ currency, totalMinor }: { readonly currency: string; readonly totalMinor: number }): ReactNode {
+  const total = formatMoneyMinor(totalMinor, currency, "ro-RO");
+  return (
+    <table className="billing-print__table billing-print__table--invoice">
+      <thead><tr><th>Nr.</th><th>Denumirea produselor sau serviciilor</th><th>U.M.</th><th>Cantitate</th><th>Preț unitar (fără TVA)</th><th>Valoare</th></tr></thead>
+      <tbody><tr><td>1</td><td><strong>Lucrări protetice</strong></td><td></td><td></td><td></td><td>{total}</td></tr></tbody>
+      <tfoot><tr><td colSpan={4}></td><th>TOTAL</th><td>{total}</td></tr></tfoot>
+    </table>
+  );
+}
+
+function InvoiceHandover(): ReactNode {
+  return (
+    <section className="billing-print__handover">
+      <div className="billing-print__handover-signature"><span>Semnătură și<br />ștampilă de predare</span></div>
+      <div className="billing-print__handover-details">
+        <div>Numele delegatului: ................................................</div>
+        <div>BI/CI seria RK nr. 744538</div>
+        <div>Mijlocul de transport: ............................................</div>
+      </div>
+    </section>
   );
 }
 
@@ -157,33 +181,6 @@ function PartyBlock({
       {party.website ? <p>{party.website}</p> : null}
       {lines?.filter((line): line is string => typeof line === "string" && line.length > 0).map((line) => <p key={line}>{line}</p>)}
     </section>
-  );
-}
-
-function InvoiceSimpleLine({ currency, totalMinor }: { readonly currency: string; readonly totalMinor: number }): ReactNode {
-  return (
-    <table className="billing-print__table billing-print__table--invoice">
-      <thead>
-        <tr>
-          <th>Nr.</th>
-          <th>Denumirea produselor sau serviciilor</th>
-          <th>U.M.</th>
-          <th>Cantitate</th>
-          <th>Preț unitar</th>
-          <th>Valoare</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>1</td>
-          <td><strong>Lucrari protetice</strong></td>
-          <td>bucată</td>
-          <td>1</td>
-          <td>{formatMoneyMinor(totalMinor, currency, "ro-RO")}</td>
-          <td>{formatMoneyMinor(totalMinor, currency, "ro-RO")}</td>
-        </tr>
-      </tbody>
-    </table>
   );
 }
 

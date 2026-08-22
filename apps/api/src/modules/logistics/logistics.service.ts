@@ -396,7 +396,7 @@ export class LogisticsService {
     if (dto.courierUserId) await this.ensurePermission(context.actor.id, "routes.assign");
     const stops = this.toRouteStopCreates(dto.stops);
     const updated = await this.prisma.$transaction(async (tx) => {
-      const current = await tx.courierRoute.findUnique({ where: { id: routeId }, select: { version: true } });
+      const current = await tx.courierRoute.findUnique({ where: { id: routeId }, select: { status: true, version: true } });
       if (!current) throw new NotFoundException("Traseul nu a fost găsit.");
       if (current.version !== dto.version) throw new ConflictException("Traseul a fost modificat între timp.");
       const route = await tx.courierRoute.update({
@@ -405,6 +405,9 @@ export class LogisticsService {
           name: dto.name,
           notes: dto.notes ?? null,
           routeDate: startOfUtcDay(dto.routeDate),
+          ...(current.status === CourierRouteStatus.DRAFT || current.status === CourierRouteStatus.ASSIGNED
+            ? { status: dto.courierUserId ? CourierRouteStatus.ASSIGNED : CourierRouteStatus.DRAFT }
+            : {}),
           updatedByUserId: context.actor.id,
           version: { increment: 1 },
           stops: { deleteMany: {}, create: stops },
@@ -416,6 +419,62 @@ export class LogisticsService {
       return route;
     });
     return this.toCourierRouteView(updated);
+  }
+
+  public async deleteRoute(context: ActorContext, routeId: string): Promise<void> {
+    await this.ensurePermission(context.actor.id, "routes.cancel");
+    await this.prisma.$transaction(async (tx) => {
+      const route = await tx.courierRoute.findUnique({ include: courierRouteInclude, where: { id: routeId } });
+      if (!route) throw new NotFoundException("Traseul nu a fost găsit.");
+      if (route.status !== CourierRouteStatus.DRAFT && route.status !== CourierRouteStatus.ASSIGNED) {
+        throw new ConflictException("Traseul nu mai poate fi șters după începerea execuției.");
+      }
+      await Promise.all(route.stops.filter((stop) => stop.workOrderId).map((stop) => tx.workOrder.update({
+        data: {
+          ...(stop.type === "DELIVERY" ? { requiresDelivery: true } : { requiresPickup: true }),
+          updatedByUserId: context.actor.id,
+          version: { increment: 1 },
+        },
+        where: { id: stop.workOrderId as string },
+      })));
+      await this.recordRouteEvent(tx, context, route.id, CourierRouteEventType.ROUTE_CANCELLED, {
+        routeId: route.id,
+        routeNumber: route.routeNumber,
+        stopCount: route.stops.length,
+      });
+      await this.recordAudit(tx, context, LOGISTICS_AUDIT_ACTIONS.routeCancelled, route.id, this.toRouteAuditMetadata(route));
+      await tx.courierRoute.delete({ where: { id: route.id } });
+    });
+  }
+
+  public async startRoute(context: ActorContext, routeId: string): Promise<CourierRouteView> {
+    const now = new Date();
+    const route = await this.prisma.$transaction(async (tx) => {
+      const current = await tx.courierRoute.findUnique({ include: courierRouteInclude, where: { id: routeId } });
+      if (!current) throw new NotFoundException("Traseul nu a fost găsit.");
+      await this.assertRouteExecutionAccess(context.actor.id, current.courierUserId);
+      if (current.status !== CourierRouteStatus.ASSIGNED) {
+        throw new ConflictException("Acest traseu nu poate fi pornit acum.");
+      }
+      const previous = await tx.courierRoute.findFirst({
+        select: { routeNumber: true },
+        where: {
+          courierUserId: current.courierUserId,
+          routeDate: current.routeDate,
+          routeNumber: { lt: current.routeNumber },
+          status: { notIn: [CourierRouteStatus.COMPLETED, CourierRouteStatus.CANCELLED] },
+        },
+      });
+      if (previous) {
+        throw new ConflictException("Finalizează traseul anterior înainte să începi acest traseu.");
+      }
+      return tx.courierRoute.update({
+        data: { startedAt: now, status: CourierRouteStatus.IN_PROGRESS, updatedByUserId: context.actor.id, version: { increment: 1 } },
+        include: courierRouteInclude,
+        where: { id: routeId },
+      });
+    });
+    return this.toCourierRouteView(route);
   }
 
   public async recordRouteStopOutcome(context: ActorContext, routeId: string, stopId: string, dto: RecordCourierRouteStopOutcomeDto): Promise<CourierRouteView> {
@@ -446,6 +505,16 @@ export class LogisticsService {
         },
         where: { id: stopId },
       });
+      if (stop.workOrderId) {
+        await tx.workOrder.update({
+          data: {
+            ...(stop.type === "DELIVERY" ? { requiresDelivery: dto.outcomeStatus === "NOT_DELIVERED" } : { requiresPickup: dto.outcomeStatus === "NOT_PICKED_UP" }),
+            updatedByUserId: context.actor.id,
+            version: { increment: 1 },
+          },
+          where: { id: stop.workOrderId },
+        });
+      }
       const allDone = current.stops.every((item) => item.id === stopId ? dto.outcomeStatus !== "PENDING" : item.outcomeStatus !== "PENDING");
       const updated = await tx.courierRoute.update({
         data: {
@@ -1485,7 +1554,7 @@ export class LogisticsService {
     };
   }
 
-  private async ensurePermission(userId: string, permission: "files.upload" | "works.create" | "pickup.create" | "pickup.read" | "pickup.update" | "pickup.cancel" | "routes.assign" | "routes.create" | "routes.read" | "logistics.update_location" | "logistics.block_work" | "logistics.unblock_work" | "logistics.prepare_work" | "logistics.manage_groups"): Promise<void> {
+  private async ensurePermission(userId: string, permission: "files.upload" | "works.create" | "pickup.create" | "pickup.read" | "pickup.update" | "pickup.cancel" | "routes.assign" | "routes.cancel" | "routes.create" | "routes.read" | "logistics.update_location" | "logistics.block_work" | "logistics.unblock_work" | "logistics.prepare_work" | "logistics.manage_groups"): Promise<void> {
     const result = await this.authorizationService.hasPermission({ permission, requiredScope: "ALL", userId });
     if (!result.allowed) {
       throw new ForbiddenException("Nu ai permisiunea necesară pentru această acțiune logistică.");

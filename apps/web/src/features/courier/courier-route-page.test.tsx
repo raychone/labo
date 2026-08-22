@@ -29,6 +29,7 @@ describe("CourierRoutePage", () => {
 
   it("shows assigned route stops and records a delivery outcome", async () => {
     const posts: unknown[] = [];
+    let started = false;
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/auth/permissions")) {
@@ -36,6 +37,11 @@ describe("CourierRoutePage", () => {
       }
       if (url.endsWith("/auth/csrf")) {
         return Promise.resolve(createJsonResponse({ csrfToken: "csrf-token" }));
+      }
+      if (url.endsWith("/routes/route_1/start") && init?.method === "POST") {
+        started = true;
+        posts.push({ type: "start" });
+        return Promise.resolve(createJsonResponse({ id: "route_1", status: "IN_PROGRESS", version: 2 }));
       }
       if (url.includes("/routes?")) {
         return Promise.resolve(createJsonResponse({
@@ -49,7 +55,7 @@ describe("CourierRoutePage", () => {
             routeDate: "2026-08-21",
             routeNumber: "TR-260821-01",
             startedAt: null,
-            status: "ASSIGNED",
+            status: started ? "IN_PROGRESS" : "ASSIGNED",
             stops: [
               { failureReason: null, id: "stop_1", outcomeAt: null, outcomeByUserName: null, outcomeNotes: null, outcomeStatus: "PENDING", pickupRequestId: null, stopOrder: 1, targetLabel: "WO-26-0001 · Ion Pop", type: "DELIVERY", workOrderId: "work_1" },
               { failureReason: null, id: "stop_2", outcomeAt: null, outcomeByUserName: null, outcomeNotes: null, outcomeStatus: "PENDING", pickupRequestId: "pickup_1", stopOrder: 2, targetLabel: "Clinica Test · 09:30", type: "PICKUP", workOrderId: null },
@@ -72,12 +78,15 @@ describe("CourierRoutePage", () => {
 
     renderWithProviders(<CourierRoutePage />);
 
-    expect(await screen.findByRole("heading", { name: "Traseul meu" })).toBeDefined();
+    expect(await screen.findByRole("heading", { name: "Trasee" })).toBeDefined();
     expect(await screen.findByText("WO-26-0001 · Ion Pop")).toBeDefined();
     expect(screen.getByText("Clinica Test · 09:30")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Începe traseul" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Livrat" })).toBeDefined());
     fireEvent.click(screen.getByRole("button", { name: "Livrat" }));
 
-    await waitFor(() => expect(posts).toHaveLength(1));
-    expect(posts[0]).toMatchObject({ outcomeStatus: "DELIVERED" });
+    await waitFor(() => expect(posts).toHaveLength(2));
+    expect(posts[0]).toMatchObject({ type: "start" });
+    expect(posts[1]).toMatchObject({ outcomeStatus: "DELIVERED" });
   });
 });

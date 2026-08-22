@@ -115,7 +115,7 @@ export const appRoutes = [
   },
   {
     icon: "TM",
-    label: "Traseul meu",
+    label: "Trasee",
     navigationGroup: "Curier",
     path: "/my-route",
     permissionMode: "any",
@@ -226,6 +226,13 @@ export const appRoutes = [
 function shouldShowInNavigation(permissionKeys: readonly string[], route: AppRouteConfig): boolean {
   if (!hasRouteAccess(permissionKeys, route)) {
     return false;
+  }
+
+  // Curierii folosesc exclusiv fluxul de traseu. Nu afișa meniul operațional
+  // comun (Acasă, Status, Scanare etc.) pentru un cont care are doar acces la
+  // traseele proprii.
+  if (permissionKeys.includes("routes.read") && !permissionKeys.includes("routes.create")) {
+    return route.path === "/my-route";
   }
 
   if (isManagerWorkspace(permissionKeys)) {

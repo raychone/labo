@@ -93,6 +93,63 @@
   padding: var(--dl-space-1) var(--dl-space-2);
 }
 
+.pricing-page__catalog-print-view {
+  display: none;
+}
+
+@media print {
+  .pricing-page__catalog-print {
+    display: none !important;
+  }
+
+  .pricing-page__catalog-print-view {
+    display: block;
+    font-family: Arial, sans-serif;
+    padding-top: 1.25rem;
+  }
+
+  .pricing-page__catalog-print-view h1 {
+    border-bottom: 2px solid #0f766e;
+    color: #153b39;
+    font-size: 25px;
+    margin: 0;
+    padding-bottom: 10px;
+    text-align: center;
+  }
+
+  .pricing-page__catalog-print-view > p {
+    color: #61736f;
+    margin: 8px 0 24px;
+  }
+
+  .pricing-page__catalog-print-row {
+    align-items: center;
+    border-bottom: 1px solid #d5dfdc;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 14px;
+    min-height: 34px;
+    padding: 7px 0;
+  }
+
+  .pricing-page__catalog-print-symbol {
+    align-items: center;
+    background: #e7f1ef;
+    border: 1px solid #9bbdb7;
+    border-radius: 5px;
+    color: #0f766e;
+    display: inline-flex;
+    font-weight: 700;
+    justify-content: center;
+    min-height: 28px;
+  }
+
+  .pricing-page__catalog-print-row > span:last-child {
+    font-weight: 700;
+    text-align: right;
+  }
+}
+
 @media (min-width: 760px) {
   .pricing-page__header,
   .pricing-page__actions {
@@ -107,5 +164,84 @@
 
   .pricing-page__summary-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media print {
+  .app-shell__sidebar,
+  .app-shell__topbar,
+  .app-shell__header,
+  .pricing-page__header,
+  .pricing-page__readonly,
+  .pricing-page .dl-tabs__list,
+  .pricing-page__actions,
+  .pricing-page__filters,
+  .pricing-page__catalog-print .dl-card__header button,
+  .pricing-page__catalog-print .dl-data-table__pagination,
+  .pricing-page__catalog-print .dl-data-table__actions {
+    display: none !important;
+  }
+
+  .app-shell__main,
+  .pricing-page,
+  .pricing-page__layout,
+  .pricing-page__catalog-print,
+  .pricing-page__catalog-print .dl-card,
+  .pricing-page__catalog-print .dl-card__content {
+    background: #fff;
+    display: block;
+    max-width: none;
+    padding: 0;
+  }
+
+  .pricing-page__catalog-print .dl-card {
+    border: 0;
+    box-shadow: none;
+  }
+
+  .pricing-page__catalog-print .dl-card__header {
+    border-bottom: 2px solid #0f766e;
+    display: block;
+    margin-bottom: 18px;
+    padding: 0 0 12px;
+  }
+
+  .pricing-page__catalog-print .dl-card__header h2 {
+    color: #102a2a;
+    font-size: 24px;
+  }
+
+  .pricing-page__catalog-print .dl-data-table,
+  .pricing-page__catalog-print .dl-data-table__scroll,
+  .pricing-page__catalog-print table {
+    display: table;
+    overflow: visible !important;
+    width: 100% !important;
+  }
+
+  .pricing-page__catalog-print table {
+    border-collapse: collapse;
+    font-size: 10px;
+    table-layout: fixed;
+  }
+
+  .pricing-page__catalog-print th,
+  .pricing-page__catalog-print td {
+    border-bottom: 1px solid #d5dfdc;
+    padding: 8px 6px;
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+
+  .pricing-page__catalog-print th {
+    background: #e7f1ef !important;
+    color: #174b46;
+    font-weight: 700;
+  }
+
+  .pricing-page__catalog-print tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }

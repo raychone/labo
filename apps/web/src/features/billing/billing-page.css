@@ -817,19 +817,7 @@
 }
 
 .billing-statement__frame::before {
-  background:
-    linear-gradient(var(--dl-color-text) 0 0) top left / 16px var(--dl-border-width) no-repeat,
-    linear-gradient(var(--dl-color-text) 0 0) top left / var(--dl-border-width) 16px no-repeat,
-    linear-gradient(var(--dl-color-text) 0 0) top right / 16px var(--dl-border-width) no-repeat,
-    linear-gradient(var(--dl-color-text) 0 0) top right / var(--dl-border-width) 16px no-repeat,
-    linear-gradient(var(--dl-color-text) 0 0) bottom left / 16px var(--dl-border-width) no-repeat,
-    linear-gradient(var(--dl-color-text) 0 0) bottom left / var(--dl-border-width) 16px no-repeat,
-    linear-gradient(var(--dl-color-text) 0 0) bottom right / 16px var(--dl-border-width) no-repeat,
-    linear-gradient(var(--dl-color-text) 0 0) bottom right / var(--dl-border-width) 16px no-repeat;
-  content: "";
-  inset: -1px;
-  pointer-events: none;
-  position: absolute;
+  display: none;
 }
 
 .billing-statement__section {
@@ -1412,4 +1400,321 @@
     page-break-after: auto;
   }
 
+}
+
+/* Print-safe statement layout: keep the table inside the printable area and
+   reserve the template header/footer instead of letting content overlap them. */
+.billing-statement__paper--a4 .billing-statement__content {
+  padding: 29mm 12mm 12mm;
+}
+
+.billing-statement__paper--a5 .billing-statement__content {
+  padding: 20mm 10mm 8mm;
+}
+
+.billing-statement__sheet {
+  min-height: calc(297mm - 41mm);
+}
+
+.billing-statement__paper--a5 .billing-statement__sheet {
+  min-height: calc(210mm - 30mm);
+}
+
+.billing-statement__frame {
+  margin: 10mm auto 0;
+  width: 100%;
+}
+
+.billing-statement__table--attachment {
+  font-size: 0.62rem;
+  table-layout: fixed;
+}
+
+.billing-statement__table--attachment th,
+.billing-statement__table--attachment td {
+  padding: 0.22rem 0.2rem;
+  white-space: normal;
+}
+
+.billing-statement__table--attachment th:nth-child(1),
+.billing-statement__table--attachment td:nth-child(1) { width: 11%; }
+.billing-statement__table--attachment th:nth-child(2),
+.billing-statement__table--attachment td:nth-child(2) { width: 12%; }
+.billing-statement__table--attachment th:nth-child(3),
+.billing-statement__table--attachment td:nth-child(3) { width: 17%; }
+.billing-statement__table--attachment th:nth-child(4),
+.billing-statement__table--attachment td:nth-child(4) { width: 17%; }
+.billing-statement__table--attachment th:nth-child(5),
+.billing-statement__table--attachment td:nth-child(5) { width: 12%; }
+.billing-statement__table--attachment th:nth-child(6),
+.billing-statement__table--attachment td:nth-child(6) { width: 7%; }
+.billing-statement__table--attachment th:nth-child(7),
+.billing-statement__table--attachment td:nth-child(7),
+.billing-statement__table--attachment th:nth-child(8),
+.billing-statement__table--attachment td:nth-child(8) { width: 12%; }
+
+.billing-statement__table thead {
+  display: table-header-group;
+}
+
+.billing-statement__table tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.billing-print__table--invoice tfoot th,
+.billing-print__table--invoice tfoot td {
+  border-top: 2px solid var(--dl-color-text);
+  font-weight: 700;
+}
+
+.billing-print__handover {
+  border: 1px solid var(--dl-color-text);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 12mm;
+  min-height: 32mm;
+}
+
+.billing-print__handover-signature,
+.billing-print__handover-details {
+  padding: 8mm;
+}
+
+.billing-print__handover-signature {
+  align-items: center;
+  border-right: 1px solid var(--dl-color-text);
+  display: flex;
+  justify-content: center;
+  text-align: center;
+}
+
+.billing-print__handover-details {
+  display: grid;
+  gap: 5mm;
+}
+
+.billing-print__legal-note {
+  border-top: 1px solid var(--dl-color-border);
+  color: var(--dl-color-text-muted);
+  font-size: var(--dl-font-size-small);
+  margin-top: auto;
+  padding-top: 5mm;
+  text-align: center;
+}
+
+.billing-statement__paper {
+  box-sizing: border-box;
+  height: 297mm;
+  min-height: 297mm;
+  border: 0;
+  border-radius: 0;
+}
+
+.billing-statement__paper--a5 {
+  height: 210mm;
+  min-height: 210mm;
+}
+
+.billing-statement__content,
+.billing-statement__sheet {
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
+}
+
+.billing-statement__sheet {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.billing-statement__frame {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+}
+
+.billing-statement__footer {
+  margin-top: auto;
+}
+
+.billing-statement .billing-print__table--attachment {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.billing-statement .billing-print__table--attachment th:nth-child(1),
+.billing-statement .billing-print__table--attachment td:nth-child(1) { width: 11%; }
+.billing-statement .billing-print__table--attachment th:nth-child(2),
+.billing-statement .billing-print__table--attachment td:nth-child(2) { width: 12%; }
+.billing-statement .billing-print__table--attachment th:nth-child(3),
+.billing-statement .billing-print__table--attachment td:nth-child(3) { width: 17%; }
+.billing-statement .billing-print__table--attachment th:nth-child(4),
+.billing-statement .billing-print__table--attachment td:nth-child(4) { width: 17%; }
+.billing-statement .billing-print__table--attachment th:nth-child(5),
+.billing-statement .billing-print__table--attachment td:nth-child(5) { width: 12%; }
+.billing-statement .billing-print__table--attachment th:nth-child(6),
+.billing-statement .billing-print__table--attachment td:nth-child(6) { width: 7%; }
+.billing-statement .billing-print__table--attachment th:nth-child(7),
+.billing-statement .billing-print__table--attachment td:nth-child(7) { width: 15%; }
+
+.billing-statement .billing-print__table--attachment th,
+.billing-statement .billing-print__table--attachment td {
+  overflow-wrap: anywhere;
+  white-space: normal !important;
+  word-break: break-word;
+}
+
+.billing-statement .billing-print__table--attachment {
+  font-size: 0.55rem;
+  line-height: 1.08;
+}
+
+.billing-statement__section {
+  min-width: 0;
+}
+
+.billing-statement__footer {
+  align-self: end;
+  display: grid;
+  justify-items: end;
+  margin-top: auto;
+  width: 100%;
+}
+
+.billing-statement__footer-total {
+  align-items: baseline;
+  display: flex;
+  gap: 8mm;
+  justify-content: space-between;
+  min-width: 62mm;
+}
+
+.billing-print__handover {
+  grid-template-columns: 1fr 2fr;
+  margin-top: 5mm;
+  min-height: 20mm;
+}
+
+.billing-print__handover-signature,
+.billing-print__handover-details {
+  font-size: 0.72rem;
+  padding: 4mm;
+}
+
+.billing-print__handover-details {
+  gap: 3mm;
+}
+
+.billing-statement__sheet {
+  display: block;
+  min-height: 0;
+}
+
+.billing-statement__frame {
+  border: 0;
+  display: block;
+  min-height: 0;
+  padding: 0;
+}
+
+.billing-statement__frame > .billing-statement__section {
+  display: block;
+  min-height: 0;
+}
+
+.billing-statement__footer {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.billing-statement .billing-print__table--attachment {
+  font-size: 0.6rem;
+  line-height: 1.08;
+  width: 100%;
+  border: 1px solid color-mix(in srgb, var(--dl-color-text) 78%, var(--dl-color-border));
+}
+
+.billing-statement .billing-print__table--attachment tfoot th,
+.billing-statement .billing-print__table--attachment tfoot td {
+  border-top: 1px solid var(--dl-color-text);
+  font-weight: 700;
+  text-align: right;
+}
+
+.billing-statement__paper,
+.billing-statement__content,
+.billing-statement__sheet,
+.billing-statement__frame {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+@media print {
+  .billing-statement__paper {
+    /* The global A4 @page has 10mm top and 12mm bottom margins. The paper
+       must fit inside that printable box or its lower half starts a new page. */
+    height: calc(297mm - 22mm) !important;
+    max-height: calc(297mm - 22mm);
+    min-height: 0 !important;
+    overflow: visible;
+  }
+
+  .billing-statement__paper--a5 {
+    height: 210mm !important;
+    max-height: 210mm;
+  }
+
+  .billing-statement__content {
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .billing-statement__sheet,
+  .billing-statement__frame,
+  .billing-statement__footer {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+.billing-statement .billing-print__table--attachment th,
+.billing-statement .billing-print__table--attachment td {
+  padding-left: 0.28rem;
+  padding-right: 0.28rem;
+}
+
+.billing-statement .billing-print__table--attachment th:nth-child(1),
+.billing-statement .billing-print__table--attachment td:nth-child(1) { width: 11%; }
+.billing-statement .billing-print__table--attachment th:nth-child(2),
+.billing-statement .billing-print__table--attachment td:nth-child(2) { width: 17%; }
+.billing-statement .billing-print__table--attachment th:nth-child(3),
+.billing-statement .billing-print__table--attachment td:nth-child(3) { width: 21%; }
+.billing-statement .billing-print__table--attachment th:nth-child(4),
+.billing-statement .billing-print__table--attachment td:nth-child(4) { width: 17%; }
+.billing-statement .billing-print__table--attachment th:nth-child(5),
+.billing-statement .billing-print__table--attachment td:nth-child(5) { width: 8%; }
+.billing-statement .billing-print__table--attachment th:nth-child(6),
+.billing-statement .billing-print__table--attachment td:nth-child(6) { width: 13%; }
+.billing-statement .billing-print__table--attachment th:nth-child(7),
+.billing-statement .billing-print__table--attachment td:nth-child(7) { width: 13%; }
+
+.billing-print--invoice .billing-print__paper {
+  border: 0;
+  border-radius: 0;
+}
+
+@media print {
+  .billing-statement__paper--a4 .billing-statement__content {
+    padding: 29mm 12mm 12mm;
+  }
+
+  .billing-statement__paper--a5 .billing-statement__content {
+    padding: 20mm 10mm 8mm;
+  }
+
+  .billing-statement__table--attachment {
+    font-size: 0.58rem;
+  }
 }

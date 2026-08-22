@@ -176,17 +176,17 @@ describe("BillingPrintPage", () => {
     const documentPanel = screen.getByRole("tabpanel", { name: "Document" });
     expect(within(documentPanel).getByText("Seria:")).toBeDefined();
     expect(within(documentPanel).getByText("Număr:")).toBeDefined();
-    expect(within(documentPanel).getByText("Total factură")).toBeDefined();
+    expect(within(documentPanel).queryByText("Total factură")).toBeNull();
     expect(within(documentPanel).queryByText("Încasat manual")).toBeNull();
     expect(within(documentPanel).queryByText("Sold restant")).toBeNull();
     expect(screen.getAllByText("Nicolaie Cristina").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Cabinet Stomatologic Central").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Export PDF" })).toBeDefined();
-    expect(screen.getAllByText("Document intern neintegrat cu RO e-Factura.").length).toBeGreaterThan(0);
-    expect(within(documentPanel).getByText("Lucrari protetice")).toBeDefined();
+    expect(screen.queryByText("Document intern neintegrat cu RO e-Factura.")).toBeNull();
+    expect(within(documentPanel).getByText("Lucrări protetice")).toBeDefined();
     expect(within(documentPanel).queryByText("Coroană zirconiu")).toBeNull();
-    expect(within(documentPanel).queryByText("WO-2026-000001")).toBeNull();
-    expect(screen.getAllByText("bucată").length).toBeGreaterThan(0);
+    expect(within(documentPanel).queryByText(/WO-2026-000001/)).toBeNull();
+    expect(within(documentPanel).getByText("U.M.")).toBeDefined();
     expect(screen.queryByText("Nicolaie Gabriel")).toBeNull();
   });
 
@@ -277,7 +277,7 @@ describe("BillingPrintPage", () => {
 
     expect(await screen.findByText("FACTURA")).toBeDefined();
     expect(screen.queryByRole("tab", { name: "Anexa" })).toBeNull();
-    expect(screen.getByText("Total factură")).toBeDefined();
+    expect(screen.queryByText("Total factură")).toBeNull();
     expect(screen.getByRole("button", { name: "Export PDF" })).toBeDefined();
   });
 
@@ -403,8 +403,8 @@ describe("BillingPrintPage", () => {
     await screen.findAllByRole("heading", { name: "FACTURA" });
     expect(screen.getAllByRole("heading", { name: "FACTURA" })).toHaveLength(1);
     expect(document.querySelectorAll(".billing-print__paper--invoice")).toHaveLength(1);
-    expect(screen.getByText("Lucrari protetice")).toBeDefined();
+    expect(screen.getByText("Lucrări protetice")).toBeDefined();
     expect(screen.queryByText("Lucrare 11")).toBeNull();
-    expect(screen.queryByText("WO-2026-000011")).toBeNull();
+    expect(screen.queryByText(/WO-2026-000011/)).toBeNull();
   });
 });
