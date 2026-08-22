@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: dental-lab-api
+    runtime: node
+    plan: free
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @dental-lab/api prisma:generate:deploy && pnpm --filter @dental-lab/api prisma:migrate:deploy && pnpm --filter @dental-lab/api build
+    startCommand: pnpm --filter @dental-lab/api start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22.14.0"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: WEB_ORIGIN
+        sync: false
+      - key: DEMO_MODE
+        value: "false"
+      - key: SESSION_COOKIE_NAME
+        value: dl_session
+      - key: CSRF_COOKIE_NAME
+        value: dl_csrf
+      - key: SESSION_TTL_SECONDS
+        value: "28800"
+      - key: LOGIN_RATE_LIMIT_WINDOW_SECONDS
+        value: "60"
+      - key: LOGIN_RATE_LIMIT_MAX_ATTEMPTS
+        value: "5"
+
+  - type: web
+    name: dental-lab-web
+    runtime: static
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @dental-lab/web build
+    staticPublishPath: apps/web/dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

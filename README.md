@@ -886,6 +886,8 @@ Payments in the current MVP are manual evidence only. Users can record partial o
 
 `DEMO-SEED-001` adds a development-only realistic dataset. It keeps the base seed small and separate.
 
+Pentru publicarea online a mediului de prezentare, vezi [ghidul de deploy gratuit](docs/DEPLOY-FREE.md), inclusiv configurația Render, baza Neon și seed-ul controlat.
+
 ```bash
 pnpm seed:demo
 pnpm --filter @dental-lab/api prisma:db:reset-demo
