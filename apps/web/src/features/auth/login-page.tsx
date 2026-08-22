@@ -21,10 +21,10 @@ import { useForm } from "react-hook-form";
 import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router";
 
 import {
-  fetchCurrentUser,
   fetchPermissions,
   demoLogin,
   login,
+  type AuthUserResponse,
   type DemoLoginRole,
 } from "./auth-api.js";
 import type { LoginFormValues } from "./login-form.schema.js";
@@ -74,22 +74,20 @@ export function LoginPage(): ReactNode {
     defaultValues: defaultLoginValues,
     resolver: zodResolver(loginFormSchema),
   });
-  async function handleAuthenticated(): Promise<void> {
-      toast.clearToasts();
-      await queryClient.invalidateQueries({ queryKey: authQueryKeys.all });
-      const currentUser = await queryClient.fetchQuery({
-        queryFn: fetchCurrentUser,
-        queryKey: authQueryKeys.currentUser,
-      });
-      const permissions = currentUser?.user
-        ? await queryClient.fetchQuery({
-          queryFn: fetchPermissions,
-          queryKey: authQueryKeys.permissions,
-        })
-        : undefined;
-      const permissionKeys = permissions?.permissions.map((permission) => permission.key) ?? [];
+  async function handleAuthenticated(authenticatedUser: AuthUserResponse): Promise<void> {
+    toast.clearToasts();
 
-      navigate(returnTo ?? getFirstAuthorizedRoute(permissionKeys), { replace: true });
+    // Login already returned the authenticated user. Reusing that payload avoids
+    // an immediate duplicate /auth/me request before loading permissions.
+    queryClient.setQueryData(authQueryKeys.currentUser, authenticatedUser);
+    queryClient.removeQueries({ queryKey: authQueryKeys.permissions });
+    const permissions = await queryClient.fetchQuery({
+      queryFn: fetchPermissions,
+      queryKey: authQueryKeys.permissions,
+    });
+    const permissionKeys = permissions.permissions.map((permission) => permission.key);
+
+    navigate(returnTo ?? getFirstAuthorizedRoute(permissionKeys), { replace: true });
   }
 
   const loginMutation = useMutation({

@@ -1,10 +1,11 @@
 import { createHash, randomBytes } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 
-import type { Session, User } from "@prisma/client";
+import type { Session } from "@prisma/client";
 import { loadServerEnvironment } from "../../config/environment.js";
 import { PrismaService } from "../database/prisma.service.js";
 import type { RequestMetadata } from "./auth.types.js";
+import type { AuthenticatedUserRecord } from "./auth.view.js";
 
 export interface CreatedSession {
   readonly session: Session;
@@ -12,13 +13,24 @@ export interface CreatedSession {
 }
 
 export interface ResolvedSession {
-  readonly session: Session;
-  readonly user: User;
+  readonly session: Pick<Session, "expiresAt" | "id">;
+  readonly user: AuthenticatedUserRecord;
 }
 
-type SessionWithUser = Session & {
-  readonly user: User;
+type SessionWithUser = Pick<Session, "expiresAt" | "id" | "lastSeenAt" | "revokedAt"> & {
+  readonly user: AuthenticatedUserRecord;
 };
+
+const SESSION_USER_SELECT = {
+  displayName: true,
+  email: true,
+  id: true,
+  isActive: true,
+  mustChangePassword: true,
+  preferredColor: true,
+} as const;
+
+const LAST_SEEN_REFRESH_MS = 60_000;
 
 function hashSessionToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -51,8 +63,16 @@ export class SessionService {
     }
 
     const session = await this.prisma.session.findUnique({
-      include: {
-        user: true,
+      select: {
+        expiresAt: true,
+        id: true,
+        lastSeenAt: true,
+        revokedAt: true,
+        tokenHash: true,
+        user: {
+          select: SESSION_USER_SELECT,
+        },
+        userId: true,
       },
       where: {
         tokenHash: hashSessionToken(token),
@@ -63,14 +83,17 @@ export class SessionService {
       return null;
     }
 
-    await this.prisma.session.update({
-      data: {
-        lastSeenAt: new Date(),
-      },
-      where: {
-        id: session.id,
-      },
-    });
+    const now = Date.now();
+    if (!session.lastSeenAt || now - session.lastSeenAt.getTime() >= LAST_SEEN_REFRESH_MS) {
+      await this.prisma.session.update({
+        data: {
+          lastSeenAt: new Date(now),
+        },
+        where: {
+          id: session.id,
+        },
+      });
+    }
 
     return {
       session,

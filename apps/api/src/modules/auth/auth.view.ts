@@ -1,5 +1,6 @@
-import type { User } from "@prisma/client";
 import type { AuthenticatedUser } from "./auth.types.js";
+
+export type AuthenticatedUserRecord = Pick<AuthenticatedUser, "displayName" | "email" | "id" | "isActive" | "mustChangePassword" | "preferredColor">;
 
 export interface AuthUserResponse {
   readonly user: {
@@ -11,7 +12,7 @@ export interface AuthUserResponse {
   };
 }
 
-export function toAuthenticatedUser(user: User): AuthenticatedUser {
+export function toAuthenticatedUser(user: AuthenticatedUserRecord): AuthenticatedUser {
   return {
     displayName: user.displayName,
     email: user.email,

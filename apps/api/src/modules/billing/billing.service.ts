@@ -192,19 +192,26 @@ export class BillingService {
     const activeDocuments = billingDocuments.filter((document) => document.status !== "CANCELLED");
     const invoices = activeDocuments.filter((document) => document.type === "INVOICE");
     const proformas = activeDocuments.filter((document) => document.type === "PROFORMA");
-    const paidMinor = invoices.reduce((total, document) => total + calculateBillingAmounts(document).paidMinor, 0);
-    const outstandingMinor = invoices.reduce((total, document) => total + calculateBillingAmounts(document).balanceMinor, 0);
-    const unpaidOutstandingMinor = invoices.reduce((total, document) => {
-      const amounts = calculateBillingAmounts(document);
-      return total + (amounts.paymentStatus === "UNPAID" ? amounts.balanceMinor : 0);
-    }, 0);
-    const partialOutstandingMinor = invoices.reduce((total, document) => {
-      const amounts = calculateBillingAmounts(document);
-      return total + (amounts.paymentStatus === "PARTIALLY_PAID" ? amounts.balanceMinor : 0);
-    }, 0);
-    const unpaidInvoiceCount = invoices.filter((document) => calculateBillingAmounts(document).paymentStatus === "UNPAID").length;
-    const partialInvoiceCount = invoices.filter((document) => calculateBillingAmounts(document).paymentStatus === "PARTIALLY_PAID").length;
-    const paidInvoiceCount = invoices.filter((document) => calculateBillingAmounts(document).paymentStatus === "PAID").length;
+    // Calculate payment totals once per invoice. The values are reused by
+    // several KPI cards; recalculating them in separate passes made the
+    // overview increasingly expensive as the invoice history grew.
+    const invoiceRows = invoices.map((document) => ({
+      amounts: calculateBillingAmounts(document),
+      document,
+    }));
+    const paidMinor = invoiceRows.reduce((total, row) => total + row.amounts.paidMinor, 0);
+    const outstandingMinor = invoiceRows.reduce((total, row) => total + row.amounts.balanceMinor, 0);
+    const unpaidOutstandingMinor = invoiceRows.reduce(
+      (total, row) => total + (row.amounts.paymentStatus === "UNPAID" ? row.amounts.balanceMinor : 0),
+      0,
+    );
+    const partialOutstandingMinor = invoiceRows.reduce(
+      (total, row) => total + (row.amounts.paymentStatus === "PARTIALLY_PAID" ? row.amounts.balanceMinor : 0),
+      0,
+    );
+    const unpaidInvoiceCount = invoiceRows.filter((row) => row.amounts.paymentStatus === "UNPAID").length;
+    const partialInvoiceCount = invoiceRows.filter((row) => row.amounts.paymentStatus === "PARTIALLY_PAID").length;
+    const paidInvoiceCount = invoiceRows.filter((row) => row.amounts.paymentStatus === "PAID").length;
     const overdueInvoiceCount = invoices.filter((document) => this.isOverdueInvoice(document)).length;
 
     return {
