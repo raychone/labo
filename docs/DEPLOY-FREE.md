@@ -88,7 +88,7 @@ curier@demo.local
 medic@demo.local
 ```
 
-Parola demo existentă în seed este `DemoLab2026!`. Folosește-o doar pentru această instanță de prezentare și schimb-o înainte ca URL-ul să fie distribuit mai larg. `DEMO_MODE` rămâne `false` pe server, deci login-ul se face din formularul normal, nu prin butoane rapide de demo.
+Parola demo existentă în seed este `DemoLab2026!`. Pentru instanța Render de prezentare, butoanele de acces rapid sunt activate prin `VITE_DEMO_MODE=true` în frontend și `DEMO_LOGIN_ENABLED=true` în API. Acestea permit oricui are URL-ul să intre direct în profilurile demo, deci dezactivează ambele variabile înainte de utilizarea reală a aplicației.
 
 Dacă vrei să refaci demo-ul de la zero, numai pe această bază de prezentare, rulează:
 

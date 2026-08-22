@@ -17,6 +17,8 @@ services:
         sync: false
       - key: DEMO_MODE
         value: "false"
+      - key: DEMO_LOGIN_ENABLED
+        value: "true"
       - key: SESSION_COOKIE_NAME
         value: dl_session
       - key: CSRF_COOKIE_NAME
@@ -36,6 +38,8 @@ services:
     envVars:
       - key: VITE_API_BASE_URL
         sync: false
+      - key: VITE_DEMO_MODE
+        value: "true"
     routes:
       - type: rewrite
         source: /*

@@ -14,6 +14,7 @@ describe("parseServerEnvironment", () => {
       csrfHeaderName: "x-csrf-token",
       databaseUrl: "postgresql://user:password@localhost:5432/database",
       demoMode: false,
+      demoLoginEnabled: false,
       loginRateLimitMaxAttempts: 5,
       loginRateLimitWindowSeconds: 60,
       port: 3001,

@@ -10,6 +10,7 @@ const serverEnvironmentSchema = z.object({
   CSRF_HEADER_NAME: z.string().min(1).default("x-csrf-token"),
   DATABASE_URL: z.string().url().startsWith("postgresql://"),
   DEMO_MODE: z.enum(["true", "false"]).default("false"),
+  DEMO_LOGIN_ENABLED: z.enum(["true", "false"]).default("false"),
   LOGIN_RATE_LIMIT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   LOGIN_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
   PORT: z.coerce.number().int().positive().max(65535).default(3010),
@@ -21,6 +22,7 @@ const serverEnvironmentSchema = z.object({
 export interface ServerEnvironment {
   readonly databaseUrl: string;
   readonly demoMode: boolean;
+  readonly demoLoginEnabled: boolean;
   readonly loginRateLimitMaxAttempts: number;
   readonly loginRateLimitWindowSeconds: number;
   readonly port: number;
@@ -39,6 +41,7 @@ export function parseServerEnvironment(
   return {
     databaseUrl: parsedEnvironment.DATABASE_URL,
     demoMode: parsedEnvironment.DEMO_MODE === "true",
+    demoLoginEnabled: parsedEnvironment.DEMO_LOGIN_ENABLED === "true",
     loginRateLimitMaxAttempts: parsedEnvironment.LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
     loginRateLimitWindowSeconds: parsedEnvironment.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
     port: parsedEnvironment.PORT,

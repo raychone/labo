@@ -90,7 +90,7 @@ export class AuthService {
   public async demoLogin(input: { readonly role: DemoLoginRole; readonly requestMetadata: RequestMetadata }): Promise<LoginResult> {
     const environment = loadServerEnvironment();
 
-    if (!environment.demoMode || process.env.NODE_ENV === "production") {
+    if (!environment.demoMode && !environment.demoLoginEnabled) {
       await this.auditService.record({
         action: AUTH_AUDIT_ACTIONS.demoLoginFailed,
         metadata: { demoRole: input.role, reason: "demo_mode_disabled" },
