@@ -153,25 +153,27 @@ export class BillingService {
 
   public async getOverview(legalEntity: LegalEntityContext, query: BillingRangeQueryDto): Promise<BillingOverview> {
     const range = this.resolveDateRange(query);
-    const currency = await this.getCurrency(legalEntity);
     const workWhere = this.createWorkWhere(legalEntity, query, range);
     const documentWhere = this.createDocumentWhere(legalEntity, query, range);
 
-    const [works, documents, ambiguousLegacyCount] = await this.prisma.$transaction([
-      this.prisma.workOrder.findMany({
-        // The cast keeps the existing billing helpers shared with the full
-        // work-order representation. Every property they read is selected
-        // above; detail endpoints continue using BILLABLE_WORK_INCLUDE.
-        select: BILLING_OVERVIEW_WORK_SELECT,
-        where: workWhere,
-      }),
-      this.prisma.billingDocument.findMany({
-        select: BILLING_OVERVIEW_DOCUMENT_SELECT,
-        where: documentWhere,
-      }),
-      this.prisma.billingDocument.count({
-        where: this.createAmbiguousLegacyWhere(legalEntity),
-      }),
+    const [currency, [works, documents, ambiguousLegacyCount]] = await Promise.all([
+      this.getCurrency(legalEntity),
+      this.prisma.$transaction([
+        this.prisma.workOrder.findMany({
+          // The cast keeps the existing billing helpers shared with the full
+          // work-order representation. Every property they read is selected
+          // above; detail endpoints continue using BILLABLE_WORK_INCLUDE.
+          select: BILLING_OVERVIEW_WORK_SELECT,
+          where: workWhere,
+        }),
+        this.prisma.billingDocument.findMany({
+          select: BILLING_OVERVIEW_DOCUMENT_SELECT,
+          where: documentWhere,
+        }),
+        this.prisma.billingDocument.count({
+          where: this.createAmbiguousLegacyWhere(legalEntity),
+        }),
+      ]),
     ]);
 
     const billableWorks = (works as unknown as BillableWorkRecord[]).filter((work) => this.isWorkCycleBillable(work));

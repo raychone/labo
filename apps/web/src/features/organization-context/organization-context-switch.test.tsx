@@ -69,7 +69,7 @@ describe("OrganizationContextSwitch", () => {
     expect(screen.queryByText("Firmă activă")).toBeNull();
   });
 
-  it("confirms dirty settings before switching and invalidates only settings", async () => {
+  it("confirms dirty settings before switching and invalidates active context queries", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/auth/csrf")) {
@@ -109,7 +109,11 @@ describe("OrganizationContextSwitch", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Schimbă firma" }));
 
     await waitFor(() => expect(screen.getByRole("radio", { name: "NG — Nicolaie Gabriel" }).getAttribute("aria-checked")).toBe("true"));
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["settings"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["settings"], refetchType: "active" });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["works"], refetchType: "active" });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["logistics"], refetchType: "active" });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["status"], refetchType: "active" });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["billing"], refetchType: "active" });
     expect(invalidateSpy).not.toHaveBeenCalledWith();
     unregister();
   });

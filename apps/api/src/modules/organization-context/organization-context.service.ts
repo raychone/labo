@@ -40,8 +40,10 @@ export class OrganizationContextService {
   ) {}
 
   public async getContext(input: ResolveContextInput): Promise<OrganizationContextView> {
-    const canSwitch = await this.canSwitchContext(input.userId);
-    const available = await this.findActiveLegalEntities();
+    const [canSwitch, available] = await Promise.all([
+      this.canSwitchContext(input.userId),
+      this.findActiveLegalEntities(),
+    ]);
     const active = await this.resolveOrInitializeActiveContext(input, available);
 
     return toOrganizationContextView({
@@ -58,24 +60,25 @@ export class OrganizationContextService {
       userId: input.userId,
     });
 
-    const target = await this.prisma.legalEntity.findFirst({
-      select: {
-        code: true,
-        displayName: true,
-        id: true,
-        isActive: true,
-      },
-      where: {
-        code: input.code,
-        isActive: true,
-      },
-    });
+    const [target, previousSession] = await Promise.all([
+      this.prisma.legalEntity.findFirst({
+        select: {
+          code: true,
+          displayName: true,
+          id: true,
+          isActive: true,
+        },
+        where: {
+          code: input.code,
+          isActive: true,
+        },
+      }),
+      this.findUsableSession(input),
+    ]);
 
     if (!target) {
       throw new NotFoundException("Firma selectată nu este disponibilă.");
     }
-
-    const previousSession = await this.findUsableSession(input);
 
     if (!previousSession) {
       throw new ForbiddenException("Sesiunea curentă nu este disponibilă.");
@@ -99,21 +102,28 @@ export class OrganizationContextService {
       throw new ForbiddenException("Sesiunea curentă nu este disponibilă.");
     }
 
-    await this.auditService.record({
-      action: ORGANIZATION_CONTEXT_AUDIT_ACTIONS.switched,
-      actorUserId: input.userId,
-      metadata: {
-        fromCode: previousSession.activeLegalEntity?.isActive === true ? previousSession.activeLegalEntity.code : null,
-        sessionId: input.sessionId,
-        source: "shell",
-        toCode: target.code,
-      },
-      requestMetadata: input.requestMetadata,
-      resourceId: input.sessionId,
-      resourceType: ORGANIZATION_CONTEXT_RESOURCE_TYPES.session,
-    });
+    const [available] = await Promise.all([
+      this.findActiveLegalEntities(),
+      this.auditService.record({
+        action: ORGANIZATION_CONTEXT_AUDIT_ACTIONS.switched,
+        actorUserId: input.userId,
+        metadata: {
+          fromCode: previousSession.activeLegalEntity?.isActive === true ? previousSession.activeLegalEntity.code : null,
+          sessionId: input.sessionId,
+          source: "shell",
+          toCode: target.code,
+        },
+        requestMetadata: input.requestMetadata,
+        resourceId: input.sessionId,
+        resourceType: ORGANIZATION_CONTEXT_RESOURCE_TYPES.session,
+      }),
+    ]);
 
-    return this.getContext(input);
+    return toOrganizationContextView({
+      active: toLegalEntityContext(target),
+      available,
+      canSwitch: true,
+    });
   }
 
   public async requireActiveContext(input: ResolveContextInput): Promise<LegalEntityContext> {

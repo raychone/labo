@@ -6,8 +6,11 @@ import type { CSSProperties, ReactNode } from "react";
 import { useState } from "react";
 
 import { isForbiddenError } from "../../lib/api-client.js";
+import { logisticsQueryKeys } from "../logistics/logistics-api.js";
 import { pricingQueryKeys } from "../pricing/pricing-api.js";
 import { settingsQueryKey } from "../settings/settings-api.js";
+import { statusQueryKeys } from "../status/status-api.js";
+import { worksQueryKeys } from "../works/works-api.js";
 import { fetchOrganizationContext, organizationContextQueryKeys, switchOrganizationContext } from "./organization-context-api.js";
 import { getOrganizationContextSwitchBlockMessage } from "./organization-context-switch-guards.js";
 
@@ -38,9 +41,14 @@ export function OrganizationContextSwitch({ canRead, canSwitch = true, compact =
     },
     onSuccess: (context) => {
       queryClient.setQueryData(organizationContextQueryKeys.all, context);
-      void queryClient.invalidateQueries({ queryKey: ["billing"] });
-      void queryClient.invalidateQueries({ queryKey: settingsQueryKey });
-      void queryClient.invalidateQueries({ queryKey: pricingQueryKeys.all });
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["billing"], refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: logisticsQueryKeys.all, refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: pricingQueryKeys.all, refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: settingsQueryKey, refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: statusQueryKeys.all, refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.all, refetchType: "active" }),
+      ]);
       toast.showToast({
         message: context.active ? formatLegalEntityOption(context.active) : "Contextul activ a fost actualizat.",
         title: "Firma activă a fost schimbată",
