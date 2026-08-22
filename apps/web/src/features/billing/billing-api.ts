@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   BillableWork,
   BillingDocumentDetail,
@@ -307,7 +307,7 @@ export function useBillableWorks(params: BillingWorkspaceParams, enabled: boolea
 }
 
 export function useBillingDocuments(params: BillingListQuery, enabled: boolean) {
-  return useQuery({ enabled, queryFn: () => fetchBillingDocuments(params), queryKey: billingQueryKeys.documents(params), retry: false });
+  return useQuery({ enabled, placeholderData: keepPreviousData, queryFn: () => fetchBillingDocuments(params), queryKey: billingQueryKeys.documents(params), retry: false });
 }
 
 export function usePayments(enabled: boolean) {
@@ -323,7 +323,7 @@ export function useMonthRegistry(params: BillingWorkspaceParams, enabled: boolea
 }
 
 export function useReceivables(params: BillingListQuery, enabled: boolean) {
-  return useQuery({ enabled, queryFn: () => fetchReceivables(params), queryKey: billingQueryKeys.receivables(params), retry: false });
+  return useQuery({ enabled, placeholderData: keepPreviousData, queryFn: () => fetchReceivables(params), queryKey: billingQueryKeys.receivables(params), retry: false });
 }
 
 export function useAmbiguousLegacyRecords(enabled: boolean) {

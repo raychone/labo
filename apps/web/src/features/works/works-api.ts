@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateWorkInput,
   CreateNextWorkCycleInput,
@@ -263,6 +263,7 @@ export function useWorks(params: WorksListParams, enabled: boolean, poll = false
     enabled,
     queryFn: () => fetchWorks(params),
     queryKey: worksQueryKeys.list(params),
+    placeholderData: keepPreviousData,
     ...(poll ? { refetchInterval: 10_000, refetchIntervalInBackground: false } : {}),
     retry: false,
   });
@@ -273,6 +274,7 @@ export function useAvailableWorksForClaim(params: ClaimWorksListParams, enabled:
     enabled,
     queryFn: () => fetchAvailableWorksForClaim(params),
     queryKey: worksQueryKeys.availableForClaim(params),
+    placeholderData: keepPreviousData,
     retry: false,
   });
 }
@@ -282,6 +284,7 @@ export function useMyClaimedWorks(params: ClaimWorksListParams, enabled: boolean
     enabled,
     queryFn: () => fetchMyClaimedWorks(params),
     queryKey: worksQueryKeys.myClaimed(params),
+    placeholderData: keepPreviousData,
     retry: false,
   });
 }

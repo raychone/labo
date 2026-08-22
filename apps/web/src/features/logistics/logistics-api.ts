@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   BlockWorkInput,
   CancelPickupRequestInput,
@@ -202,11 +202,11 @@ export async function createLogisticsWork(input: CreateWorkInput, attachments: r
 }
 
 export function useLogisticsCenter(params: LogisticsCenterQuery, enabled: boolean) {
-  return useQuery({ enabled, queryFn: () => fetchLogisticsCenter(params), queryKey: logisticsQueryKeys.center(params), refetchInterval: 10_000, retry: false });
+  return useQuery({ enabled, placeholderData: keepPreviousData, queryFn: () => fetchLogisticsCenter(params), queryKey: logisticsQueryKeys.center(params), refetchInterval: 10_000, refetchIntervalInBackground: false, retry: false });
 }
 
 export function useLogisticsSummary(params: LogisticsCenterQuery, enabled: boolean) {
-  return useQuery({ enabled, queryFn: () => fetchLogisticsSummary(params), queryKey: logisticsQueryKeys.summary(params), refetchInterval: 10_000, retry: false });
+  return useQuery({ enabled, queryFn: () => fetchLogisticsSummary(params), queryKey: logisticsQueryKeys.summary(params), refetchInterval: 10_000, refetchIntervalInBackground: false, retry: false });
 }
 
 export function useWorkLogistics(workOrderId: string | null, enabled: boolean) {
@@ -222,7 +222,7 @@ export function usePickupRequests(enabled: boolean) {
 }
 
 export function useCourierRoutes(params: CourierRouteListQuery, enabled: boolean) {
-  return useQuery({ enabled, queryFn: () => fetchCourierRoutes(params), queryKey: logisticsQueryKeys.routes(params), retry: false });
+  return useQuery({ enabled, placeholderData: keepPreviousData, queryFn: () => fetchCourierRoutes(params), queryKey: logisticsQueryKeys.routes(params), retry: false });
 }
 
 export function useLogisticsTransition() {
