@@ -423,6 +423,12 @@ export class WorkFormSubmissionValidationService {
     }
 
     for (const key of keys) {
+      // Restoration is a global optional intake field. Older templates may not
+      // contain it in their snapshot, but a stale client can still send an
+      // empty/previous value; ignore it instead of rejecting the whole work.
+      if (key === "restoration_type" && !fieldsByKey.has(key)) {
+        continue;
+      }
       if (isForbiddenWorkFormValueKey(key) || !fieldsByKey.has(key)) {
         throw new BadRequestException(`Câmp formular necunoscut sau interzis: ${key}.`);
       }

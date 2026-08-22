@@ -45,7 +45,7 @@ describe("route registry", () => {
     const labels = getNavigationRoutes(["works.read_assigned", "technician.workbench.read", "technician.earnings.read_own", "logistics.center.read"]).map((route) => route.label);
 
     expect(labels).toContain("Lucrările mele");
-    expect(labels).toContain("Câștiguri");
+    expect(labels).toContain("Valoare");
     expect(labels).not.toContain("Lucrări");
     expect(labels).not.toContain("Centru operațional");
   });
@@ -71,7 +71,7 @@ describe("route registry", () => {
     const technician = getNavigationRoutes([
       "works.read_assigned", "scan.use", "technician.workbench.read", "technician.earnings.read_own", "patients.read",
     ]).map((route) => route.label);
-    expect(technician).toEqual(expect.arrayContaining(["Acasă", "Status", "Scanare", "Lucrările mele", "Câștiguri", "Pacienți"]));
+    expect(technician).toEqual(expect.arrayContaining(["Acasă", "Status", "Scanare", "Lucrările mele", "Valoare", "Pacienți"]));
     expect(technician).not.toContain("Traseu");
     expect(technician).not.toContain("Facturare");
 

@@ -446,6 +446,16 @@ export function WorkForm({
             options={RESTORATION_TYPE_OPTIONS}
             value={form.watch("restorationType") ?? ""}
           />
+          {form.watch("restorationType") ? (
+            <Button
+              disabled={isDisabled}
+              onClick={() => form.setValue("restorationType", null, { shouldDirty: true, shouldValidate: true })}
+              type="button"
+              variant="outline"
+            >
+              Fără tip restaurare
+            </Button>
+          ) : null}
           {workDetailsSlot}
         </FormGrid>
       </FormSection>

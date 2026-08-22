@@ -159,4 +159,11 @@ describe("WorkFormSubmissionValidationService", () => {
     expect(service.validateValues(snapshot, { shade: "A2" }, { enforceRequired: false })).toEqual({ shade: "A2", teeth: null });
     expect(service.validateValues(snapshot, { shade: "A2" }, { enforceRequired: true })).toEqual({ shade: "A2", teeth: null });
   });
+
+  it("ignores restoration values for templates that do not expose restoration", async () => {
+    const service = new WorkFormSubmissionValidationService();
+    const snapshot = service.createSnapshot(activeTemplate as unknown as Parameters<WorkFormSubmissionValidationService["createSnapshot"]>[0]);
+
+    expect(service.validateValues(snapshot, { restoration_type: "cimentata", shade: "A2" })).toEqual({ shade: "A2", teeth: null });
+  });
 });

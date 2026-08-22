@@ -47,6 +47,7 @@ export interface BillingDocumentLineView {
   readonly workCreatedAtSnapshot: string;
   readonly workOrderId: string;
   readonly workTypeNameSnapshot: string;
+  readonly workTypeSymbolSnapshot?: string;
 }
 
 export interface PaymentView {
@@ -156,6 +157,7 @@ export interface BillableWork {
   readonly workCycleId: string | null;
   readonly workCycleNumber: number | null;
   readonly workTypeName: string;
+  readonly workTypeSymbol?: string;
 }
 
 export interface BillingSeriesView {
@@ -290,6 +292,7 @@ export interface BillingStatementWorkRow {
   readonly patientName: string;
   readonly totalPriceMinor: number;
   readonly workTypeName: string;
+  readonly workTypeSymbol?: string;
 }
 
 export interface ClinicBillingStatement {

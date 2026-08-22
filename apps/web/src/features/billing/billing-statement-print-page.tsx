@@ -23,9 +23,11 @@ interface SerializedStatementWork {
   readonly totalPriceMinor: number | null;
   readonly workCycleNumber: number | null;
   readonly workTypeName: string;
+  readonly workTypeSymbol?: string;
 }
 
 interface StatementNoteLine {
+  readonly doctorNameSnapshot?: string;
   readonly id: string;
   readonly lineTotalMinor: number;
   readonly patientNameSnapshot: string;
@@ -35,6 +37,7 @@ interface StatementNoteLine {
   readonly workCode: string;
   readonly workCreatedAtSnapshot: string;
   readonly workTypeNameSnapshot: string;
+  readonly workTypeSymbolSnapshot?: string;
 }
 
 interface StatementArrearLine {
@@ -61,12 +64,11 @@ function formatShortDate(value: string): string {
   return `${date.getDate()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getFullYear()).slice(-2)}`;
 }
 
-function formatMoneyMinorCompact(value: number, currency: string): string {
+function formatMoneyMinorCompact(value: number, _currency: string): string {
   return new Intl.NumberFormat("ro-RO", {
-    currency,
     maximumFractionDigits: 0,
     minimumFractionDigits: 0,
-    style: "currency",
+    style: "decimal",
   }).format(value / 100);
 }
 
@@ -130,6 +132,7 @@ function readWorkPayload(searchParams: URLSearchParams): readonly SerializedStat
         totalPriceMinor: typeof record.totalPriceMinor === "number" ? record.totalPriceMinor : null,
         workCycleNumber: typeof record.workCycleNumber === "number" ? record.workCycleNumber : null,
         workTypeName: record.workTypeName,
+        ...(typeof record.workTypeSymbol === "string" ? { workTypeSymbol: record.workTypeSymbol } : {}),
       }];
     });
   } catch {
@@ -141,6 +144,7 @@ function toNoteLineFromAttachment(line: BillingDocumentLineView): StatementNoteL
   return {
     id: line.id,
     lineTotalMinor: line.lineTotalMinor,
+    doctorNameSnapshot: line.doctorNameSnapshot,
     patientNameSnapshot: line.patientNameSnapshot,
     quantity: line.quantity,
     toothPositionSnapshot: line.toothPositionSnapshot,
@@ -148,6 +152,7 @@ function toNoteLineFromAttachment(line: BillingDocumentLineView): StatementNoteL
     workCode: line.workCode,
     workCreatedAtSnapshot: line.workCreatedAtSnapshot,
     workTypeNameSnapshot: line.workTypeNameSnapshot,
+    ...(typeof line.workTypeSymbolSnapshot === "string" ? { workTypeSymbolSnapshot: line.workTypeSymbolSnapshot } : {}),
   };
 }
 
@@ -157,6 +162,7 @@ function toNoteLineFromWork(work: SerializedStatementWork): StatementNoteLine {
   return {
     id: work.id,
     lineTotalMinor: totalMinor,
+    doctorNameSnapshot: work.doctorName,
     patientNameSnapshot: work.patientName,
     quantity: work.quantity,
     toothPositionSnapshot: work.patientReference,
@@ -164,6 +170,7 @@ function toNoteLineFromWork(work: SerializedStatementWork): StatementNoteLine {
     workCode: work.code,
     workCreatedAtSnapshot: work.createdAt,
     workTypeNameSnapshot: work.workTypeName,
+    ...(typeof work.workTypeSymbol === "string" ? { workTypeSymbolSnapshot: work.workTypeSymbol } : {}),
   };
 }
 
@@ -216,6 +223,7 @@ export function BillingStatementPrintPage(): ReactNode {
       return statementQuery.data.uninvoicedWorks.map((work) => ({
         id: work.code,
         lineTotalMinor: work.totalPriceMinor,
+        doctorNameSnapshot: work.doctorName,
         patientNameSnapshot: work.patientName,
         quantity: 1,
         toothPositionSnapshot: null,
@@ -223,6 +231,7 @@ export function BillingStatementPrintPage(): ReactNode {
         workCode: work.code,
         workCreatedAtSnapshot: work.createdAt,
         workTypeNameSnapshot: work.workTypeName,
+        ...(typeof work.workTypeSymbol === "string" ? { workTypeSymbolSnapshot: work.workTypeSymbol } : {}),
       }));
     }
 
@@ -438,20 +447,22 @@ function NoteLinesTable({ currency, rows, totalMinor }: { readonly currency: str
       <thead>
         <tr>
           <th>Data</th>
+          <th>Doctor</th>
           <th>Nume pacient</th>
-          <th>Tip lucrare</th>
+          <th>Simbol</th>
           <th>Poziție arcadă</th>
           <th>Nr. elem.</th>
           <th>Preț / elem.</th>
-          <th>Valoare lei</th>
+          <th>Valoare</th>
         </tr>
       </thead>
       <tbody>
         {rows.map((row) => (
           <tr key={row.id}>
             <td>{formatShortDate(row.workCreatedAtSnapshot)}</td>
+            <td>{row.doctorNameSnapshot ?? "-"}</td>
             <td>{row.patientNameSnapshot}</td>
-            <td>{row.workTypeNameSnapshot}</td>
+            <td>{row.workTypeSymbolSnapshot ?? "-"}</td>
             <td>{row.toothPositionSnapshot ?? "-"}</td>
             <td>{row.quantity}</td>
             <td>{formatMoneyMinorCompact(row.unitPriceMinor, currency)}</td>
@@ -462,7 +473,7 @@ function NoteLinesTable({ currency, rows, totalMinor }: { readonly currency: str
       {totalMinor !== null ? (
         <tfoot>
           <tr>
-            <th colSpan={6}>Total</th>
+            <th colSpan={7}>Total</th>
             <th>{formatMoneyMinorCompact(totalMinor, currency)}</th>
           </tr>
         </tfoot>

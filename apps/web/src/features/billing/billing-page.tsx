@@ -359,6 +359,7 @@ interface SerializedStatementWork {
   readonly totalPriceMinor: number | null;
   readonly workCycleNumber: number | null;
   readonly workTypeName: string;
+  readonly workTypeSymbol?: string;
 }
 
 function serializeStatementWorks(works: readonly BillableWork[]): string {
@@ -374,6 +375,7 @@ function serializeStatementWorks(works: readonly BillableWork[]): string {
     totalPriceMinor: work.totalPriceMinor,
     workCycleNumber: work.workCycleNumber,
     workTypeName: work.workTypeName,
+    ...(typeof work.workTypeSymbol === "string" ? { workTypeSymbol: work.workTypeSymbol } : {}),
   }) satisfies SerializedStatementWork));
 }
 
@@ -775,6 +777,7 @@ export function BillingPage(): ReactNode {
         totalPriceMinor: work.totalPriceMinor,
         workCycleNumber: null,
         workTypeName: work.workTypeName,
+        ...(typeof work.workTypeSymbol === "string" ? { workTypeSymbol: work.workTypeSymbol } : {}),
       }))) } : {}),
     };
     const path = scope === "clinic" ? "/billing/statements/clinic/pdf" : "/billing/statements/doctor/pdf";

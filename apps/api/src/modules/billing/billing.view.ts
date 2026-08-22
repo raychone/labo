@@ -30,6 +30,7 @@ export interface BillingDocumentLineView {
   readonly workCreatedAtSnapshot: string;
   readonly workOrderId: string;
   readonly workTypeNameSnapshot: string;
+  readonly workTypeSymbolSnapshot?: string;
 }
 
 export interface PaymentView {
@@ -105,6 +106,7 @@ export interface BillableWork {
   readonly workCycleId: string | null;
   readonly workCycleNumber: number | null;
   readonly workTypeName: string;
+  readonly workTypeSymbol?: string;
 }
 
 export interface BillingSeriesView {
@@ -309,6 +311,7 @@ export function toBillingDocumentLineView(line: BillingDocumentRecord["lines"][n
     workCreatedAtSnapshot: line.workCreatedAtSnapshot.toISOString(),
     workOrderId: line.workOrderId,
     workTypeNameSnapshot: line.workTypeNameSnapshot,
+    workTypeSymbolSnapshot: line.workOrder.workType.symbol,
   };
 }
 
@@ -362,6 +365,7 @@ export function toBillableWorkView(workOrder: BillableWorkRecord, includeMoney: 
     workCycleId: activeCycle?.id ?? null,
     workCycleNumber: activeCycle?.cycleNumber ?? null,
     workTypeName: workOrder.workType.name,
+    workTypeSymbol: workOrder.workType.symbol,
   };
 }
 

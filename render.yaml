@@ -3,10 +3,12 @@ services:
     name: dental-lab-api
     runtime: node
     plan: free
-    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @dental-lab/api prisma:generate:deploy && pnpm --filter @dental-lab/api prisma:migrate:deploy && pnpm --filter @dental-lab/api build
+    buildCommand: pnpm install --frozen-lockfile && PLAYWRIGHT_BROWSERS_PATH=0 pnpm exec playwright install chromium && pnpm --filter @dental-lab/api prisma:generate:deploy && pnpm --filter @dental-lab/api prisma:migrate:deploy && pnpm --filter @dental-lab/api build
     startCommand: pnpm --filter @dental-lab/api start
     healthCheckPath: /health
     envVars:
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: "0"
       - key: NODE_VERSION
         value: "22.14.0"
       - key: NODE_ENV

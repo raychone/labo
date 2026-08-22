@@ -196,9 +196,12 @@ describe("BillingStatementPrintPage", () => {
     expect(screen.queryByText("Perioadă")).toBeNull();
     expect(screen.queryByText("2 documente selectate din perioadă")).toBeNull();
     expect(screen.getByText("Anexa la factura FACT-2026-000123")).toBeDefined();
-    for (const label of ["Data", "Nume pacient", "Tip lucrare", "Poziție arcadă", "Nr. elem.", "Preț / elem.", "Valoare lei"] as const) {
+    for (const label of ["Data", "Doctor", "Nume pacient", "Simbol", "Poziție arcadă", "Nr. elem.", "Preț / elem.", "Valoare"] as const) {
       expect(screen.getByText(label)).toBeDefined();
     }
+    expect(screen.queryByText("Tip lucrare")).toBeNull();
+    expect(screen.queryByText("Valoare lei")).toBeNull();
+    expect(screen.queryByText(/RON|lei/i)).toBeNull();
     expect(screen.queryByText("WO-2026-000001")).toBeNull();
     expect(screen.queryByText("WO-2026-000002")).toBeNull();
     expect(screen.getByText("Restante existente")).toBeDefined();

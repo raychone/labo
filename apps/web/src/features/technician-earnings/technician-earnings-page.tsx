@@ -45,7 +45,7 @@ export function TechnicianEarningsPage(): ReactNode {
       <section className="dl-container technician-earnings__layout" aria-labelledby="earnings-title">
         <header className="technician-earnings__header">
           <div>
-            <h1 id="earnings-title">Câștiguri</h1>
+            <h1 id="earnings-title">Valoare</h1>
             <p>Manoperele finalizate generează o sumă de primit. Plata apare doar după ce Managerul o înregistrează.</p>
           </div>
         </header>
@@ -114,7 +114,7 @@ export function EarningsContent({
   }
 
   if (error) {
-    return <ErrorState title="Câștigurile nu pot fi încărcate" description={error} />;
+    return <ErrorState title="Valoarea nu poate fi încărcată" description={error} />;
   }
 
   if (!data) {

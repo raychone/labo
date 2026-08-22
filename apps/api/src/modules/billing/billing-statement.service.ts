@@ -522,6 +522,7 @@ function toUninvoicedWorkRow(work: UninvoicedWorkRecord) {
     patientName: work.patientName,
     totalPriceMinor: getWorkSnapshotTotal(work),
     workTypeName: work.workType.name,
+    workTypeSymbol: work.workType.symbol,
   };
 }
 

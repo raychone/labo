@@ -88,7 +88,7 @@ export const appRoutes = [
   },
   {
     icon: "CA",
-    label: "Câștiguri",
+    label: "Valoare",
     navigationGroup: "Tehnician",
     path: "/earnings",
     permissionMode: "any",
