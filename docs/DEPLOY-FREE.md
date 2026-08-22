@@ -20,8 +20,10 @@ Nu folosi date reale de pacienți în baza gratuită de demo.
 
 1. Intră pe [neon.tech](https://neon.tech) și creează cont.
 2. Creează un proiect PostgreSQL, de exemplu `dental-lab-demo`.
-3. Din **Connect** copiază connection string-ul pooled, preferabil cel care conține `-pooler`.
-4. Păstrează-l temporar într-un password manager. Nu îl pune în GitHub.
+3. Din **Connect** copiază ambele connection string-uri:
+   - pooled, cel care conține `-pooler`, pentru `DATABASE_URL`;
+   - direct, fără `-pooler`, pentru `DIRECT_URL` și migrații Prisma.
+4. Păstrează-le temporar într-un password manager. Nu le pune în GitHub.
 
 Neon oferă pooling și pe planul Free; pentru acest demo este suficient. Verifică limita curentă în pagina planului înainte de prezentare.
 
@@ -31,7 +33,9 @@ Neon oferă pooling și pe planul Free; pentru acest demo este suficient. Verifi
 2. Alege **New → Blueprint**.
 3. Selectează repository-ul și branch-ul principal.
 4. Render va detecta `render.yaml` și va propune `dental-lab-api` și `dental-lab-web`.
-5. Pentru API completează `DATABASE_URL` cu URL-ul Neon.
+5. Pentru API completează:
+   - `DATABASE_URL` cu URL-ul Neon pooled (`-pooler`);
+   - `DIRECT_URL` cu URL-ul Neon direct, fără `-pooler`.
 6. Pentru `WEB_ORIGIN` și `VITE_API_BASE_URL` poți pune temporar valorile sugerate de Render sau le poți lăsa pentru pasul următor.
 7. Confirmă planul **Free** și pornește deploy-ul.
 
@@ -67,6 +71,7 @@ Seed-ul demo nu se rulează automat la fiecare deploy și nu poate rula cu `NODE
 
 ```bash
 export DATABASE_URL='URL-ul-Neon-pooler'
+export DIRECT_URL='URL-ul-Neon-direct-fara-pooler'
 export NODE_ENV=development
 export AUTH_SEED_EMAIL='admin-demo@example.com'
 export AUTH_SEED_PASSWORD='schimba-cu-o-parola-lunga-si-unica'
@@ -94,6 +99,7 @@ Dacă vrei să refaci demo-ul de la zero, numai pe această bază de prezentare,
 
 ```bash
 export DATABASE_URL='URL-ul-Neon-pooler'
+export DIRECT_URL='URL-ul-Neon-direct-fara-pooler'
 export NODE_ENV=development
 ALLOW_DEMO_SEED=true pnpm --filter @dental-lab/api prisma:reset:demo:deploy
 ```

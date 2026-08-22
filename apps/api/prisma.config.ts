@@ -2,7 +2,10 @@ import { defineConfig, env } from "prisma/config";
 
 export default defineConfig({
   datasource: {
-    url: env("DATABASE_URL"),
+    // Migrations must use Neon's direct connection. The pooled URL remains
+    // appropriate for the running API, but can interfere with Prisma's
+    // session-level advisory lock during deploys.
+    url: process.env.DIRECT_URL ?? env("DATABASE_URL"),
   },
   migrations: {
     path: "prisma/migrations",

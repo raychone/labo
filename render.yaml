@@ -3,6 +3,7 @@ services:
     name: dental-lab-api
     runtime: node
     plan: free
+    region: frankfurt
     buildCommand: pnpm install --frozen-lockfile && PLAYWRIGHT_BROWSERS_PATH=0 pnpm exec playwright install chromium && pnpm --filter @dental-lab/api prisma:generate:deploy && pnpm --filter @dental-lab/api prisma:migrate:deploy && pnpm --filter @dental-lab/api build
     startCommand: pnpm --filter @dental-lab/api start
     healthCheckPath: /health
@@ -14,6 +15,8 @@ services:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
         sync: false
       - key: WEB_ORIGIN
         sync: false
