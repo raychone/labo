@@ -118,8 +118,8 @@ export class LogisticsController {
 
   @Get("pickup-requests")
   @RequirePermission("pickup.read", "ALL")
-  public listPickupRequests(@CurrentUser() actor: AuthenticatedUser) {
-    return this.logisticsService.listPickupRequests(actor);
+  public listPickupRequests(@CurrentUser() actor: AuthenticatedUser, @Query() query: LogisticsCenterQueryDto) {
+    return this.logisticsService.listPickupRequests(actor, query);
   }
 
   @Post("pickup-requests")

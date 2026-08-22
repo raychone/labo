@@ -34,11 +34,16 @@ export const logisticsQueryKeys = {
   all: ["logistics"] as const,
   center: (params: LogisticsCenterQuery) => ["logistics", "center", params] as const,
   groups: ["logistics", "groups"] as const,
-  pickups: ["logistics", "pickups"] as const,
+  pickups: (params: PickupRequestsQuery = {}) => ["logistics", "pickups", params] as const,
   routes: (params: CourierRouteListQuery) => ["logistics", "routes", params] as const,
   summary: (params: LogisticsCenterQuery) => ["logistics", "summary", params] as const,
   work: (workOrderId: string | null) => ["logistics", "work", workOrderId] as const,
 };
+
+export type PickupRequestsQuery = Pick<
+  LogisticsCenterQuery,
+  "clinicId" | "doctorId" | "dateFrom" | "dateTo" | "exactDate" | "receptionUserId" | "pickupHorizonDays"
+>;
 
 function appendOptional(query: URLSearchParams, key: string, value: boolean | number | string | undefined): void {
   if (value !== undefined && value !== "") {
@@ -86,6 +91,18 @@ function toCenterQuery(params: LogisticsCenterQuery): string {
   return query.toString();
 }
 
+function toPickupQuery(params: PickupRequestsQuery): string {
+  const query = new URLSearchParams();
+  appendOptional(query, "clinicId", params.clinicId);
+  appendOptional(query, "doctorId", params.doctorId);
+  appendOptional(query, "dateFrom", params.dateFrom);
+  appendOptional(query, "dateTo", params.dateTo);
+  appendOptional(query, "exactDate", params.exactDate);
+  appendOptional(query, "receptionUserId", params.receptionUserId);
+  appendOptional(query, "pickupHorizonDays", params.pickupHorizonDays);
+  return query.toString();
+}
+
 async function sendJson<TResponse>(path: string, method: "DELETE" | "PATCH" | "POST", body?: unknown): Promise<TResponse> {
   const csrfToken = await fetchCsrfToken();
   const init: RequestInit = {
@@ -122,8 +139,9 @@ export async function fetchDeliveryPreparationGroups(): Promise<readonly Deliver
   return parseApiResponse<readonly DeliveryPreparationGroupSummary[]>(response);
 }
 
-export async function fetchPickupRequests(): Promise<readonly PickupRequestView[]> {
-  const response = await apiFetch("/pickup-requests");
+export async function fetchPickupRequests(params: PickupRequestsQuery = {}): Promise<readonly PickupRequestView[]> {
+  const suffix = toPickupQuery(params);
+  const response = await apiFetch(`/pickup-requests${suffix ? `?${suffix}` : ""}`);
   return parseApiResponse<readonly PickupRequestView[]>(response);
 }
 
@@ -217,8 +235,8 @@ export function useDeliveryPreparationGroups(enabled: boolean) {
   return useQuery({ enabled, queryFn: fetchDeliveryPreparationGroups, queryKey: logisticsQueryKeys.groups, retry: false });
 }
 
-export function usePickupRequests(enabled: boolean) {
-  return useQuery({ enabled, queryFn: fetchPickupRequests, queryKey: logisticsQueryKeys.pickups, retry: false });
+export function usePickupRequests(enabled: boolean, params: PickupRequestsQuery = {}) {
+  return useQuery({ enabled, queryFn: () => fetchPickupRequests(params), queryKey: logisticsQueryKeys.pickups(params), retry: false });
 }
 
 export function useCourierRoutes(params: CourierRouteListQuery, enabled: boolean) {
@@ -267,7 +285,7 @@ export function useCreatePickupRequest() {
   return useMutation({
     mutationFn: createPickupRequest,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: logisticsQueryKeys.pickups });
+      await queryClient.invalidateQueries({ queryKey: ["logistics", "pickups"] });
     },
   });
 }
@@ -277,7 +295,7 @@ export function useUpdatePickupRequest() {
   return useMutation({
     mutationFn: ({ input, pickupId }: { readonly input: UpdatePickupRequestInput; readonly pickupId: string }) => updatePickupRequest(pickupId, input),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: logisticsQueryKeys.pickups });
+      await queryClient.invalidateQueries({ queryKey: ["logistics", "pickups"] });
     },
   });
 }
@@ -287,7 +305,7 @@ export function useCancelPickupRequest() {
   return useMutation({
     mutationFn: ({ input, pickupId }: { readonly input: CancelPickupRequestInput; readonly pickupId: string }) => cancelPickupRequest(pickupId, input),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: logisticsQueryKeys.pickups });
+      await queryClient.invalidateQueries({ queryKey: ["logistics", "pickups"] });
     },
   });
 }

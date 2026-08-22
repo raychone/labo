@@ -54,6 +54,7 @@ import {
   useLogisticsSummary,
   useUpdateLogisticsWorkActions,
   usePickupRequests,
+  type PickupRequestsQuery,
   useUpdatePickupRequest,
 } from "./logistics-api.js";
 import { applyApiErrorsToForm, getErrorMessage, UnsavedChangesPrompt, useBeforeUnloadPrompt, useCloseGuard } from "../../lib/form-utils.js";
@@ -178,7 +179,18 @@ export function LogisticsPage(): ReactNode {
     retry: false,
   });
   const showPickups = query.category === "DE_RIDICAT";
-  const pickupsQuery = usePickupRequests(canReadPickups && showPickups);
+  const pickupQuery = useMemo<PickupRequestsQuery>(() => {
+    const next = {} as { -readonly [Key in keyof PickupRequestsQuery]?: PickupRequestsQuery[Key] };
+    if (query.clinicId) next.clinicId = query.clinicId;
+    if (query.doctorId) next.doctorId = query.doctorId;
+    if (query.dateFrom) next.dateFrom = query.dateFrom;
+    if (query.dateTo) next.dateTo = query.dateTo;
+    if (query.exactDate) next.exactDate = query.exactDate;
+    if (query.receptionUserId) next.receptionUserId = query.receptionUserId;
+    if (query.pickupHorizonDays) next.pickupHorizonDays = query.pickupHorizonDays;
+    return next;
+  }, [query.clinicId, query.dateFrom, query.dateTo, query.doctorId, query.exactDate, query.pickupHorizonDays, query.receptionUserId]);
+  const pickupsQuery = usePickupRequests(canReadPickups && showPickups, pickupQuery);
   const updateWorkActions = useUpdateLogisticsWorkActions();
   const createRouteList = useCreateCourierRoute();
   const routesQuery = useCourierRoutes({ page: 1, pageSize: 100 }, canReadRoutes);
@@ -419,7 +431,7 @@ export function LogisticsPage(): ReactNode {
                 <span>Livrare/Ridicare</span>
               </div>
               {(centerQuery.data?.items ?? []).map((item) => (
-                <WorkRow item={item} key={item.id} onOpen={() => navigate(`/works?workId=${encodeURIComponent(item.id)}`)} onStatus={(status) => updateWorkStatus.mutate({ status, workOrderId: item.id })} onRouteSelection={(selected) => setSelectedRouteItems((current) => { const next = new Set(current); const key = `work:${item.id}`; if (selected) next.add(key); else next.delete(key); return next; })} onUpdateActions={(input) => {
+                <WorkRow category={query.category ?? "ALL"} item={item} key={item.id} onOpen={() => navigate(`/works?workId=${encodeURIComponent(item.id)}`)} onStatus={(status) => updateWorkStatus.mutate({ status, workOrderId: item.id })} onRouteSelection={(selected) => setSelectedRouteItems((current) => { const next = new Set(current); const key = `work:${item.id}`; if (selected) next.add(key); else next.delete(key); return next; })} onUpdateActions={(input) => {
                   const nextDelivery = input.requiresDelivery ?? item.requiresDelivery;
                   const nextPickup = input.requiresPickup ?? item.requiresPickup;
                   updateWorkActions.mutate({ input: { ...input, ...(nextDelivery ? { requiresPickup: false } : {}), ...(nextPickup ? { requiresDelivery: false } : {}) }, workOrderId: item.id });
@@ -970,12 +982,14 @@ function SummaryCard({ active, dayWindow, label, onClick, onDayWindowChange, val
 }
 
 function WorkRow({
+  category,
   item,
   onOpen,
   onStatus,
   onRouteSelection,
   onUpdateActions,
 }: {
+  readonly category: LogisticsCenterCategory;
   readonly item: LogisticsCenterItem;
   readonly onOpen: () => void;
   readonly onStatus: (status: (typeof FINAL_WORK_STATUSES)[number]) => void;
@@ -984,6 +998,7 @@ function WorkRow({
 }): ReactNode {
   const [markerOpen, setMarkerOpen] = useState(false);
   const marker = item.logisticsMarker;
+  const isPickupOperation = category === "DE_RIDICAT" || (category === "ALL" && item.requiresPickup && !item.requiresDelivery);
   return (
     <article className="logistics-page__row">
       <div className="logistics-page__row-place"><strong>{item.clinic.name}</strong><span>{item.doctor.name}</span></div>
@@ -1010,15 +1025,18 @@ function WorkRow({
         <button aria-label="Marcaj logistic" className={`logistics-page__marker logistics-page__marker--${marker ?? "none"}`} onClick={() => setMarkerOpen((current) => !current)} title="Marcaj logistic" type="button" />
         {markerOpen ? <div className="logistics-page__marker-menu">{LOGISTICS_MARKERS.map((value) => <button aria-label={`Alege marcajul ${value.slice(-1)}`} className={`logistics-page__marker logistics-page__marker--${value}`} key={value} onClick={() => { onUpdateActions({ marker: value }); setMarkerOpen(false); }} title={`Marcaj ${value.slice(-1)}`} type="button" />)}</div> : null}
       </div>
-      <div aria-label="Livrare sau ridicare" className="logistics-page__row-requirements">
-        <label className="logistics-page__requirement">
-          <input checked={item.requiresDelivery} onChange={() => { const selected = !item.requiresDelivery; onUpdateActions({ requiresDelivery: selected, requiresPickup: false }); onRouteSelection(selected); }} type="checkbox" />
-          <span>Livrat</span>
-        </label>
-        <label className="logistics-page__requirement">
-          <input checked={item.requiresPickup} onChange={() => { const selected = !item.requiresPickup; onUpdateActions({ requiresPickup: selected, requiresDelivery: false }); onRouteSelection(selected); }} type="checkbox" />
-          <span>Ridicat</span>
-        </label>
+      <div aria-label={isPickupOperation ? "Ridicare" : "Livrare"} className="logistics-page__row-requirements">
+        {isPickupOperation ? (
+          <label className="logistics-page__requirement">
+            <input checked={item.requiresPickup} onChange={() => { const selected = !item.requiresPickup; onUpdateActions({ requiresPickup: selected, requiresDelivery: false }); onRouteSelection(selected); }} type="checkbox" />
+            <span>Ridicat</span>
+          </label>
+        ) : (
+          <label className="logistics-page__requirement">
+            <input checked={item.requiresDelivery} onChange={() => { const selected = !item.requiresDelivery; onUpdateActions({ requiresDelivery: selected, requiresPickup: false }); onRouteSelection(selected); }} type="checkbox" />
+            <span>Livrat</span>
+          </label>
+        )}
       </div>
     </article>
   );

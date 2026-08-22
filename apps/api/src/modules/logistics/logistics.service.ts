@@ -208,11 +208,12 @@ export class LogisticsService {
     return { attachments, work };
   }
 
-  public async listPickupRequests(actor: AuthenticatedUser): Promise<readonly PickupRequestView[]> {
+  public async listPickupRequests(actor: AuthenticatedUser, query: LogisticsCenterQueryDto): Promise<readonly PickupRequestView[]> {
     await this.ensurePermission(actor.id, "pickup.read");
     const pickups = await this.prisma.pickupRequest.findMany({
       include: { clinic: true, doctor: true },
       orderBy: [{ scheduledDate: "asc" }, { exactTime: "asc" }, { windowStartTime: "asc" }, { createdAt: "asc" }],
+      where: this.toPickupWhere(query),
       take: 200,
     });
     return pickups.map((pickup) => this.toPickupRequestView(pickup));
@@ -569,12 +570,26 @@ export class LogisticsService {
   public async getCenterSummary(actor: AuthenticatedUser, query: LogisticsCenterQueryDto): Promise<LogisticsCenterSummary> {
     const actionContext = await this.createActionContext(actor.id);
     const now = new Date();
+    const { deliveryHorizonDays: _deliveryHorizonDays, pickupHorizonDays: _pickupHorizonDays, ...summaryBaseQuery } = query;
+    const summaryQuery: LogisticsCenterQueryDto = {
+      ...summaryBaseQuery,
+      category: "ALL",
+      page: 1,
+      pageSize: 100,
+      sortBy: "requestedDeliveryDate",
+      sortDirection: "asc",
+    };
     const workOrders = await this.prisma.workOrder.findMany({
       include: logisticsWorkInclude,
-      where: this.toWorkWhere({ ...query, page: 1, pageSize: 100, sortBy: "requestedDeliveryDate", sortDirection: "asc" }),
+      where: this.toWorkWhere(summaryQuery),
     });
+    const items = workOrders.map((work) => toLogisticsCenterItem(work, actionContext, now));
     const toPickup = await this.prisma.pickupRequest.count({ where: this.toPickupWhere(query) });
-    return createLogisticsSummary(workOrders.map((work) => toLogisticsCenterItem(work, actionContext, now)), toPickup);
+    const summary = createLogisticsSummary(items, toPickup);
+    const toDeliver = items.filter(
+      (item) => this.matchesCategory(item, "DE_LIVRAT") && (!query.deliveryHorizonDays || isWithinDays(item.requestedDeliveryDate, query.deliveryHorizonDays)),
+    ).length;
+    return { ...summary, toDeliver };
   }
 
   public async getWorkLogistics(actor: AuthenticatedUser, workOrderId: string): Promise<WorkLogisticsView> {
@@ -1111,6 +1126,12 @@ export class LogisticsService {
   private toWorkWhere(query: LogisticsCenterQueryDto): Prisma.WorkOrderWhereInput {
     const search = query.search?.trim();
     const dateRange = toRequestedDeliveryRange(query);
+    const horizonDays = query.category === "DE_LIVRAT"
+      ? query.deliveryHorizonDays
+      : query.category === "DE_RIDICAT"
+        ? query.pickupHorizonDays
+        : undefined;
+    const horizonRange = toHorizonDateRange(horizonDays);
     const and: Prisma.WorkOrderWhereInput[] = [];
     if (query.logisticsStatus) {
       and.push({ activeCycle: { is: { logisticsState: { is: { status: query.logisticsStatus } } } } });
@@ -1129,6 +1150,9 @@ export class LogisticsService {
           { completedAt: dateRange, status: "FINALIZATA" },
         ],
       });
+    }
+    if (horizonRange) {
+      and.push({ requestedDeliveryDate: horizonRange });
     }
     return {
       ...(and.length > 0 ? { AND: and } : {}),
@@ -1150,13 +1174,16 @@ export class LogisticsService {
   }
 
   private toPickupWhere(query: LogisticsCenterQueryDto): Prisma.PickupRequestWhereInput {
-    const dateRange = toScheduledDateRange(query);
+    const dateRanges = [toScheduledDateRange(query), toHorizonDateRange(query.pickupHorizonDays)].filter(
+      (range): range is Prisma.DateTimeFilter => range !== null,
+    );
     return {
       status: PickupRequestStatus.SCHEDULED,
       ...(query.clinicId ? { clinicId: query.clinicId } : {}),
       ...(query.doctorId ? { doctorId: query.doctorId } : {}),
       ...(query.receptionUserId ? { createdByUserId: query.receptionUserId } : {}),
-      ...(dateRange ? { scheduledDate: dateRange } : {}),
+      ...(dateRanges.length === 1 ? { scheduledDate: dateRanges[0] } : {}),
+      ...(dateRanges.length > 1 ? { AND: dateRanges.map((scheduledDate) => ({ scheduledDate })) } : {}),
     };
   }
 
@@ -1177,10 +1204,10 @@ export class LogisticsService {
     if (query.billingStatus && item.billing.documentStatus !== query.billingStatus && item.billing.paymentStatus !== query.billingStatus) {
       return false;
     }
-    if (query.deliveryHorizonDays && !isWithinDays(item.requestedDeliveryDate, query.deliveryHorizonDays)) {
+    if (query.category === "DE_LIVRAT" && query.deliveryHorizonDays && !isWithinDays(item.requestedDeliveryDate, query.deliveryHorizonDays)) {
       return false;
     }
-    if (query.pickupHorizonDays && !isWithinDays(item.requestedDeliveryDate, query.pickupHorizonDays)) {
+    if (query.category === "DE_RIDICAT" && query.pickupHorizonDays && !isWithinDays(item.requestedDeliveryDate, query.pickupHorizonDays)) {
       return false;
     }
     return this.matchesCategory(item, query.category);
@@ -1669,6 +1696,14 @@ function toRequestedDeliveryRange(query: LogisticsCenterQueryDto): Prisma.DateTi
 
 function toScheduledDateRange(query: LogisticsCenterQueryDto): Prisma.DateTimeFilter | null {
   return toDateRange(query.exactDate, query.dateFrom, query.dateTo);
+}
+
+function toHorizonDateRange(days?: number): Prisma.DateTimeFilter | null {
+  if (!days) {
+    return null;
+  }
+  const start = startOfUtcDay(new Date().toISOString());
+  return { gte: start, lt: addUtcDays(start, days + 1) };
 }
 
 function toDateRange(exactDate?: string, dateFrom?: string, dateTo?: string): Prisma.DateTimeFilter | null {
