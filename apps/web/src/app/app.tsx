@@ -4,6 +4,7 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 
 import { AuthenticatedAppShell } from "./authenticated-app-shell.js";
+import { useAuthState } from "./auth-state.js";
 import { DashboardPage } from "./dashboard-page.js";
 import { ForbiddenPage, NotFoundPage } from "./error-pages.js";
 import { PublicOnlyRoute, AuthenticatedRoute, PermissionRoute } from "./route-guards.js";
@@ -140,13 +141,13 @@ const router = createBrowserRouter([
     path: "/billing/month-registry/print",
   },
   {
-    element: <AuthenticatedRoute><PermissionRoute requiredPermissions={operationalStatusReadPermissions}><LazyRoute><StatusTvPage /></LazyRoute></PermissionRoute></AuthenticatedRoute>,
+    element: <AuthenticatedRoute><NonCourierRoute><PermissionRoute requiredPermissions={operationalStatusReadPermissions}><LazyRoute><StatusTvPage /></LazyRoute></PermissionRoute></NonCourierRoute></AuthenticatedRoute>,
     path: "/status/tv",
   },
   {
     children: [
-      { element: <Navigate replace to="/dashboard" />, index: true },
-      { element: <DashboardPage />, path: "dashboard" },
+      { element: <RoleLandingRedirect />, index: true },
+      { element: <RoleAwareDashboard />, path: "dashboard" },
       {
         element: <PermissionRoute requiredPermissions={deliveryReadPermissions}><LazyRoute><DeliveriesPage /></LazyRoute></PermissionRoute>,
         path: "deliveries",
@@ -160,7 +161,7 @@ const router = createBrowserRouter([
         path: "works",
       },
       {
-        element: <PermissionRoute requiredPermissions={operationalStatusReadPermissions}><LazyRoute><StatusPage /></LazyRoute></PermissionRoute>,
+        element: <NonCourierRoute><PermissionRoute requiredPermissions={operationalStatusReadPermissions}><LazyRoute><StatusPage /></LazyRoute></PermissionRoute></NonCourierRoute>,
         path: "status",
       },
       {
@@ -242,6 +243,25 @@ const router = createBrowserRouter([
     path: "/",
   },
 ]);
+
+function isCourier(permissionKeys: readonly string[]): boolean {
+  return permissionKeys.includes("routes.read") && !permissionKeys.includes("routes.create");
+}
+
+function NonCourierRoute({ children }: { readonly children: ReactNode }): ReactNode {
+  const auth = useAuthState();
+  return isCourier(auth.permissionKeys) ? <Navigate replace to="/my-route" /> : children;
+}
+
+function RoleLandingRedirect(): ReactNode {
+  const auth = useAuthState();
+  return <Navigate replace to={isCourier(auth.permissionKeys) ? "/my-route" : "/dashboard"} />;
+}
+
+function RoleAwareDashboard(): ReactNode {
+  const auth = useAuthState();
+  return isCourier(auth.permissionKeys) ? <Navigate replace to="/my-route" /> : <DashboardPage />;
+}
 
 export function App(): ReactNode {
   return (

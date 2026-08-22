@@ -305,12 +305,16 @@ export function getRouteByPath(pathname: string): AppRouteConfig | undefined {
     .sort((left, right) => right.path.length - left.path.length)[0];
 }
 
-export function getDefaultAuthorizedRoute(): string {
-  return "/dashboard";
+function isCourierPermissions(permissionKeys: readonly string[]): boolean {
+  return permissionKeys.includes("routes.read") && !permissionKeys.includes("routes.create");
+}
+
+export function getDefaultAuthorizedRoute(permissionKeys: readonly string[] = []): string {
+  return isCourierPermissions(permissionKeys) ? "/my-route" : "/dashboard";
 }
 
 export function getFirstAuthorizedRoute(permissionKeys: readonly string[]): string {
-  return getNavigationRoutes(permissionKeys)[0]?.path ?? getDefaultAuthorizedRoute();
+  return getNavigationRoutes(permissionKeys)[0]?.path ?? getDefaultAuthorizedRoute(permissionKeys);
 }
 
 export function getSafeReturnTo(value: string | null): string | null {

@@ -49,6 +49,7 @@ export function AuthenticatedAppShell(): ReactNode {
   const currentRoute = getRouteByPath(location.pathname);
   const pageTitle = currentRoute?.label ?? (location.pathname === "/forbidden" ? "Acces restricționat" : "Pagina");
   const routes = useMemo(() => getNavigationRoutes(auth.permissionKeys), [auth.permissionKeys]);
+  const courierOnly = routes.length === 1 && routes[0]?.path === "/my-route";
   usePageTitle(pageTitle, laboratoryName);
   const logoutMutation = useMutation({
     mutationFn: async () => {
@@ -129,7 +130,7 @@ export function AuthenticatedAppShell(): ReactNode {
             <small>{laboratoryName}</small>
           </div>
         </header>
-        <AppHeader pageTitle={pageTitle} pathname={location.pathname} />
+        <AppHeader courierOnly={courierOnly} pageTitle={pageTitle} pathname={location.pathname} />
         {settingsQuery.isError && canReadSettings ? (
           <div className="app-shell__notice">
             <ErrorState title="Branding indisponibil" description="Setările laboratorului nu au putut fi încărcate. Se folosește fallback-ul." />
@@ -149,7 +150,7 @@ export function AuthenticatedAppShell(): ReactNode {
         title="Navigație"
         >
         <div className="app-shell__mobile-drawer">
-          <BrandBlock laboratoryName={laboratoryName} />
+          <BrandBlock courierOnly={courierOnly} laboratoryName={laboratoryName} />
           {canSwitchOrganizationContext ? <OrganizationContextSwitch canRead={canReadOrganizationContext} canSwitch compact /> : null}
           <NavigationList currentPath={location.pathname} routes={routes} />
           <div className="app-shell__drawer-user">
@@ -200,7 +201,7 @@ function AppSidebar({
 }): ReactNode {
   return (
     <aside className="app-shell__sidebar">
-      <BrandBlock laboratoryName={laboratoryName} />
+      <BrandBlock courierOnly={routes.length === 1 && routes[0]?.path === "/my-route"} laboratoryName={laboratoryName} />
       {canSwitchOrganizationContext ? <OrganizationContextSwitch canRead={canReadOrganizationContext} canSwitch /> : null}
       <NavigationList currentPath={currentPath} routes={routes} />
       <div className="app-shell__sidebar-footer">
@@ -211,9 +212,9 @@ function AppSidebar({
   );
 }
 
-function BrandBlock({ laboratoryName }: { readonly laboratoryName: string }): ReactNode {
+function BrandBlock({ courierOnly, laboratoryName }: { readonly courierOnly: boolean; readonly laboratoryName: string }): ReactNode {
   return (
-    <Link className="app-shell__brand" to="/dashboard">
+    <Link className="app-shell__brand" to={courierOnly ? "/my-route" : "/dashboard"}>
       <span className="app-brand-mark" aria-hidden="true">{getBrandInitials(laboratoryName)}</span>
       <span>
         <strong>{laboratoryName}</strong>
@@ -298,27 +299,29 @@ function getRoleLabel(permissionKeys: readonly string[]): string {
 }
 
 function AppHeader({
+  courierOnly,
   pageTitle,
   pathname,
 }: {
+  readonly courierOnly: boolean;
   readonly pageTitle: string;
   readonly pathname: string;
 }): ReactNode {
   return (
     <header className="app-shell__header">
-      <Breadcrumbs pageTitle={pageTitle} pathname={pathname} />
+      <Breadcrumbs courierOnly={courierOnly} pageTitle={pageTitle} pathname={pathname} />
     </header>
   );
 }
 
-function Breadcrumbs({ pageTitle, pathname }: { readonly pageTitle: string; readonly pathname: string }): ReactNode {
+function Breadcrumbs({ courierOnly, pageTitle, pathname }: { readonly courierOnly: boolean; readonly pageTitle: string; readonly pathname: string }): ReactNode {
   const isDashboard = pathname === "/" || pathname === "/dashboard";
 
   return (
     <nav aria-label="Breadcrumb" className="app-shell__breadcrumbs">
       <ol>
         <li>
-          {isDashboard ? <span>Panou principal</span> : <Link to="/dashboard">Panou principal</Link>}
+          {courierOnly ? <span>Trasee</span> : isDashboard ? <span>Panou principal</span> : <Link to="/dashboard">Panou principal</Link>}
         </li>
         {!isDashboard ? <li><span>{pageTitle}</span></li> : null}
       </ol>

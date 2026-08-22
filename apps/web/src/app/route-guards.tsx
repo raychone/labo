@@ -50,7 +50,7 @@ export function PublicOnlyRoute({ children }: { readonly children: ReactNode }):
     const returnTo = getSafeReturnTo(searchParams.get("returnTo"));
     const target = returnTo && returnTo !== "/login"
       ? returnTo
-      : getDefaultAuthorizedRoute();
+      : getDefaultAuthorizedRoute(auth.permissionKeys);
 
     return <Navigate replace to={hasRouteTargetAccess(target, auth.permissionKeys) ? target : getFirstAuthorizedRoute(auth.permissionKeys)} />;
   }
@@ -97,6 +97,10 @@ export function PermissionRoute({
 }
 
 function hasRouteTargetAccess(target: string, permissionKeys: readonly string[]): boolean {
+  if (permissionKeys.includes("routes.read") && !permissionKeys.includes("routes.create") && (target === "/" || target === "/dashboard" || target === "/status" || target.startsWith("/status/"))) {
+    return false;
+  }
+
   if (target === "/" || target === "/dashboard") {
     return true;
   }
