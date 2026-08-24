@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import type { TechnicianManeuverUnit } from "@dental-lab/shared";
 
 export const technicianOperationRateInclude = {
   operation: true,
@@ -40,6 +41,7 @@ export interface TechnicianOperationOptionView {
   readonly code: string;
   readonly id: string;
   readonly name: string;
+  readonly pricingUnit: TechnicianManeuverUnit | null;
 }
 
 export interface TechnicianOperationSummaryView extends TechnicianOperationOptionView {
@@ -155,13 +157,16 @@ export interface TechnicianEarningsSummaryView {
   readonly works: readonly TechnicianEarningsWorkBreakdownView[];
 }
 
-export function toTechnicianOperationOptionView(operation: Pick<TechnicianOperationRecord, "code" | "id" | "name">): TechnicianOperationOptionView {
+export function toTechnicianOperationViewInput(operation: Pick<TechnicianOperationRecord, "code" | "id" | "name" | "pricingUnit">): TechnicianOperationOptionView {
   return {
     code: operation.code,
     id: operation.id,
     name: operation.name,
+    pricingUnit: operation.pricingUnit as TechnicianManeuverUnit | null,
   };
 }
+
+export const toTechnicianOperationOptionView = toTechnicianOperationViewInput;
 
 export function toTechnicianOperationSummaryView(operation: TechnicianOperationRecord): TechnicianOperationSummaryView {
   return {

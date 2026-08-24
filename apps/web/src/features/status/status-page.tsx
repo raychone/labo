@@ -758,7 +758,7 @@ function StatusDetailDrawer({ onOpenChange, row }: { readonly onOpenChange: (ope
 
 function Metric({ label, value }: { readonly label: string; readonly value: ReactNode }): ReactNode {
   return (
-    <div className="status-page__metric">
+    <div className="dl-kpi status-page__metric">
       <span>{label}</span>
       <strong>{value}</strong>
     </div>

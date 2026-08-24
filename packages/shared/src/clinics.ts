@@ -6,10 +6,18 @@ export type ClinicSortField = (typeof CLINIC_SORT_FIELDS)[number];
 export type DoctorSortField = (typeof DOCTOR_SORT_FIELDS)[number];
 export type SortDirection = (typeof SORT_DIRECTIONS)[number];
 
+export type LegalEntityCode = "CDT" | "NG";
+
+export interface LegalEntitySummary {
+  readonly code: LegalEntityCode;
+  readonly displayName: string;
+}
+
 export interface ClinicOption {
   readonly code: string;
   readonly id: string;
   readonly name: string;
+  readonly legalEntity?: LegalEntitySummary | null;
 }
 
 export interface ClinicSummary extends ClinicOption {
@@ -53,6 +61,7 @@ export interface ClinicDetail extends ClinicSummary {
 }
 
 export interface CreateClinicInput {
+  readonly legalEntityCode?: LegalEntityCode | null;
   readonly addressLine1?: string | null;
   readonly addressLine2?: string | null;
   readonly billingAddressLine1?: string | null;
@@ -88,6 +97,7 @@ export interface DoctorOption {
   readonly clinicId: string;
   readonly displayName: string;
   readonly id: string;
+  readonly legalEntity?: LegalEntitySummary | null;
 }
 
 export interface DoctorClinicSummary {
@@ -116,6 +126,7 @@ export interface DoctorDetail extends DoctorSummary {
 
 export interface CreateDoctorInput {
   readonly clinicId: string;
+  readonly legalEntityCode?: LegalEntityCode | null;
   readonly email?: string | null;
   readonly firstName: string;
   readonly internalNotes?: string | null;

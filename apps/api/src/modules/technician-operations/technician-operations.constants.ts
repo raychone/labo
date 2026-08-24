@@ -9,6 +9,7 @@ export const TECHNICIAN_OPERATION_AUDIT_ACTIONS = {
   operationCreated: "technician_operations.created",
   operationRestored: "technician_operations.restored",
   operationUpdated: "technician_operations.updated",
+  operationUnitChanged: "technician_operations.unit_changed",
   performedOperationCreated: "technician_performed_operations.created",
   performedOperationRemoved: "technician_performed_operations.removed",
   rateSet: "technician_rates.set",

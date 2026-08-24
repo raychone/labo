@@ -471,12 +471,16 @@ describe("WorksPage", () => {
             { key: "doctors.read", scopes: ["ALL"] },
             { key: "works.create", scopes: ["ALL"] },
             { key: "works.read_all", scopes: ["ALL"] },
+            { key: "probe_types.read", scopes: ["ALL"] },
             { key: "works.update", scopes: ["ALL"] },
           ],
         }));
       }
       if (url.includes("/works/work-type-options")) {
         return Promise.resolve(createJsonResponse(workTypeOptionsResponse));
+      }
+      if (url.includes("/works/probe-types")) {
+        return Promise.resolve(createJsonResponse([{ id: "probe_type_1", isArchived: false, name: "Lingură", sortOrder: 0 }]));
       }
       if (url.includes("/clinics/options")) {
         return Promise.resolve(createJsonResponse(clinicOptionsResponse));
@@ -628,6 +632,7 @@ describe("WorksPage", () => {
             { key: "works.deadline.preview", scopes: ["ALL"] },
             { key: "works.deadline.set_manual", scopes: ["ALL"] },
             { key: "works.read_all", scopes: ["ALL"] },
+            { key: "probe_types.read", scopes: ["ALL"] },
           ],
         }));
       }
@@ -636,6 +641,9 @@ describe("WorksPage", () => {
       }
       if (url.includes("/works/work-type-options")) {
         return Promise.resolve(createJsonResponse(workTypeOptionsResponse));
+      }
+      if (url.includes("/works/probe-types")) {
+        return Promise.resolve(createJsonResponse([{ id: "probe_type_1", isArchived: false, name: "Lingură", sortOrder: 0 }]));
       }
       if (url.includes("/clinics/options")) {
         return Promise.resolve(createJsonResponse(clinicOptionsResponse));
@@ -694,12 +702,16 @@ describe("WorksPage", () => {
 
     fireEvent.change(screen.getByLabelText("Clinică"), { target: { value: "clinic_1" } });
     fireEvent.change(await screen.findByLabelText("Medic"), { target: { value: "doctor_1" } });
-    fireEvent.change(screen.getByLabelText("Elemente"), { target: { value: "3" } });
     fireEvent.change(screen.getByLabelText("Culoare"), { target: { value: "A2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Dinte 11" }));
+    fireEvent.click(screen.getByRole("button", { name: "Adaugă componentă" }));
+    expect(await screen.findByText(/1\. Punte zirconiu/)).toBeDefined();
     fireEvent.change(screen.getByLabelText("Data termenului"), { target: { value: "2026-08-20" } });
     fireEvent.change(screen.getByLabelText("Ora termenului"), { target: { value: "09:30" } });
+    fireEvent.focus(screen.getByLabelText("Tip probă curentă"));
+    fireEvent.click(await screen.findByRole("option", { name: "Lingură" }));
     fireEvent.change(screen.getByLabelText("Note"), { target: { value: "Lucrare prioritară" } });
-    fireEvent.click(screen.getByRole("button", { name: "Creează lucrare" }));
+    fireEvent.submit(document.getElementById("create-work-form")!);
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/works"), expect.objectContaining({ method: "POST" })));
     const createCall = fetchMock.mock.calls.find(([input, init]) => String(input).endsWith("/works") && (init as RequestInit | undefined)?.method === "POST");
@@ -710,10 +722,11 @@ describe("WorksPage", () => {
       clinicalNotes: "Lucrare prioritară",
       doctorId: "doctor_1",
       patientId: "patient_1",
-      quantity: 3,
+      quantity: 1,
       requestedDeliveryDate: "2026-08-20",
-      shade: "A2",
+      shade: null,
       workTypeId: "work_type_2",
+      items: [expect.objectContaining({ scope: "TOOTH", teeth: [11], workTypeId: "work_type_2", shade: null })],
     });
     expect(body.manualDueAt).toEqual(expect.stringMatching(/^2026-08-20T/));
   });
@@ -982,6 +995,49 @@ describe("WorksPage", () => {
     expect((await screen.findAllByText("Ciclul 2")).length).toBeGreaterThan(0);
     expect(await screen.findByText("Probă")).toBeDefined();
     expect(screen.queryByRole("button", { name: "Înregistrează revenirea" })).toBeNull();
+  });
+
+  it("renders canonical completed probes from immutable snapshots and only the active probe is editable", async () => {
+    const canonicalWork = {
+      ...workDetail,
+      workflow: workflowResponse,
+      activeProbeCycle: {
+        completedAt: null,
+        deadlineAt: "2026-08-25T10:00:00.000Z",
+        id: "probe_active",
+        openedAt: "2026-08-24T08:00:00.000Z",
+        probeType: { id: "probe_archived", isArchived: true, name: "Denumire veche", sortOrder: 0 },
+        probeTypeNameSnapshot: "Denumire veche",
+        sequence: 2,
+        status: "ACTIVE" as const,
+      },
+      completedProbeCycles: [{
+        completedAt: "2026-08-23T15:00:00.000Z",
+        deadlineAt: "2026-08-23T10:00:00.000Z",
+        id: "probe_completed",
+        openedAt: "2026-08-22T08:00:00.000Z",
+        probeType: { id: "probe_archived", isArchived: true, name: "Nume catalog nou", sortOrder: 0 },
+        probeTypeNameSnapshot: "Lingură istorică",
+        sequence: 1,
+        status: "COMPLETED" as const,
+      }],
+    };
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/auth/permissions")) return Promise.resolve(createJsonResponse({ permissions: [{ key: "cycles.probe_type.select", scopes: ["ALL"] }, { key: "probe_types.read", scopes: ["ALL"] }, { key: "works.read_all", scopes: ["ALL"] }] }));
+      if (url.endsWith("/works/probe-types")) return Promise.resolve(createJsonResponse([{ id: "probe_active_2", isArchived: false, name: "Biscuit", sortOrder: 1 }]));
+      if (url.includes("/works/work_order_1/workflow")) return Promise.resolve(createJsonResponse(workflowResponse));
+      if (url.includes("/works/work_order_1")) return Promise.resolve(createJsonResponse(canonicalWork));
+      if (url.includes("/works/work-type-options")) return Promise.resolve(createJsonResponse(workTypeOptionsResponse));
+      if (url.includes("/works?")) return Promise.resolve(createJsonResponse(worksListResponse));
+      return Promise.resolve(createJsonResponse({}, 404));
+    }));
+
+    renderWithProviders(<WorksPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
+    expect(await screen.findByText("Proba 1 — Lingură istorică")).toBeDefined();
+    expect(screen.getByLabelText("Tip probă")).toBeDefined();
+    expect(screen.getByText("Tip probă istoric: Lingură istorică")).toBeDefined();
   });
 
   it("registers a returned work with clinic, doctor and distinct return reason", async () => {

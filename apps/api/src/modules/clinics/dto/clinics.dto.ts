@@ -119,6 +119,11 @@ export class ListClinicsQueryDto {
 
 export class ClinicMutationDto {
   @IsOptional()
+  @Transform(({ value }) => uppercaseOptionalString(value))
+  @IsIn(["CDT", "NG"])
+  public readonly legalEntityCode?: "CDT" | "NG";
+
+  @IsOptional()
   @Transform(({ value }) => trimRequiredString(value))
   @IsString()
   @MinLength(2)

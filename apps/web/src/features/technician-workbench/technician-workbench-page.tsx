@@ -5,6 +5,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  ConfirmActionModal,
   ErrorState,
   LoadingState,
   Modal,
@@ -31,7 +32,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchPermissions } from "../auth/auth-api.js";
 import { fetchOrganizationContext } from "../organization-context/organization-context-api.js";
 import { usePerformedTechnicianOperations, usePerformTechnicianOperation, useRemovePerformedTechnicianOperation, useTechnicianOperationOptions } from "./technician-workbench-api.js";
-import { useAvailableWorksForClaim, useClaimWork, useMyClaimedWorks, useSetWorkStatus, useUpdateTechnicianWorkDetails, useWork } from "../works/works-api.js";
+import { useAvailableWorksForClaim, useClaimWork, useFinalizeTechnicalWork, useMarkProbeReady, useMyClaimedWorks, useUpdateTechnicianWorkDetails, useWork } from "../works/works-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
 import { useMediaQuery } from "../../lib/use-media-query.js";
 import { hasPermission } from "../users/users-api.js";
@@ -63,6 +64,7 @@ export function TechnicianWorkbenchPage(): ReactNode {
   const [claimTarget, setClaimTarget] = useState<WorkSummary | null>(null);
   const [detailsTarget, setDetailsTarget] = useState<WorkSummary | null>(null);
   const [operationsTarget, setOperationsTarget] = useState<WorkSummary | null>(null);
+  const [finalizeTarget, setFinalizeTarget] = useState<WorkSummary | null>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const isCompactMobile = useMediaQuery("(max-width: 719px)");
   const permissionsResult = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
@@ -76,7 +78,8 @@ export function TechnicianWorkbenchPage(): ReactNode {
   const myClaimedQuery = useMyClaimedWorks(claimFilters, canReadOwnClaims);
   const detailsQuery = useWork(detailsTarget?.id ?? null, detailsTarget !== null);
   const claimMutation = useClaimWork();
-  const finalizeMutation = useSetWorkStatus();
+  const probeReadyMutation = useMarkProbeReady();
+  const finalizeMutation = useFinalizeTechnicalWork();
   const technicianDetailsMutation = useUpdateTechnicianWorkDetails();
   const visibleAvailableWorks = useMemo(
     () => pickSingleWorkbenchMatch(availableQuery.data?.items ?? [], claimFilters.search),
@@ -99,15 +102,22 @@ export function TechnicianWorkbenchPage(): ReactNode {
   }
 
   function finalizeWork(work: WorkSummary): void {
-    finalizeMutation.mutate({
-      input: {
-        reason: "Finalizată de tehnician din atelier.",
-        status: "FINALIZATA",
-      },
-      workOrderId: work.id,
-    }, {
+    setFinalizeTarget(work);
+  }
+
+  function markProbeReady(work: WorkSummary): void {
+    probeReadyMutation.mutate({ workOrderId: work.id }, {
+      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Proba nu a fost marcată gata", variant: "error" }),
+      onSuccess: () => toast.showToast({ message: `Proba activă pentru ${work.code} a fost marcată gata.`, variant: "success" }),
+    });
+  }
+
+  function confirmFinalize(): void {
+    if (!finalizeTarget) return;
+    const work = finalizeTarget;
+    finalizeMutation.mutate({ workOrderId: work.id }, {
       onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost finalizată", variant: "error" }),
-      onSuccess: (updatedWork) => toast.showToast({ message: `${updatedWork.code} a fost finalizată.`, variant: "success" }),
+      onSuccess: () => { setFinalizeTarget(null); toast.showToast({ message: `${work.code} a fost finalizată.`, variant: "success" }); },
     });
   }
 
@@ -193,6 +203,8 @@ export function TechnicianWorkbenchPage(): ReactNode {
                   items={visibleClaimedWorks}
                   compact={isCompactMobile}
                   finalizeWorkId={finalizeMutation.isPending ? finalizeMutation.variables?.workOrderId : null}
+                  onProbeReady={markProbeReady}
+                  probeReadyWorkId={probeReadyMutation.isPending ? probeReadyMutation.variables?.workOrderId : null}
                   mode="mine"
                   onDetails={setDetailsTarget}
                   onFinalize={finalizeWork}
@@ -272,6 +284,16 @@ export function TechnicianWorkbenchPage(): ReactNode {
           canReadOperations={canReadOperations}
           work={operationsTarget}
         />
+        <ConfirmActionModal
+          confirmLabel="Finalizează"
+          description="Lucrarea nu va mai reveni pentru o probă nouă."
+          isLoading={finalizeMutation.isPending}
+          isOpen={finalizeTarget !== null}
+          onCancel={() => setFinalizeTarget(null)}
+          onConfirm={confirmFinalize}
+          title="Finalizezi definitiv lucrarea?"
+          variant="danger"
+        />
       </section>
     </main>
   );
@@ -287,7 +309,7 @@ function MetricButton({
   readonly value: number;
 }): ReactNode {
   return (
-    <Button className="technician-workbench__metric" onClick={onClick} variant="secondary">
+    <Button className="dl-kpi technician-workbench__metric" onClick={onClick} variant="secondary">
       <span className="technician-workbench__metric-copy">
         <span>{label}</span>
         <strong>{value}</strong>
@@ -349,7 +371,9 @@ function ClaimList({
   onClaim,
   onDetails,
   onFinalize,
+  onProbeReady,
   onOperations,
+  probeReadyWorkId,
 }: {
   readonly compact?: boolean;
   readonly emptyDescription: string;
@@ -361,7 +385,9 @@ function ClaimList({
   readonly onClaim?: (work: WorkSummary) => void;
   readonly onDetails: (work: WorkSummary) => void;
   readonly onFinalize?: (work: WorkSummary) => void;
+  readonly onProbeReady?: (work: WorkSummary) => void;
   readonly onOperations?: (work: WorkSummary) => void;
+  readonly probeReadyWorkId?: string | null;
 }): ReactNode {
   if (isLoading) {
     return <LoadingState text="Se încarcă lucrările" />;
@@ -403,7 +429,8 @@ function ClaimList({
               <>
                 <Button onClick={() => onDetails(work)} variant="outline">Detalii</Button>
                 <Button onClick={() => onOperations?.(work)} variant="outline">Manopere</Button>
-                <Button disabled={work.status === "FINALIZATA"} isLoading={finalizeWorkId === work.id} onClick={() => onFinalize?.(work)}>Finalizata</Button>
+                <Button disabled={work.status === "FINALIZATA" || work.technicalReadiness === "PROBE_READY" || work.technicalReadiness === "FINAL_READY"} isLoading={probeReadyWorkId === work.id} onClick={() => onProbeReady?.(work)}>Probă gata</Button>
+                <Button aria-label="Finalizata" disabled={work.status === "FINALIZATA" || work.technicalReadiness === "PROBE_READY" || work.technicalReadiness === "FINAL_READY"} isLoading={finalizeWorkId === work.id} onClick={() => onFinalize?.(work)}>Finalizată</Button>
               </>
             )}
           </div>

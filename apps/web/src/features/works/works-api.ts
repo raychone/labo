@@ -26,6 +26,11 @@ import type {
   WorkWorkflowExecutionView,
   WorksListParams,
   WorkTypeFormOption,
+  ProbeTypeView,
+  WorkOrderItemInput,
+  WorkOrderCompositionInput,
+  WorkOrderItemView,
+  ToothConnectionView,
 } from "@dental-lab/shared";
 
 import { fetchCsrfToken } from "../auth/auth-api.js";
@@ -45,6 +50,7 @@ export const worksQueryKeys = {
   cycles: (workOrderId: string | null) => ["works", "cycles", workOrderId] as const,
   realLabSheet: (workOrderId: string | null, cycleId: string | null) => ["works", "real-lab-sheet", workOrderId, cycleId] as const,
   workTypeOptions: ["works", "work-type-options"] as const,
+  probeTypes: ["works", "probe-types"] as const,
   deadlinePreview: (input: WorkDeadlinePreviewInput | null) => ["works", "deadline-preview", input] as const,
 };
 
@@ -71,6 +77,7 @@ function toWorksQueryString(params: WorksListParams): string {
   appendOptional(query, "assignedTechnicianId", params.assignedTechnicianId);
   appendOptional(query, "doctorId", params.doctorId);
   appendOptional(query, "priority", params.priority);
+  appendOptional(query, "urgency", params.urgency);
   appendOptional(query, "search", params.search);
   appendOptional(query, "status", params.status);
   appendOptional(query, "workTypeId", params.workTypeId);
@@ -78,7 +85,7 @@ function toWorksQueryString(params: WorksListParams): string {
   return query.toString();
 }
 
-async function sendJson<TResponse>(path: string, method: "PATCH" | "POST", body?: unknown): Promise<TResponse> {
+async function sendJson<TResponse>(path: string, method: "DELETE" | "PATCH" | "POST", body?: unknown): Promise<TResponse> {
   const csrfToken = await fetchCsrfToken();
   const init: RequestInit = {
     headers: {
@@ -150,6 +157,19 @@ export async function fetchWorkFormWorkTypeOptions(): Promise<readonly WorkTypeF
   return parseApiResponse<readonly WorkTypeFormOption[]>(response);
 }
 
+export async function fetchProbeTypes(includeArchived = false): Promise<readonly ProbeTypeView[]> {
+  const response = await apiFetch(`/works/probe-types${includeArchived ? "?includeArchived=true" : ""}`);
+  return parseApiResponse<readonly ProbeTypeView[]>(response);
+}
+
+export async function createProbeType(input: { readonly name: string; readonly sortOrder?: number }): Promise<ProbeTypeView> {
+  return sendJson<ProbeTypeView>("/works/probe-types", "POST", input);
+}
+
+export async function updateProbeType(id: string, input: { readonly name?: string; readonly sortOrder?: number; readonly isArchived?: boolean }): Promise<ProbeTypeView> {
+  return sendJson<ProbeTypeView>(`/works/probe-types/${id}`, "PATCH", input);
+}
+
 export async function createWork(input: CreateWorkInput): Promise<WorkDetail> {
   return sendJson<WorkDetail>("/works", "POST", input);
 }
@@ -160,6 +180,51 @@ export async function previewWorkDeadline(input: WorkDeadlinePreviewInput): Prom
 
 export async function updateWork(workOrderId: string, input: UpdateWorkInput): Promise<WorkDetail> {
   return sendJson<WorkDetail>(`/works/${workOrderId}`, "PATCH", input);
+}
+
+export async function updateActiveProbeDeadline(workOrderId: string, cycleId: string, deadlineAt: string): Promise<import("@dental-lab/shared").ProbeCycleView> {
+  return sendJson(`/works/${workOrderId}/probe-cycles/${cycleId}/deadline`, "PATCH", { deadlineAt });
+}
+
+export async function markProbeReady(workOrderId: string): Promise<{ readonly probeReady: true }> {
+  return sendJson(`/works/${workOrderId}/probe-ready`, "POST");
+}
+
+export async function finalizeTechnicalWork(workOrderId: string): Promise<{ readonly finalized: true }> {
+  return sendJson(`/works/${workOrderId}/finalize`, "POST");
+}
+
+export async function receiveProbe(workOrderId: string, input: { readonly probeTypeId: string; readonly deadlineAt: string }): Promise<import("@dental-lab/shared").ProbeCycleView> {
+  return sendJson(`/works/${workOrderId}/probe-cycles/receive`, "POST", input);
+}
+
+export async function createWorkOrderItem(workOrderId: string, input: WorkOrderItemInput): Promise<WorkOrderItemView> {
+  return sendJson<WorkOrderItemView>(`/works/${workOrderId}/items`, "POST", input);
+}
+
+export async function updateWorkOrderItem(workOrderId: string, itemId: string, input: Partial<WorkOrderItemInput>): Promise<WorkOrderItemView> {
+  return sendJson<WorkOrderItemView>(`/works/${workOrderId}/items/${itemId}`, "PATCH", input);
+}
+
+export async function archiveWorkOrderItem(workOrderId: string, itemId: string): Promise<{ readonly archived: true }> {
+  return sendJson<{ readonly archived: true }>(`/works/${workOrderId}/items/${itemId}`, "DELETE");
+}
+
+export async function createToothConnection(workOrderId: string, input: { readonly toothA: number; readonly toothB: number }): Promise<ToothConnectionView> {
+  return sendJson<ToothConnectionView>(`/works/${workOrderId}/tooth-connections`, "POST", input);
+}
+
+export async function removeToothConnection(workOrderId: string, connectionId: string): Promise<{ readonly removed: true }> {
+  return sendJson<{ readonly removed: true }>(`/works/${workOrderId}/tooth-connections/${connectionId}`, "DELETE");
+}
+
+export async function updateWorkComposition(workOrderId: string, input: WorkOrderCompositionInput): Promise<{ readonly items: readonly WorkOrderItemView[]; readonly toothConnections: readonly ToothConnectionView[] }> {
+  return sendJson(`/works/${workOrderId}/composition`, "PATCH", input);
+}
+
+export async function fetchWorkCompatibility(workOrderId: string): Promise<import("@dental-lab/shared").WorkOrderCompatibilityView> {
+  const response = await apiFetch(`/works/${workOrderId}/compatibility`);
+  return parseApiResponse<import("@dental-lab/shared").WorkOrderCompatibilityView>(response);
 }
 
 export async function claimWork(workOrderId: string, input: ClaimWorkInput): Promise<WorkDetail> {
@@ -226,6 +291,10 @@ export async function fetchWorkCycles(workOrderId: string): Promise<WorkCyclesHi
 
 export async function createNextWorkCycle(workOrderId: string, input: CreateNextWorkCycleInput): Promise<WorkCyclesHistory> {
   return sendJson<WorkCyclesHistory>(`/works/${workOrderId}/cycles/next`, "POST", input);
+}
+
+export async function selectProbeType(workOrderId: string, cycleId: string, probeTypeId: string): Promise<import("@dental-lab/shared").ProbeCycleView> {
+  return sendJson<import("@dental-lab/shared").ProbeCycleView>(`/works/${workOrderId}/probe-cycles/${cycleId}/probe-type`, "PATCH", { probeTypeId });
 }
 
 export async function fetchRealLabSheet(workOrderId: string, cycleId: string): Promise<RealLabSheetView> {
@@ -352,6 +421,24 @@ export function useWorkFormWorkTypeOptions(enabled: boolean) {
   });
 }
 
+export function useProbeTypes(enabled: boolean) {
+  return useQuery({ enabled, queryFn: () => fetchProbeTypes(), queryKey: worksQueryKeys.probeTypes, retry: false });
+}
+
+export function useAllProbeTypes(enabled: boolean) {
+  return useQuery({ enabled, queryFn: () => fetchProbeTypes(true), queryKey: [...worksQueryKeys.probeTypes, "all"], retry: false });
+}
+
+export function useCreateProbeType() {
+  const queryClient = useQueryClient();
+  return useMutation({ mutationFn: createProbeType, onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: worksQueryKeys.probeTypes }); } });
+}
+
+export function useUpdateProbeType() {
+  const queryClient = useQueryClient();
+  return useMutation({ mutationFn: ({ id, input }: { readonly id: string; readonly input: { readonly name?: string; readonly sortOrder?: number; readonly isArchived?: boolean } }) => updateProbeType(id, input), onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: worksQueryKeys.probeTypes }); } });
+}
+
 export function useWorkDeadlinePreview(input: WorkDeadlinePreviewInput | null, enabled: boolean) {
   return useQuery({
     enabled: enabled && input !== null,
@@ -384,6 +471,60 @@ export function useUpdateWork() {
   });
 }
 
+export function useUpdateActiveProbeDeadline() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ workOrderId, cycleId, deadlineAt }: { readonly workOrderId: string; readonly cycleId: string; readonly deadlineAt: string }) => updateActiveProbeDeadline(workOrderId, cycleId, deadlineAt),
+    onSuccess: async (_cycle, variables) => {
+      await Promise.all([queryClient.invalidateQueries({ queryKey: worksQueryKeys.detail(variables.workOrderId) }), queryClient.invalidateQueries({ queryKey: worksQueryKeys.all })]);
+    },
+  });
+}
+
+export function useMarkProbeReady() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ workOrderId }: { readonly workOrderId: string }) => markProbeReady(workOrderId),
+    onSuccess: async (_result, variables) => invalidateClaimQueries(queryClient, variables.workOrderId),
+  });
+}
+
+export function useFinalizeTechnicalWork() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ workOrderId }: { readonly workOrderId: string }) => finalizeTechnicalWork(workOrderId),
+    onSuccess: async (_result, variables) => invalidateClaimQueries(queryClient, variables.workOrderId),
+  });
+}
+
+export function useReceiveProbe() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ workOrderId, input }: { readonly workOrderId: string; readonly input: { readonly probeTypeId: string; readonly deadlineAt: string } }) => receiveProbe(workOrderId, input),
+    onSuccess: async (_cycle, variables) => {
+      await Promise.all([queryClient.invalidateQueries({ queryKey: worksQueryKeys.all }), queryClient.invalidateQueries({ queryKey: worksQueryKeys.detail(variables.workOrderId) }), queryClient.invalidateQueries({ queryKey: worksQueryKeys.cycles(variables.workOrderId) }), queryClient.invalidateQueries({ queryKey: statusQueryKeys.all }), queryClient.invalidateQueries({ queryKey: ["technician-workbench"] }), queryClient.invalidateQueries({ queryKey: ["logistics"] })]);
+    },
+  });
+}
+
+export function useWorkCompositionMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = async (workOrderId: string) => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: worksQueryKeys.detail(workOrderId) }),
+      queryClient.invalidateQueries({ queryKey: worksQueryKeys.all }),
+    ]);
+  };
+  return {
+    updateComposition: useMutation({ mutationFn: ({ workOrderId, input }: { workOrderId: string; input: WorkOrderCompositionInput }) => updateWorkComposition(workOrderId, input), onSuccess: (_data, variables) => invalidate(variables.workOrderId) }),
+    createItem: useMutation({ mutationFn: ({ workOrderId, input }: { workOrderId: string; input: WorkOrderItemInput }) => createWorkOrderItem(workOrderId, input), onSuccess: (_data, variables) => invalidate(variables.workOrderId) }),
+    updateItem: useMutation({ mutationFn: ({ workOrderId, itemId, input }: { workOrderId: string; itemId: string; input: Partial<WorkOrderItemInput> }) => updateWorkOrderItem(workOrderId, itemId, input), onSuccess: (_data, variables) => invalidate(variables.workOrderId) }),
+    archiveItem: useMutation({ mutationFn: ({ workOrderId, itemId }: { workOrderId: string; itemId: string }) => archiveWorkOrderItem(workOrderId, itemId), onSuccess: (_data, variables) => invalidate(variables.workOrderId) }),
+    createConnection: useMutation({ mutationFn: ({ workOrderId, input }: { workOrderId: string; input: { toothA: number; toothB: number } }) => createToothConnection(workOrderId, input), onSuccess: (_data, variables) => invalidate(variables.workOrderId) }),
+    removeConnection: useMutation({ mutationFn: ({ workOrderId, connectionId }: { workOrderId: string; connectionId: string }) => removeToothConnection(workOrderId, connectionId), onSuccess: (_data, variables) => invalidate(variables.workOrderId) }),
+  };
+}
+
 export function useUploadWorkAttachments() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -412,6 +553,17 @@ export function useCreateNextWorkCycle() {
         queryClient.invalidateQueries({ queryKey: ["logistics"] }),
         queryClient.invalidateQueries({ queryKey: ["delivery"] }),
       ]);
+    },
+  });
+}
+
+export function useSelectProbeType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ cycleId, probeTypeId, workOrderId }: { readonly cycleId: string; readonly probeTypeId: string; readonly workOrderId: string }) => selectProbeType(workOrderId, cycleId, probeTypeId),
+    onSuccess: async (_cycle, variables) => {
+      await queryClient.invalidateQueries({ queryKey: worksQueryKeys.detail(variables.workOrderId) });
+      await queryClient.invalidateQueries({ queryKey: worksQueryKeys.all });
     },
   });
 }

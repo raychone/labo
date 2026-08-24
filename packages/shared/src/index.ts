@@ -1,4 +1,92 @@
 export { APPLICATION_NAME, WORKSPACE_SCOPE } from "./workspace.constants.js";
+export {
+  POSTMEETING_AUDIT_ACTIONS,
+  POSTMEETING_AUDIT_ACTION_LABELS_RO,
+  POSTMEETING_RESOLVED_DECISIONS,
+  POSTMEETING_UNRESOLVED_AUTHORIZATION_GATES,
+  formatPostmeetingAuditMessage,
+} from "./rbac-audit-contract.js";
+export type { PostmeetingAuditAction, PostmeetingAuditPresentationData } from "./rbac-audit-contract.js";
+export {
+  ADULT_FDI_TEETH,
+  ANATOMICAL_SCOPE_LABELS_RO,
+  ANATOMICAL_SCOPE_TYPES,
+  DENTAL_ASSET_DIRECTORY,
+  DENTAL_ASSET_SOURCE_CODES,
+  LEGACY_COMPATIBILITY_MAPPINGS,
+  MANEUVER_QUANTITY_FIXTURES,
+  POSTMODEL_AUDIT_ACTIONS,
+  POSTMODEL_UI_TERMINOLOGY_RO,
+  PROBE_LIFECYCLE_TERMS_RO,
+  PROBE_LIFECYCLE_TRANSITIONS,
+  TECHNICIAN_MANEUVER_UNIT_LABELS_RO,
+  TECHNICIAN_MANEUVER_UNIT_HELP_RO,
+  TECHNICIAN_MANEUVER_UNITS,
+  calculateManeuverQuantity,
+  calculateManeuverTotalMinor,
+  URGENCY_LABELS_RO,
+  URGENCY_LEVELS,
+  URGENCY_SURCHARGE_PERCENT,
+  calculateUrgencySurchargeMinor,
+  WORK_ORDER_CANONICAL_IDENTITY,
+  isAdultFdiTooth,
+  isAllowedProbeTransition,
+  isAnatomicalScopeType,
+  resolveMirroredFdiTooth,
+} from "./postmeeting-contract.js";
+export type {
+  AdultFdiTooth,
+  AnatomicalScopeType,
+  DentalAssetIdentity,
+  DentalAssetSourceCode,
+  ManeuverQuantityFixture,
+  ProbeLifecycleAction,
+  ProbeLifecycleState,
+  ProbeLifecycleTransition,
+  TechnicianManeuverUnit,
+  UrgencyLevel,
+  WorkOrderCanonicalIdentity,
+} from "./postmeeting-contract.js";
+export {
+  normalizeWorkOrderItemTeeth,
+  validateWorkOrderItemScope,
+} from "./work-order-items.js";
+export {
+  expandCanonicalWorkOrderItemTeeth,
+  compareNormalizedToothConnections,
+  getCanonicalWorkOrderCompositionTeeth,
+  isAdjacentAdultFdiPair,
+  isToothPresentInCanonicalWorkOrderComposition,
+  normalizeConnectionPair,
+  normalizeConnectionTeeth,
+} from "./tooth-connections.js";
+export type { CanonicalWorkOrderCompositionItem, NormalizedToothConnection, ToothConnectionView } from "./tooth-connections.js";
+export {
+  classifyLegacyComposition,
+  extractLegacyFdiTeeth,
+  LEGACY_COMPATIBILITY_CLASSIFICATIONS,
+  LEGACY_COMPATIBILITY_LABELS_RO,
+  LEGACY_COMPATIBILITY_SOURCES,
+} from "./legacy-compatibility.js";
+export type {
+  LegacyClassificationInput,
+  LegacyClassificationResult,
+  LegacyCompatibilityClassification,
+  LegacyCompatibilityItemView,
+  LegacyCompatibilitySource,
+  LegacyCycleCompatibilityView,
+  WorkOrderCompatibilityView,
+} from "./legacy-compatibility.js";
+export type {
+  WorkOrderCompositionInput,
+  WorkOrderCompositionItemInput,
+  WorkOrderItemInput,
+  WorkOrderItemScope,
+  WorkOrderItemScopeValidation,
+  WorkOrderItemToothInput,
+  WorkOrderItemToothView,
+  WorkOrderItemView,
+} from "./work-order-items.js";
 export type { AuditLogQuery, AuditLogSummary, PaginatedAuditLogsResponse } from "./audit.js";
 export {
   LEGAL_ENTITY_CODES,
@@ -201,7 +289,7 @@ export type {
   TechnicianPaymentInput,
   TechnicianPaymentView,
 } from "./technician-operations.js";
-export { FINAL_WORK_STATUSES, SCAN_SOURCES, WORK_ASSIGNMENT_EVENT_TYPES, WORK_CLAIM_SOURCES, WORK_CLAIM_STATUSES, WORK_CYCLE_REASONS, WORK_CYCLE_STATUSES, WORK_DEADLINE_MODES, WORK_DEADLINE_SOURCES, WORK_PRIORITIES, WORK_QR_PAYLOAD_PREFIX, WORK_SORT_FIELDS, WORK_STATUSES, isWorkQrPayload } from "./works.js";
+export { FINAL_WORK_STATUSES, PROBE_CYCLE_STATUSES, SCAN_SOURCES, WORK_ASSIGNMENT_EVENT_TYPES, WORK_CLAIM_SOURCES, WORK_CLAIM_STATUSES, WORK_CYCLE_REASONS, WORK_CYCLE_STATUSES, WORK_DEADLINE_MODES, WORK_DEADLINE_SOURCES, WORK_PRIORITIES, WORK_QR_PAYLOAD_PREFIX, WORK_SORT_FIELDS, WORK_STATUSES, isWorkQrPayload } from "./works.js";
 export type {
   ClaimWorkInput,
   CreateWorkInput,
@@ -230,6 +318,10 @@ export type {
   WorkCycleStatus,
   WorkCycleView,
   WorkCyclesHistory,
+  ProbeCycleStatus,
+  ProbeCycleView,
+  ProbeTypeView,
+  WorkTechnicalReadiness,
   WorkDeadlineMode,
   WorkDeadlinePreview,
   WorkDeadlinePreviewInput,

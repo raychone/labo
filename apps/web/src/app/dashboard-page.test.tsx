@@ -285,7 +285,7 @@ describe("DashboardPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Recepție" })).toBeDefined();
     expect(screen.getAllByRole("link", { name: "Lucrare nouă" }).length).toBe(1);
-    expect(screen.getByRole("button", { name: "Înregistrează revenirea" })).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Înregistrează revenirea" })).toBeNull();
     expect(screen.getAllByRole("link", { name: "Scanează lucrare" }).length).toBe(1);
     expect(screen.queryByText("Situație financiară")).toBeNull();
     expect(screen.queryByRole("link", { name: "Lucrările mele" })).toBeNull();

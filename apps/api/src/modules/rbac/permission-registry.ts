@@ -41,6 +41,8 @@ export type PermissionKey =
   | "works.read_all"
   | "works.read_assigned"
   | "works.update"
+  | "works.urgency.update"
+  | "works.deadline.current.update"
   | "works.assign"
   | "works.change_status"
   | "works.archive"
@@ -52,6 +54,7 @@ export type PermissionKey =
   | "works.technical_details.read"
   | "works.technical_details.update"
   | "works.production.finalize"
+  | "works.production.probe_ready"
   | "works.claim.available.read"
   | "works.claim.own.read"
   | "works.claim.create"
@@ -65,9 +68,22 @@ export type PermissionKey =
   | "works.execution_snapshot.read_deadline"
   | "works.execution_snapshot.history.read"
   | "works.execution_snapshot.create"
+  | "works.item.create"
+  | "works.item.update"
+  | "works.item.remove"
+  | "works.scope.update"
+  | "works.connections.manage"
+  | "works.custom_type.use"
+  | "works.custom_platform.use"
+  | "works.custom_type.save_to_catalog"
+  | "works.custom_platform.save_to_catalog"
   | "cycles.read"
   | "cycles.history.read"
   | "cycles.create_next"
+  | "cycles.probe_type.select"
+  | "cycles.mark_received"
+  | "probe_types.read"
+  | "probe_types.manage"
   | "scan.use"
   | "scan.resolve"
   | "workflow.read"
@@ -85,6 +101,8 @@ export type PermissionKey =
   | "technician.workload.read"
   | "technician.operations.read"
   | "technician.operations.manage_own"
+  | "technician.operations.scope.select"
+  | "technician.operations.configure"
   | "technician.rates.read"
   | "technician.rates.manage"
   | "technician.earnings.read_own"
@@ -92,6 +110,9 @@ export type PermissionKey =
   | "technician.payments.read_own"
   | "technician.payments.read_all"
   | "technician.payments.create"
+  | "notifications.read_own"
+  | "notifications.mark_read_own"
+  | "notifications.dismiss_own"
   | "logistics.read"
   | "logistics.plan"
   | "logistics.assign"
@@ -221,6 +242,8 @@ export const PERMISSION_REGISTRY = [
   definePermission("works.read_all", "Read all work orders."),
   definePermission("works.read_assigned", "Read assigned work orders."),
   definePermission("works.update", "Update work orders."),
+  definePermission("works.urgency.update", "Set and change canonical work urgency."),
+  definePermission("works.deadline.current.update", "Set the current active probe deadline."),
   definePermission("works.assign", "Assign work orders."),
   definePermission("works.change_status", "Change work order status."),
   definePermission("works.archive", "Archive work orders."),
@@ -232,6 +255,7 @@ export const PERMISSION_REGISTRY = [
   definePermission("works.technical_details.read", "Read technician-editable work technical details."),
   definePermission("works.technical_details.update", "Update technician-editable work technical details."),
   definePermission("works.production.finalize", "Mark technical production as finalized."),
+  definePermission("works.production.probe_ready", "Mark the active technical probe as Probă gata."),
   definePermission("works.claim.available.read", "Read work orders available for technician claim."),
   definePermission("works.claim.own.read", "Read own claimed work orders."),
   definePermission("works.claim.create", "Claim an available work order."),
@@ -245,9 +269,22 @@ export const PERMISSION_REGISTRY = [
   definePermission("works.execution_snapshot.read_deadline", "Read execution snapshot deadline fields."),
   definePermission("works.execution_snapshot.history.read", "Read execution snapshot references in assignment history."),
   definePermission("works.execution_snapshot.create", "Create execution snapshots through claim or manager assignment."),
+  definePermission("works.item.create", "Add a technical component to a work order."),
+  definePermission("works.item.update", "Edit a current technical component of a work order."),
+  definePermission("works.item.remove", "Remove a current unused technical component from a work order."),
+  definePermission("works.scope.update", "Edit the anatomical scope of a current work component."),
+  definePermission("works.connections.manage", "Manage persisted adjacent-tooth connections in the authorized case context."),
+  definePermission("works.custom_type.use", "Use a one-off custom work type without catalog persistence."),
+  definePermission("works.custom_platform.use", "Use a one-off custom implant platform without catalog persistence."),
+  definePermission("works.custom_type.save_to_catalog", "Save a custom work type to the reusable catalog; final role remains unresolved."),
+  definePermission("works.custom_platform.save_to_catalog", "Save a custom implant platform to the reusable catalog; final role remains unresolved."),
   definePermission("cycles.read", "Read current work cycle state."),
   definePermission("cycles.history.read", "Read work cycle history."),
   definePermission("cycles.create_next", "Register a returned work and create the next work cycle."),
+  definePermission("cycles.probe_type.select", "Select the current or next data-driven probe type."),
+  definePermission("cycles.mark_received", "Register a returned case as Recepționată."),
+  definePermission("probe_types.read", "Read the global laboratory ProbeType catalog."),
+  definePermission("probe_types.manage", "Manage the global laboratory ProbeType catalog."),
   definePermission("scan.use", "Use operational QR scanner."),
   definePermission("scan.resolve", "Resolve operational QR scan context."),
   definePermission("workflow.read", "Read workflows."),
@@ -265,6 +302,8 @@ export const PERMISSION_REGISTRY = [
   definePermission("technician.workload.read", "Read technician workload."),
   definePermission("technician.operations.read", "Read technician operation catalog and performed operations."),
   definePermission("technician.operations.manage_own", "Manage own performed technician operations."),
+  definePermission("technician.operations.scope.select", "Select the authorized scope of an own performed maneuver."),
+  definePermission("technician.operations.configure", "Configure technician maneuver definitions, rates, and pricing units."),
   definePermission("technician.rates.read", "Read technician operation rates."),
   definePermission("technician.rates.manage", "Manage technician operation rates."),
   definePermission("technician.earnings.read_own", "Read own technician earnings."),
@@ -272,6 +311,9 @@ export const PERMISSION_REGISTRY = [
   definePermission("technician.payments.read_own", "Read own technician payments and balance."),
   definePermission("technician.payments.read_all", "Read all technician payments and balances."),
   definePermission("technician.payments.create", "Record a technician payment."),
+  definePermission("notifications.read_own", "Read own notifications."),
+  definePermission("notifications.mark_read_own", "Mark own notifications as read."),
+  definePermission("notifications.dismiss_own", "Dismiss own notifications."),
   definePermission("logistics.read", "Read logistics."),
   definePermission("logistics.plan", "Plan logistics."),
   definePermission("logistics.assign", "Assign logistics work."),
@@ -408,6 +450,9 @@ export const ROLE_PERMISSION_MATRIX = {
     "comments.create": "ALL",
     "comments.read_external": "ALL",
     "organization_context.read": "ALL",
+    "notifications.dismiss_own": "ALL",
+    "notifications.mark_read_own": "ALL",
+    "notifications.read_own": "ALL",
     "cycles.read": "OWN_DELIVERY",
     "delivery.capture_signature": "OWN_DELIVERY",
     "delivery.complete": "OWN_DELIVERY",
@@ -435,6 +480,9 @@ export const ROLE_PERMISSION_MATRIX = {
     "comments.read_internal": "ALL",
     "clinics.read": "ALL",
     "organization_context.read": "ALL",
+    "notifications.dismiss_own": "ALL",
+    "notifications.mark_read_own": "ALL",
+    "notifications.read_own": "ALL",
     "cycles.history.read": "ALL",
     "cycles.read": "ALL",
     "delivery.assign": "ALL",
@@ -493,6 +541,8 @@ export const ROLE_PERMISSION_MATRIX = {
     "works.read_assigned": "ASSIGNED",
     "works.technical_details.read": "ALL",
     "works.update": "ALL",
+    "works.urgency.update": "ALL",
+    "works.deadline.current.update": "ALL",
     "logistics.alerts.update": "ALL",
     "logistics.delivery_marker.update": "ALL",
   }),
@@ -501,6 +551,9 @@ export const ROLE_PERMISSION_MATRIX = {
     "comments.create": "ALL",
     "comments.read_external": "ALL",
     "organization_context.read": "ALL",
+    "notifications.dismiss_own": "OWN_CLINIC",
+    "notifications.mark_read_own": "OWN_CLINIC",
+    "notifications.read_own": "OWN_CLINIC",
     "files.read": "OWN_CLINIC",
     "works.read_assigned": "OWN_CLINIC",
     "works.deadline.read": "OWN_CLINIC",
@@ -513,9 +566,12 @@ export const ROLE_PERMISSION_MATRIX = {
     "comments.read_external": "ALL",
     "comments.read_internal": "ALL",
     "organization_context.read": "ALL",
+    "cycles.mark_received": "ALL",
     "cycles.create_next": "ALL",
     "cycles.history.read": "ALL",
     "cycles.read": "ALL",
+    "cycles.probe_type.select": "ALL",
+    "probe_types.read": "ALL",
     "delivery.read": "ALL",
     "delivery.proof.print": "ALL",
     "delivery.signature.read": "ALL",
@@ -539,6 +595,16 @@ export const ROLE_PERMISSION_MATRIX = {
     "reception.handover_to_courier": "ALL",
     "reception.handover_to_logistics": "ALL",
     "reception.receive": "ALL",
+    "works.connections.manage": "ALL",
+    "works.custom_platform.use": "ALL",
+    "works.custom_type.use": "ALL",
+    "works.item.create": "ALL",
+    "works.item.remove": "ALL",
+    "works.item.update": "ALL",
+    "works.scope.update": "ALL",
+    "notifications.dismiss_own": "ALL",
+    "notifications.mark_read_own": "ALL",
+    "notifications.read_own": "ALL",
     "scan.resolve": "ALL",
     "scan.use": "ALL",
     "workflow.complete_stage": "OWN_STAGE",
@@ -555,14 +621,21 @@ export const ROLE_PERMISSION_MATRIX = {
     "works.read_all": "ALL",
     "works.read_assigned": "ASSIGNED",
     "works.update": "ALL",
+    "works.urgency.update": "ALL",
+    "works.deadline.current.update": "ALL",
   }),
   TEHNICIAN: grants({
     "comments.create": "ALL",
     "comments.read_external": "ALL",
     "comments.read_internal": "ALL",
     "organization_context.read": "ALL",
+    "notifications.dismiss_own": "ASSIGNED",
+    "notifications.mark_read_own": "ASSIGNED",
+    "notifications.read_own": "ASSIGNED",
     "cycles.history.read": "ASSIGNED",
     "cycles.read": "ASSIGNED",
+    "cycles.probe_type.select": "ASSIGNED",
+    "probe_types.read": "ASSIGNED",
     "files.read": "ASSIGNED",
     "forms.read": "ALL",
     "work_forms.real.finalize": "ASSIGNED",
@@ -579,6 +652,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "technician.payments.read_own": "ASSIGNED",
     "technician.operations.manage_own": "ASSIGNED",
     "technician.operations.read": "ALL",
+    "technician.operations.scope.select": "ASSIGNED",
     "workflow.complete_stage": "OWN_STAGE",
     "workflow.pause_stage": "OWN_STAGE",
     "workflow.read": "ASSIGNED",
@@ -595,6 +669,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "works.execution_snapshot.read_deadline": "ASSIGNED",
     "works.execution_snapshot.history.read": "ASSIGNED",
     "works.production.finalize": "ASSIGNED",
+    "works.production.probe_ready": "ASSIGNED",
     "works.read_assigned": "OWN_STAGE",
     "works.technical_details.read": "ASSIGNED",
     "works.technical_details.update": "ASSIGNED",

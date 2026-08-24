@@ -1,0 +1,267 @@
+.tooth-diagram {
+  display: grid;
+  gap: var(--dl-space-4);
+  min-width: 0;
+  width: 100%;
+}
+
+.tooth-diagram__shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-2);
+}
+
+.tooth-diagram__shortcut {
+  background: var(--dl-color-surface);
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  color: var(--dl-color-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--dl-font-size-label);
+  font-weight: var(--dl-font-weight-semibold);
+  min-height: 2.5rem;
+  padding: var(--dl-space-2) var(--dl-space-3);
+}
+
+.tooth-diagram__shortcut:hover {
+  border-color: var(--dl-color-accent);
+}
+
+.tooth-diagram__shortcut:focus-visible,
+.tooth-diagram__tooth:focus-visible,
+.tooth-diagram__connection:focus-visible {
+  outline: 3px solid var(--dl-color-focus-ring, var(--dl-color-accent));
+  outline-offset: 3px;
+}
+
+.tooth-diagram__arches {
+  display: grid;
+  gap: var(--dl-space-5);
+  min-width: 0;
+  width: 100%;
+}
+
+.tooth-diagram__arch {
+  background: var(--dl-color-surface);
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-lg);
+  min-width: 0;
+  padding: var(--dl-space-3);
+  width: 100%;
+}
+
+.tooth-diagram__arch--semantic {
+  border-color: var(--dl-color-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dl-color-accent) 16%, transparent);
+}
+
+.tooth-diagram__arch-scroll {
+  box-sizing: border-box;
+  contain: inline-size layout;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: var(--dl-space-3) var(--dl-space-2) var(--dl-space-2);
+  scrollbar-width: thin;
+  width: 100%;
+}
+
+.tooth-diagram__arch-row {
+  align-items: end;
+  display: flex;
+  gap: 0.2rem;
+  margin-inline: auto;
+  min-width: max-content;
+  width: max-content;
+}
+
+.tooth-diagram__position {
+  align-items: center;
+  display: flex;
+  flex: 0 0 4.1rem;
+  gap: 0.2rem;
+  min-width: 4.1rem;
+}
+
+.tooth-diagram__position--last::after {
+  display: none;
+}
+
+.tooth-diagram__tooth {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--dl-radius-md);
+  color: var(--dl-color-text);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  font: inherit;
+  flex: 0 0 1.9rem;
+  gap: 0.2rem;
+  min-height: 8.25rem;
+  min-width: 1.9rem;
+  padding: var(--dl-space-1);
+  touch-action: manipulation;
+  width: 1.9rem;
+}
+
+.tooth-diagram__tooth:hover:not(:disabled) .tooth-diagram__tooth-image-wrap,
+.tooth-diagram__tooth--focused .tooth-diagram__tooth-image-wrap {
+  background: var(--dl-color-accent-subtle);
+  border-radius: var(--dl-radius-md);
+}
+
+.tooth-diagram__tooth--selected .tooth-diagram__tooth-image-wrap {
+  background: color-mix(in srgb, var(--dl-color-accent) 14%, transparent);
+  border: 2px solid var(--dl-color-accent);
+  border-radius: var(--dl-radius-md);
+}
+
+.tooth-diagram__tooth--configured .tooth-diagram__tooth-image-wrap {
+  border: 1px dashed color-mix(in srgb, var(--dl-color-accent) 55%, transparent);
+  border-radius: var(--dl-radius-md);
+}
+
+.tooth-diagram__tooth--selected .tooth-diagram__tooth-image-wrap {
+  border: 2px solid var(--dl-color-accent);
+}
+
+.tooth-diagram__tooth--configured .tooth-diagram__tooth-number {
+  color: var(--dl-color-accent);
+  font-weight: var(--dl-font-weight-bold);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 0.15rem;
+}
+
+.tooth-diagram__tooth--focused {
+  box-shadow: none;
+}
+
+.tooth-diagram__tooth--focused .tooth-diagram__tooth-image-wrap {
+  border: 2px solid var(--dl-color-info-foreground, var(--dl-color-accent));
+  border-radius: var(--dl-radius-md);
+}
+
+.tooth-diagram__tooth--disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.7);
+  opacity: 0.52;
+}
+
+.tooth-diagram__tooth-image-wrap {
+  align-items: center;
+  display: flex;
+  height: 6.5rem;
+  justify-content: center;
+  overflow: visible;
+  padding: 0.2rem;
+  transition: background-color 120ms ease, border-color 120ms ease;
+  width: 100%;
+}
+
+.tooth-diagram__tooth-image {
+  display: block;
+  height: calc(100% * var(--tooth-asset-height-scale, 1));
+  max-width: none;
+  object-fit: contain;
+  width: auto;
+}
+
+.tooth-diagram__tooth-image--mirrored {
+  transform: scaleX(-1);
+}
+
+.tooth-diagram__tooth-number {
+  font-size: var(--dl-font-size-label);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--dl-font-weight-semibold);
+  line-height: 1.2;
+}
+
+.tooth-diagram__connection {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  display: flex;
+  height: 2.5rem;
+  justify-content: center;
+  padding: 0;
+  flex: 0 0 2rem;
+  touch-action: manipulation;
+  width: 2rem;
+}
+
+.tooth-diagram__connection > span:first-child {
+  background: var(--dl-color-surface);
+  border: 2px solid var(--dl-color-accent);
+  border-radius: 999px;
+  display: block;
+  height: 0.85rem;
+  transition: background-color 120ms ease, transform 120ms ease;
+  width: 0.85rem;
+}
+
+.tooth-diagram__connection:hover:not(:disabled) > span:first-child {
+  transform: scale(1.15);
+}
+
+.tooth-diagram__connection--active > span:first-child {
+  background: var(--dl-color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dl-color-accent) 18%, transparent);
+}
+
+.tooth-diagram__connection--unavailable,
+.tooth-diagram__connection:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.tooth-diagram__sr-only {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+@media (max-width: 47.99rem) {
+  .tooth-diagram__arch {
+    padding: var(--dl-space-1);
+  }
+
+  .tooth-diagram__arch-scroll {
+    padding: var(--dl-space-2) 0;
+  }
+
+  .tooth-diagram__arch-row {
+    gap: 0.2rem;
+  }
+
+  .tooth-diagram__tooth {
+    gap: 0.1rem;
+    min-height: 5.25rem;
+    padding: 0;
+  }
+
+  .tooth-diagram__tooth-image-wrap {
+    height: 4.15rem;
+    width: 100%;
+  }
+
+  .tooth-diagram__tooth-number {
+    font-size: 0.72rem;
+  }
+
+  .tooth-diagram__connection > span:first-child {
+    height: clamp(0.3rem, 1.8vw, 0.5rem);
+    width: clamp(0.3rem, 1.8vw, 0.5rem);
+  }
+}

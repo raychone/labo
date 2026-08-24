@@ -445,7 +445,7 @@ describe("TechnicianWorkbenchPage", () => {
     });
   });
 
-  it("shows claimed work actions and finalizes through the status endpoint", async () => {
+  it("shows claimed work actions and finalizes through the canonical endpoint", async () => {
     const fetchMock = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     const matchMedia = createMatchMedia(false);
@@ -501,10 +501,10 @@ describe("TechnicianWorkbenchPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Închide" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Finalizata" }));
+    fireEvent.click(screen.getByRole("button", { name: "Finalizează" }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/works/work_3/status"), expect.objectContaining({
-        body: JSON.stringify({ reason: "Finalizată de tehnician din atelier.", status: "FINALIZATA" }),
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/works/work_3/finalize"), expect.objectContaining({
         method: "POST",
       }));
     });

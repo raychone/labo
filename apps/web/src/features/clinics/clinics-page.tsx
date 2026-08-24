@@ -73,6 +73,7 @@ const statusOptions = [
 ] as const;
 
 const defaultClinicValues: ClinicFormValues = {
+  legalEntityCode: null,
   addressLine1: null,
   addressLine2: null,
   billingAddressLine1: null,
@@ -129,6 +130,7 @@ function toClinicFormValues(clinic: ClinicDetail | undefined): ClinicFormValues 
     email: clinic.email,
     internalNotes: clinic.internalNotes,
     legalName: clinic.legalName,
+    legalEntityCode: clinic.legalEntity?.code ?? null,
     name: clinic.name,
     phone: clinic.phone,
     postalCode: clinic.postalCode,
@@ -141,6 +143,7 @@ function toClinicFormValues(clinic: ClinicDetail | undefined): ClinicFormValues 
 function toDoctorFormValues(doctor: DoctorDetail | undefined, clinicId: string | null): DoctorFormValues {
   return {
     clinicId: doctor?.clinicId ?? clinicId ?? "",
+    legalEntityCode: doctor?.legalEntity?.code ?? null,
     email: doctor?.email ?? null,
     firstName: doctor?.firstName ?? "",
     internalNotes: doctor?.internalNotes ?? null,
@@ -151,6 +154,7 @@ function toDoctorFormValues(doctor: DoctorDetail | undefined, clinicId: string |
 }
 
 const clinicFieldLabels: Partial<Record<keyof ClinicFormValues, string>> = {
+  legalEntityCode: "Firmă",
   billingCountryCode: "Țară facturare",
   contactPersonEmail: "Email contact",
   countryCode: "Țară",
@@ -161,6 +165,7 @@ const clinicFieldLabels: Partial<Record<keyof ClinicFormValues, string>> = {
 };
 
 const doctorFieldLabels: Partial<Record<keyof DoctorFormValues, string>> = {
+  legalEntityCode: "Firmă",
   clinicId: "Clinică",
   email: "Email",
   firstName: "Prenume",
@@ -721,6 +726,7 @@ function ClinicForm({
     <FormLayout className="clinics-page__form" id={formId} onSubmit={(event) => void form.handleSubmit(onSubmit)(event)}>
       <FormErrorSummary errors={summaryItems} ref={summaryRef} />
       <FormSection title="Profil">
+        <Select disabled={isDisabled} error={form.formState.errors.legalEntityCode?.message} label="Firmă" options={[{ label: "CDT", value: "CDT" }, { label: "NG", value: "NG" }]} placeholder="Alege firma" required {...form.register("legalEntityCode")} />
         <TextInput disabled={isDisabled} error={form.formState.errors.name?.message} id="name" label="Nume clinică" required {...form.register("name")} />
         <TextInput disabled={isDisabled} error={form.formState.errors.legalName?.message} id="legalName" label="Denumire legală" {...form.register("legalName")} />
         <TextInput disabled={isDisabled} error={form.formState.errors.taxId?.message} id="taxId" label="Cod fiscal" {...form.register("taxId")} />
@@ -958,6 +964,7 @@ function DoctorModal({
               error={form.formState.errors.clinicId?.message}
             />
           )}
+          <Select disabled={isSaving} error={form.formState.errors.legalEntityCode?.message} label="Firmă" options={[{ label: "CDT", value: "CDT" }, { label: "NG", value: "NG" }]} placeholder="Alege firma" required {...form.register("legalEntityCode")} />
           <div className="clinics-page__form-grid">
             <TextInput disabled={isSaving} error={form.formState.errors.firstName?.message} id="firstName" label="Prenume" required {...form.register("firstName")} />
             <TextInput disabled={isSaving} error={form.formState.errors.lastName?.message} id="lastName" label="Nume" required {...form.register("lastName")} />

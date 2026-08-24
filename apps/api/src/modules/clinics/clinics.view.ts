@@ -1,11 +1,12 @@
 import type { Prisma } from "@prisma/client";
 
-export type ClinicRecord = Prisma.ClinicGetPayload<object>;
+export type ClinicRecord = Prisma.ClinicGetPayload<object> & { readonly legalEntity?: { readonly code: string; readonly displayName: string } | null };
 
 export interface ClinicOptionView {
   readonly code: string;
   readonly id: string;
   readonly name: string;
+  readonly legalEntity: { readonly code: "CDT" | "NG"; readonly displayName: string } | null;
 }
 
 export interface ClinicSummaryView extends ClinicOptionView {
@@ -56,11 +57,12 @@ export interface PaginatedClinicsView {
   readonly total: number;
 }
 
-export function toClinicOptionView(clinic: Pick<ClinicRecord, "code" | "id" | "name">): ClinicOptionView {
+export function toClinicOptionView(clinic: Pick<ClinicRecord, "code" | "id" | "name" | "legalEntity">): ClinicOptionView {
   return {
     code: clinic.code,
     id: clinic.id,
     name: clinic.name,
+    legalEntity: clinic.legalEntity ? { code: clinic.legalEntity.code as "CDT" | "NG", displayName: clinic.legalEntity.displayName } : null,
   };
 }
 

@@ -14,6 +14,9 @@ import { AuthorizationService } from "../rbac/authorization.service.js";
 import { PermissionsGuard } from "../rbac/permissions.guard.js";
 import { WorksController } from "./works.controller.js";
 import { WorksService } from "./works.service.js";
+import { WorkItemsService } from "./work-items.service.js";
+import { LegacyCompatibilityService } from "./legacy-compatibility.service.js";
+import { ToothConnectionsService } from "./tooth-connections.service.js";
 
 const responseBody = {
   baseUnitPriceMinor: 35000,
@@ -179,6 +182,23 @@ describe("WorksController", () => {
             }),
             updateWork: vi.fn().mockResolvedValue(responseBody),
           },
+        },
+        {
+          provide: WorkItemsService,
+          useValue: {
+            archive: vi.fn(),
+            create: vi.fn(),
+            list: vi.fn().mockResolvedValue([]),
+            update: vi.fn(),
+          },
+        },
+        {
+          provide: LegacyCompatibilityService,
+          useValue: { getComposition: vi.fn().mockResolvedValue({}) },
+        },
+        {
+          provide: ToothConnectionsService,
+          useValue: { create: vi.fn(), list: vi.fn().mockResolvedValue([]), remove: vi.fn() },
         },
       ],
     })

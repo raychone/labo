@@ -290,6 +290,15 @@
   grid-template-columns: 1fr;
 }
 
+/* The multi-item editor owns its own responsive layout. Keeping the slot in
+   one form-grid track prevents the generic two-column form breakpoint from
+   cutting the dental diagram to half width. */
+.works-page__multi-item-details-grid {
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  width: 100%;
+}
+
 .works-page__badge-stack,
 .works-page__row-actions {
   display: grid;

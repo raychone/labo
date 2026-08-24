@@ -223,6 +223,7 @@
 html {
   min-width: 20rem;
   text-size-adjust: 100%;
+  width: 100%;
 }
 
 body {
@@ -235,10 +236,73 @@ body {
   margin: 0;
   min-height: 100vh;
   text-rendering: optimizeLegibility;
+  width: 100%;
 }
 
 #root {
   min-height: 100vh;
+  width: 100%;
+}
+
+.dl-kpi {
+  align-content: center;
+  color: var(--dl-color-text);
+  display: grid;
+  gap: 0.35rem;
+  justify-items: center;
+  min-width: 0;
+  text-align: center;
+}
+
+.dl-kpi__title,
+.dl-kpi__value,
+.dl-kpi__description {
+  color: #111817;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dl-kpi__title {
+  font-size: clamp(0.82rem, 1vw, 1rem);
+  font-weight: var(--dl-font-weight-bold);
+  line-height: 1.2;
+}
+
+.dl-kpi__value {
+  font-size: clamp(1.35rem, 2.4vw, 2rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+.dl-kpi__description {
+  font-size: clamp(0.76rem, 0.95vw, 0.9rem);
+  font-weight: var(--dl-font-weight-medium);
+  line-height: 1.25;
+}
+
+/* Existing app KPI cards opt into the same readable text scale. */
+.dl-kpi span,
+.dl-kpi strong,
+.dl-kpi small {
+  color: #111817 !important;
+}
+
+.dl-kpi span {
+  font-size: clamp(0.82rem, 1vw, 1rem) !important;
+  font-weight: var(--dl-font-weight-bold);
+  line-height: 1.2;
+}
+
+.dl-kpi strong {
+  font-size: clamp(1.35rem, 2.4vw, 2rem) !important;
+  line-height: 1.05;
+}
+
+.dl-kpi small {
+  font-size: clamp(0.76rem, 0.95vw, 0.9rem) !important;
+  font-weight: var(--dl-font-weight-medium);
+  line-height: 1.25;
 }
 
 ::selection {
@@ -371,6 +435,117 @@ select:disabled {
     linear-gradient(135deg, var(--dl-color-text-muted) 50%, transparent 50%);
 }
 
+.dl-select-field {
+  position: relative;
+}
+
+.dl-select {
+  position: relative;
+}
+
+.dl-select__search {
+  background: var(--dl-color-surface);
+  padding-right: 3rem;
+}
+
+.dl-select--open .dl-select__search {
+  border-color: var(--dl-color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dl-color-accent) 16%, transparent);
+}
+
+.dl-select__chevron {
+  border-bottom: 2px solid var(--dl-color-text-secondary);
+  border-right: 2px solid var(--dl-color-text-secondary);
+  height: 0.55rem;
+  pointer-events: none;
+  position: absolute;
+  right: 1.1rem;
+  top: 1rem;
+  transform: rotate(45deg);
+  width: 0.55rem;
+}
+
+.dl-select__menu {
+  background: var(--dl-color-surface);
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-lg);
+  box-shadow: var(--dl-shadow-lg);
+  display: grid;
+  gap: var(--dl-space-2);
+  left: 0;
+  max-height: min(24rem, 50vh);
+  overflow-y: auto;
+  padding: var(--dl-space-2);
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--dl-space-2));
+  z-index: 20;
+}
+
+.dl-select__option {
+  background: var(--dl-color-surface);
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  color: var(--dl-color-text);
+  cursor: pointer;
+  display: grid;
+  gap: 0.2rem;
+  min-height: 4.25rem;
+  padding: var(--dl-space-3);
+  position: relative;
+  text-align: left;
+  width: 100%;
+}
+
+.dl-select__option:hover,
+.dl-select__option:focus-visible,
+.dl-select__option--selected {
+  background: var(--dl-color-accent-subtle);
+  border-color: var(--dl-color-accent);
+  outline: none;
+}
+
+.dl-select__option--disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.dl-select__option strong {
+  font-size: var(--dl-font-size-body);
+  font-weight: var(--dl-font-weight-bold);
+}
+
+.dl-select__option small {
+  color: var(--dl-color-text-muted);
+  font-size: var(--dl-font-size-label);
+}
+
+.dl-select__check {
+  color: var(--dl-color-accent);
+  font-size: 1.2rem;
+  position: absolute;
+  right: var(--dl-space-3);
+  top: var(--dl-space-3);
+}
+
+.dl-select__empty {
+  color: var(--dl-color-text-muted);
+  margin: 0;
+  padding: var(--dl-space-3);
+}
+
+.dl-select__native {
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  width: 1px;
+}
+
+.dl-select--disabled .dl-select__search {
+  cursor: not-allowed;
+}
+
 input[aria-invalid="true"],
 textarea[aria-invalid="true"],
 select[aria-invalid="true"] {
@@ -497,10 +672,13 @@ th {
 .dl-button__spinner,
 .dl-loading-state__spinner {
   animation: dl-spin var(--dl-duration-normal) linear infinite;
+  box-sizing: border-box;
   border: 2px solid currentColor;
   border-right-color: transparent;
   border-radius: var(--dl-radius-full);
+  display: block;
   height: 1rem;
+  transform-origin: center;
   width: 1rem;
 }
 
@@ -508,7 +686,8 @@ th {
   left: 50%;
   position: absolute;
   top: 50%;
-  transform: translate(-50%, -50%);
+  animation-name: dl-spin-button;
+  transform: translate(-50%, -50%) rotate(0deg);
 }
 
 .dl-button--primary {
@@ -1476,7 +1655,13 @@ th {
 
 @keyframes dl-spin {
   to {
-    rotate: 360deg;
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes dl-spin-button {
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
   }
 }
 

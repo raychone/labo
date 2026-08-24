@@ -204,7 +204,7 @@ export function MonthRegistryReportView({
 
         <section className="billing-month-registry__summary" aria-label="Rezumat registru lunar">
           {summaryCards.map((card) => (
-            <div className="billing-month-registry__summary-card" key={card.label}>
+            <div className="dl-kpi billing-month-registry__summary-card" key={card.label}>
               <span>{card.label}</span>
               <strong>{formatMoneyMinor(card.value, registry.currency, "ro-RO")}</strong>
             </div>

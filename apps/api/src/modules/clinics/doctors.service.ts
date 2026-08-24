@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { DOCTOR_RESOURCE_TYPE, DOCTORS_AUDIT_ACTIONS } from "./clinics.constants.js";
+import { resolveCanonicalLegalEntity } from "./legal-entity.js";
 import type { CreateDoctorDto, ListDoctorOptionsQueryDto, ListDoctorsQueryDto, UpdateDoctorDto } from "./dto/doctors.dto.js";
 import {
   type DoctorDetailView,
@@ -62,6 +63,7 @@ export class DoctorsService {
       this.prisma.doctor.findMany({
         include: {
           clinic: true,
+          legalEntity: true,
         },
         orderBy: {
           [query.sortBy]: query.sortDirection,
@@ -85,6 +87,7 @@ export class DoctorsService {
     const doctors = await this.prisma.doctor.findMany({
       include: {
         clinic: true,
+        legalEntity: true,
       },
       orderBy: [
         {
@@ -112,12 +115,17 @@ export class DoctorsService {
   }
 
   public async createDoctor(context: ActorContext, dto: CreateDoctorDto): Promise<DoctorDetailView> {
-    await this.assertClinicCanReceiveDoctor(dto.clinicId);
+    const clinic = await this.getActiveClinic(dto.clinicId);
+    const legalEntity = await resolveCanonicalLegalEntity(this.prisma, dto.legalEntityCode) ?? clinic.legalEntity;
+    if (dto.legalEntityCode && clinic.legalEntity && dto.legalEntityCode !== clinic.legalEntity.code) {
+      throw new BadRequestException("Firma medicului trebuie să fie aceeași cu firma clinicii.");
+    }
     const displayName = this.buildDisplayName(dto.firstName, dto.lastName);
 
     const doctor = await this.prisma.$transaction(async (tx) => {
       const data: Prisma.DoctorUncheckedCreateInput = {
         clinicId: dto.clinicId,
+        ...(legalEntity ? { legalEntityId: legalEntity.id } : {}),
         displayName,
         firstName: dto.firstName,
         lastName: dto.lastName,
@@ -132,6 +140,7 @@ export class DoctorsService {
         data,
         include: {
           clinic: true,
+          legalEntity: true,
         },
       });
 
@@ -156,11 +165,17 @@ export class DoctorsService {
       throw new BadRequestException("Archived doctors must be restored before editing.");
     }
 
-    if (dto.clinicId !== undefined) {
-      await this.assertClinicCanReceiveDoctor(dto.clinicId);
+    const targetClinic = await this.getActiveClinic(dto.clinicId ?? before.clinicId);
+    const requestedEntity = await resolveCanonicalLegalEntity(this.prisma, dto.legalEntityCode);
+    if (requestedEntity && targetClinic.legalEntity && requestedEntity.code !== targetClinic.legalEntity.code) {
+      throw new BadRequestException("Firma medicului trebuie să fie aceeași cu firma clinicii.");
     }
 
     const data = this.toUpdateData(dto, before);
+    if (dto.clinicId !== undefined || dto.legalEntityCode !== undefined) {
+      const resolvedEntityId = (requestedEntity ?? targetClinic.legalEntity)?.id;
+      if (resolvedEntityId) data.legalEntityId = resolvedEntityId;
+    }
     if (Object.keys(data).length <= 1) {
       throw new BadRequestException("No doctor fields were provided.");
     }
@@ -170,6 +185,7 @@ export class DoctorsService {
         data,
         include: {
           clinic: true,
+          legalEntity: true,
         },
         where: {
           id: doctorId,
@@ -211,6 +227,7 @@ export class DoctorsService {
         },
         include: {
           clinic: true,
+          legalEntity: true,
         },
         where: {
           id: doctorId,
@@ -237,7 +254,7 @@ export class DoctorsService {
       return toDoctorDetailView(doctor);
     }
 
-    await this.assertClinicCanReceiveDoctor(doctor.clinicId);
+    await this.getActiveClinic(doctor.clinicId);
 
     const restoredDoctor = await this.prisma.$transaction(async (tx) => {
       const updatedDoctor = await tx.doctor.update({
@@ -250,6 +267,7 @@ export class DoctorsService {
         },
         include: {
           clinic: true,
+          legalEntity: true,
         },
         where: {
           id: doctorId,
@@ -269,10 +287,11 @@ export class DoctorsService {
     return toDoctorDetailView(restoredDoctor);
   }
 
-  private async findDoctorOrThrow(doctorId: string): Promise<Prisma.DoctorGetPayload<{ include: { clinic: true } }>> {
+  private async findDoctorOrThrow(doctorId: string): Promise<Prisma.DoctorGetPayload<{ include: { clinic: true; legalEntity: true } }>> {
     const doctor = await this.prisma.doctor.findUnique({
       include: {
         clinic: true,
+        legalEntity: true,
       },
       where: {
         id: doctorId,
@@ -286,11 +305,9 @@ export class DoctorsService {
     return doctor;
   }
 
-  private async assertClinicCanReceiveDoctor(clinicId: string): Promise<void> {
+  private async getActiveClinic(clinicId: string): Promise<Prisma.ClinicGetPayload<{ include: { legalEntity: true } }>> {
     const clinic = await this.prisma.clinic.findUnique({
-      select: {
-        isActive: true,
-      },
+      include: { legalEntity: true },
       where: {
         id: clinicId,
       },
@@ -303,6 +320,8 @@ export class DoctorsService {
     if (!clinic.isActive) {
       throw new BadRequestException("Doctors cannot be created or restored for archived clinics.");
     }
+
+    return clinic;
   }
 
   private buildDisplayName(firstName: string, lastName: string): string {
@@ -311,7 +330,7 @@ export class DoctorsService {
 
   private toUpdateData(
     dto: UpdateDoctorDto,
-    before: Prisma.DoctorGetPayload<{ include: { clinic: true } }>,
+    before: Prisma.DoctorGetPayload<{ include: { clinic: true; legalEntity: true } }>,
   ): Prisma.DoctorUncheckedUpdateInput {
     const firstName = dto.firstName ?? before.firstName;
     const lastName = dto.lastName ?? before.lastName;
@@ -390,8 +409,8 @@ export class DoctorsService {
   }
 
   private getChangedFields(
-    before: Prisma.DoctorGetPayload<{ include: { clinic: true } }>,
-    after: Prisma.DoctorGetPayload<{ include: { clinic: true } }>,
+    before: Prisma.DoctorGetPayload<{ include: { clinic: true; legalEntity: true } }>,
+    after: Prisma.DoctorGetPayload<{ include: { clinic: true; legalEntity: true } }>,
   ): readonly (typeof DOCTOR_MUTATION_FIELDS)[number][] {
     return DOCTOR_MUTATION_FIELDS.filter((field) => before[field] !== after[field]);
   }

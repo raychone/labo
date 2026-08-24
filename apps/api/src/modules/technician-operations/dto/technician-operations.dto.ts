@@ -3,6 +3,7 @@ import { IsBoolean, IsIn, IsInt, IsISO8601, IsOptional, IsString, Matches, Max, 
 
 import { SORT_DIRECTIONS } from "../../work-types/work-types.constants.js";
 import { MAX_TECHNICIAN_RATE_MINOR } from "../technician-operations.constants.js";
+import { TECHNICIAN_MANEUVER_UNITS } from "@dental-lab/shared";
 
 export const TECHNICIAN_OPERATION_SORT_FIELDS = ["code", "createdAt", "name", "updatedAt"] as const;
 
@@ -96,6 +97,14 @@ export class TechnicianOperationMutationDto {
   @IsInt()
   @Min(0)
   public readonly sortOrder?: number;
+
+  @IsOptional()
+  @IsIn(TECHNICIAN_MANEUVER_UNITS)
+  public readonly pricingUnit?: (typeof TECHNICIAN_MANEUVER_UNITS)[number];
+
+  @IsOptional()
+  @IsBoolean()
+  public readonly confirmPricingUnitChange?: boolean;
 }
 
 export class SetTechnicianRateDto {

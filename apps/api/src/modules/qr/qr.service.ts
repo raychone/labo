@@ -174,6 +174,12 @@ const WORK_DETAIL_INCLUDE = {
     },
   },
   patient: true,
+  items: {
+    include: { teeth: true, workType: true },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    where: { archivedAt: null },
+  },
+  toothConnections: { orderBy: [{ toothA: "asc" }, { toothB: "asc" }] },
   workFormSubmissions: {
     orderBy: {
       createdAt: "desc",

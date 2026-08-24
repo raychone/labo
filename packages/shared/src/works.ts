@@ -3,11 +3,15 @@ import type { DeadlineDashboardSummary, DeadlineFilter } from "./work-deadline-v
 import type { LegalEntityCode } from "./organization-context.js";
 import type { WorkAttachmentSummary } from "./logistics.js";
 import type { WorkWorkflowExecutionView, WorkflowExecutionStatus } from "./workflow-execution.js";
+import type { WorkOrderItemInput } from "./work-order-items.js";
+import type { WorkOrderItemView } from "./work-order-items.js";
+import type { ToothConnectionView } from "./tooth-connections.js";
+import type { UrgencyLevel } from "./postmeeting-contract.js";
 
 export const WORK_STATUSES = ["REGISTERED", "RECEPTIE", "IN_LUCRU", "IN_ASTEPTARE", "FINALIZATA"] as const;
 export const FINAL_WORK_STATUSES = ["RECEPTIE", "IN_LUCRU", "IN_ASTEPTARE", "FINALIZATA"] as const;
 export const WORK_PRIORITIES = ["NORMAL", "URGENT"] as const;
-export const WORK_SORT_FIELDS = ["code", "createdAt", "effectiveDueAt", "priority", "requestedDeliveryDate", "status", "totalPriceMinor", "updatedAt"] as const;
+export const WORK_SORT_FIELDS = ["code", "createdAt", "effectiveDueAt", "priority", "urgency", "requestedDeliveryDate", "status", "totalPriceMinor", "updatedAt"] as const;
 export const WORK_QR_PAYLOAD_PREFIX = "dl-work:" as const;
 export const SCAN_SOURCES = ["camera", "manual"] as const;
 export const WORK_DEADLINE_MODES = ["CALCULATED", "MANUAL", "UNRESOLVED"] as const;
@@ -31,6 +35,28 @@ export type WorkAssignmentEventType = (typeof WORK_ASSIGNMENT_EVENT_TYPES)[numbe
 export type ExecutionSnapshotStatus = (typeof EXECUTION_SNAPSHOT_STATUSES)[number];
 export type WorkCycleReason = (typeof WORK_CYCLE_REASONS)[number];
 export type WorkCycleStatus = (typeof WORK_CYCLE_STATUSES)[number];
+export const PROBE_CYCLE_STATUSES = ["ACTIVE", "COMPLETED"] as const;
+export type ProbeCycleStatus = (typeof PROBE_CYCLE_STATUSES)[number];
+export const WORK_TECHNICAL_READINESS = ["PROBE_READY", "FINAL_READY"] as const;
+export type WorkTechnicalReadiness = (typeof WORK_TECHNICAL_READINESS)[number];
+
+export interface ProbeTypeView {
+  readonly id: string;
+  readonly name: string;
+  readonly sortOrder: number;
+  readonly isArchived: boolean;
+}
+
+export interface ProbeCycleView {
+  readonly id: string;
+  readonly sequence: number;
+  readonly status: ProbeCycleStatus;
+  readonly probeType: ProbeTypeView;
+  readonly probeTypeNameSnapshot: string;
+  readonly openedAt: string;
+  readonly completedAt: string | null;
+  readonly deadlineAt: string;
+}
 
 export interface WorkClinicSummary {
   readonly code: string;
@@ -190,9 +216,17 @@ export interface WorkSummary {
     readonly birthDate?: string | null;
   } | null;
   readonly priority: WorkPriority;
+  readonly urgency?: UrgencyLevel | null;
+  readonly urgencyPercent?: 0 | 25 | 50 | 75 | 100 | null;
+  readonly urgencySurchargeMinor?: number | null;
+  readonly urgencyAdjustedTotalMinor?: number | null;
   readonly quantity: number;
   readonly requestedDeliveryDate: string;
   readonly status: WorkStatus;
+  readonly technicalReadiness?: WorkTechnicalReadiness | null;
+  readonly probeReadyAt?: string | null;
+  readonly probeReceivedAt?: string | null;
+  readonly finalizedAt?: string | null;
   readonly statusChangedAt: string | null;
   readonly waitingStartedAt: string | null;
   readonly completedAt: string | null;
@@ -216,6 +250,10 @@ export interface WorkDetail extends Omit<WorkSummary, "workflow"> {
   readonly version: number;
   readonly workForm: WorkFormSubmissionView | null;
   readonly workflow: WorkWorkflowExecutionView | null;
+  readonly items: readonly WorkOrderItemView[];
+  readonly toothConnections: readonly ToothConnectionView[];
+  readonly activeProbeCycle: ProbeCycleView | null;
+  readonly completedProbeCycles: readonly ProbeCycleView[];
 }
 
 export interface WorkCycleView {
@@ -289,11 +327,17 @@ export interface CreateWorkInput {
   readonly patientReference?: string | null;
   readonly shade?: string | null;
   readonly priority: WorkPriority;
+  readonly urgency?: UrgencyLevel;
   readonly quantity: number;
   readonly requestedDeliveryDate: string;
   readonly manualDueAt?: string | null;
   readonly workFormSubmission?: CreateWorkFormSubmissionInput;
   readonly workTypeId: string;
+  readonly probeTypeId: string;
+  readonly probeDeadlineAt: string;
+  /** B08 aggregate intake: one WorkOrder with independently configured items. */
+  readonly items?: readonly WorkOrderItemInput[];
+  readonly toothConnections?: readonly { readonly toothA: number; readonly toothB: number }[];
 }
 
 export type UpdateWorkInput = Partial<Omit<CreateWorkInput, "workFormSubmission">> & {
@@ -315,6 +359,7 @@ export interface WorksListParams {
   readonly page: number;
   readonly pageSize: number;
   readonly priority?: WorkPriority | undefined;
+  readonly urgency?: UrgencyLevel | undefined;
   readonly search?: string | undefined;
   readonly sortBy: WorkSortField;
   readonly sortDirection: "asc" | "desc";

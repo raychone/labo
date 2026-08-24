@@ -8,6 +8,7 @@ const optionalPhone = z.string().trim().regex(/^[+()0-9 .-]{6,40}$/, "Telefonul 
 const countryCode = z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, "Foloseste cod ISO cu doua litere.");
 
 export const clinicFormSchema = z.object({
+  legalEntityCode: z.enum(["CDT", "NG"]).nullable(),
   addressLine1: nullableTrimmedString(160),
   addressLine2: nullableTrimmedString(160),
   billingAddressLine1: nullableTrimmedString(160),
@@ -39,6 +40,7 @@ export const clinicFormSchema = z.object({
 
 export const doctorFormSchema = z.object({
   clinicId: z.string().min(1, "Alege clinica."),
+  legalEntityCode: z.enum(["CDT", "NG"]).nullable(),
   email: optionalEmail,
   firstName: z.string().trim().min(2, "Prenumele este obligatoriu.").max(80),
   internalNotes: nullableTrimmedString(2000),

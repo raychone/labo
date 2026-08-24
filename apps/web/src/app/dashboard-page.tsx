@@ -274,7 +274,7 @@ function DashboardSection({ action, children, description, title }: { readonly a
 
 function SummaryMetricCard({ label, to, value }: { readonly label: string; readonly to: string; readonly value: number | string | undefined }): ReactNode {
   return (
-    <Link className="dashboard-page__metric dashboard-page__metric--link" to={to}>
+    <Link className="dl-kpi dashboard-page__metric dashboard-page__metric--link" to={to}>
       <span>{label}</span>
       <strong>{value ?? "..."}</strong>
     </Link>
@@ -453,7 +453,6 @@ function ReceptionDashboard({
         </div>
         <div className="dashboard-page__actions">
           {canCreateWork ? <DashboardAction label="Lucrare nouă" to="/works?create=1" variant="primary" /> : null}
-          {canCreateNextCycle ? <Button onClick={() => setReturnModalOpen(true)} variant="outline">Înregistrează revenirea</Button> : null}
           {canScanWork ? <DashboardAction label="Scanează lucrare" to="/scan" /> : null}
         </div>
       </div>

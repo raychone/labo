@@ -1,4 +1,4 @@
-import { formatApplicationTitle } from "@dental-lab/shared";
+import { formatApplicationTitle, type AdultFdiTooth } from "@dental-lab/shared";
 import {
   Accordion,
   Button,
@@ -18,6 +18,7 @@ import {
   FilterBar,
   IconButton,
   LoadingState,
+  KpiCard,
   Modal,
   NumberInput,
   PriorityBadge,
@@ -38,6 +39,7 @@ import {
 import type { CSSProperties, ReactNode } from "react";
 import { useState } from "react";
 
+import { ToothDiagram } from "../../components/dental/tooth-diagram.js";
 import "./style-preview-page.css";
 
 interface ColorTokenPreview {
@@ -203,6 +205,73 @@ function OverlayDemo(): ReactNode {
   );
 }
 
+function DentalDiagramPreview(): ReactNode {
+  const [selectedTeeth, setSelectedTeeth] = useState<AdultFdiTooth[]>([11, 12]);
+  const [connections, setConnections] = useState([
+    { toothA: 11 as AdultFdiTooth, toothB: 12 as AdultFdiTooth },
+    { toothA: 11 as AdultFdiTooth, toothB: 21 as AdultFdiTooth },
+    { toothA: 31 as AdultFdiTooth, toothB: 41 as AdultFdiTooth },
+  ]);
+
+  function toggleTooth(tooth: AdultFdiTooth): void {
+    setSelectedTeeth((current) =>
+      current.includes(tooth) ? current.filter((item) => item !== tooth) : [...current, tooth],
+    );
+  }
+
+  function toggleConnection(connection: { readonly toothA: AdultFdiTooth; readonly toothB: AdultFdiTooth }): void {
+    setConnections((current) => {
+      const exists = current.some(
+        (item) =>
+          (item.toothA === connection.toothA && item.toothB === connection.toothB) ||
+          (item.toothA === connection.toothB && item.toothB === connection.toothA),
+      );
+      return exists
+        ? current.filter(
+            (item) =>
+              !(
+                (item.toothA === connection.toothA && item.toothB === connection.toothB) ||
+                (item.toothA === connection.toothB && item.toothB === connection.toothA)
+              ),
+          )
+        : [...current, connection];
+    });
+  }
+
+  return (
+    <section className="style-preview__panel dl-stack" aria-labelledby="dental-diagram-title">
+      <div className="style-preview__dental-heading">
+        <div>
+          <p className="style-preview__eyebrow">B06 / TOOTH-DIAGRAM-001</p>
+          <h2 id="dental-diagram-title">Previzualizare diagramă dentară</h2>
+        </div>
+        <p className="style-preview__dental-note">
+          Redimensionează fereastra pentru a verifica desktop, tabletă și mobil. Pe mobil și
+          tabletă, arcadele se încadrează în card, iar fiecare dinte și bulină rămân vizibile.
+        </p>
+      </div>
+      <div className="style-preview__dental-frame">
+        <ToothDiagram
+          configuredTeeth={[21, 41]}
+          connections={connections}
+          disabledTeeth={[38]}
+          focusedTooth={21}
+          mode="edit"
+          onConnectionToggle={toggleConnection}
+          onShortcut={(teeth) => setSelectedTeeth([...teeth])}
+          onToothToggle={toggleTooth}
+          semanticScope="BOTH_ARCHES"
+          selectedTeeth={selectedTeeth}
+        />
+      </div>
+      <p className="style-preview__dental-state">
+        Selectate: {selectedTeeth.length ? selectedTeeth.join(", ") : "niciun dinte"} · Conexiuni active: {connections.length} ·
+        Spațiul 11–21 și 41–31 este inclus.
+      </p>
+    </section>
+  );
+}
+
 export function StylePreviewPage(): ReactNode {
   return (
     <ToastProvider>
@@ -220,6 +289,8 @@ export function StylePreviewPage(): ReactNode {
           </header>
 
           <div className="dl-stack" style={createStackGapStyle("--dl-space-8")}>
+            <DentalDiagramPreview />
+
             <section className="style-preview__panel dl-stack" aria-labelledby="colors-title">
               <h2 id="colors-title">Semantic Colors</h2>
               <div className="dl-grid">{colorTokens.map(renderColorSwatch)}</div>
@@ -243,6 +314,17 @@ export function StylePreviewPage(): ReactNode {
               </div>
             </section>
 
+            <section className="style-preview__panel dl-stack" aria-labelledby="kpi-title">
+              <h2 id="kpi-title">KPI</h2>
+              <div className="style-preview__kpi-grid">
+                <KpiCard className="style-preview__status-kpi" title="În lucru" value="38" />
+                <KpiCard description="față de ieri" title="Lucrări active" value="24" />
+                <KpiCard description="înregistrări" title="Facturi achitate" value="128" />
+                <KpiCard description="termen apropiat" title="De livrat azi" value="7" />
+                <KpiCard description="luna curentă" title="Venituri" value="42.580 lei" />
+              </div>
+            </section>
+
             <section className="style-preview__panel dl-stack" aria-labelledby="forms-title">
               <h2 id="forms-title">Form Controls</h2>
               <div className="style-preview__form-grid">
@@ -251,12 +333,16 @@ export function StylePreviewPage(): ReactNode {
                 <NumberInput label="Number input" />
                 <DateInput label="Date input" />
                 <Select
-                  label="Styled select"
+                  className="style-preview__select"
+                  hint="Alege starea lucrării"
+                  label="Stare lucrare"
                   options={[
-                    { label: "Planned", value: "planned" },
-                    { label: "Production", value: "production" },
+                    { label: "În așteptare", secondary: "Lucrarea nu a început", value: "planned" },
+                    { label: "În lucru", secondary: "Se lucrează la caz", value: "production" },
+                    { label: "Gata pentru livrare", secondary: "Poate fi trimisă către clinică", value: "ready" },
+                    { label: "Finalizată", secondary: "Cazul este închis tehnic", value: "completed" },
                   ]}
-                  placeholder="Choose status"
+                  placeholder="Selectează starea"
                 />
                 <Textarea label="Textarea" placeholder="Write a generic note" />
               </div>

@@ -1,0 +1,92 @@
+.multi-item-work-editor {
+  display: grid;
+  gap: var(--dl-space-4);
+  min-width: 0;
+  width: 100%;
+}
+
+.multi-item-work-editor__diagram {
+  min-width: 0;
+}
+
+.multi-item-work-editor__fields {
+  min-width: 0;
+}
+
+.multi-item-work-editor__actions,
+.multi-item-work-editor__item > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-2);
+}
+
+.multi-item-work-editor__list {
+  display: grid;
+  gap: var(--dl-space-2);
+}
+
+.multi-item-work-editor__item {
+  align-items: center;
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  display: flex;
+  gap: var(--dl-space-3);
+  justify-content: space-between;
+  min-width: 0;
+  padding: var(--dl-space-3);
+}
+
+.multi-item-work-editor__item > div:first-child {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.multi-item-work-editor__item span,
+.multi-item-work-editor__empty,
+.multi-item-work-editor__error {
+  color: var(--dl-color-text-secondary);
+  font-size: var(--dl-font-size-label);
+  margin: 0;
+}
+
+.multi-item-work-editor__error {
+  color: var(--dl-color-danger, #b42318);
+}
+
+@media (max-width: 47.99rem) {
+  .multi-item-work-editor__item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+/* Keep the clinical selector broad on tablets and ordinary desktop widths.
+   The side-by-side form is only useful once the modal has enough room for a
+   full practical arch track and a readable item editor. */
+@media (min-width: 100rem) {
+  .multi-item-work-editor {
+    grid-template-columns: minmax(0, 1fr) minmax(24rem, 30rem);
+    align-items: start;
+  }
+
+  .multi-item-work-editor__diagram {
+    grid-column: 1;
+    grid-row: 1 / span 4;
+  }
+
+  .multi-item-work-editor__fields {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .multi-item-work-editor__error,
+  .multi-item-work-editor__actions {
+    grid-column: 2;
+  }
+
+  .multi-item-work-editor__list,
+  .multi-item-work-editor__empty {
+    grid-column: 1 / -1;
+  }
+}

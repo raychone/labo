@@ -44,6 +44,10 @@ export interface LogisticsCenterItem {
   readonly logisticsMarker: LogisticsMarker | null;
   readonly logisticsNote: string | null;
   readonly operationalStatus: "RECEPTIE" | "IN_LUCRU" | "IN_ASTEPTARE" | "FINALIZATA";
+  readonly technicalReadiness: "PROBE_READY" | "FINAL_READY" | null;
+  readonly probeReadyAt: string | null;
+  readonly probeReceivedAt: string | null;
+  readonly finalizedAt: string | null;
   readonly patientName: string;
   readonly patientReference: string | null;
   readonly preparationGroup: DeliveryPreparationGroupSummary | null;
@@ -335,6 +339,10 @@ export function toLogisticsCenterItem(work: LogisticsWorkRecord, actionContext: 
     logisticsMarker: work.logisticsMarker,
     logisticsNote: work.logisticsNote,
     operationalStatus: work.status === "REGISTERED" ? "RECEPTIE" : work.status,
+    technicalReadiness: work.technicalReadiness,
+    probeReadyAt: work.probeReadyAt?.toISOString() ?? null,
+    probeReceivedAt: work.probeReceivedAt?.toISOString() ?? null,
+    finalizedAt: work.finalizedAt?.toISOString() ?? null,
     patientName: work.patientName,
     patientReference: work.patientReference,
     technician: work.claimedBy ? { name: work.claimedBy.displayName, preferredColor: work.claimedBy.preferredColor } : null,

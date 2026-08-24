@@ -24,6 +24,7 @@ import {
   CardTitle,
   EmptyState,
   ErrorState,
+  KpiCard,
   LoadingState,
   Select,
   TextInput,
@@ -533,10 +534,12 @@ export function StatusTvPage(): ReactNode {
 
         <div className="status-tv-page__summary">
           {summaryCounters.map((counter) => (
-            <div className="status-tv-page__summary-card" key={counter.tab}>
-              <span>{counter.label}</span>
-              <strong>{counter.count}</strong>
-            </div>
+            <KpiCard
+              className="dl-kpi status-tv-page__summary-card"
+              key={counter.tab}
+              title={counter.label}
+              value={counter.count}
+            />
           ))}
         </div>
 

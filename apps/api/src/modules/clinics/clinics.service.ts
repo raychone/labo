@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { CLINIC_RESOURCE_TYPE, CLINICS_AUDIT_ACTIONS } from "./clinics.constants.js";
+import { resolveCanonicalLegalEntity } from "./legal-entity.js";
 import type { CreateClinicDto, ListClinicsQueryDto, UpdateClinicDto } from "./dto/clinics.dto.js";
 import {
   type ClinicDetailView,
@@ -81,6 +82,7 @@ export class ClinicsService {
     const [total, clinics] = await this.prisma.$transaction([
       this.prisma.clinic.count({ where }),
       this.prisma.clinic.findMany({
+        include: { legalEntity: true },
         orderBy: {
           [query.sortBy]: query.sortDirection,
         },
@@ -101,6 +103,7 @@ export class ClinicsService {
 
   public async listClinicOptions(): Promise<readonly ClinicOptionView[]> {
     const clinics = await this.prisma.clinic.findMany({
+      include: { legalEntity: true },
       orderBy: {
         name: "asc",
       },
@@ -120,10 +123,13 @@ export class ClinicsService {
   public async createClinic(context: ActorContext, dto: CreateClinicDto): Promise<ClinicDetailView> {
     const clinic = await this.prisma.$transaction(async (tx) => {
       const code = await this.generateClinicCode(tx);
+      const legalEntity = await resolveCanonicalLegalEntity(tx, dto.legalEntityCode);
       const createdClinic = await tx.clinic.create({
         data: {
           ...this.toCreateData(dto, context.actorUserId, code),
+          ...(legalEntity ? { legalEntityId: legalEntity.id } : {}),
         },
+        include: { legalEntity: true },
       });
 
       await this.recordAudit(tx, {
@@ -147,7 +153,9 @@ export class ClinicsService {
       throw new BadRequestException("Archived clinics must be restored before editing.");
     }
 
+    const legalEntity = dto.legalEntityCode ? await resolveCanonicalLegalEntity(this.prisma, dto.legalEntityCode) : null;
     const data = this.toUpdateData(dto, context.actorUserId);
+    if (dto.legalEntityCode && legalEntity) data.legalEntityId = legalEntity.id;
     if (Object.keys(data).length <= 1) {
       throw new BadRequestException("No clinic fields were provided.");
     }
@@ -158,6 +166,7 @@ export class ClinicsService {
         where: {
           id: clinicId,
         },
+        include: { legalEntity: true },
       });
       const changedFields = this.getChangedFields(before, updatedClinic);
 
@@ -198,6 +207,7 @@ export class ClinicsService {
         where: {
           id: clinicId,
         },
+        include: { legalEntity: true },
       });
 
       await this.recordAudit(tx, {
@@ -249,8 +259,9 @@ export class ClinicsService {
     return toClinicDetailView(restoredClinic);
   }
 
-  private async findClinicOrThrow(clinicId: string): Promise<Prisma.ClinicGetPayload<object>> {
+  private async findClinicOrThrow(clinicId: string): Promise<Prisma.ClinicGetPayload<{ include: { legalEntity: true } }>> {
     const clinic = await this.prisma.clinic.findUnique({
+      include: { legalEntity: true },
       where: {
         id: clinicId,
       },

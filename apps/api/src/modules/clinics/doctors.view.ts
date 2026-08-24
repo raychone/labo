@@ -3,13 +3,15 @@ import type { Prisma } from "@prisma/client";
 export type DoctorRecord = Prisma.DoctorGetPayload<{
   include: {
     clinic: true;
+    legalEntity: true;
   };
-}>;
+}> & { readonly legalEntity?: { readonly code: string; readonly displayName: string } | null };
 
 export interface DoctorOptionView {
   readonly clinicId: string;
   readonly displayName: string;
   readonly id: string;
+  readonly legalEntity: { readonly code: "CDT" | "NG"; readonly displayName: string } | null;
 }
 
 export interface DoctorClinicSummaryView {
@@ -44,11 +46,12 @@ export interface PaginatedDoctorsView {
   readonly total: number;
 }
 
-export function toDoctorOptionView(doctor: Pick<DoctorRecord, "clinicId" | "displayName" | "id">): DoctorOptionView {
+export function toDoctorOptionView(doctor: Pick<DoctorRecord, "clinicId" | "displayName" | "id"> & Partial<Pick<DoctorRecord, "legalEntity">>): DoctorOptionView {
   return {
     clinicId: doctor.clinicId,
     displayName: doctor.displayName,
     id: doctor.id,
+    legalEntity: doctor.legalEntity ? { code: doctor.legalEntity.code as "CDT" | "NG", displayName: doctor.legalEntity.displayName } : null,
   };
 }
 
@@ -60,6 +63,7 @@ export function toDoctorSummaryView(doctor: DoctorRecord): DoctorSummaryView {
       id: doctor.clinic.id,
       name: doctor.clinic.name,
     },
+    legalEntity: doctor.legalEntity ? { code: doctor.legalEntity.code as "CDT" | "NG", displayName: doctor.legalEntity.displayName } : null,
     createdAt: doctor.createdAt.toISOString(),
     email: doctor.email,
     firstName: doctor.firstName,

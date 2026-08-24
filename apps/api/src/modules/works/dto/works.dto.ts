@@ -1,8 +1,20 @@
 import { Transform, Type } from "class-transformer";
-import { IsBoolean, IsIn, IsInt, IsISO8601, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
+import { IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
 
 import { FINAL_WORK_STATUSES, MAX_WORK_ORDER_QUANTITY, SORT_DIRECTIONS, WORK_CLAIM_STATUSES, WORK_CYCLE_REASONS, WORK_ORDER_SORT_FIELDS, WORK_PRIORITIES, WORK_STATUSES } from "../works.constants.js";
 import { DEADLINE_FILTERS } from "../work-deadline-visual.js";
+import { CreateWorkOrderItemDto } from "./work-order-items.dto.js";
+import { URGENCY_LEVELS } from "@dental-lab/shared";
+
+class CreateWorkToothConnectionDto {
+  @Type(() => Number)
+  @IsInt()
+  public readonly toothA!: number;
+
+  @Type(() => Number)
+  @IsInt()
+  public readonly toothB!: number;
+}
 
 function trimOptionalString(value: unknown): string | null | undefined {
   if (value === undefined) {
@@ -67,6 +79,10 @@ export class ListWorksQueryDto {
   @IsOptional()
   @IsIn(WORK_PRIORITIES)
   public readonly priority?: (typeof WORK_PRIORITIES)[number];
+
+  @IsOptional()
+  @IsIn(URGENCY_LEVELS)
+  public readonly urgency?: (typeof URGENCY_LEVELS)[number];
 
   @IsOptional()
   @IsISO8601({ strict: true })
@@ -249,6 +265,10 @@ export class WorkMutationDto {
   public readonly patientReference?: string | null;
 
   @IsOptional()
+  @IsIn(URGENCY_LEVELS)
+  public readonly urgency?: (typeof URGENCY_LEVELS)[number];
+
+  @IsOptional()
   @Transform(({ value }) => trimOptionalString(value))
   @IsString()
   @MaxLength(80)
@@ -347,7 +367,7 @@ export class CreateWorkDto extends WorkMutationDto {
 
   @Transform(({ value }) => trimRequiredString(value))
   @IsString()
-  public declare readonly workTypeId: string;
+  public declare readonly workTypeId?: string;
 
   @Transform(({ value }) => trimRequiredString(value))
   @IsString()
@@ -362,8 +382,21 @@ export class CreateWorkDto extends WorkMutationDto {
   @IsIn(WORK_PRIORITIES)
   public override readonly priority: (typeof WORK_PRIORITIES)[number] = "NORMAL";
 
+  @IsIn(URGENCY_LEVELS)
+  public override readonly urgency?: (typeof URGENCY_LEVELS)[number] = "NORMAL";
+
   @IsISO8601({ strict: true })
   public declare readonly requestedDeliveryDate: string;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  public readonly probeTypeId?: string | null;
+
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}T.+(?:Z|[+-]\d{2}:\d{2})$/)
+  public readonly probeDeadlineAt?: string;
 
   @IsOptional()
   @IsISO8601({ strict: true })
@@ -385,6 +418,18 @@ export class CreateWorkDto extends WorkMutationDto {
   @IsInt()
   @Min(1)
   public readonly expectedWorkflowTemplateVersion?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateWorkOrderItemDto)
+  public readonly items?: CreateWorkOrderItemDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateWorkToothConnectionDto)
+  public readonly toothConnections?: CreateWorkToothConnectionDto[];
 }
 
 export class UpdateWorkDto extends WorkMutationDto {

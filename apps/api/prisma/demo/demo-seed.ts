@@ -36,6 +36,7 @@ export async function seedDemoData(prisma: PrismaClient, now = new Date()): Prom
 
   await resetDemoData(prisma);
   await seedDemoUsers(prisma, dataset, passwordHash);
+  await seedDemoProbeTypes(prisma, dataset);
   await seedDemoSettings(prisma);
   await seedDemoClinics(prisma, dataset);
   await seedDemoDoctors(prisma, dataset);
@@ -54,6 +55,14 @@ export async function seedDemoData(prisma: PrismaClient, now = new Date()): Prom
   await seedDemoPickupsAndRoutes(prisma, now);
 
   return dataset;
+}
+
+async function seedDemoProbeTypes(prisma: PrismaClient, dataset: DemoDataset): Promise<void> {
+  const manager = dataset.users.find((user) => user.roleKey === "MANAGER");
+  if (!manager) return;
+  for (const [sortOrder, name] of (["Lingură", "Biscuit", "Ocluzie", "Probă estetică"] as const).entries()) {
+    await prisma.probeType.create({ data: { createdByUserId: manager.id, id: `demo_probe_type_${sortOrder + 1}`, name, sortOrder } });
+  }
 }
 
 export function getDemoWorkflowTemplateCount(): number {
@@ -668,6 +677,10 @@ async function seedDemoUsers(prisma: PrismaClient, dataset: DemoDataset, passwor
 }
 
 async function seedDemoClinics(prisma: PrismaClient, dataset: DemoDataset): Promise<void> {
+  const [cdt, ng] = await Promise.all([
+    prisma.legalEntity.findUniqueOrThrow({ select: { id: true }, where: { code: "CDT" } }),
+    prisma.legalEntity.findUniqueOrThrow({ select: { id: true }, where: { code: "NG" } }),
+  ]);
   for (const clinic of dataset.clinics) {
     await prisma.clinic.create({
       data: {
@@ -692,6 +705,7 @@ async function seedDemoClinics(prisma: PrismaClient, dataset: DemoDataset): Prom
         id: clinic.id,
         internalNotes: "Clinica fictiva pentru prezentare demo.",
         isActive: clinic.isActive,
+        legalEntityId: clinic.id === "demo_clinic_point" ? ng.id : cdt.id,
         legalName: clinic.legalName,
         name: clinic.name,
         phone: "+40000000000",
@@ -705,6 +719,8 @@ async function seedDemoClinics(prisma: PrismaClient, dataset: DemoDataset): Prom
 }
 
 async function seedDemoDoctors(prisma: PrismaClient, dataset: DemoDataset): Promise<void> {
+  const clinics = await prisma.clinic.findMany({ select: { id: true, legalEntityId: true } });
+  const clinicLegalEntity = new Map(clinics.map((clinic) => [clinic.id, clinic.legalEntityId]));
   for (const doctor of dataset.doctors) {
     await prisma.doctor.create({
       data: {
@@ -715,6 +731,7 @@ async function seedDemoDoctors(prisma: PrismaClient, dataset: DemoDataset): Prom
         id: doctor.id,
         internalNotes: "Medic fictiv pentru demo.",
         isActive: doctor.isActive,
+        legalEntityId: clinicLegalEntity.get(doctor.clinicId) ?? null,
         lastName: doctor.lastName,
         phone: doctor.phone,
         professionalCode: doctor.professionalCode,
@@ -1231,27 +1248,27 @@ async function seedDemoOptionalIntakeWorks(prisma: PrismaClient, now: Date): Pro
 
 async function seedDemoTechnicianOperations(prisma: PrismaClient, now: Date): Promise<void> {
   const operations = [
-    { code: "TF", id: "demo_operation_tf", name: "TF", sortOrder: 1 },
-    { code: "SF", id: "demo_operation_sf", name: "SF", sortOrder: 2 },
-    { code: "PLACARE_CERAMICA", id: "demo_operation_placare", name: "Placare ceramica", sortOrder: 3 },
-    { code: "GLAZURA", id: "demo_operation_glazura", name: "Glazura", sortOrder: 4 },
-    { code: "MIYO", id: "demo_operation_miyo", name: "Miyo", sortOrder: 5 },
-    { code: "RCR", id: "demo_operation_rcr", name: "RCR", sortOrder: 6 },
-    { code: "LINGURA_IMPLANT", id: "demo_operation_lingura_implant", name: "Lingura implant", sortOrder: 7 },
-    { code: "GLAZURARE", id: "demo_operation_glazurare", name: "Glazurare", sortOrder: 8 },
-    { code: "SCANARE", id: "demo_operation_scanare", name: "Scanare", sortOrder: 9 },
-    { code: "DESIGN", id: "demo_operation_design", name: "Design", sortOrder: 10 },
-    { code: "PRELUCRARE_ZR", id: "demo_operation_prelucrare_zr", name: "Prelucrare zr", sortOrder: 11 },
-    { code: "FREZARE_ZR", id: "demo_operation_frezare_zr", name: "Frezare zr", sortOrder: 12 },
-    { code: "PROTEZA_SCHELETATA", id: "demo_operation_scheletata", name: "Proteza scheletata", sortOrder: 13 },
-    { code: "IBAR", id: "demo_operation_ibar", name: "IBar", sortOrder: 14 },
-    { code: "PF_TCS_VERTEX", id: "demo_operation_pf_tcs", name: "PF TCS/Vertex", sortOrder: 15 },
-    { code: "PTA", id: "demo_operation_pta", name: "PTA", sortOrder: 16 },
-    { code: "PPA", id: "demo_operation_ppa", name: "PPA", sortOrder: 17 },
-    { code: "REPARATIE_PROTEZA", id: "demo_operation_reparatie", name: "Reparatie proteza", sortOrder: 18 },
-    { code: "BARA_PLASA_PROTEZA", id: "demo_operation_bara_plasa", name: "BAra/plasa proteza", sortOrder: 19 },
-    { code: "KEMENY", id: "demo_operation_kemeny", name: "Kemeny", sortOrder: 20 },
-    { code: "GUTIERA", id: "demo_operation_gutiera", name: "Gutiera", sortOrder: 21 },
+    { code: "TF", id: "demo_operation_tf", name: "TF", sortOrder: 1, pricingUnit: "PER_CASE" },
+    { code: "SF", id: "demo_operation_sf", name: "SF", sortOrder: 2, pricingUnit: "PER_CASE" },
+    { code: "PLACARE_CERAMICA", id: "demo_operation_placare", name: "Placare ceramica", sortOrder: 3, pricingUnit: "PER_ELEMENT" },
+    { code: "GLAZURA", id: "demo_operation_glazura", name: "Glazura", sortOrder: 4, pricingUnit: "PER_ELEMENT" },
+    { code: "MIYO", id: "demo_operation_miyo", name: "Miyo", sortOrder: 5, pricingUnit: "PER_ELEMENT" },
+    { code: "RCR", id: "demo_operation_rcr", name: "RCR", sortOrder: 6, pricingUnit: "PER_UNIT" },
+    { code: "LINGURA_IMPLANT", id: "demo_operation_lingura_implant", name: "Lingura implant", sortOrder: 7, pricingUnit: "PER_UNIT" },
+    { code: "GLAZURARE", id: "demo_operation_glazurare", name: "Glazurare", sortOrder: 8, pricingUnit: "PER_ELEMENT" },
+    { code: "SCANARE", id: "demo_operation_scanare", name: "Scanare", sortOrder: 9, pricingUnit: "PER_ARCH" },
+    { code: "DESIGN", id: "demo_operation_design", name: "Design", sortOrder: 10, pricingUnit: "PER_CASE" },
+    { code: "PRELUCRARE_ZR", id: "demo_operation_prelucrare_zr", name: "Prelucrare zr", sortOrder: 11, pricingUnit: "PER_UNIT" },
+    { code: "FREZARE_ZR", id: "demo_operation_frezare_zr", name: "Frezare zr", sortOrder: 12, pricingUnit: "PER_UNIT" },
+    { code: "PROTEZA_SCHELETATA", id: "demo_operation_scheletata", name: "Proteza scheletata", sortOrder: 13, pricingUnit: "PER_CASE" },
+    { code: "IBAR", id: "demo_operation_ibar", name: "IBar", sortOrder: 14, pricingUnit: "PER_UNIT" },
+    { code: "PF_TCS_VERTEX", id: "demo_operation_pf_tcs", name: "PF TCS/Vertex", sortOrder: 15, pricingUnit: "PER_CASE" },
+    { code: "PTA", id: "demo_operation_pta", name: "PTA", sortOrder: 16, pricingUnit: "PER_CASE" },
+    { code: "PPA", id: "demo_operation_ppa", name: "PPA", sortOrder: 17, pricingUnit: "PER_CASE" },
+    { code: "REPARATIE_PROTEZA", id: "demo_operation_reparatie", name: "Reparatie proteza", sortOrder: 18, pricingUnit: "PER_UNIT" },
+    { code: "BARA_PLASA_PROTEZA", id: "demo_operation_bara_plasa", name: "BAra/plasa proteza", sortOrder: 19, pricingUnit: "PER_UNIT" },
+    { code: "KEMENY", id: "demo_operation_kemeny", name: "Kemeny", sortOrder: 20, pricingUnit: "PER_CASE" },
+    { code: "GUTIERA", id: "demo_operation_gutiera", name: "Gutiera", sortOrder: 21, pricingUnit: "PER_ARCH" },
   ] as const;
   await prisma.technicianOperation.updateMany({
     data: { isActive: false, sortOrder: 999 },
@@ -1265,6 +1282,7 @@ async function seedDemoTechnicianOperations(prisma: PrismaClient, now: Date): Pr
         description: "Manoperă demonstrativă pentru câștiguri.",
         id: operation.id,
         name: operation.name,
+        pricingUnit: operation.pricingUnit,
         sortOrder: "sortOrder" in operation ? operation.sortOrder : 0,
         updatedByUserId: "demo_user_manager",
       },
@@ -1273,6 +1291,7 @@ async function seedDemoTechnicianOperations(prisma: PrismaClient, now: Date): Pr
         description: "Manoperă demonstrativă pentru câștiguri.",
         isActive: true,
         name: operation.name,
+        pricingUnit: operation.pricingUnit,
         sortOrder: operation.sortOrder,
         updatedByUserId: "demo_user_manager",
       },

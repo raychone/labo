@@ -1152,7 +1152,7 @@ function OverviewCards({
     <section className="billing-page__cards" aria-label="Indicatori facturare">
       {cards.map((card) => (
           <button
-            className="billing-page__kpi-card"
+            className="dl-kpi billing-page__kpi-card"
             key={card.label}
             onClick={() => onNavigate(card.tab, "filter" in card ? card.filter : undefined)}
             type="button"

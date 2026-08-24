@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, Inject, Param, Patch, Post, Query, Req, Res, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Delete, ForbiddenException, Get, Inject, Optional, Param, Patch, Post, Query, Req, Res, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FilesInterceptor } from "@nestjs/platform-express";
 import type { Response } from "express";
 import type { Request } from "express";
@@ -32,7 +32,17 @@ import {
   UpsertRealLabSheetDto,
   WorkDeadlinePreviewDto,
 } from "./dto/works.dto.js";
+import { CreateProbeTypeDto, UpdateProbeTypeDto } from "./dto/probe-types.dto.js";
+import { CreateWorkOrderItemDto, UpdateWorkOrderItemDto } from "./dto/work-order-items.dto.js";
+import { UpdateWorkOrderCompositionDto } from "./dto/work-order-composition.dto.js";
 import { WorksService } from "./works.service.js";
+import { WorkItemsService } from "./work-items.service.js";
+import { LegacyCompatibilityService } from "./legacy-compatibility.service.js";
+import { ToothConnectionsService } from "./tooth-connections.service.js";
+import { CreateToothConnectionDto } from "./dto/tooth-connections.dto.js";
+import { ProbeTypesService } from "./probe-types.service.js";
+import { ProbeCyclesService } from "./probe-cycles.service.js";
+import { SelectProbeTypeDto, UpdateProbeDeadlineDto } from "./dto/probe-cycles.dto.js";
 import { LOGISTICS_ATTACHMENT_LIMITS } from "../logistics/logistics.constants.js";
 import type { UploadedAttachmentFile } from "../logistics/logistics.service.js";
 
@@ -42,8 +52,70 @@ import type { UploadedAttachmentFile } from "../logistics/logistics.service.js";
 export class WorksController {
   public constructor(
     @Inject(AuthorizationService) private readonly authorizationService: AuthorizationService,
+    @Inject(LegacyCompatibilityService) private readonly legacyCompatibilityService: LegacyCompatibilityService,
+    @Inject(ToothConnectionsService) private readonly toothConnectionsService: ToothConnectionsService,
+    @Inject(WorkItemsService) private readonly workItemsService: WorkItemsService,
     @Inject(WorksService) private readonly worksService: WorksService,
+    @Optional() @Inject(ProbeTypesService) private readonly probeTypesService: ProbeTypesService,
+    @Optional() @Inject(ProbeCyclesService) private readonly probeCyclesService: ProbeCyclesService,
   ) {}
+
+  @Get("probe-types")
+  @RequirePermission("probe_types.read", "ALL")
+  public listProbeTypes(@CurrentUser() actor: AuthenticatedUser, @Query("includeArchived") includeArchived?: string) {
+    return this.probeTypesService.list(actor.id, includeArchived === "true");
+  }
+
+  @Post("probe-types")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("probe_types.manage", "ALL")
+  public createProbeType(@CurrentUser() actor: AuthenticatedUser, @Body() dto: CreateProbeTypeDto) {
+    return this.probeTypesService.create(actor.id, dto);
+  }
+
+  @Patch("probe-types/:id")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("probe_types.manage", "ALL")
+  public updateProbeType(@CurrentUser() actor: AuthenticatedUser, @Param("id") id: string, @Body() dto: UpdateProbeTypeDto) {
+    return this.probeTypesService.update(actor.id, id, dto);
+  }
+
+  @Patch(":id/probe-cycles/:cycleId/probe-type")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("cycles.probe_type.select", "ASSIGNED")
+  public selectProbeType(@Param("id") workOrderId: string, @Param("cycleId") cycleId: string, @Body() dto: SelectProbeTypeDto, @CurrentUser() actor: AuthenticatedUser, @CurrentLegalEntity() legalEntity: LegalEntityContext, @Req() request: Request) {
+    return this.probeCyclesService.selectProbeType({ actorUserId: actor.id, cycleId, dto, legalEntity, requestMetadata: getRequestMetadata(request), workOrderId });
+  }
+
+  @Patch(":id/probe-cycles/:cycleId/deadline")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("works.deadline.current.update", "ALL")
+  public updateProbeDeadline(@Param("id") workOrderId: string, @Param("cycleId") cycleId: string, @Body() dto: UpdateProbeDeadlineDto, @CurrentUser() actor: AuthenticatedUser, @CurrentLegalEntity() legalEntity: LegalEntityContext, @Req() request: Request) {
+    return this.probeCyclesService.updateActiveDeadline({ actorUserId: actor.id, cycleId, deadlineAt: dto.deadlineAt, legalEntity, requestMetadata: getRequestMetadata(request), workOrderId });
+  }
+
+  @Post(":id/probe-ready")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("works.change_status", "OWN_STAGE")
+  public async markProbeReady(@Param("id") workOrderId: string, @CurrentUser() actor: AuthenticatedUser, @CurrentLegalEntity() legalEntity: LegalEntityContext, @Req() request: Request) {
+    await this.probeCyclesService.markProbeReady({ actorUserId: actor.id, legalEntity, requestMetadata: getRequestMetadata(request), workOrderId });
+    return { probeReady: true };
+  }
+
+  @Post(":id/finalize")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("works.change_status", "OWN_STAGE")
+  public async finalizeWork(@Param("id") workOrderId: string, @CurrentUser() actor: AuthenticatedUser, @CurrentLegalEntity() legalEntity: LegalEntityContext, @Req() request: Request) {
+    await this.probeCyclesService.finalizeWork({ actorUserId: actor.id, legalEntity, requestMetadata: getRequestMetadata(request), workOrderId });
+    return { finalized: true };
+  }
+
+  @Post(":id/probe-cycles/receive")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("cycles.create_next", "ALL")
+  public receiveProbe(@Param("id") workOrderId: string, @Body() dto: import("./dto/probe-cycles.dto.js").ReceiveProbeDto, @CurrentUser() actor: AuthenticatedUser, @CurrentLegalEntity() legalEntity: LegalEntityContext, @Req() request: Request) {
+    return this.probeCyclesService.createNextActiveAfterReception({ actorUserId: actor.id, deadlineAt: dto.deadlineAt, legalEntity, probeTypeId: dto.probeTypeId, requestMetadata: getRequestMetadata(request), returnedAfterCompletedCycle: true, workOrderId });
+  }
 
   @Get()
   public async listWorks(@CurrentUser() actor: AuthenticatedUser, @Query() query: ListWorksQueryDto) {
@@ -67,6 +139,104 @@ export class WorksController {
   @RequirePermission("works.create", "ALL")
   public listWorkTypeFormOptions() {
     return this.worksService.listWorkTypeFormOptions();
+  }
+
+  @Get(":id/items")
+  public listWorkOrderItems(@CurrentUser() actor: AuthenticatedUser, @CurrentLegalEntity() legalEntity: LegalEntityContext, @Param("id") workOrderId: string) {
+    return this.workItemsService.list(actor.id, workOrderId, legalEntity);
+  }
+
+  @Patch(":id/composition")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("works.update", "ALL")
+  public updateWorkOrderComposition(
+    @Param("id") workOrderId: string,
+    @Body() dto: UpdateWorkOrderCompositionDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentLegalEntity() legalEntity: LegalEntityContext,
+    @Req() request: Request,
+  ) {
+    return this.workItemsService.updateComposition({ actorUserId: actor.id, dto, legalEntity, requestMetadata: getRequestMetadata(request), workOrderId });
+  }
+
+  @Get(":id/compatibility")
+  public getLegacyCompatibility(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentLegalEntity() legalEntity: LegalEntityContext,
+    @Param("id") workOrderId: string,
+  ) {
+    return this.legacyCompatibilityService.getComposition(actor.id, workOrderId, legalEntity);
+  }
+
+  @Get(":id/tooth-connections")
+  public listToothConnections(@CurrentUser() actor: AuthenticatedUser, @CurrentLegalEntity() legalEntity: LegalEntityContext, @Param("id") workOrderId: string) {
+    return this.toothConnectionsService.list(actor.id, workOrderId, legalEntity);
+  }
+
+  @Post(":id/tooth-connections")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("works.connections.manage", "ALL")
+  public createToothConnection(
+    @Param("id") workOrderId: string,
+    @Body() dto: CreateToothConnectionDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentLegalEntity() legalEntity: LegalEntityContext,
+    @Req() request: Request,
+  ) {
+    return this.toothConnectionsService.create({ actorUserId: actor.id, dto, legalEntity, requestMetadata: getRequestMetadata(request), workOrderId });
+  }
+
+  @Delete(":id/tooth-connections/:connectionId")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("works.connections.manage", "ALL")
+  public removeToothConnection(
+    @Param("id") workOrderId: string,
+    @Param("connectionId") connectionId: string,
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentLegalEntity() legalEntity: LegalEntityContext,
+    @Req() request: Request,
+  ) {
+    return this.toothConnectionsService.remove({ actorUserId: actor.id, connectionId, legalEntity, requestMetadata: getRequestMetadata(request), workOrderId });
+  }
+
+  @Post(":id/items")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("works.item.create", "ALL")
+  public createWorkOrderItem(
+    @Param("id") workOrderId: string,
+    @Body() dto: CreateWorkOrderItemDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentLegalEntity() legalEntity: LegalEntityContext,
+    @Req() request: Request,
+  ) {
+    return this.workItemsService.create({ actorUserId: actor.id, dto, legalEntity, requestMetadata: getRequestMetadata(request), workOrderId });
+  }
+
+  @Patch(":id/items/:itemId")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("works.item.update", "ALL")
+  public updateWorkOrderItem(
+    @Param("id") workOrderId: string,
+    @Param("itemId") itemId: string,
+    @Body() dto: UpdateWorkOrderItemDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentLegalEntity() legalEntity: LegalEntityContext,
+    @Req() request: Request,
+  ) {
+    return this.workItemsService.update({ actorUserId: actor.id, dto, itemId, legalEntity, requestMetadata: getRequestMetadata(request), workOrderId });
+  }
+
+  @Delete(":id/items/:itemId")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("works.item.remove", "ALL")
+  public archiveWorkOrderItem(
+    @Param("id") workOrderId: string,
+    @Param("itemId") itemId: string,
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentLegalEntity() legalEntity: LegalEntityContext,
+    @Req() request: Request,
+  ) {
+    return this.workItemsService.archive({ actorUserId: actor.id, itemId, legalEntity, requestMetadata: getRequestMetadata(request), workOrderId });
   }
 
   @Post("deadline-preview")

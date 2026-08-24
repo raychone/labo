@@ -1,5 +1,5 @@
 export const WORK_ORDER_RESOURCE_TYPE = "work_order";
-export const WORK_ORDER_SORT_FIELDS = ["code", "createdAt", "effectiveDueAt", "priority", "requestedDeliveryDate", "status", "totalPriceMinor", "updatedAt"] as const;
+export const WORK_ORDER_SORT_FIELDS = ["code", "createdAt", "effectiveDueAt", "priority", "urgency", "requestedDeliveryDate", "status", "totalPriceMinor", "updatedAt"] as const;
 export const WORK_PRIORITIES = ["NORMAL", "URGENT"] as const;
 export const WORK_STATUSES = ["REGISTERED", "RECEPTIE", "IN_LUCRU", "IN_ASTEPTARE", "FINALIZATA"] as const;
 export const FINAL_WORK_STATUSES = ["RECEPTIE", "IN_LUCRU", "IN_ASTEPTARE", "FINALIZATA"] as const;
@@ -29,6 +29,9 @@ export const WORK_ORDER_AUDIT_ACTIONS = {
   executionSnapshotPricingUnresolved: "work.execution_snapshot.pricing_unresolved",
   executionSnapshotDeadlineUnresolved: "work.execution_snapshot.deadline_unresolved",
   updated: "work_orders.updated",
+  urgencySet: "work_orders.urgency_set",
+  urgencyChanged: "work_orders.urgency_changed",
+  probeDeadlineChanged: "work_orders.probe_deadline_changed",
   updatedWithDeadlineRecalculation: "work_orders.updated_deadline_recalculated",
   cycleCreated: "work_cycles.created",
   cycleClosed: "work_cycles.closed",

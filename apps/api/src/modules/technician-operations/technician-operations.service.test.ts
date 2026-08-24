@@ -16,6 +16,7 @@ function operation(overrides: Partial<TechnicianOperation> = {}): TechnicianOper
     id: "operation_1",
     isActive: true,
     name: "Ceramică",
+    pricingUnit: null,
     sortOrder: 0,
     updatedAt: new Date("2026-08-20T10:00:00.000Z"),
     updatedByUserId: "manager_1",
@@ -95,7 +96,7 @@ describe("TechnicianOperationsService", () => {
 
     const result = await service.createOperation(
       { actorUserId: "manager_1", requestMetadata: { ipAddress: "127.0.0.1" } },
-      { code: "glaze", description: null, name: "Glazurare" },
+      { code: "glaze", description: null, name: "Glazurare", pricingUnit: "PER_ELEMENT" },
     );
 
     expect(create).toHaveBeenCalledWith({
@@ -183,6 +184,36 @@ describe("TechnicianOperationsService", () => {
       }),
     });
     expect(result.rateMinor).toBe(4000);
+  });
+
+  it("requires explicit confirmation before changing a classified maneuver unit and closes active rates", async () => {
+    const auditCreate = vi.fn().mockResolvedValue({});
+    const before = operation({ pricingUnit: "PER_ELEMENT" });
+    const update = vi.fn().mockResolvedValue(operation({ pricingUnit: "PER_CASE" }));
+    const closeRates = vi.fn().mockResolvedValue({ count: 1 });
+    const service = createService({
+      technicianOperation: { findUnique: vi.fn().mockResolvedValue(before) },
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        auditLog: { create: auditCreate },
+        technicianOperation: { update },
+        technicianOperationRate: { updateMany: closeRates },
+      })),
+    });
+
+    await expect(service.updateOperation(
+      { actorUserId: "manager_1", requestMetadata: {} },
+      "operation_1",
+      { code: "CERAMICA", description: "Stratificare ceramică", name: "Ceramică", pricingUnit: "PER_CASE" },
+    )).rejects.toThrow("Confirmă explicit");
+    expect(closeRates).not.toHaveBeenCalled();
+
+    await service.updateOperation(
+      { actorUserId: "manager_1", requestMetadata: {} },
+      "operation_1",
+      { code: "CERAMICA", description: "Stratificare ceramică", name: "Ceramică", pricingUnit: "PER_CASE", confirmPricingUnitChange: true },
+    );
+    expect(closeRates).toHaveBeenCalledWith({ data: { validUntil: expect.any(Date) }, where: { operationId: "operation_1", validUntil: null } });
+    expect(auditCreate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: "technician_operations.unit_changed", metadata: expect.objectContaining({ from: "Per element", to: "Per lucrare" }) }) }));
   });
 
   it("rejects setting a rate for an inactive or missing technician", async () => {

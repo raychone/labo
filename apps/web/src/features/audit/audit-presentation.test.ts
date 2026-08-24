@@ -26,4 +26,15 @@ describe("audit presentation", () => {
     expect(getAuditActionLabel("new.future_action")).toBe("Future action");
     expect(formatAuditRow({ action: "new.future_action", actorDisplayName: null, actorUserId: "secret-id", createdAt: "2026-01-01T00:00:00.000Z", id: "audit-1", metadata: null, resourceId: "demo_invoice_paid_3", resourceType: "billing_document" })).toMatchObject({ actor: "Sistem", entity: "Document financiar", details: "Activitate înregistrată." });
   });
+
+  it("presents B02 post-meeting actions in Romanian without technical identifiers", () => {
+    expect(getAuditActionLabel("work_order.probe_ready")).toBe("Lucrare marcată Probă gata");
+    expect(formatAuditDetails("work_order.tooth_connection_added", { toothNumbers: [11, 21], workOrderId: "opaque-id" }))
+      .toBe("Au fost conectați dinții 11, 21.");
+    expect(formatAuditDetails("technician.performed_maneuver_added", { maneuverName: "Ceramică", toothNumbers: [11, 12, 21] }))
+      .toBe("Manopera Ceramică a fost adăugată pentru dinții 11, 12, 21.");
+    expect(formatAuditDetails("work_order.probe_type_selected", { probeTypeName: "Lingură", probeTypeId: "opaque-id" }))
+      .toBe("A fost selectat tipul de probă Lingură.");
+    expect(formatAuditDetails("work_order.case_received", { workOrderId: "opaque-id" })).toBe("Lucrarea a fost recepționată.");
+  });
 });

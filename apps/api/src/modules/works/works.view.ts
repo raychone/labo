@@ -2,6 +2,9 @@ import type { Prisma } from "@prisma/client";
 
 import { toWorkflowExecutionView, toWorkflowSummaryView } from "../workflow-execution/workflow-execution.view.js";
 import { resolveDeadlineVisualState, type DeadlineDashboardSummary } from "./work-deadline-visual.js";
+import { toWorkOrderItemView } from "./work-items.service.js";
+import { toToothConnectionView } from "./tooth-connections.service.js";
+import { calculateUrgencySurchargeMinor, URGENCY_SURCHARGE_PERCENT } from "@dental-lab/shared";
 
 type WorkFormValue = boolean | number | readonly string[] | string | null;
 type WorkFormValues = Readonly<Record<string, WorkFormValue>>;
@@ -34,7 +37,7 @@ export interface WorkFormSubmissionView {
   readonly values: WorkFormValues;
 }
 
-export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
+type WorkOrderRecordPayload = Prisma.WorkOrderGetPayload<{
   include: {
     assignedTechnician: {
       select: {
@@ -170,6 +173,21 @@ export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
         };
       };
     };
+    activeProbeCycle: {
+      include: {
+        probeType: true;
+      };
+    };
+    probeCycles: {
+      include: {
+        probeType: true;
+      };
+      orderBy: { sequence: "asc" };
+      where: {
+        status: "COMPLETED",
+        OR: [{ completionOutcome: "PROBE_READY" }, { completionOutcome: null }],
+      };
+    };
     patient: true;
     workFormSubmissions: {
       where: {
@@ -192,9 +210,22 @@ export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{
         uploadedAt: true;
       };
     };
-    workType: true;
+    workType: true,
+    items: {
+      include: { teeth: true, workType: true },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      where: { archivedAt: null },
+    },
+    toothConnections: {
+      orderBy: [{ toothA: "asc" }, { toothB: "asc" }],
+    },
   };
 }>;
+
+export type WorkOrderRecord = Omit<WorkOrderRecordPayload, "activeProbeCycle" | "probeCycles"> & {
+  readonly activeProbeCycle?: WorkOrderRecordPayload["activeProbeCycle"];
+  readonly probeCycles?: WorkOrderRecordPayload["probeCycles"];
+};
 
 export interface WorkClaimAccessViewInput {
   readonly canClaim: boolean;
@@ -242,9 +273,17 @@ export interface WorkSummaryView {
     readonly sex: import("@prisma/client").PatientSex | null;
   } | null;
   readonly priority: string;
+  readonly urgency: string | null;
+  readonly urgencyPercent: number | null;
+  readonly urgencySurchargeMinor: number | null;
+  readonly urgencyAdjustedTotalMinor: number | null;
   readonly quantity: number;
   readonly requestedDeliveryDate: string;
   readonly status: string;
+  readonly technicalReadiness: import("@dental-lab/shared").WorkTechnicalReadiness | null;
+  readonly probeReadyAt: string | null;
+  readonly probeReceivedAt: string | null;
+  readonly finalizedAt: string | null;
   readonly statusChangedAt: string | null;
   readonly waitingStartedAt: string | null;
   readonly completedAt: string | null;
@@ -326,7 +365,11 @@ export interface WorkDetailView extends Omit<WorkSummaryView, "workflow"> {
   readonly updatedByUserId: string | null;
   readonly version: number;
   readonly workflow: ReturnType<typeof toWorkflowExecutionView> | null;
+  readonly items: ReturnType<typeof toWorkOrderItemView>[];
+  readonly toothConnections: ReturnType<typeof toToothConnectionView>[];
   readonly workForm: WorkFormSubmissionView | null;
+  readonly activeProbeCycle: import("@dental-lab/shared").ProbeCycleView | null;
+  readonly completedProbeCycles: readonly import("@dental-lab/shared").ProbeCycleView[];
 }
 
 export interface WorkCycleView {
@@ -527,14 +570,22 @@ export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: bo
         }
       : null,
     priority: workOrder.priority,
+    urgency: workOrder.urgency,
+    urgencyPercent: workOrder.urgency ? URGENCY_SURCHARGE_PERCENT[workOrder.urgency as keyof typeof URGENCY_SURCHARGE_PERCENT] : null,
     quantity: workOrder.quantity,
     requestedDeliveryDate: workOrder.requestedDeliveryDate.toISOString(),
     status: workOrder.status,
+    technicalReadiness: workOrder.technicalReadiness,
+    probeReadyAt: workOrder.probeReadyAt?.toISOString() ?? null,
+    probeReceivedAt: workOrder.probeReceivedAt?.toISOString() ?? null,
+    finalizedAt: workOrder.finalizedAt?.toISOString() ?? null,
     statusChangedAt: workOrder.statusChangedAt?.toISOString() ?? null,
     waitingStartedAt: workOrder.waitingStartedAt?.toISOString() ?? null,
     completedAt: workOrder.completedAt?.toISOString() ?? null,
     completedByUserId: workOrder.completedByUserId,
     totalPriceMinor: includePricing ? workOrder.totalPriceMinor : null,
+    urgencySurchargeMinor: includePricing && workOrder.urgency ? calculateUrgencySurchargeMinor(workOrder.totalPriceMinor, workOrder.urgency as keyof typeof URGENCY_SURCHARGE_PERCENT) : null,
+    urgencyAdjustedTotalMinor: includePricing && workOrder.urgency ? workOrder.totalPriceMinor + calculateUrgencySurchargeMinor(workOrder.totalPriceMinor, workOrder.urgency as keyof typeof URGENCY_SURCHARGE_PERCENT) : null,
     executionSnapshot: toExecutionSnapshotView(workOrder, includePricing),
     updatedAt: workOrder.updatedAt.toISOString(),
     workflow: toWorkflowSummaryView(workOrder.activeCycle?.workflowExecution ?? null),
@@ -730,7 +781,24 @@ export function toWorkDetailView(workOrder: WorkOrderRecord, includePricing: boo
           reason: "Acțiunile se verifică pe endpointul dedicat de workflow.",
         })
       : null,
+    items: (workOrder.items ?? []).map(toWorkOrderItemView),
+    toothConnections: (workOrder.toothConnections ?? []).map(toToothConnectionView),
+    activeProbeCycle: workOrder.activeProbeCycle ? toProbeCycleView(workOrder.activeProbeCycle) : null,
+    completedProbeCycles: (workOrder.probeCycles ?? []).map(toProbeCycleView),
     workForm: toWorkFormSubmissionView(workOrder.workFormSubmissions?.[0] ?? null),
+  };
+}
+
+function toProbeCycleView(cycle: NonNullable<WorkOrderRecord["activeProbeCycle"]> | NonNullable<WorkOrderRecord["probeCycles"]>[number]): import("@dental-lab/shared").ProbeCycleView {
+  return {
+    id: cycle.id,
+    sequence: cycle.sequence,
+    status: cycle.status,
+    probeType: { id: cycle.probeType.id, isArchived: cycle.probeType.isArchived, name: cycle.probeType.name, sortOrder: cycle.probeType.sortOrder },
+    probeTypeNameSnapshot: cycle.probeTypeNameSnapshot,
+    openedAt: cycle.openedAt.toISOString(),
+    completedAt: cycle.completedAt?.toISOString() ?? null,
+    deadlineAt: cycle.deadlineAt.toISOString(),
   };
 }
 

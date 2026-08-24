@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState, type ReactNode } from "react";
 
@@ -105,6 +105,29 @@ describe("form controls", () => {
     expect(screen.getByLabelText("Pieces")).toBeDefined();
     expect(screen.getByLabelText("Due date")).toBeDefined();
     expect(screen.getByRole("combobox", { name: "Status" })).toBeDefined();
+  });
+
+  it("renders Select options as searchable cards and updates the native form value", () => {
+    const onChange = vi.fn();
+    render(
+      <Select
+        label="Tip lucrare"
+        onChange={onChange}
+        options={[
+          { label: "Cheie Control", value: "control" },
+          { label: "Cimentare PMMA I", value: "pmma" },
+        ]}
+        placeholder="Caută tipul lucrării"
+      />,
+    );
+
+    fireEvent.focus(screen.getByRole("combobox", { name: "Tip lucrare" }));
+    const listbox = screen.getByRole("listbox");
+    expect(within(listbox).getByRole("option", { name: /Cheie Control/ })).toBeDefined();
+    fireEvent.click(within(listbox).getByRole("option", { name: /Cimentare PMMA I/ }));
+
+    expect(onChange).toHaveBeenCalled();
+    expect(screen.getByRole("combobox", { name: "Tip lucrare" }).getAttribute("value")).toBe("Cimentare PMMA I");
   });
 
   it("supports Checkbox, RadioGroup, and Switch interactions", () => {

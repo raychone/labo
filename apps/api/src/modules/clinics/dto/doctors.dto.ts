@@ -45,6 +45,11 @@ function lowercaseOptionalString(value: unknown): string | null | undefined {
   return typeof trimmed === "string" ? trimmed.toLowerCase() : trimmed;
 }
 
+function uppercaseOptionalString(value: unknown): string | null | undefined {
+  const trimmed = trimOptionalString(value);
+  return typeof trimmed === "string" ? trimmed.toUpperCase() : trimmed;
+}
+
 export class ListDoctorsQueryDto {
   @IsOptional()
   @Type(() => Number)
@@ -90,6 +95,11 @@ export class ListDoctorOptionsQueryDto {
 }
 
 export class DoctorMutationDto {
+  @IsOptional()
+  @Transform(({ value }) => uppercaseOptionalString(value))
+  @IsIn(["CDT", "NG"])
+  public readonly legalEntityCode?: "CDT" | "NG";
+
   @IsOptional()
   @IsString()
   @MaxLength(80)

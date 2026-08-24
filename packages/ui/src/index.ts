@@ -11,6 +11,8 @@ export {
   CardTitle,
 } from "./components/card.js";
 export type { CardProps } from "./components/card.js";
+export { KpiCard } from "./components/kpi.js";
+export type { KpiCardProps } from "./components/kpi.js";
 export {
   FilterBar,
   SearchInput,

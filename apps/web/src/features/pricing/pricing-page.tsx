@@ -32,6 +32,9 @@ import {
   formatMoneyMinor,
   formatWorkTypeUnit,
   minorToDecimalString,
+  TECHNICIAN_MANEUVER_UNIT_HELP_RO,
+  TECHNICIAN_MANEUVER_UNIT_LABELS_RO,
+  TECHNICIAN_MANEUVER_UNITS,
   WORK_TYPE_UNITS,
   type ExecutionTimeRuleInput,
   type PriceCatalogItemInput,
@@ -49,6 +52,7 @@ import {
   type TechnicianRateInput,
   type TechnicianRateView,
   type WorkTypeOption,
+  type ProbeTypeView,
 } from "@dental-lab/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -60,6 +64,7 @@ import { registerOrganizationContextSwitchGuard } from "../organization-context/
 import { useSettings } from "../settings/settings-api.js";
 import { fetchUsers, hasPermission, type UserSummary } from "../users/users-api.js";
 import { useCreateWorkType, useUpdateWorkType, useWorkType, useWorkTypeOptions } from "../work-types/work-types-api.js";
+import { useAllProbeTypes, useCreateProbeType, useUpdateProbeType } from "../works/works-api.js";
 import {
   useArchivePricingAgreement,
   useArchivePricingCatalogItem,
@@ -258,6 +263,7 @@ function getTechnicianOperationDefaults(): TechnicianOperationFormValues {
     code: "",
     description: "",
     name: "",
+    pricingUnit: "PER_ELEMENT",
   };
 }
 
@@ -266,6 +272,7 @@ function toTechnicianOperationInput(values: TechnicianOperationFormValues): Tech
     code: values.code,
     description: values.description || null,
     name: values.name,
+    pricingUnit: values.pricingUnit,
   };
 }
 
@@ -342,6 +349,7 @@ export function PricingPage(): ReactNode {
   const canReadOperations = hasPermission(permissionsQuery.data, "technician.operations.read");
   const canReadRates = hasPermission(permissionsQuery.data, "technician.rates.read");
   const canManageRates = hasPermission(permissionsQuery.data, "technician.rates.manage");
+  const canManageProbeTypes = hasPermission(permissionsQuery.data, "probe_types.manage");
   const settingsQuery = useSettings(canRead);
   const catalogQuery = usePricingCatalog(catalogParams, canRead);
   const archiveQuery = usePricingCatalog(archiveParams, canRead);
@@ -362,6 +370,7 @@ export function PricingPage(): ReactNode {
   const ratesQuery = useTechnicianRates(selectedTechnicianId, canReadRates);
   const selectedCatalogQuery = usePricingCatalogItem(selectedCatalogId, canRead);
   const workTypesQuery = useWorkTypeOptions(canRead);
+  const probeTypesQuery = useAllProbeTypes(canRead);
   const clinicsQuery = useQuery({ enabled: canRead, queryFn: fetchClinicOptions, queryKey: ["clinics", "options"], retry: false });
   const doctorsQuery = useQuery({ enabled: canRead, queryFn: () => fetchDoctorOptions(), queryKey: ["doctors", "options"], retry: false });
   const createCatalogMutation = useCreatePricingCatalogItem();
@@ -383,25 +392,13 @@ export function PricingPage(): ReactNode {
   const setRateMutation = useSetTechnicianRate();
   const currency = settingsQuery.data?.currency ?? "RON";
   const locale = settingsQuery.data?.locale ?? "ro-RO";
-  void operationParams;
-  void setOperationParams;
-  void selectedTechnicianId;
-  void setSelectedTechnicianId;
-  void selectedOperationId;
   void canPreview;
-  void operationsQuery;
-  void techniciansQuery;
-  void ratesQuery;
   void previewMutation;
-  void createOperationMutation;
-  void updateOperationMutation;
-  void setRateMutation;
-  void toTechnicianOperationInput;
-  void toTechnicianRateInput;
   void PreviewTab;
   void TermsTab;
-  void TechnicianOperationsTab;
   void AuditSourceTab;
+
+  const editingOperation = (operationsQuery.data?.items ?? []).find((operation) => operation.id === selectedOperationId);
 
   const catalogColumns = useMemo<readonly DataTableColumn<PriceCatalogItemSummary>[]>(() => [
     { header: "Categorie", id: "category", isSortable: true, renderCell: (item) => item.category },
@@ -423,6 +420,7 @@ export function PricingPage(): ReactNode {
     { header: "Cod", id: "code", isSortable: true, renderCell: (item) => item.code },
     { header: "Manoperă", id: "name", isSortable: true, renderCell: (item) => item.name },
     { header: "Descriere", id: "description", renderCell: (item) => item.description ?? "-" },
+    { header: "Unitate de tarifare", id: "pricingUnit", renderCell: (item) => item.pricingUnit ? TECHNICIAN_MANEUVER_UNIT_LABELS_RO[item.pricingUnit] : "Neclasificată" },
     { header: "Status", id: "status", renderCell: (item) => <StatusBadge label={item.isActive ? "Activ" : "Arhivat"} variant={item.isActive ? "approved" : "closed"} /> },
     {
       header: "Acțiuni",
@@ -446,12 +444,28 @@ export function PricingPage(): ReactNode {
   const rateColumns = useMemo<readonly DataTableColumn<TechnicianRateView>[]>(() => [
     { header: "Tehnician", id: "technician", renderCell: (item) => item.technician.displayName },
     { header: "Manoperă", id: "operation", renderCell: (item) => `${item.operation.code} · ${item.operation.name}` },
+    { header: "Unitate", id: "unit", renderCell: (item) => item.operation.pricingUnit ? TECHNICIAN_MANEUVER_UNIT_LABELS_RO[item.operation.pricingUnit] : "Neclasificată" },
     { align: "right", header: "Câștig", id: "rateMinor", renderCell: (item) => formatMoneyMinor(item.rateMinor, item.currency, locale) },
     { header: "Valabil de la", id: "effectiveFrom", renderCell: (item) => item.effectiveFrom.slice(0, 10) },
     { header: "Valabil până la", id: "validUntil", renderCell: (item) => item.validUntil?.slice(0, 10) ?? "rata curentă/viitoare" },
   ], [locale]);
-  void operationColumns;
-  void rateColumns;
+  function saveOperation(values: TechnicianOperationFormValues, form: ReturnType<typeof useForm<TechnicianOperationFormValues>>): void {
+    const input = toTechnicianOperationInput(values);
+    if (editingOperation && editingOperation.pricingUnit !== values.pricingUnit && !window.confirm("Schimbarea unității modifică sensul tarifării pentru calculele viitoare. Tarifele curente vor fi închise și trebuie configurate din nou. Continui?")) return;
+    const onError = (error: unknown) => { applyApiErrorsToForm(form, error); toast.showToast({ message: getErrorMessage(error), title: "Manopera nu a fost salvată", variant: "error" }); };
+    const onSuccess = () => { setSelectedOperationId(undefined); form.reset(getTechnicianOperationDefaults()); toast.showToast({ message: editingOperation ? "Manopera a fost modificată." : "Manopera a fost creată.", variant: "success" }); };
+    if (editingOperation) updateOperationMutation.mutate({ id: editingOperation.id, input: { ...input, ...(editingOperation.pricingUnit !== values.pricingUnit ? { confirmPricingUnitChange: true } : {}) } }, { onError, onSuccess });
+    else createOperationMutation.mutate(input, { onError, onSuccess });
+  }
+
+  function saveRate(values: TechnicianRateFormValues, form: ReturnType<typeof useForm<TechnicianRateFormValues>>): void {
+    try {
+      setRateMutation.mutate(toTechnicianRateInput(values), {
+        onError: (error) => { applyApiErrorsToForm(form, error); toast.showToast({ message: getErrorMessage(error), title: "Tariful nu a fost salvat", variant: "error" }); },
+        onSuccess: () => { form.reset(getTechnicianRateDefaults()); toast.showToast({ message: "Tariful tehnicianului a fost salvat.", variant: "success" }); },
+      });
+    } catch (error) { toast.showToast({ message: getErrorMessage(error), title: "Tarif invalid", variant: "error" }); }
+  }
 
   if (permissionsQuery.isLoading || settingsQuery.isLoading) {
     return <PageFrame><LoadingState text="Se încarcă prețurile" /></PageFrame>;
@@ -476,6 +490,8 @@ export function PricingPage(): ReactNode {
           </div>
         </header>
         {!canUpdate ? <p className="pricing-page__readonly">Ai acces de citire. Modificările de preț cer permisiuni financiare explicite.</p> : null}
+
+        <ProbeTypeCatalogCard canManage={canManageProbeTypes} isLoading={probeTypesQuery.isLoading} probeTypes={probeTypesQuery.data ?? []} />
 
         <Tabs
           tabs={[
@@ -530,6 +546,38 @@ export function PricingPage(): ReactNode {
               content: <CatalogTab active={archiveParams.active} archived audience="STANDARD" audienceId="" clinics={[]} doctors={[]} catalogQuery={archiveQuery} columns={catalogColumns} onActiveChange={() => undefined} onAudienceChange={() => undefined} onAudienceIdChange={() => undefined} onRestore={(id) => restoreCatalogMutation.mutate(id, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Tipul nu a fost reactivat", variant: "error" }), onSuccess: () => toast.showToast({ message: "Tipul de lucrare a fost reactivat.", variant: "success" }) })} onRowAction={(item) => setSelectedCatalogId(item.id)} onSearchChange={(search) => setArchiveParams((current) => ({ ...current, page: 1, search: search || undefined }))} printPrice={(item) => formatMoneyMinor(item.standardPriceMinor, currency, locale)} search={archiveParams.search ?? ""} />,
               id: "archive",
               label: "Arhivă",
+            },
+            {
+              content: (
+                <TechnicianOperationsTab
+                  active={operationParams.isActive}
+                  canManageRates={canManageRates}
+                  canReadOperations={canReadOperations}
+                  canReadRates={canReadRates}
+                  columns={operationColumns}
+                  currency={currency}
+                  editingOperation={editingOperation}
+                  isSaving={createOperationMutation.isPending || updateOperationMutation.isPending || archiveOperationMutation.isPending || restoreOperationMutation.isPending || setRateMutation.isPending}
+                  locale={locale}
+                  onCancelOperationEdit={() => setSelectedOperationId(undefined)}
+                  onActiveChange={(active) => setOperationParams((current) => ({ ...current, isActive: active, page: 1 }))}
+                  onOperationSubmit={saveOperation}
+                  onRateSubmit={saveRate}
+                  onSearchChange={(search) => setOperationParams((current) => ({ ...current, page: 1, search: search || undefined }))}
+                  onTechnicianChange={setSelectedTechnicianId}
+                  operations={operationsQuery.data?.items ?? []}
+                  operationsQuery={operationsQuery}
+                  rateColumns={rateColumns}
+                  ratesQuery={ratesQuery}
+                  search={operationParams.search ?? ""}
+                  selectedTechnicianId={selectedTechnicianId}
+                  technicians={techniciansQuery.data?.items ?? []}
+                  techniciansError={techniciansQuery.isError ? getErrorMessage(techniciansQuery.error) : undefined}
+                  techniciansLoading={techniciansQuery.isLoading}
+                />
+              ),
+              id: "operations",
+              label: "Manopere",
             },
           ]}
         />
@@ -671,6 +719,56 @@ export function WorkSettingsPage(): ReactNode {
 
 function PageFrame({ children }: { readonly children: ReactNode }): ReactNode {
   return <main className="pricing-page"><section className="dl-container">{children}</section></main>;
+}
+
+export function ProbeTypeCatalogCard({ canManage, isLoading, probeTypes }: { readonly canManage: boolean; readonly isLoading: boolean; readonly probeTypes: readonly ProbeTypeView[] }): ReactNode {
+  const toast = useToast();
+  const createMutation = useCreateProbeType();
+  const updateMutation = useUpdateProbeType();
+  const [name, setName] = useState("");
+  const [sortOrder, setSortOrder] = useState("0");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+
+  function resetForm(): void {
+    setEditingId(null);
+    setName("");
+    setSortOrder("0");
+  }
+
+  function save(): void {
+    const trimmedName = name.trim();
+    const parsedSortOrder = Number.parseInt(sortOrder, 10);
+    if (!trimmedName || !Number.isInteger(parsedSortOrder) || parsedSortOrder < 0) {
+      toast.showToast({ message: "Introdu o denumire și o ordine validă.", title: "Tipul probei nu a fost salvat", variant: "error" });
+      return;
+    }
+    if (editingId) {
+      updateMutation.mutate({ id: editingId, input: { name: trimmedName, sortOrder: parsedSortOrder } }, { onError: handleSaveError, onSuccess: () => { resetForm(); toast.showToast({ message: "Tipul probei a fost modificat.", variant: "success" }); } });
+    } else {
+      createMutation.mutate({ name: trimmedName, sortOrder: parsedSortOrder }, { onError: handleSaveError, onSuccess: () => { resetForm(); toast.showToast({ message: "Tipul probei a fost creat.", variant: "success" }); } });
+    }
+  }
+
+  function handleSaveError(error: unknown): void {
+    toast.showToast({ message: getErrorMessage(error), title: "Tipul probei nu a fost salvat", variant: "error" });
+  }
+
+  const columns: readonly DataTableColumn<ProbeTypeView>[] = [
+    { header: "Denumire", id: "name", renderCell: (type) => type.name },
+    { header: "Ordine", id: "sortOrder", renderCell: (type) => type.sortOrder },
+    { header: "Stare", id: "status", renderCell: (type) => <StatusBadge label={type.isArchived ? "Arhivat" : "Activ"} variant={type.isArchived ? "closed" : "approved"} /> },
+    ...(canManage ? [{ header: "Acțiuni", id: "actions", renderCell: (type: ProbeTypeView) => <div className="pricing-page__table-actions"><Button onClick={() => { setEditingId(type.id); setName(type.name); setSortOrder(String(type.sortOrder)); }} size="small" variant="outline">Editează</Button><Button onClick={() => updateMutation.mutate({ id: type.id, input: { isArchived: !type.isArchived } }, { onError: handleSaveError, onSuccess: () => toast.showToast({ message: type.isArchived ? "Tipul probei a fost reactivat." : "Tipul probei a fost arhivat.", variant: "success" }) })} size="small" variant="outline">{type.isArchived ? "Reactivează" : "Arhivează"}</Button></div> }] : []),
+  ] as readonly DataTableColumn<ProbeTypeView>[];
+
+  return <Card>
+    <CardHeader><CardTitle>Tipuri de probă</CardTitle><CardDescription>Catalog global comun pentru CDT și NG.</CardDescription></CardHeader>
+    <CardContent className="pricing-page__stack">
+      {isLoading ? <LoadingState text="Se încarcă tipurile de probă" /> : null}
+      <DataTable columns={columns} emptyMessage="Nu există tipuri de probă." getRowKey={(type) => type.id} rows={probeTypes} />
+      {canManage ? <FormGrid><TextInput label="Denumire" onChange={(event) => setName(event.target.value)} value={name} /><TextInput label="Ordine" onChange={(event) => setSortOrder(event.target.value)} value={sortOrder} /><div className="pricing-page__actions"><Button disabled={isSaving} onClick={save}>{editingId ? "Salvează modificarea" : "Adaugă tip probă"}</Button>{editingId ? <Button onClick={resetForm} variant="ghost">Renunță</Button> : null}</div></FormGrid> : <p className="pricing-page__readonly">Catalogul este disponibil doar pentru citire.</p>}
+    </CardContent>
+  </Card>;
 }
 
 function CatalogTab({
@@ -969,6 +1067,7 @@ function TechnicianOperationsTab({
       code: editingOperation.code,
       description: editingOperation.description ?? "",
       name: editingOperation.name,
+      pricingUnit: editingOperation.pricingUnit ?? "PER_ELEMENT",
     } : getTechnicianOperationDefaults());
   }, [editingOperation, operationForm]);
 
@@ -1014,6 +1113,15 @@ function TechnicianOperationsTab({
             <FormGrid>
               <TextInput error={operationForm.formState.errors.code?.message} label="Cod" {...operationForm.register("code")} />
               <TextInput error={operationForm.formState.errors.name?.message} label="Manoperă" {...operationForm.register("name")} />
+              <div>
+                <Select
+                  error={operationForm.formState.errors.pricingUnit?.message}
+                  label="Unitate de tarifare"
+                  options={TECHNICIAN_MANEUVER_UNITS.map((unit) => ({ label: TECHNICIAN_MANEUVER_UNIT_LABELS_RO[unit], value: unit }))}
+                  {...operationForm.register("pricingUnit")}
+                />
+                <p className="pricing-page__muted">{TECHNICIAN_MANEUVER_UNIT_HELP_RO[operationForm.watch("pricingUnit")]}</p>
+              </div>
               <FormGridFull>
                 <Textarea error={operationForm.formState.errors.description?.message} label="Descriere" rows={3} {...operationForm.register("description")} />
               </FormGridFull>
@@ -1059,6 +1167,7 @@ function TechnicianOperationsTab({
                   placeholder="Alege manopera"
                   {...rateForm.register("operationId")}
                 />
+                {rateForm.watch("operationId") ? <p className="pricing-page__muted">Unitatea manoperei: {operations.find((operation) => operation.id === rateForm.watch("operationId"))?.pricingUnit ? TECHNICIAN_MANEUVER_UNIT_LABELS_RO[operations.find((operation) => operation.id === rateForm.watch("operationId"))?.pricingUnit as keyof typeof TECHNICIAN_MANEUVER_UNIT_LABELS_RO] : "Neclasificată"}</p> : null}
                 <NumberInput error={rateForm.formState.errors.rateDecimal?.message} label={`Câștig ${currency}`} {...rateForm.register("rateDecimal")} />
                 <DateInput error={rateForm.formState.errors.effectiveFrom?.message} label="Valabil de la" {...rateForm.register("effectiveFrom")} />
               </FormGrid>

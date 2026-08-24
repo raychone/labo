@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { WorkFormTemplateKind, WorkStageEventType, WorkStageExecutionStatus, type Prisma, type WorkStatus } from "@prisma/client";
 import { Buffer } from "node:buffer";
 
@@ -6,7 +6,7 @@ import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
 import type { LegalEntityContext } from "../organization-context/organization-context.view.js";
 import { PatientsService } from "../patients/patients.service.js";
-import { AuthorizationService, doesScopeSatisfy } from "../rbac/authorization.service.js";
+import { AuthorizationService } from "../rbac/authorization.service.js";
 import type { PermissionKey } from "../rbac/permission-registry.js";
 import { DEFAULT_LABORATORY_SETTINGS, SETTINGS_SINGLETON_KEY } from "../settings/settings.constants.js";
 import { WorkQrTokenService } from "../qr/work-qr-token.service.js";
@@ -45,6 +45,19 @@ import {
 } from "./work-execution-snapshot.js";
 import { accumulateDeadlineDashboardSummary, createEmptyDeadlineDashboardSummary, isDeadlineInFilter } from "./work-deadline-visual.js";
 import { WorkOrderCodeService } from "./work-order-code.service.js";
+import { ProbeTypesService } from "./probe-types.service.js";
+import { getVisibleWorkWhere } from "./work-readability.js";
+import {
+  getCanonicalWorkOrderCompositionTeeth,
+  isAdjacentAdultFdiPair,
+  normalizeConnectionPair,
+  validateWorkOrderItemScope,
+  type WorkOrderItemInput,
+  URGENCY_LEVELS,
+  URGENCY_LABELS_RO,
+  URGENCY_SURCHARGE_PERCENT,
+} from "@dental-lab/shared";
+import type { CreateWorkOrderItemDto } from "./dto/work-order-items.dto.js";
 import { LOGISTICS_ATTACHMENT_LIMITS } from "../logistics/logistics.constants.js";
 import type { UploadedAttachmentFile } from "../logistics/logistics.service.js";
 import {
@@ -226,6 +239,14 @@ const WORK_ORDER_INCLUDE = {
     },
   },
   workType: true,
+  items: {
+    include: { teeth: true, workType: true },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    where: { archivedAt: null },
+  },
+  toothConnections: {
+    orderBy: [{ toothA: "asc" }, { toothB: "asc" }],
+  },
   attachments: {
     orderBy: {
       uploadedAt: "asc",
@@ -269,6 +290,7 @@ const WORK_ORDER_MUTATION_FIELDS = [
   "shade",
   "quantity",
   "priority",
+  "urgency",
   "requestedDeliveryDate",
   "externalReference",
   "internalNotes",
@@ -406,6 +428,7 @@ export class WorksService {
     @Inject(WorkflowExecutionService) private readonly workflowExecutionService: WorkflowExecutionService,
     @Inject(WorkDeadlineService) private readonly workDeadlineService: WorkDeadlineService,
     @Inject(PricingResolverService) private readonly pricingResolverService: PricingResolverService,
+    @Optional() @Inject(ProbeTypesService) private readonly probeTypesService?: ProbeTypesService,
   ) {}
 
   public async listWorks(actorUserId: string, query: ListWorksQueryDto, includePricing: boolean): Promise<PaginatedWorksView> {
@@ -420,7 +443,7 @@ export class WorksService {
       userId: actorUserId,
     });
     const access = await this.createClaimAccess(actorUserId);
-    return this.listWorksWithWhere(query, false, access, await this.getVisibleWorkWhere(actorUserId), { claimStatus: "UNCLAIMED" });
+    return this.listWorksWithWhere(query, false, access, await this.getVisibleWorkWhere(actorUserId), { claimStatus: "UNCLAIMED", technicalReadiness: null });
   }
 
   public async listMyClaimed(actorUserId: string, query: ListClaimWorksQueryDto): Promise<PaginatedWorksView> {
@@ -453,6 +476,7 @@ export class WorksService {
       ...(query.workTypeId ? { workTypeId: query.workTypeId } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.priority ? { priority: query.priority } : {}),
+      ...(query.urgency ? { urgency: query.urgency } : {}),
       ...(query.claimStatus ? { claimStatus: query.claimStatus } : {}),
       ...(query.assignedTechnicianId ? { assignedTechnicianId: query.assignedTechnicianId } : {}),
       ...(query.executionLegalEntityCode ? { executionLegalEntity: { code: query.executionLegalEntityCode } } : {}),
@@ -528,37 +552,7 @@ export class WorksService {
   }
 
   private async getVisibleWorkWhere(userId: string): Promise<Prisma.WorkOrderWhereInput> {
-    const [readAll, readAssigned, readAvailable] = await Promise.all([
-      this.authorizationService.hasPermission({ permission: "works.read_all", requiredScope: "ALL", userId }),
-      this.authorizationService.hasPermission({ permission: "works.read_assigned", userId }),
-      this.authorizationService.hasPermission({ permission: "works.claim.available.read", requiredScope: "ALL", userId }),
-    ]);
-
-    if (readAll.allowed) {
-      return {};
-    }
-    if (!readAssigned.allowed) {
-      if (!readAvailable.allowed) {
-        throw new ForbiddenException("Permission denied.");
-      }
-    }
-
-    const scopes = readAssigned.effectiveScopes;
-    const canReadAssigned = scopes.some((scope) => doesScopeSatisfy(scope, "ASSIGNED") || doesScopeSatisfy(scope, "OWN_STAGE"));
-
-    if (!canReadAssigned && !readAvailable.allowed) {
-      return { id: "__no_visible_work__" };
-    }
-
-    return {
-      OR: [
-        { assignedTechnicianId: userId },
-        { claimedByUserId: userId },
-        ...(readAvailable.allowed ? [{ claimStatus: "UNCLAIMED" as const }] : []),
-        { activeCycle: { is: { workflowExecution: { is: { currentStage: { is: { assignedUserId: userId } } } } } } },
-        { activeCycle: { is: { workflowExecution: { is: { stages: { some: { assignedUserId: userId } } } } } } },
-      ],
-    };
+    return getVisibleWorkWhere(this.authorizationService, userId);
   }
 
   private async findVisibleWorkOrderOrThrow(userId: string, workOrderId: string): Promise<WorkOrderRecord> {
@@ -1448,6 +1442,9 @@ export class WorksService {
   public async setWorkStatus(context: ActorContext, workOrderId: string, dto: SetWorkStatusDto): Promise<WorkDetailView> {
     const before = await this.findWorkOrderOrThrow(workOrderId);
     await this.ensureCanChangeStatus(context.actorUserId, before);
+    if (dto.status === "FINALIZATA" && before.activeProbeCycleId) {
+      throw new ConflictException("Folosește acțiunea canonică «Finalizată» pentru ciclul tehnic activ.");
+    }
     this.assertAllowedStatusTransition(before.status, dto.status);
     if ((dto.status === "IN_LUCRU" || dto.status === "IN_ASTEPTARE" || dto.status === "FINALIZATA") && before.claimStatus !== "CLAIMED") {
       throw new BadRequestException("Lucrarea trebuie preluată înainte de această stare.");
@@ -1577,10 +1574,20 @@ export class WorksService {
     const requestedDeliveryDate = parseDateOnly(dto.requestedDeliveryDate, true);
     const operationNow = new Date();
     const manualDueAt = dto.manualDueAt ? new Date(dto.manualDueAt) : null;
+    const probeDeadlineAt = dto.probeDeadlineAt ? new Date(dto.probeDeadlineAt) : null;
+    if (dto.probeTypeId && (!probeDeadlineAt || !Number.isFinite(probeDeadlineAt.getTime()))) throw new BadRequestException("Termenul probei curente nu este valid.");
     if (manualDueAt && !canSetManualDeadline) {
       throw new BadRequestException("Nu ai permisiunea necesară pentru termen manual.");
     }
 
+    const aggregateItems = dto.items?.length ? dto.items : null;
+    if (dto.items !== undefined && (!dto.probeTypeId || !probeDeadlineAt)) {
+      throw new BadRequestException("Alege tipul probei și termenul explicit al probei curente.");
+    }
+    const legacyWorkTypeId = dto.workTypeId ?? aggregateItems?.[0]?.workTypeId ?? null;
+    if (!legacyWorkTypeId) {
+      throw new BadRequestException("Adaugă cel puțin un element cu tip de lucrare.");
+    }
     const workOrder = await this.prisma.$transaction(async (tx) => {
       const clinicId = dto.clinicId ?? null;
       const doctorId = dto.doctorId ?? null;
@@ -1588,18 +1595,35 @@ export class WorksService {
       await this.validateDoctor(tx, doctorId, clinicId, true);
       this.rejectConflictingPatientPayload(dto.patientId, dto.patientName);
       const patient = await this.patientsService.findActivePatientOrThrow(tx, dto.patientId);
-      const workType = await this.validateWorkType(tx, dto.workTypeId, true);
-      const pricing = await this.createPricingSnapshot(tx, workType.basePriceMinor, dto.quantity);
+      const workType = await this.validateWorkType(tx, legacyWorkTypeId, true);
+      const probeType = dto.probeTypeId && probeDeadlineAt && this.probeTypesService
+        ? await this.probeTypesService.requireSelectable(dto.probeTypeId, tx)
+        : null;
+      const itemInputs: WorkOrderItemInput[] = aggregateItems
+        ? aggregateItems.map((item) => this.validateAggregateItem(item))
+        : [{
+            scope: "TOOTH" as const,
+            teeth: [],
+            workTypeId: legacyWorkTypeId,
+            shade: dto.shade ?? null,
+            implantPlatform: dto.implantPlatform ?? null,
+            technicalCodeNotes: dto.technicalCodeNotes ?? null,
+          }];
+      for (const item of itemInputs) {
+        await this.validateWorkType(tx, item.workTypeId ?? legacyWorkTypeId, true);
+      }
+      const quantity = aggregateItems ? itemInputs.length : dto.quantity;
+      const pricing = await this.createPricingSnapshot(tx, workType.basePriceMinor, quantity);
       const deadline = await this.workDeadlineService.resolveForWork({
         clinicId,
         doctorId,
         legalEntity,
         manualDueAt,
         now: operationNow,
-        quantity: dto.quantity,
+        quantity,
         source: manualDueAt ? "MANUAL_OVERRIDE" : "CREATION",
         startAt: operationNow,
-        workTypeId: dto.workTypeId,
+        workTypeId: legacyWorkTypeId,
       });
       const code = await this.workOrderCodeService.generate(tx);
       const qrToken = await this.workQrTokenService.generate(tx);
@@ -1608,7 +1632,7 @@ export class WorksService {
         enforceRequired: false,
         submission: dto.workFormSubmission,
         workCode: code,
-        workTypeId: dto.workTypeId,
+        workTypeId: legacyWorkTypeId,
       });
 
       const data: Prisma.WorkOrderUncheckedCreateInput = {
@@ -1622,15 +1646,16 @@ export class WorksService {
         patientId: patient.id,
         patientName: toPatientSnapshotName(patient),
         priority: dto.priority,
+        urgency: dto.urgency ?? "NORMAL",
         qrToken,
-        quantity: dto.quantity,
+        quantity,
         requestedDeliveryDate,
         status: "RECEPTIE",
         statusChangedAt: operationNow,
         statusChangedByUserId: context.actorUserId,
         totalPriceMinor: pricing.totalPriceMinor,
         updatedByUserId: context.actorUserId,
-        workTypeId: dto.workTypeId,
+        workTypeId: legacyWorkTypeId,
       };
 
       assignNullableCreateValue(data, "clinicalNotes", dto.clinicalNotes);
@@ -1667,14 +1692,56 @@ export class WorksService {
         },
       });
 
+      const initialProbeCycle = probeType && probeDeadlineAt ? await tx.probeCycle.create({
+        data: {
+          createdByUserId: context.actorUserId,
+          deadlineAt: probeDeadlineAt,
+          openedAt: operationNow,
+          probeTypeId: probeType.id,
+          probeTypeNameSnapshot: probeType.name,
+          sequence: 1,
+          status: "ACTIVE",
+          workOrderId: createdWorkOrder.id,
+        },
+      }) : null;
+
       await tx.workOrder.update({
         data: {
           activeCycleId: initialCycle.id,
+          ...(initialProbeCycle ? { activeProbeCycleId: initialProbeCycle.id } : {}),
+          ...(initialProbeCycle ? { deadlineMode: "MANUAL", effectiveDueAt: probeDeadlineAt, manualDueAt: probeDeadlineAt, deadlineSource: "CREATION", deadlineRevision: { increment: 1 } } : {}),
         },
-        where: {
-          id: createdWorkOrder.id,
-        },
+        where: { id: createdWorkOrder.id },
       });
+
+      if (aggregateItems) {
+        for (const [sortOrder, item] of itemInputs.entries()) {
+          await tx.workOrderItem.create({
+            data: {
+              workOrderId: createdWorkOrder.id,
+              sortOrder,
+              scope: item.scope,
+              workTypeId: item.workTypeId ?? null,
+              ...(item.customWorkTypeSnapshot ? { customWorkTypeSnapshot: item.customWorkTypeSnapshot as Prisma.InputJsonValue } : {}),
+              shade: item.shade ?? null,
+              implantPlatform: item.implantPlatform ?? null,
+              ...(item.customImplantPlatformSnapshot ? { customImplantPlatformSnapshot: item.customImplantPlatformSnapshot as Prisma.InputJsonValue } : {}),
+              restorationType: item.restorationType ?? null,
+              technicalCodeNotes: item.technicalCodeNotes ?? null,
+              notes: item.notes ?? null,
+              teeth: { create: (item.teeth ?? []).map((fdiTooth, toothSortOrder) => ({ fdiTooth, sortOrder: toothSortOrder })) },
+            },
+          });
+        }
+        const presentTeeth = new Set(getCanonicalWorkOrderCompositionTeeth(itemInputs.map((item) => ({ scope: item.scope, teeth: item.teeth ?? [] }))));
+        for (const connection of dto.toothConnections ?? []) {
+          const pair = normalizeConnectionPair(connection.toothA, connection.toothB);
+          if (!pair || !isAdjacentAdultFdiPair(connection.toothA, connection.toothB) || !presentTeeth.has(pair.toothA) || !presentTeeth.has(pair.toothB)) {
+            throw new BadRequestException("Conexiunea selectată nu este validă pentru compoziția lucrării.");
+          }
+          await tx.workOrderToothConnection.create({ data: { workOrderId: createdWorkOrder.id, toothA: pair.toothA, toothB: pair.toothB } });
+        }
+      }
 
       await this.workflowExecutionService.createSnapshotForWork(tx, {
         actorUserId: context.actorUserId,
@@ -1691,6 +1758,13 @@ export class WorksService {
         action: WORK_ORDER_AUDIT_ACTIONS.created,
         actorUserId: context.actorUserId,
         metadata: this.createAuditMetadata(createdWorkOrder),
+        requestMetadata: context.requestMetadata,
+        resourceId: createdWorkOrder.id,
+      });
+      await this.recordAudit(tx, {
+        action: WORK_ORDER_AUDIT_ACTIONS.urgencySet,
+        actorUserId: context.actorUserId,
+        metadata: { from: null, to: formatUrgency(createdWorkOrder.urgency), workCode: createdWorkOrder.code },
         requestMetadata: context.requestMetadata,
         resourceId: createdWorkOrder.id,
       });
@@ -1727,6 +1801,10 @@ export class WorksService {
 
   public async updateWork(context: ActorContext, legalEntity: LegalEntityContext, workOrderId: string, dto: UpdateWorkDto): Promise<WorkDetailView> {
     const before = await this.findWorkOrderOrThrow(workOrderId);
+    if (dto.urgency !== undefined) {
+      await this.authorizationService.requirePermission({ permission: "works.urgency.update", requiredScope: "ALL", userId: context.actorUserId });
+      if (before.status === "FINALIZATA") throw new BadRequestException("Urgența nu mai poate fi modificată după finalizarea lucrării.");
+    }
     const beforeGenericSubmission = getGenericWorkFormSubmission(before);
     this.rejectConflictingPatientPayload(dto.patientId, dto.patientName);
     const data = await this.toUpdateData(before, dto, context.actorUserId);
@@ -1851,6 +1929,19 @@ export class WorksService {
             changedFields,
             code: before.code,
             status: updatedWorkOrder.status,
+          },
+          requestMetadata: context.requestMetadata,
+          resourceId: workOrderId,
+        });
+      }
+      if (dto.urgency !== undefined && before.urgency !== updatedWorkOrder.urgency) {
+        await this.recordAudit(tx, {
+          action: before.urgency === null ? WORK_ORDER_AUDIT_ACTIONS.urgencySet : WORK_ORDER_AUDIT_ACTIONS.urgencyChanged,
+          actorUserId: context.actorUserId,
+          metadata: {
+            from: formatUrgency(before.urgency),
+            to: formatUrgency(updatedWorkOrder.urgency),
+            workCode: before.code,
           },
           requestMetadata: context.requestMetadata,
           resourceId: workOrderId,
@@ -2231,6 +2322,9 @@ export class WorksService {
           data.priority = value;
         }
         return;
+      case "urgency":
+        if (typeof value === "string" && (URGENCY_LEVELS as readonly string[]).includes(value)) data.urgency = value as "NORMAL" | "URGENCY_1" | "URGENCY_2" | "URGENCY_3" | "URGENCY_4";
+        return;
       case "quantity":
         if (typeof value === "number") {
           data.quantity = value;
@@ -2300,6 +2394,20 @@ export class WorksService {
     }
   }
 
+  private validateAggregateItem(dto: CreateWorkOrderItemDto): WorkOrderItemInput {
+    const validation = validateWorkOrderItemScope(dto);
+    if (!validation.valid) {
+      throw new BadRequestException(validation.message ?? "Componenta tehnică nu este validă.");
+    }
+    if (!dto.workTypeId && !dto.customWorkTypeSnapshot) {
+      throw new BadRequestException("Selectează un tip de lucrare pentru fiecare componentă.");
+    }
+    if (dto.workTypeId && dto.customWorkTypeSnapshot) {
+      throw new BadRequestException("Alege tipul din catalog sau valoarea personalizată, nu ambele.");
+    }
+    return { ...dto, teeth: validation.teeth };
+  }
+
   private async validateWorkType(
     client: Prisma.TransactionClient | PrismaService,
     workTypeId: string,
@@ -2367,6 +2475,7 @@ export class WorksService {
       currency: workOrder.currency,
       doctorId: workOrder.doctorId,
       priority: workOrder.priority,
+      urgency: workOrder.urgency,
       quantity: workOrder.quantity,
       shade: workOrder.shade,
       status: workOrder.status,
@@ -2809,6 +2918,9 @@ export class WorksService {
     if (workOrder.claimStatus !== "UNCLAIMED") {
       throw new ConflictException("Lucrarea este deja revendicată.");
     }
+    if (workOrder.technicalReadiness === "PROBE_READY" || workOrder.technicalReadiness === "FINAL_READY") {
+      throw new ConflictException("Lucrarea nu mai este disponibilă pentru preluare tehnică.");
+    }
     const logisticsStatus = workOrder.activeCycle?.logisticsState?.status;
     if (logisticsStatus === "BLOCKED") {
       throw new BadRequestException("Lucrarea blocată nu poate fi revendicată.");
@@ -3010,6 +3122,12 @@ function isDtoFieldChanged(before: WorkOrderRecord, dto: UpdateWorkDto, field: (
   }
 
   return before[field] !== value;
+}
+
+function formatUrgency(value: string | null): string | null {
+  if (!value || !(value in URGENCY_LABELS_RO)) return null;
+  const level = value as keyof typeof URGENCY_LABELS_RO;
+  return `${URGENCY_LABELS_RO[level]} · +${URGENCY_SURCHARGE_PERCENT[level]}%`;
 }
 
 function isPrismaErrorCode(error: unknown, code: string): boolean {

@@ -34,6 +34,7 @@ function clinic(overrides: Partial<Clinic> = {}): Clinic {
     email: "clinic@example.test",
     id: "clinic_1",
     internalNotes: null,
+    legalEntityId: null,
     isActive: true,
     legalName: null,
     name: "Clinica Test",
@@ -72,6 +73,9 @@ describe("ClinicsService", () => {
           clinic: {
             create: clinicCreate,
           },
+          legalEntity: {
+            findFirst: vi.fn().mockResolvedValue(null),
+          },
         }),
       ),
     });
@@ -87,6 +91,7 @@ describe("ClinicsService", () => {
         createdByUserId: "actor_1",
         name: "Clinica Test",
       }),
+      include: { legalEntity: true },
     });
     expect(auditCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -114,5 +119,41 @@ describe("DoctorsService", () => {
         { clinicId: "clinic_1", firstName: "Ana", lastName: "Popescu" },
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("rejects doctor creation when requested ownership mismatches the clinic", async () => {
+    const service = createDoctorsService({
+      clinic: { findUnique: vi.fn().mockResolvedValue({ isActive: true, legalEntity: { code: "CDT", id: "entity_cdt" } }) },
+      legalEntity: { findFirst: vi.fn().mockResolvedValue({ code: "NG", displayName: "NG", id: "entity_ng" }) },
+    });
+
+    await expect(service.createDoctor(
+      { actorUserId: "actor_1", requestMetadata: {} },
+      { clinicId: "clinic_1", firstName: "Ana", lastName: "Popescu", legalEntityCode: "NG" },
+    )).rejects.toThrow("aceeași cu firma clinicii");
+  });
+
+  it("rejects doctor ownership changes that mismatch the target clinic", async () => {
+    const service = createDoctorsService({
+      doctor: {
+        findUnique: vi.fn().mockResolvedValue({
+          clinicId: "clinic_1",
+          firstName: "Ana",
+          id: "doctor_1",
+          isActive: true,
+          lastName: "Popescu",
+          clinic: { id: "clinic_1", name: "Clinica", code: "CL-1" },
+          legalEntity: { code: "CDT", id: "entity_cdt" },
+        }),
+      },
+      clinic: { findUnique: vi.fn().mockResolvedValue({ isActive: true, legalEntity: { code: "CDT", id: "entity_cdt" } }) },
+      legalEntity: { findFirst: vi.fn().mockResolvedValue({ code: "NG", displayName: "NG", id: "entity_ng" }) },
+    });
+
+    await expect(service.updateDoctor(
+      { actorUserId: "actor_1", requestMetadata: {} },
+      "doctor_1",
+      { clinicId: "clinic_2", legalEntityCode: "NG" },
+    )).rejects.toThrow("aceeași cu firma clinicii");
   });
 });

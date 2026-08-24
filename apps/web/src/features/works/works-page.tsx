@@ -1,4 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import {
   Button,
   Card,
@@ -44,14 +45,18 @@ import {
   type WorkCycleReason,
   type WorkCyclesHistory,
   type WorksListParams,
+  type CreateClinicInput,
+  type CreateDoctorInput,
+  URGENCY_LABELS_RO,
+  URGENCY_LEVELS,
 } from "@dental-lab/shared";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
-import { fetchClinicOptions, fetchDoctorOptions } from "../clinics/clinics-api.js";
+import { createClinic, createDoctor, fetchClinicOptions, fetchDoctorOptions } from "../clinics/clinics-api.js";
 import { fetchPatient, useCreatePatient, usePatientOptions } from "../patients/patients-api.js";
 import { patientFormSchema, type PatientFormValues } from "../patients/patients-page.schema.js";
 import { useSettings } from "../settings/settings-api.js";
@@ -61,9 +66,12 @@ import { useActiveWorkFormTemplate } from "../work-forms/work-form-templates-api
 import { WorkForm, WorkFormActions, defaultWorkFormValues, toPersistedWorkFormValues, toWorkDeadlinePreviewInput, toWorkFormValues, toWorkMutationInput } from "./work-form.js";
 import { WorkFormFieldRenderer } from "./work-dynamic-form.js";
 import { WorkWorkflowSection } from "./work-workflow-section.js";
-import { downloadWorkAttachment, useCreateNextWorkCycle, useCreateWork, useFinalizeRealLabSheet, useRealLabSheet, useUpdateWork, useUpdateTechnicianWorkDetails, useUploadWorkAttachments, useUpsertRealLabSheet, useWork, useWorkCycles, useWorkDeadlinePreview, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
+import { downloadWorkAttachment, useCreateNextWorkCycle, useCreateWork, useFinalizeRealLabSheet, useProbeTypes, useRealLabSheet, useReceiveProbe, useSelectProbeType, useUpdateActiveProbeDeadline, useUpdateWork, useUpdateTechnicianWorkDetails, useUploadWorkAttachments, useUpsertRealLabSheet, useWork, useWorkCycles, useWorkDeadlinePreview, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
 import { workFormSchema, type WorkFormValues } from "./works-page.schema.js";
 import { WorkQrModal } from "./work-qr-modal.js";
+import { filterDraftConnections, getDraftCompositionTeeth, MultiItemWorkEditor, type DraftToothConnection, type DraftWorkOrderItem } from "./multi-item-work-editor.js";
+import "./multi-item-work-editor.css";
+import { WorkDetailComposition } from "./work-detail-composition.js";
 import { applyApiErrorsToForm, getErrorMessage, getFormErrorSummaryItems, UnsavedChangesPrompt, useBeforeUnloadPrompt, useCloseGuard, useErrorSummaryFocus } from "../../lib/form-utils.js";
 import { useTechnicianOptions } from "../technician-workbench/technician-workbench-api.js";
 import "./works-page.css";
@@ -79,6 +87,7 @@ const defaultListParams: WorksListParams = {
   page: 1,
   pageSize,
   priority: undefined,
+  urgency: undefined,
   search: undefined,
   sortBy: "createdAt",
   sortDirection: "desc",
@@ -88,11 +97,7 @@ const defaultListParams: WorksListParams = {
 
 const EMPTY_WORK_ATTACHMENTS = [] as const;
 
-const priorityFilterOptions = [
-  { label: "Toate", value: "" },
-  { label: "Normal", value: "NORMAL" },
-  { label: "Urgent", value: "URGENT" },
-] as const;
+const urgencyFilterOptions = [{ label: "Toate", value: "" }, ...URGENCY_LEVELS.map((value) => ({ label: `${URGENCY_LABELS_RO[value]} · +${value === "NORMAL" ? 0 : value === "URGENCY_1" ? 25 : value === "URGENCY_2" ? 50 : value === "URGENCY_3" ? 75 : 100}%`, value }))] as const;
 
 const deadlineFilterOptions = [
   { label: "Toate", value: "" },
@@ -183,6 +188,11 @@ function formatPrice(value: number | null, currency: string, locale: string): st
   return value === null ? "Restricționat" : formatMoneyMinor(value, currency, locale);
 }
 
+function urgencyLabel(value: import("@dental-lab/shared").UrgencyLevel | null | undefined): string {
+  if (!value) return "Prioritate istorică";
+  return `${URGENCY_LABELS_RO[value]} · +${value === "NORMAL" ? 0 : value === "URGENCY_1" ? 25 : value === "URGENCY_2" ? 50 : value === "URGENCY_3" ? 75 : 100}%`;
+}
+
 function getSafeColor(value: string | null | undefined): string | null {
   return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : null;
 }
@@ -244,6 +254,18 @@ function DeadlineDetailCard({ work }: { readonly work: import("@dental-lab/share
   );
 }
 
+function ActiveProbeDeadlineCard({ canEdit, work }: { readonly canEdit: boolean; readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
+  const cycle = work.activeProbeCycle;
+  const mutation = useUpdateActiveProbeDeadline();
+  const [value, setValue] = useState(cycle ? cycle.deadlineAt.slice(0, 16) : "");
+  useEffect(() => setValue(cycle ? cycle.deadlineAt.slice(0, 16) : ""), [cycle?.deadlineAt]);
+  if (!cycle) return null;
+  return <Card><CardHeader><CardTitle>Termen probă curentă</CardTitle><CardDescription>{cycle.probeTypeNameSnapshot}</CardDescription></CardHeader><CardContent>
+    <div className="works-page__detail-field"><span>Termen explicit</span><strong>{formatDateTime(cycle.deadlineAt)}</strong></div>
+    {canEdit && work.status !== "FINALIZATA" ? <div className="works-page__actions"><label>Modifică termenul<input aria-label="Termen probă curentă" className="dl-control" onChange={(event) => setValue(event.target.value)} type="datetime-local" value={value} /></label><Button disabled={!value || mutation.isPending} isLoading={mutation.isPending} onClick={() => mutation.mutate({ cycleId: cycle.id, deadlineAt: new Date(value).toISOString(), workOrderId: work.id })} type="button">Salvează termenul</Button></div> : null}
+  </CardContent></Card>;
+}
+
 export function WorksPage(): ReactNode {
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -270,6 +292,7 @@ export function WorksPage(): ReactNode {
     && !hasPermission(permissionsQuery.data, "logistics.center.read");
   const canShowLegacyCycles = canReadCycles && canShowLegacyExecution;
   const canCreateNextCycle = hasPermission(permissionsQuery.data, "cycles.create_next");
+  const canSelectProbeType = hasPermission(permissionsQuery.data, "cycles.probe_type.select");
   const canReadPricing = hasPermission(permissionsQuery.data, "pricing.read");
   const canEditTechnicalCode = hasPermission(permissionsQuery.data, "works.technical_details.update");
   const canUploadFiles = hasPermission(permissionsQuery.data, "files.upload");
@@ -284,6 +307,7 @@ export function WorksPage(): ReactNode {
     retry: false,
   });
   const formWorkTypeOptionsQuery = useWorkFormWorkTypeOptions(canCreate || canUpdate);
+  const probeTypesQuery = useProbeTypes(canCreate || canUpdate || canReadCycles);
   const pricingWorkTypeOptionsQuery = useWorkTypeOptions(canReadPricing);
   const techniciansQuery = useTechnicianOptions(canReadTechnicianOptions);
   const settingsQuery = useSettings(canReadPricing);
@@ -341,10 +365,10 @@ export function WorksPage(): ReactNode {
       },
     },
     {
-      header: "Prioritate",
-      id: "priority",
+      header: "Urgență",
+      id: "urgency",
       isSortable: true,
-      renderCell: (work) => <PriorityBadge label={work.priority === "URGENT" ? "Urgent" : "Normal"} variant={work.priority === "URGENT" ? "urgent" : "normal"} />,
+      renderCell: (work) => work.urgency ? <BadgePill label={urgencyLabel(work.urgency)} tone={work.urgency === "NORMAL" ? "neutral" : "warning"} /> : <PriorityBadge label={work.priority === "URGENT" ? "Urgent" : "Normal"} variant={work.priority === "URGENT" ? "urgent" : "normal"} />,
     },
     {
       header: "Acțiuni",
@@ -450,10 +474,10 @@ export function WorksPage(): ReactNode {
                     value={params.doctorId ?? ""}
                   />
                   <Select
-                    label="Prioritate"
-                    onChange={(event) => setParams((current) => ({ ...current, page: 1, priority: event.target.value === "URGENT" ? "URGENT" : event.target.value === "NORMAL" ? "NORMAL" : undefined }))}
-                    options={priorityFilterOptions}
-                    value={params.priority ?? ""}
+                    label="Urgență"
+                    onChange={(event) => setParams((current) => ({ ...current, page: 1, urgency: URGENCY_LEVELS.includes(event.target.value as typeof URGENCY_LEVELS[number]) ? event.target.value as typeof URGENCY_LEVELS[number] : undefined }))}
+                    options={urgencyFilterOptions}
+                    value={params.urgency ?? ""}
                   />
                   <Select
                     label="Termen"
@@ -520,6 +544,7 @@ export function WorksPage(): ReactNode {
         initialPatient={initialPatientQuery.data}
         initialPatientId={initialPatientId ?? undefined}
         pricingWorkTypeOptions={pricingWorkTypeOptionsQuery.data ?? []}
+        probeTypeOptions={probeTypesQuery.data ?? []}
         isSaving={createMutation.isPending}
         onOpenChange={setIsCreateOpen}
         onSubmit={handleCreate}
@@ -532,6 +557,7 @@ export function WorksPage(): ReactNode {
         canEditTechnicalCode={canEditTechnicalCode}
         canUploadFiles={canUploadFiles}
         canCreateNextCycle={canCreateNextCycle}
+        canSelectProbeType={canSelectProbeType}
         canReadCycles={canShowLegacyCycles}
         canShowLegacyExecution={canShowLegacyExecution}
         canReadPricing={canReadPricing}
@@ -550,6 +576,7 @@ export function WorksPage(): ReactNode {
         onSubmit={handleUpdate}
         onShowQr={(workId) => setQrWorkId(workId)}
         pricingWorkTypeOptions={pricingWorkTypeOptionsQuery.data ?? []}
+        probeTypeOptions={probeTypesQuery.data ?? []}
         submitError={updateMutation.error}
         work={selectedWork}
         workError={selectedWorkQuery.error}
@@ -587,6 +614,7 @@ function CreateWorkModal({
   onOpenChange,
   onSubmit,
   pricingWorkTypeOptions,
+  probeTypeOptions,
   submitError,
 }: {
   readonly clinicOptions: readonly { readonly code: string; readonly id: string; readonly name: string }[];
@@ -602,15 +630,40 @@ function CreateWorkModal({
   readonly onOpenChange: (isOpen: boolean) => void;
   readonly onSubmit: (input: CreateWorkInput) => void;
   readonly pricingWorkTypeOptions: readonly { readonly basePriceMinor: number; readonly id: string }[];
+  readonly probeTypeOptions: readonly import("@dental-lab/shared").ProbeTypeView[];
   readonly submitError: unknown;
 }): ReactNode {
   const [isPatientCreateOpen, setPatientCreateOpen] = useState(false);
+  const [isClinicCreateOpen, setClinicCreateOpen] = useState(false);
+  const [isDoctorCreateOpen, setDoctorCreateOpen] = useState(false);
+  const [draftItems, setDraftItems] = useState<readonly DraftWorkOrderItem[]>([]);
+  const [draftConnections, setDraftConnections] = useState<readonly DraftToothConnection[]>([]);
   const form = useForm<WorkFormValues>({
     defaultValues: defaultWorkFormValues,
     resolver: zodResolver(workFormSchema),
   });
   const patientOptionsQuery = usePatientOptions("", isOpen);
   const createPatientMutation = useCreatePatient();
+  const queryClient = useQueryClient();
+  const createClinicMutation = useMutation({
+    mutationFn: (input: CreateClinicInput) => createClinic(input),
+    onSuccess: async (clinic) => {
+      await queryClient.invalidateQueries({ queryKey: ["clinics"] });
+      await queryClient.invalidateQueries({ queryKey: ["doctors"] });
+      form.setValue("clinicId", clinic.id, { shouldDirty: true, shouldValidate: true });
+      form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true });
+      setClinicCreateOpen(false);
+    },
+  });
+  const createDoctorMutation = useMutation({
+    mutationFn: (input: CreateDoctorInput) => createDoctor(input),
+    onSuccess: async (doctor) => {
+      await queryClient.invalidateQueries({ queryKey: ["clinics"] });
+      await queryClient.invalidateQueries({ queryKey: ["doctors"] });
+      form.setValue("doctorId", doctor.id, { shouldDirty: true, shouldValidate: true });
+      setDoctorCreateOpen(false);
+    },
+  });
   const selectedClinicId = form.watch("clinicId");
   const selectedDoctorId = form.watch("doctorId");
   const selectedWorkTypeId = form.watch("workTypeId");
@@ -644,6 +697,8 @@ function CreateWorkModal({
   useEffect(() => {
     if (!isOpen) {
       form.reset(defaultWorkFormValues);
+      setDraftItems([]);
+      setDraftConnections([]);
     }
   }, [form, isOpen]);
 
@@ -686,6 +741,7 @@ function CreateWorkModal({
         footer={<WorkFormActions canReset={form.formState.isDirty} formId="create-work-form" isSaving={isSaving} onReset={() => form.reset(defaultWorkFormValues)} submitDisabled={submitDisabled} submitLabel="Creează lucrare" />}
         isOpen={isOpen}
         onOpenChange={closeGuard.handleOpenChange}
+        size="full"
         title="Lucrare nouă"
       >
         <WorkForm
@@ -695,16 +751,49 @@ function CreateWorkModal({
           formId="create-work-form"
           isDisabled={isSaving}
           onClinicChange={() => form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true })}
+          onCreateClinic={() => setClinicCreateOpen(true)}
+          onCreateDoctor={() => setDoctorCreateOpen(true)}
           onCreatePatient={() => setPatientCreateOpen(true)}
           onSubmit={(values) => {
             form.clearErrors("root");
-            onSubmit(toWorkMutationInput(values, activeTemplateQuery.data));
+            if (draftItems.length === 0) {
+              form.setError("root", { message: "Adaugă cel puțin o componentă lucrării." });
+              return;
+            }
+            const input = toWorkMutationInput(values, activeTemplateQuery.data);
+            const firstItem = draftItems[0];
+            onSubmit({
+              ...input,
+              quantity: draftItems.length,
+              shade: firstItem?.shade ?? null,
+              implantPlatform: firstItem?.implantPlatform === "Alt tip" ? firstItem.implantPlatformCustom : firstItem?.implantPlatform ?? null,
+              items: draftItems.map((item) => ({
+                scope: item.scope,
+                teeth: item.teeth,
+                workTypeId: item.workTypeId,
+                shade: item.shade,
+                implantPlatform: item.implantPlatform === "Alt tip" ? item.implantPlatformCustom : item.implantPlatform,
+                restorationType: item.restorationType,
+                technicalCodeNotes: item.technicalCodeNotes,
+                notes: item.notes,
+              })),
+              toothConnections: filterDraftConnections(draftConnections, getDraftCompositionTeeth(draftItems)),
+            });
           }}
+          multiItem
+          workDetailsSlot={<MultiItemWorkEditor connections={draftConnections} disabled={isSaving} items={draftItems} onChange={(items, connections) => {
+            setDraftItems(items);
+            setDraftConnections(connections);
+            const first = items[0];
+            form.setValue("workTypeId", first?.workTypeId ?? "", { shouldDirty: true, shouldValidate: true });
+            form.setValue("quantity", items.length || 1, { shouldDirty: true, shouldValidate: true });
+          }} workTypeOptions={formWorkTypeOptions} />}
           totalPreview={totalPreview}
           deadlinePreview={deadlinePreviewQuery.data ?? null}
           isDeadlinePreviewLoading={deadlinePreviewQuery.isFetching}
           workTypeOptions={formWorkTypeOptions}
           patientOptions={patientOptions}
+          probeTypeOptions={probeTypeOptions}
         />
       </Modal>
       <QuickPatientModal
@@ -718,6 +807,21 @@ function CreateWorkModal({
           },
         })}
         submitError={createPatientMutation.error}
+      />
+      <QuickClinicModal
+        isOpen={isClinicCreateOpen}
+        isSaving={createClinicMutation.isPending}
+        onOpenChange={setClinicCreateOpen}
+        onSubmit={(values) => createClinicMutation.mutate({ ...values, legalEntityCode: values.legalEntityCode || null })}
+        submitError={createClinicMutation.error}
+      />
+      <QuickDoctorModal
+        clinicId={selectedClinicId}
+        isOpen={isDoctorCreateOpen}
+        isSaving={createDoctorMutation.isPending}
+        onOpenChange={setDoctorCreateOpen}
+        onSubmit={(values) => createDoctorMutation.mutate({ ...values, legalEntityCode: values.legalEntityCode || null })}
+        submitError={createDoctorMutation.error}
       />
       {closeGuard.confirmModal}
     </>
@@ -883,6 +987,7 @@ function WorkDetailsDrawer({
   canEditTechnicalCode,
   canUploadFiles,
   canCreateNextCycle,
+  canSelectProbeType,
   canReadCycles,
   canShowLegacyExecution,
   canReadPricing,
@@ -897,6 +1002,7 @@ function WorkDetailsDrawer({
   onShowQr,
   onSubmit,
   pricingWorkTypeOptions,
+  probeTypeOptions,
   submitError,
   work,
   workError,
@@ -905,6 +1011,7 @@ function WorkDetailsDrawer({
   readonly canEditTechnicalCode: boolean;
   readonly canUploadFiles: boolean;
   readonly canCreateNextCycle: boolean;
+  readonly canSelectProbeType: boolean;
   readonly canReadCycles: boolean;
   readonly canShowLegacyExecution: boolean;
   readonly canReadPricing: boolean;
@@ -919,6 +1026,7 @@ function WorkDetailsDrawer({
   readonly onShowQr: (workId: string) => void;
   readonly onSubmit: (input: UpdateWorkInput) => void;
   readonly pricingWorkTypeOptions: readonly { readonly basePriceMinor: number; readonly id: string }[];
+  readonly probeTypeOptions: readonly import("@dental-lab/shared").ProbeTypeView[];
   readonly submitError: unknown;
   readonly work: import("@dental-lab/shared").WorkDetail | undefined;
   readonly workError: unknown;
@@ -957,15 +1065,19 @@ function WorkDetailsDrawer({
     : null;
   const closeGuard = useCloseGuard(form.formState.isDirty, isSaving, onOpenChange);
   const [pendingWorkTypeChange, setPendingWorkTypeChange] = useState<UpdateWorkInput | null>(null);
+  const [editingCaseFields, setEditingCaseFields] = useState(false);
   const isWorkTypeChanging = Boolean(work && selectedWorkTypeId !== "" && selectedWorkTypeId !== work.workType.id);
   const submitDisabled = false;
   const [isReturnOpen, setReturnOpen] = useState(false);
   const createNextCycleMutation = useCreateNextWorkCycle();
+  const receiveProbeMutation = useReceiveProbe();
+  const selectProbeTypeMutation = useSelectProbeType();
   const cyclesQuery = useWorkCycles(work?.id ?? null, isOpen && canReadCycles && work !== undefined);
   const activeCycleNumber = cyclesQuery.data?.cycles.find((cycle) => cycle.id === cyclesQuery.data?.activeCycleId)?.cycleNumber ?? null;
 
   useEffect(() => {
     form.reset(toWorkFormValues(work));
+    setEditingCaseFields(false);
   }, [form, work]);
 
   useEffect(() => {
@@ -1017,34 +1129,38 @@ function WorkDetailsDrawer({
               />
             ) : null}
             <div className="works-page__meta">
-              <StatusBadge label="Înregistrată" variant="registered" />
-              <PriorityBadge label={work.priority === "URGENT" ? "Urgent" : "Normal"} variant={work.priority === "URGENT" ? "urgent" : "normal"} />
+              <StatusBadge label={work.status === "FINALIZATA" ? "Finalizată" : work.technicalReadiness === "PROBE_READY" ? "Probă gata" : work.status === "RECEPTIE" && work.probeReceivedAt ? "Recepționată" : "Înregistrată"} variant={work.status === "FINALIZATA" ? "closed" : work.technicalReadiness === "PROBE_READY" ? "production" : "registered"} />
+              {work.urgency ? <BadgePill label={urgencyLabel(work.urgency)} tone={work.urgency !== "NORMAL" ? "warning" : "neutral"} /> : <PriorityBadge label={work.priority === "URGENT" ? "Urgent" : "Normal"} variant={work.priority === "URGENT" ? "urgent" : "normal"} />}
               <span>Termen promis: {formatDate(work.requestedDeliveryDate)}</span>
               <span>Termen efectiv: {work.deadline.effectiveDueAt ? formatDateTime(work.deadline.effectiveDueAt) : "Nerezolvat"}</span>
               <span>Deadline: {work.deadline.status} · rev. {work.deadline.revision}</span>
               {canReadPricing ? <span>Total: {formatPrice(work.totalPriceMinor, work.currency ?? currency, locale)}</span> : null}
             </div>
+            {work.activeProbeCycle || (work.completedProbeCycles ?? []).length > 0 ? <ProbeCycleSummary canSelect={canSelectProbeType} isSaving={selectProbeTypeMutation.isPending} onSelect={(cycleId, probeTypeId) => selectProbeTypeMutation.mutate({ cycleId, probeTypeId, workOrderId: work.id })} probeTypes={probeTypeOptions} work={work} /> : null}
             <div className="works-page__actions">
               <Button onClick={() => onShowQr(work.id)} variant="outline">Vezi QR</Button>
+              {canUpdate ? <Button onClick={() => setEditingCaseFields(true)} type="button" variant="outline">Editează datele lucrării</Button> : null}
             </div>
-            <DeadlineDetailCard work={work} />
-            {canReadCycles ? (
+            {work.activeProbeCycle ? <ActiveProbeDeadlineCard canEdit={canUpdate} work={work} /> : <DeadlineDetailCard work={work} />}
+            <WorkDetailComposition canEdit={canUpdate} isOpen={isOpen} work={work} workTypeOptions={formWorkTypeOptions} />
+            {canReadCycles && !work.activeProbeCycle && ((work.completedProbeCycles ?? []).length === 0 || work.technicalReadiness === "PROBE_READY") ? (
               <WorkCyclesSection
                 canCreateNextCycle={canCreateNextCycle}
                 error={cyclesQuery.error}
                 history={cyclesQuery.data}
                 isLoading={cyclesQuery.isLoading}
                 onRegisterReturn={() => setReturnOpen(true)}
+                isCanonical={work.technicalReadiness === "PROBE_READY"}
                 work={work}
               />
             ) : null}
             {workTypeOptionsError ? <ErrorState title="Opțiunile nu au fost încărcate" description={getErrorMessage(workTypeOptionsError)} /> : null}
-            <WorkForm
+            {editingCaseFields ? <WorkForm
               clinicOptions={clinicOptions}
               doctorOptions={doctorsQuery.data ?? []}
               form={form}
               formId="update-work-form"
-              isDisabled={!canUpdate || isSaving}
+                isDisabled={!canUpdate || isSaving || work.status === "FINALIZATA"}
               onClinicChange={() => form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true })}
               allowPatientEdit={false}
               onCreatePatient={() => undefined}
@@ -1068,16 +1184,18 @@ function WorkDetailsDrawer({
               isDeadlinePreviewLoading={deadlinePreviewQuery.isFetching}
               workTypeOptions={formWorkTypeOptions}
               patientOptions={work.patient ? [{ birthDate: work.patient.birthDate ?? null, firstName: work.patient.firstName, fullName: work.patient.fullName, id: work.patient.id, lastName: work.patient.lastName, workCount: 0 }] : []}
+              probeTypeOptions={probeTypeOptions}
               workDetailsSlot={<WorkCodeAndFilesFields canEditCode={canEditTechnicalCode} canUploadFiles={canUploadFiles} work={work} />}
-            />
-            <WorkFormActions
+            /> : null}
+            {editingCaseFields ? <WorkFormActions
               canReset={form.formState.isDirty}
               formId="update-work-form"
               isSaving={isSaving}
               onReset={() => form.reset(toWorkFormValues(work))}
               submitDisabled={submitDisabled}
               submitLabel="Salvează lucrarea"
-            />
+            /> : null}
+            {editingCaseFields ? <Button onClick={() => { form.reset(toWorkFormValues(work)); setEditingCaseFields(false); }} type="button" variant="ghost">Renunță la editarea datelor</Button> : null}
             {!canUpdate ? <p className="works-page__muted">Ai acces de citire, dar nu poți modifica lucrarea.</p> : null}
           </div>
         ) : !workError ? <LoadingState text="Se încarcă detaliile" /> : null}
@@ -1097,7 +1215,20 @@ function WorkDetailsDrawer({
         title="Schimbi tipul lucrării?"
         variant="danger"
       />
-      <RegisterReturnModal
+      {work?.technicalReadiness === "PROBE_READY" ? <CanonicalReceiveProbeModal
+        isLoading={receiveProbeMutation.isPending}
+        isOpen={isReturnOpen}
+        onOpenChange={setReturnOpen}
+        onSubmit={(input) => {
+          if (!work) return;
+          receiveProbeMutation.mutate({ input, workOrderId: work.id }, {
+            onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Recepționarea nu a fost înregistrată", variant: "error" }),
+            onSuccess: () => { setReturnOpen(false); toast.showToast({ message: `${work.code} a fost recepționată și are o probă activă nouă.`, variant: "success" }); },
+          });
+        }}
+        probeTypes={probeTypeOptions}
+        work={work}
+      /> : <RegisterReturnModal
         clinicOptions={clinicOptions}
         history={cyclesQuery.data}
         isLoading={createNextCycleMutation.isPending}
@@ -1118,9 +1249,34 @@ function WorkDetailsDrawer({
         }}
         submitError={createNextCycleMutation.error}
         work={work}
-      />
+      />}
       {closeGuard.confirmModal}
     </>
+  );
+}
+
+function ProbeCycleSummary({ canSelect, isSaving, onSelect, probeTypes, work }: { readonly canSelect: boolean; readonly isSaving: boolean; readonly onSelect: (cycleId: string, probeTypeId: string) => void; readonly probeTypes: readonly import("@dental-lab/shared").ProbeTypeView[]; readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
+  const cycles = [
+    ...(work.activeProbeCycle ? [work.activeProbeCycle] : []),
+    ...(work.completedProbeCycles ?? []),
+  ];
+  return (
+    <Card>
+      <CardHeader><CardTitle>Probe tehnice</CardTitle><CardDescription>Cicluri la nivelul întregii lucrări; istoricul păstrează denumirea probei.</CardDescription></CardHeader>
+      <CardContent>
+        {cycles.length === 0 ? <p className="works-page__muted">Nu există probe canonice pentru această lucrare.</p> : cycles.map((cycle) => {
+          const options = cycle.status === "ACTIVE" && cycle.probeType.isArchived && !probeTypes.some((type) => type.id === cycle.probeType.id)
+            ? [cycle.probeType, ...probeTypes]
+            : probeTypes;
+          return (
+          <div className="works-page__cycle-item" key={cycle.id}>
+            <div><strong>{cycle.status === "ACTIVE" ? "Probă activă" : `Proba ${cycle.sequence} — ${cycle.probeTypeNameSnapshot}`}</strong><span> · termen {formatDateTime(cycle.deadlineAt)}</span></div>
+            {cycle.status === "ACTIVE" ? <Select disabled={!canSelect || isSaving} label="Tip probă" options={options.map((type) => ({ label: type.name, value: type.id }))} value={cycle.probeType.id} onChange={(event) => onSelect(cycle.id, event.target.value)} /> : <span className="works-page__muted">Tip probă istoric: {cycle.probeTypeNameSnapshot}</span>}
+          </div>
+          );
+        })}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1130,6 +1286,7 @@ function WorkCyclesSection({
   history,
   isLoading,
   onRegisterReturn,
+  isCanonical,
   work,
 }: {
   readonly canCreateNextCycle: boolean;
@@ -1137,6 +1294,7 @@ function WorkCyclesSection({
   readonly history: WorkCyclesHistory | undefined;
   readonly isLoading: boolean;
   readonly onRegisterReturn: () => void;
+  readonly isCanonical?: boolean;
   readonly work: import("@dental-lab/shared").WorkDetail;
 }): ReactNode {
   const cycles = history?.cycles ?? [];
@@ -1162,7 +1320,7 @@ function WorkCyclesSection({
             <span className="works-page__muted">Ciclu curent</span>
             <strong>{activeCycle ? `Ciclul ${activeCycle.cycleNumber}` : "Nedisponibil"}</strong>
           </div>
-          {canCreateNextCycle ? <Button onClick={onRegisterReturn}>Înregistrează revenirea</Button> : null}
+          {canCreateNextCycle ? <Button onClick={onRegisterReturn}>{isCanonical ? "Recepționată" : "Înregistrează revenirea"}</Button> : null}
         </div>
         {isLoading ? <LoadingState text="Se încarcă ciclurile" /> : null}
         {error ? <ErrorState title="Ciclurile nu au fost încărcate" description={getErrorMessage(error)} /> : null}
@@ -1229,7 +1387,7 @@ function ExecutionNowCard({ activeCycleNumber, showLegacyExecution, work }: { re
           {showLegacyExecution ? <MetricCell label="Etapă curentă" value={currentStage?.name ?? "Fără etapă curentă"} /> : null}
           {showLegacyExecution ? <MetricCell label="Poziție etapă" value={currentStage ? `Etapa ${currentStage.sortOrder} din ${work.workflow?.progress.total ?? 0}` : "N/A"} /> : null}
           {showLegacyExecution ? <MetricCell label="Status etapă" value={currentStage ? getWorkStageExecutionStatusLabel(currentStage.status) : "Nedefinit"} /> : null}
-          <MetricCell label="Prioritate" value={work.priority === "URGENT" ? "Urgent" : "Normal"} />
+          <MetricCell label={work.urgency ? "Urgență" : "Prioritate istorică"} value={work.urgency ? urgencyLabel(work.urgency) : (work.priority === "URGENT" ? "Urgent" : "Normal")} />
           <MetricCell label="Tehnician" value={currentTechnician?.displayName ?? "Nerevendicată"} />
           <MetricCell label="Firmă" value={executionCompany} />
           {showLegacyExecution ? <MetricCell label="Progres" value={progress} /> : null}
@@ -1483,6 +1641,45 @@ function RealLabSheetSection({
   );
 }
 
+function CanonicalReceiveProbeModal({
+  isLoading,
+  isOpen,
+  onOpenChange,
+  onSubmit,
+  probeTypes,
+  work,
+}: {
+  readonly isLoading: boolean;
+  readonly isOpen: boolean;
+  readonly onOpenChange: (isOpen: boolean) => void;
+  readonly onSubmit: (input: { readonly deadlineAt: string; readonly probeTypeId: string }) => void;
+  readonly probeTypes: readonly import("@dental-lab/shared").ProbeTypeView[];
+  readonly work: import("@dental-lab/shared").WorkDetail;
+}): ReactNode {
+  const [probeTypeId, setProbeTypeId] = useState("");
+  const [deadlineAt, setDeadlineAt] = useState("");
+  useEffect(() => {
+    if (isOpen) {
+      setProbeTypeId(probeTypes[0]?.id ?? "");
+      setDeadlineAt("");
+    }
+  }, [isOpen, probeTypes]);
+  const canSubmit = probeTypeId !== "" && deadlineAt !== "";
+  return <Modal
+    description={`${work.code} · ultima probă a fost marcată gata; aceeași lucrare continuă.`}
+    footer={<Button disabled={!canSubmit} isLoading={isLoading} onClick={() => onSubmit({ deadlineAt: new Date(deadlineAt).toISOString(), probeTypeId })}>Recepționează și începe proba</Button>}
+    isOpen={isOpen}
+    onOpenChange={onOpenChange}
+    title="Recepționată"
+  >
+    <FormLayout>
+      <p className="works-page__muted">Ultima probă finalizată rămâne în istoric. Alege tipul și termenul explicit pentru următoarea probă.</p>
+      <Select label="Tip probă nouă" options={probeTypes.map((type) => ({ label: type.name, value: type.id }))} value={probeTypeId} onChange={(event) => setProbeTypeId(event.target.value)} required />
+      <label className="works-page__detail-field"><span>Termen nou</span><input aria-label="Termen probă nouă" className="dl-control" onChange={(event) => setDeadlineAt(event.target.value)} type="datetime-local" value={deadlineAt} required /></label>
+    </FormLayout>
+  </Modal>;
+}
+
 function RegisterReturnModal({
   clinicOptions,
   history,
@@ -1710,6 +1907,76 @@ function QuickPatientModal({
       </FormLayout>
     </Modal>
   );
+}
+
+const quickClinicSchema = z.object({
+  legalEntityCode: z.union([z.enum(["CDT", "NG"]), z.literal("")]),
+  name: z.string().trim().min(2, "Numele clinicii este obligatoriu."),
+});
+type QuickClinicValues = z.infer<typeof quickClinicSchema>;
+
+function QuickClinicModal({
+  isOpen,
+  isSaving,
+  onOpenChange,
+  onSubmit,
+  submitError,
+}: {
+  readonly isOpen: boolean;
+  readonly isSaving: boolean;
+  readonly onOpenChange: (isOpen: boolean) => void;
+  readonly onSubmit: (values: QuickClinicValues) => void;
+  readonly submitError: unknown;
+}): ReactNode {
+  const form = useForm<QuickClinicValues>({ defaultValues: { legalEntityCode: "", name: "" }, resolver: zodResolver(quickClinicSchema) });
+  useEffect(() => { if (!isOpen) form.reset({ legalEntityCode: "", name: "" }); }, [form, isOpen]);
+  useEffect(() => { if (submitError) applyApiErrorsToForm(form, submitError); }, [form, submitError]);
+  return <Modal description="Creează clinica și păstrează datele lucrării în formular." footer={<FormActions formId="quick-clinic-form" isSubmitting={isSaving} submitLabel="Creează clinica" />} isOpen={isOpen} onOpenChange={onOpenChange} title="Clinică nouă">
+    <FormLayout id="quick-clinic-form" onSubmit={(event) => void form.handleSubmit((values) => onSubmit(values))(event)}>
+      <FormGrid>
+        <TextInput error={form.formState.errors.name?.message} id="quickClinicName" label="Nume clinică" required {...form.register("name")} />
+        <Select error={form.formState.errors.legalEntityCode?.message} id="quickClinicLegalEntity" label="Entitate juridică" options={[{ label: "CDT", value: "CDT" }, { label: "NG", value: "NG" }]} placeholder="Se poate completa ulterior de Manager" {...form.register("legalEntityCode")} />
+      </FormGrid>
+    </FormLayout>
+  </Modal>;
+}
+
+const quickDoctorSchema = z.object({
+  clinicId: z.string().min(1, "Alege clinica."),
+  firstName: z.string().trim().min(2, "Prenumele este obligatoriu."),
+  lastName: z.string().trim().min(2, "Numele este obligatoriu."),
+  legalEntityCode: z.union([z.enum(["CDT", "NG"]), z.literal("")]),
+});
+type QuickDoctorValues = z.infer<typeof quickDoctorSchema>;
+
+function QuickDoctorModal({
+  clinicId,
+  isOpen,
+  isSaving,
+  onOpenChange,
+  onSubmit,
+  submitError,
+}: {
+  readonly clinicId: string;
+  readonly isOpen: boolean;
+  readonly isSaving: boolean;
+  readonly onOpenChange: (isOpen: boolean) => void;
+  readonly onSubmit: (values: QuickDoctorValues) => void;
+  readonly submitError: unknown;
+}): ReactNode {
+  const form = useForm<QuickDoctorValues>({ defaultValues: { clinicId, firstName: "", lastName: "", legalEntityCode: "" }, resolver: zodResolver(quickDoctorSchema) });
+  useEffect(() => { form.setValue("clinicId", clinicId); }, [clinicId, form]);
+  useEffect(() => { if (!isOpen) form.reset({ clinicId, firstName: "", lastName: "", legalEntityCode: "" }); }, [clinicId, form, isOpen]);
+  useEffect(() => { if (submitError) applyApiErrorsToForm(form, submitError); }, [form, submitError]);
+  return <Modal description="Doctorul este verificat server-side pentru compatibilitatea entității juridice." footer={<FormActions formId="quick-doctor-form" isSubmitting={isSaving} submitLabel="Creează medicul" />} isOpen={isOpen} onOpenChange={onOpenChange} title="Medic nou">
+    <FormLayout id="quick-doctor-form" onSubmit={(event) => void form.handleSubmit((values) => onSubmit(values))(event)}>
+      <FormGrid>
+        <TextInput error={form.formState.errors.firstName?.message} id="quickDoctorFirstName" label="Prenume" required {...form.register("firstName")} />
+        <TextInput error={form.formState.errors.lastName?.message} id="quickDoctorLastName" label="Nume" required {...form.register("lastName")} />
+        <Select error={form.formState.errors.legalEntityCode?.message} id="quickDoctorLegalEntity" label="Entitate juridică" options={[{ label: "CDT", value: "CDT" }, { label: "NG", value: "NG" }]} placeholder="Se poate completa ulterior de Manager" {...form.register("legalEntityCode")} />
+      </FormGrid>
+    </FormLayout>
+  </Modal>;
 }
 
 function mergePatientOptions(options: readonly PatientOption[], selected: { readonly birthDate?: string | null; readonly firstName: string; readonly fullName: string; readonly id: string; readonly lastName: string } | null): readonly PatientOption[] {

@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
+import { TECHNICIAN_MANEUVER_UNIT_LABELS_RO } from "@dental-lab/shared";
 
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
@@ -100,6 +101,9 @@ export class TechnicianOperationsService {
   }
 
   public async createOperation(context: ActorContext, dto: TechnicianOperationMutationDto): Promise<TechnicianOperationDetailView> {
+    if (!dto.pricingUnit) {
+      throw new BadRequestException("Alege unitatea de tarifare a manoperei.");
+    }
     const operation = await this.prisma.$transaction(async (tx) => {
       const created = await tx.technicianOperation.create({
         data: {
@@ -107,6 +111,7 @@ export class TechnicianOperationsService {
           createdByUserId: context.actorUserId,
           description: dto.description ?? null,
           name: normalizeText(dto.name),
+          pricingUnit: dto.pricingUnit ?? null,
           sortOrder: dto.sortOrder ?? 0,
           updatedByUserId: context.actorUserId,
         },
@@ -133,12 +138,24 @@ export class TechnicianOperationsService {
       throw new BadRequestException("Archived technician operations must be restored before editing.");
     }
 
+    const nextPricingUnit = dto.pricingUnit === undefined ? before.pricingUnit : dto.pricingUnit;
+    const pricingUnitChanged = nextPricingUnit !== before.pricingUnit;
+    if (pricingUnitChanged && before.pricingUnit !== null && !dto.confirmPricingUnitChange) {
+      throw new BadRequestException("Confirmă explicit schimbarea unității de tarifare; tarifele active vor fi închise și trebuie configurate din nou.");
+    }
     const operation = await this.prisma.$transaction(async (tx) => {
+      if (pricingUnitChanged) {
+        await tx.technicianOperationRate.updateMany({
+          data: { validUntil: new Date() },
+          where: { operationId, validUntil: null },
+        });
+      }
       const updated = await tx.technicianOperation.update({
         data: {
           code: normalizeCode(dto.code),
           description: dto.description ?? null,
           name: normalizeText(dto.name),
+          ...(dto.pricingUnit === undefined ? {} : { pricingUnit: dto.pricingUnit }),
           ...(dto.sortOrder === undefined ? {} : { sortOrder: dto.sortOrder }),
           updatedByUserId: context.actorUserId,
           version: { increment: 1 },
@@ -154,6 +171,21 @@ export class TechnicianOperationsService {
         resourceId: operationId,
         resourceType: TECHNICIAN_OPERATION_RESOURCE_TYPES.operation,
       });
+
+      if (pricingUnitChanged) {
+        await this.recordAudit(tx, {
+          action: TECHNICIAN_OPERATION_AUDIT_ACTIONS.operationUnitChanged,
+          actorUserId: context.actorUserId,
+          metadata: {
+            from: before.pricingUnit ? TECHNICIAN_MANEUVER_UNIT_LABELS_RO[before.pricingUnit as keyof typeof TECHNICIAN_MANEUVER_UNIT_LABELS_RO] : "Neclasificată",
+            name: updated.name,
+            to: updated.pricingUnit ? TECHNICIAN_MANEUVER_UNIT_LABELS_RO[updated.pricingUnit as keyof typeof TECHNICIAN_MANEUVER_UNIT_LABELS_RO] : "Neclasificată",
+          },
+          requestMetadata: context.requestMetadata,
+          resourceId: operationId,
+          resourceType: TECHNICIAN_OPERATION_RESOURCE_TYPES.operation,
+        });
+      }
 
       return updated;
     });

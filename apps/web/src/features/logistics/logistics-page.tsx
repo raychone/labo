@@ -1006,7 +1006,11 @@ function WorkRow({
         <span className="logistics-page__code">{item.workCode}</span>
         <strong>{item.patientName}</strong>
       </button>
-      <div className="logistics-page__row-type">{item.workTypeName}</div>
+      <div className="logistics-page__row-type">
+        {item.workTypeName}
+        {item.technicalReadiness === "PROBE_READY" ? <small>Probă gata</small> : null}
+        {item.technicalReadiness === "FINAL_READY" ? <small>Finalizată</small> : null}
+      </div>
       <div className="logistics-page__row-value">-</div>
       <div className="logistics-page__row-technician">
         <span className="logistics-page__technician-dot" style={{ backgroundColor: item.technician?.preferredColor ?? "transparent" }} />

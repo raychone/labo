@@ -13,7 +13,8 @@ import {
   TextInput,
   Textarea,
 } from "@dental-lab/ui";
-import type { ClinicOption, CreateWorkInput, DoctorOption, PatientOption, UpdateWorkInput, WorkDeadlinePreview, WorkDeadlinePreviewInput, WorkDetail, WorkFormTemplateDetail, WorkPriority, WorkTypeFormOption } from "@dental-lab/shared";
+import { URGENCY_LABELS_RO, URGENCY_LEVELS } from "@dental-lab/shared";
+import type { ClinicOption, CreateWorkInput, DoctorOption, PatientOption, ProbeTypeView, UpdateWorkInput, WorkDeadlinePreview, WorkDeadlinePreviewInput, WorkDetail, WorkFormTemplateDetail, WorkTypeFormOption } from "@dental-lab/shared";
 import type { ReactNode } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { useEffect, useId, useMemo, useState } from "react";
@@ -31,7 +32,9 @@ export const defaultWorkFormValues: WorkFormValues = {
   implantPlatformCustom: null,
   patientId: "",
   patientReference: null,
+  probeTypeId: "",
   priority: "NORMAL",
+  urgency: "NORMAL",
   quantity: 1,
   requestedDeliveryDate: "",
   requestedDeliveryTime: "",
@@ -40,11 +43,6 @@ export const defaultWorkFormValues: WorkFormValues = {
   workFormValues: {},
   workTypeId: "",
 };
-
-const priorityOptions: readonly { readonly label: string; readonly value: WorkPriority }[] = [
-  { label: "Normal", value: "NORMAL" },
-  { label: "Urgent", value: "URGENT" },
-];
 
 const workFieldLabels: Record<keyof WorkFormValues, string> = {
   clinicId: "Cabinet",
@@ -56,7 +54,9 @@ const workFieldLabels: Record<keyof WorkFormValues, string> = {
   implantPlatformCustom: "Alt tip platformă",
   patientId: "Pacient",
   patientReference: "Identificator pacient",
+  probeTypeId: "Tip probă curentă",
   priority: "Prioritate",
+  urgency: "Urgență",
   quantity: "Elemente",
   requestedDeliveryDate: "Data termenului",
   requestedDeliveryTime: "Ora termenului",
@@ -92,7 +92,9 @@ export function toWorkFormValues(work: WorkDetail | undefined): WorkFormValues {
     implantPlatformCustom: work.implantPlatform && !IMPLANT_PLATFORM_OPTIONS.includes(work.implantPlatform as (typeof IMPLANT_PLATFORM_OPTIONS)[number]) ? work.implantPlatform : null,
     patientId: work.patient?.id ?? "",
     patientReference: work.patientReference,
+    probeTypeId: work.activeProbeCycle?.probeType.id ?? "",
     priority: work.priority,
+    urgency: work.urgency ?? "NORMAL",
     quantity: work.quantity,
     requestedDeliveryDate: work.requestedDeliveryDate.slice(0, 10),
     requestedDeliveryTime: work.deadline.manualDueAt?.slice(11, 16) ?? work.deadline.effectiveDueAt?.slice(11, 16) ?? "",
@@ -116,6 +118,9 @@ export function toWorkMutationInput(values: WorkFormValues, template: WorkFormTe
     ...(includePatient ? { patientId: values.patientId } : {}),
     patientReference: values.patientReference,
     priority: values.priority,
+    urgency: values.urgency,
+    ...(includePatient ? { probeTypeId: values.probeTypeId } : {}),
+    ...(includePatient ? { probeDeadlineAt: toManualDueAt(values.requestedDeliveryDate, values.requestedDeliveryTime) ?? "" } : {}),
     quantity: values.quantity,
     requestedDeliveryDate: values.requestedDeliveryDate,
     ...(includeManualDueAt ? { manualDueAt: toManualDueAt(values.requestedDeliveryDate, values.requestedDeliveryTime) } : {}),
@@ -212,12 +217,16 @@ export function WorkForm({
   formId,
   isDisabled,
   onClinicChange,
+  onCreateClinic,
+  onCreateDoctor,
   onCreatePatient,
   onSubmit,
   allowPatientEdit = true,
   workDetailsSlot,
+  multiItem = false,
   workTypeOptions,
   patientOptions,
+  probeTypeOptions,
 }: {
   readonly clinicOptions: readonly ClinicOption[];
   readonly doctorOptions: readonly DoctorOption[];
@@ -225,15 +234,19 @@ export function WorkForm({
   readonly formId: string;
   readonly isDisabled: boolean;
   readonly onClinicChange: (clinicId: string) => void;
+  readonly onCreateClinic?: () => void;
+  readonly onCreateDoctor?: () => void;
   readonly onCreatePatient: () => void;
   readonly onSubmit: (values: WorkFormValues) => void;
   readonly allowPatientEdit?: boolean;
   readonly workDetailsSlot?: ReactNode;
+  readonly multiItem?: boolean;
   readonly totalPreview?: string | null;
   readonly deadlinePreview?: WorkDeadlinePreview | null;
   readonly isDeadlinePreviewLoading?: boolean;
   readonly workTypeOptions: readonly WorkTypeFormOption[];
   readonly patientOptions: readonly PatientOption[];
+  readonly probeTypeOptions?: readonly ProbeTypeView[];
 }): ReactNode {
   const summaryRef = useErrorSummaryFocus(form.formState.errors, form.formState.submitCount);
   const summaryItems = form.formState.submitCount > 0
@@ -328,6 +341,7 @@ export function WorkForm({
             selectedValue={clinicId}
             emptyMessage="Nu există clinici potrivite."
           />
+          {onCreateClinic ? <div><Button disabled={isDisabled} onClick={onCreateClinic} type="button" variant="secondary">Clinică nouă</Button></div> : null}
           <SearchablePickerField
             disabled={isDisabled}
             error={form.formState.errors.doctorId?.message}
@@ -347,6 +361,7 @@ export function WorkForm({
             selectedValue={doctorId}
             emptyMessage={doctorOptions.length === 0 ? "Nu există medici activi disponibili." : "Nu există medici potriviți."}
           />
+          {onCreateDoctor ? <div><Button disabled={isDisabled} onClick={onCreateDoctor} type="button" variant="secondary">Medic nou</Button></div> : null}
         </FormGrid>
       </FormSection>
 
@@ -373,7 +388,7 @@ export function WorkForm({
       </FormSection>
 
       <FormSection title="Lucrare">
-        <FormGrid>
+        {multiItem ? <FormGrid className="works-page__multi-item-details-grid">{workDetailsSlot}</FormGrid> : <FormGrid>
           <SearchablePickerField
             disabled={isDisabled}
             error={form.formState.errors.workTypeId?.message}
@@ -457,11 +472,12 @@ export function WorkForm({
             </Button>
           ) : null}
           {workDetailsSlot}
-        </FormGrid>
+        </FormGrid>}
       </FormSection>
 
-      <FormSection title="Termen și prioritate">
+      <FormSection title="Termen și urgență">
         <FormGrid>
+          <Select disabled={isDisabled} error={form.formState.errors.probeTypeId?.message} id="probeTypeId" label="Tip probă curentă" options={(probeTypeOptions ?? []).map((option) => ({ label: option.name, value: option.id }))} required {...form.register("probeTypeId")} />
           <DateInput
             disabled={isDisabled}
             error={form.formState.errors.requestedDeliveryDate?.message}
@@ -478,7 +494,7 @@ export function WorkForm({
             placeholder="HH:mm"
             {...form.register("requestedDeliveryTime")}
           />
-          <Select disabled={isDisabled} error={form.formState.errors.priority?.message} id="priority" label="Prioritate" options={priorityOptions} required {...form.register("priority")} />
+          <Select disabled={isDisabled} error={form.formState.errors.urgency?.message} id="urgency" label="Urgență" options={URGENCY_LEVELS.map((value) => ({ label: `${URGENCY_LABELS_RO[value]} · +${value === "NORMAL" ? 0 : value === "URGENCY_1" ? 25 : value === "URGENCY_2" ? 50 : value === "URGENCY_3" ? 75 : 100}%`, value }))} {...form.register("urgency")} />
         </FormGrid>
       </FormSection>
 
@@ -524,13 +540,13 @@ function filterSearchableOptions(options: readonly SearchableOption[], searchVal
   return normalizedSearch === "" ? matched.slice(0, 3) : matched;
 }
 
-interface SearchableOption {
+export interface SearchableOption {
   readonly label: string;
   readonly secondary: string | undefined;
   readonly value: string;
 }
 
-function SearchablePickerField({
+export function SearchablePickerField({
   disabled,
   emptyMessage,
   error,

@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException } from "@nes
 import type { Clinic, Doctor, Patient, Prisma, WorkType } from "@prisma/client";
 import { plainToInstance } from "class-transformer";
 import { validate } from "class-validator";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PrismaService } from "../database/prisma.service.js";
 import type { PatientsService } from "../patients/patients.service.js";
@@ -44,6 +44,7 @@ function clinic(overrides: Partial<Clinic> = {}): Clinic {
     email: null,
     id: "clinic_1",
     internalNotes: null,
+    legalEntityId: null,
     isActive: true,
     legalName: null,
     name: "Clinica Test",
@@ -69,6 +70,7 @@ function doctor(overrides: Partial<Doctor> = {}): Doctor {
     firstName: "Ana",
     id: "doctor_1",
     internalNotes: null,
+    legalEntityId: null,
     isActive: true,
     lastName: "Popescu",
     phone: null,
@@ -296,6 +298,17 @@ const createDto = {
 } as const;
 
 describe("WorksService", () => {
+  beforeEach(() => {
+    // Keep date validation deterministic while preserving the production rule
+    // that requestedDeliveryDate cannot be before today.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-01T09:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("creates a RECEPTIE work order with immutable pricing snapshot and audit", async () => {
     const createdWorkOrder = workOrder();
     const auditCreate = vi.fn().mockResolvedValue({});
@@ -353,6 +366,54 @@ describe("WorksService", () => {
     });
     expect(result.status).toBe("RECEPTIE");
     expect(result.totalPriceMinor).toBe(70000);
+  });
+
+  it("persists aggregate items and canonical case-level tooth connections and reads them back", async () => {
+    const createdWorkOrder = workOrder({
+      items: [
+        { archivedAt: null, baseUnitPriceMinor: 35000, commercialSnapshot: null, createdAt: new Date("2026-08-01T09:00:00.000Z"), customImplantPlatformSnapshot: null, customWorkTypeSnapshot: null, id: "item_11", implantPlatform: null, notes: null, restorationType: null, shade: null, scope: "TOOTH", sortOrder: 0, technicalCodeNotes: null, teeth: [{ fdiTooth: 11, sortOrder: 0 }], totalPriceMinor: 35000, updatedAt: new Date("2026-08-01T09:00:00.000Z"), workOrderId: "work_order_1", workType: workType(), workTypeId: "work_type_1", currency: "RON" },
+        { archivedAt: null, baseUnitPriceMinor: 35000, commercialSnapshot: null, createdAt: new Date("2026-08-01T09:00:00.000Z"), customImplantPlatformSnapshot: null, customWorkTypeSnapshot: null, id: "item_12", implantPlatform: null, notes: null, restorationType: null, shade: null, scope: "TOOTH", sortOrder: 1, technicalCodeNotes: null, teeth: [{ fdiTooth: 12, sortOrder: 0 }], totalPriceMinor: 35000, updatedAt: new Date("2026-08-01T09:00:00.000Z"), workOrderId: "work_order_1", workType: workType(), workTypeId: "work_type_1", currency: "RON" },
+      ],
+      toothConnections: [{ createdAt: new Date("2026-08-01T09:00:00.000Z"), id: "connection_1", toothA: 12, toothB: 11, workOrderId: "work_order_1" }],
+    });
+    const itemCreate = vi.fn().mockResolvedValue({});
+    const connectionCreate = vi.fn().mockResolvedValue({});
+    const findUniqueOrThrow = vi.fn().mockResolvedValue(createdWorkOrder);
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+        clinic: { findUnique: vi.fn().mockResolvedValue({ isActive: true }) },
+        doctor: { findUnique: vi.fn().mockResolvedValue({ clinicId: "clinic_1", isActive: true }) },
+        laboratorySettings: { upsert: vi.fn().mockResolvedValue({ currency: "RON" }) },
+        workCycle: { create: vi.fn().mockResolvedValue({ id: "cycle_1" }) },
+        workOrder: { create: vi.fn().mockResolvedValue(createdWorkOrder), findUniqueOrThrow, update: vi.fn().mockResolvedValue(createdWorkOrder) },
+        workOrderItem: { create: itemCreate },
+        workOrderToothConnection: { create: connectionCreate },
+        workType: { findUnique: vi.fn().mockResolvedValue({ basePriceMinor: 35000, isActive: true }) },
+      })),
+    });
+
+    const result = await service.createWork(
+      { actorUserId: "actor_1", requestMetadata: {} },
+      legalEntity,
+      {
+        ...createDto,
+        items: [
+          { scope: "TOOTH", teeth: [11], workTypeId: "work_type_1" },
+          { scope: "TOOTH", teeth: [12], workTypeId: "work_type_1" },
+        ],
+        probeTypeId: "probe_type_1",
+        probeDeadlineAt: "2026-08-25T10:00:00.000Z",
+        toothConnections: [{ toothA: 11, toothB: 12 }],
+      },
+      false,
+    );
+
+    expect(itemCreate).toHaveBeenCalledTimes(2);
+    expect(connectionCreate).toHaveBeenCalledWith({ data: { toothA: 12, toothB: 11, workOrderId: "work_order_1" } });
+    expect(findUniqueOrThrow).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "work_order_1" } }));
+    expect(result.items).toHaveLength(2);
+    expect(result.toothConnections).toEqual([expect.objectContaining({ toothA: 12, toothB: 11 })]);
   });
 
   it.each([

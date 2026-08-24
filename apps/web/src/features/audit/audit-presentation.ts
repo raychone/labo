@@ -19,6 +19,17 @@ const ACTION_LABELS: Record<string, string> = {
   "work.updated": "Lucrare modificată", "work_orders.claimed": "Lucrare preluată de tehnician", "work_orders.released": "Lucrare eliberată",
   "work_orders.status_changed": "Status lucrare modificat", "work_orders.assigned": "Lucrare atribuită",
   "work_orders.reassigned": "Lucrare reatribuită", "work_cycles.created": "Etapă de lucru creată", "work_cycles.closed": "Etapă de lucru închisă",
+  "work_order.item_added": "Componentă tehnică adăugată", "work_order.item_modified": "Componentă tehnică modificată",
+  "work_order.item_removed": "Componentă tehnică eliminată", "work_order.anatomical_scope_modified": "Domeniu anatomic modificat",
+  "work_order.tooth_connection_added": "Dinți conectați", "work_order.tooth_connection_removed": "Conexiune dentară eliminată",
+  "work_order.probe_type_selected": "Tip de probă selectat", "work_order.probe_type_corrected": "Tip de probă modificat", "work_order.probe_type_created": "Tip de probă creat", "work_order.probe_type_updated": "Tip de probă modificat", "work_order.probe_type_archived": "Tip de probă arhivat", "work_order.probe_type_restored": "Tip de probă restaurat", "work_order.active_probe_cycle_started": "Probă activă începută",
+  "work_order.case_received": "Lucrare recepționată", "work_order.probe_ready": "Lucrare marcată Probă gata",
+  "work_order.finalized": "Lucrare finalizată", "work_order.details_modified": "Lucrare modificată",
+  "work_order.urgency_set": "Urgență setată", "work_order.urgency_changed": "Urgență modificată", "work_order.probe_deadline_changed": "Termen probă modificat",
+  "technician.performed_maneuver_added": "Manoperă adăugată", "technician.maneuver_scope_recorded": "Domeniu manoperă înregistrat",
+  "technician.maneuver_pricing_unit_changed": "Unitate manoperă modificată",
+  "work_order.custom_work_type_used": "Tip personalizat folosit", "work_order.custom_work_type_saved": "Tip personalizat salvat",
+  "work_order.custom_implant_platform_used": "Platformă personalizată folosită", "work_order.custom_implant_platform_saved": "Platformă personalizată salvată",
   "patient.created": "Pacient adăugat", "patient.updated": "Date pacient modificate", "patient.archived": "Pacient arhivat", "patient.restored": "Pacient reactivat",
   "clinics.created": "Clinică adăugată", "clinics.updated": "Clinică modificată", "doctors.created": "Medic adăugat", "doctors.updated": "Medic modificat",
   "pricing.catalog_item_created": "Preț adăugat în catalog", "pricing.catalog_item_updated": "Preț modificat",
@@ -34,7 +45,7 @@ const ACTION_LABELS: Record<string, string> = {
   "delivery.completed": "Livrare finalizată", "delivery.picked_up": "Livrare ridicată", "delivery.cancelled": "Livrare anulată",
   "logistics.note_updated": "Notă logistică modificată", "logistics.location_updated": "Locație logistică modificată",
   "logistics.work_blocked": "Lucrare blocată", "logistics.work_unblocked": "Lucrare deblocată", "logistics.attachment_uploaded": "Fișier atașat",
-  "technician_operations.created": "Manoperă creată", "technician_operations.updated": "Manoperă modificată",
+  "technician_operations.created": "Manoperă creată", "technician_operations.updated": "Manoperă modificată", "technician_operations.unit_changed": "Unitate manoperă modificată",
   "technician_rates.set": "Tarif tehnician stabilit", "technician_performed_operations.created": "Manoperă bifată ca finalizată",
   "settings.updated": "Setări firmă modificate", "user.created": "Utilizator creat", "user.updated": "Utilizator modificat",
   "user.disabled": "Utilizator dezactivat", "user.enabled": "Utilizator reactivat", "user.password_reset": "Parola utilizatorului resetată",
@@ -78,7 +89,33 @@ export function getAuditEntityLabel(resourceType: string, metadata: Metadata = n
     : label;
 }
 
+function formatPostmeetingDetails(action: string, metadata: Metadata): string | null {
+  if (!metadata) return null;
+  const teeth = Array.isArray(metadata.toothNumbers)
+    ? metadata.toothNumbers.filter((value): value is number => typeof value === "number").join(", ")
+    : "";
+  const probeTypeName = text(metadata.probeTypeName);
+  const previousProbeTypeName = text(metadata.previousProbeTypeName);
+  const nextProbeTypeName = text(metadata.nextProbeTypeName);
+  const probeNumber = typeof metadata.probeNumber === "number" ? metadata.probeNumber : null;
+  const maneuverName = text(metadata.maneuverName);
+
+  if (action === "work_order.tooth_connection_added") return teeth ? `Au fost conectați dinții ${teeth}.` : "Au fost conectați dinții indicați.";
+  if (action === "work_order.tooth_connection_removed") return teeth ? `Conexiunea dintre dinții ${teeth} a fost eliminată.` : "Conexiunea dintre dinții indicați a fost eliminată.";
+  if (action === "work_order.probe_type_selected") return probeTypeName ? `A fost selectat tipul de probă ${probeTypeName}.` : "A fost selectat tipul de probă.";
+  if (action === "work_order.probe_type_corrected") return previousProbeTypeName && nextProbeTypeName && probeNumber ? `Tip probă modificat · Proba ${probeNumber} · din ${previousProbeTypeName} în ${nextProbeTypeName}.` : "Tipul probei a fost modificat.";
+  if (action === "technician.performed_maneuver_added") return maneuverName && teeth ? `Manopera ${maneuverName} a fost adăugată pentru dinții ${teeth}.` : "A fost adăugată o manoperă.";
+  if (action === "work_order.case_received") return "Lucrarea a fost recepționată.";
+  if (action === "work_order.probe_ready") return "Tehnicianul a marcat lucrarea ca Probă gata.";
+  if (action === "work_order.finalized") return "Tehnicianul a finalizat lucrarea.";
+  if (action === "work_order.urgency_set" || action === "work_order.urgency_changed") return `Urgență modificată din ${text(metadata.from) ?? "istoric"} în ${text(metadata.to) ?? "necunoscut"}.`;
+  if (action === "work_order.probe_deadline_changed") return `Termen probă modificat din ${text(metadata.from) ?? "necunoscut"} în ${text(metadata.to) ?? "necunoscut"}.`;
+  return null;
+}
+
 export function formatAuditDetails(action: string, metadata: Metadata): string {
+  const postmeetingDetails = formatPostmeetingDetails(action, metadata);
+  if (postmeetingDetails) return postmeetingDetails;
   if (!metadata) return "Activitate înregistrată.";
   const before = metadata.before && typeof metadata.before === "object" ? metadata.before as Record<string, unknown> : null;
   const after = metadata.after && typeof metadata.after === "object" ? metadata.after as Record<string, unknown> : null;

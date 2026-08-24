@@ -158,6 +158,10 @@ export interface LogisticsCenterItem {
   readonly logisticsMarker: LogisticsMarker | null;
   readonly logisticsNote: string | null;
   readonly operationalStatus: (typeof FINAL_WORK_STATUSES)[number];
+  readonly technicalReadiness?: "PROBE_READY" | "FINAL_READY" | null;
+  readonly probeReadyAt?: string | null;
+  readonly probeReceivedAt?: string | null;
+  readonly finalizedAt?: string | null;
   readonly patientName: string;
   readonly patientReference: string | null;
   readonly preparationGroup: DeliveryPreparationGroupSummary | null;

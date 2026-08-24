@@ -1,6 +1,83 @@
 .style-preview {
   background:
     linear-gradient(180deg, var(--dl-color-background) 0%, var(--dl-color-background-secondary) 100%);
+  box-sizing: border-box;
+  display: block;
+  max-width: none;
+  min-width: 0;
+  margin-inline: 0;
+  overflow-x: clip;
+  width: 100%;
+}
+
+/* The preview is a responsive showcase, so it should use the available canvas.
+   Only each dental arch gets an internal horizontal scroll surface. */
+.style-preview .dl-container {
+  margin-inline: 0;
+  max-width: none;
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+}
+
+.style-preview > .dl-container > .dl-stack,
+.style-preview__panel {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 47.99rem) {
+  /* The generic .dl-container has a readable max-width. The preview is a
+     full-width showcase on phones; only the inner arch track may overflow. */
+  .style-preview .dl-container,
+  .style-preview__panel {
+    max-width: none;
+    width: 100%;
+  }
+}
+
+.app-shell__main {
+  inline-size: 100%;
+  max-inline-size: 100%;
+}
+
+.app-shell__main > .style-preview {
+  inline-size: 100%;
+  max-inline-size: none;
+  min-inline-size: 0;
+}
+
+.style-preview__kpi-grid {
+  display: grid;
+  gap: var(--dl-space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.style-preview__kpi-grid .dl-kpi {
+  background: var(--dl-color-surface-elevated);
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  min-height: 7rem;
+  padding: var(--dl-space-4);
+}
+
+.style-preview__status-kpi {
+  align-items: center;
+  background: var(--dl-color-surface-elevated);
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  display: grid;
+  justify-items: center;
+  min-height: 7rem;
+  padding: var(--dl-space-4);
+  text-align: center;
+}
+
+@media (min-width: 48rem) {
+  .style-preview__kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .style-preview__header {
@@ -26,6 +103,28 @@
 .style-preview__summary {
   color: var(--dl-color-text-secondary);
   max-width: var(--dl-layout-readable-max-width);
+}
+
+.style-preview__dental-heading {
+  align-items: start;
+  display: grid;
+  gap: var(--dl-space-4);
+}
+
+.style-preview__dental-note,
+.style-preview__dental-state {
+  color: var(--dl-color-text-secondary);
+  font-size: var(--dl-font-size-label);
+  margin: 0;
+}
+
+.style-preview__dental-frame {
+  background: var(--dl-color-background-secondary);
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-lg);
+  min-width: 0;
+  overflow: hidden;
+  padding: var(--dl-space-3);
 }
 
 .style-preview__panel {
@@ -118,6 +217,19 @@
   grid-template-columns: 1fr;
 }
 
+.style-preview__select {
+  background-color: var(--dl-color-surface-elevated);
+  border-color: var(--dl-color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dl-color-accent) 10%, transparent), var(--dl-shadow-sm);
+  font-weight: var(--dl-font-weight-semibold);
+}
+
+.style-preview__select:focus-visible {
+  border-color: var(--dl-color-accent-hover);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--dl-color-accent) 22%, transparent);
+  outline: none;
+}
+
 .style-preview__label {
   color: var(--dl-color-text-secondary);
   font-size: var(--dl-font-size-label);
@@ -143,5 +255,11 @@
 
   .style-preview__form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .style-preview__dental-heading {
+    align-items: end;
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, 28rem);
+    justify-content: space-between;
   }
 }

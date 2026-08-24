@@ -14,11 +14,16 @@ import { WorkOrderCodeService } from "./work-order-code.service.js";
 import { WorkDeadlineService } from "./work-deadline.service.js";
 import { WorksController } from "./works.controller.js";
 import { WorksService } from "./works.service.js";
+import { WorkItemsService } from "./work-items.service.js";
+import { LegacyCompatibilityService } from "./legacy-compatibility.service.js";
+import { ToothConnectionsService } from "./tooth-connections.service.js";
+import { ProbeTypesService } from "./probe-types.service.js";
+import { ProbeCyclesService } from "./probe-cycles.service.js";
 
 @Module({
   controllers: [WorksController],
   imports: [AuthModule, DatabaseModule, DeadlinesModule, OrganizationContextModule, PatientsModule, PricingModule, QrModule, RbacModule, WorkFormsModule, WorkflowExecutionModule],
-  providers: [WorkDeadlineService, WorkOrderCodeService, WorksService],
+  providers: [LegacyCompatibilityService, ProbeCyclesService, ProbeTypesService, ToothConnectionsService, WorkDeadlineService, WorkOrderCodeService, WorkItemsService, WorksService],
   exports: [WorksService],
 })
 export class WorksModule {}

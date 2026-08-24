@@ -35,6 +35,8 @@ const expectedPermissionKeys = [
   "works.read_all",
   "works.read_assigned",
   "works.update",
+  "works.urgency.update",
+  "works.deadline.current.update",
   "works.assign",
   "works.change_status",
   "works.archive",
@@ -46,6 +48,7 @@ const expectedPermissionKeys = [
   "works.technical_details.read",
   "works.technical_details.update",
   "works.production.finalize",
+  "works.production.probe_ready",
   "works.claim.available.read",
   "works.claim.own.read",
   "works.claim.create",
@@ -59,9 +62,22 @@ const expectedPermissionKeys = [
   "works.execution_snapshot.read_deadline",
   "works.execution_snapshot.history.read",
   "works.execution_snapshot.create",
+  "works.item.create",
+  "works.item.update",
+  "works.item.remove",
+  "works.scope.update",
+  "works.connections.manage",
+  "works.custom_type.use",
+  "works.custom_platform.use",
+  "works.custom_type.save_to_catalog",
+  "works.custom_platform.save_to_catalog",
   "cycles.read",
   "cycles.history.read",
   "cycles.create_next",
+  "cycles.probe_type.select",
+  "cycles.mark_received",
+  "probe_types.read",
+  "probe_types.manage",
   "scan.use",
   "scan.resolve",
   "workflow.read",
@@ -79,13 +95,18 @@ const expectedPermissionKeys = [
   "technician.workload.read",
   "technician.operations.read",
   "technician.operations.manage_own",
+  "technician.operations.scope.select",
+  "technician.operations.configure",
   "technician.rates.read",
   "technician.rates.manage",
   "technician.earnings.read_own",
     "technician.earnings.read_all",
     "technician.payments.create",
     "technician.payments.read_all",
-    "technician.payments.read_own",
+  "technician.payments.read_own",
+  "notifications.read_own",
+  "notifications.mark_read_own",
+  "notifications.dismiss_own",
   "logistics.read",
   "logistics.plan",
   "logistics.assign",
@@ -211,6 +232,9 @@ describe("PERMISSION_REGISTRY", () => {
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["invoice.create"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["finance.read"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.update"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.urgency.update"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.CURIER["works.urgency.update"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.MEDIC["works.urgency.update"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.MEDIC["audit.read"]).toBeNull();
     expect(OVERRIDE_ELIGIBLE_PERMISSION_KEYS).toContain("works.update");
   });
@@ -219,12 +243,16 @@ describe("PERMISSION_REGISTRY", () => {
     expect(ROLE_PERMISSION_MATRIX.MANAGER["users.create"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["works.read_all"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["works.create"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["works.urgency.update"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["works.deadline.current.update"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["clinics.read"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["doctors.read"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["workflow.complete_stage"]).toBe("OWN_STAGE");
     expect(ROLE_PERMISSION_MATRIX.CURIER["delivery.complete"]).toBe("OWN_DELIVERY");
     expect(ROLE_PERMISSION_MATRIX.CURIER["delivery.start_transit"]).toBe("OWN_DELIVERY");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["clinics.read"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.urgency.update"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.deadline.current.update"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["doctors.read"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["cycles.create_next"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["cycles.create_next"]).toBeNull();
@@ -258,6 +286,11 @@ describe("PERMISSION_REGISTRY", () => {
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.claim.release_any"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.technical_details.update"]).toBe("ASSIGNED");
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.production.finalize"]).toBe("ASSIGNED");
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.production.probe_ready"]).toBe("ASSIGNED");
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["technician.operations.scope.select"]).toBe("ASSIGNED");
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["technician.operations.configure"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.custom_type.save_to_catalog"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.custom_platform.save_to_catalog"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["logistics.alerts.update"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["logistics.delivery_marker.update"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["pickup.create"]).toBe("ALL");
@@ -285,5 +318,16 @@ describe("PERMISSION_REGISTRY", () => {
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["organization_context.switch"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["organization_context.switch"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.CURIER["organization_context.switch"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.item.create"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.scope.update"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.connections.manage"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["cycles.probe_type.select"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["cycles.mark_received"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.custom_type.save_to_catalog"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.custom_platform.save_to_catalog"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["works.connections.manage"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.CURIER["works.item.create"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.CURIER["notifications.read_own"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["notifications.read_own"]).toBe("ALL");
   });
 });

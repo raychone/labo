@@ -6,6 +6,8 @@ export interface TechnicianOperationInput {
   readonly code: string;
   readonly description?: string | null;
   readonly name: string;
+  readonly pricingUnit?: TechnicianManeuverUnit;
+  readonly confirmPricingUnitChange?: boolean;
 }
 
 export interface TechnicianOperationSummary {
@@ -15,6 +17,7 @@ export interface TechnicianOperationSummary {
   readonly id: string;
   readonly isActive: boolean;
   readonly name: string;
+  readonly pricingUnit?: TechnicianManeuverUnit | null;
   readonly sortOrder: number;
   readonly updatedAt: string;
 }
@@ -31,6 +34,7 @@ export interface TechnicianOperationOption {
   readonly code: string;
   readonly id: string;
   readonly name: string;
+  readonly pricingUnit?: TechnicianManeuverUnit | null;
 }
 
 export interface TechnicianOperationsListParams {
@@ -176,3 +180,4 @@ export interface TechnicianPaymentInput {
   readonly paidAt?: string;
   readonly technicianId: string;
 }
+import type { TechnicianManeuverUnit } from "./postmeeting-contract.js";
