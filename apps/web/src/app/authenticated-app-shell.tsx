@@ -9,7 +9,7 @@ import { OrganizationContextSwitch } from "../features/organization-context/orga
 import { useSettings } from "../features/settings/settings-api.js";
 import { addUnauthorizedListener, isUnauthorizedError } from "../lib/api-client.js";
 import { useAuthState } from "./auth-state.js";
-import { useMarkNotificationRead, useNotifications } from "../features/notifications/notifications-api.js";
+import { useDismissNotification, useMarkAllNotificationsRead, useMarkNotificationRead, useNotifications, type NotificationView } from "../features/notifications/notifications-api.js";
 import { ShellErrorBoundary } from "./error-boundary.js";
 import { getNavigationRoutes, getRouteByPath } from "./route-registry.js";
 import { usePageTitle } from "./use-page-title.js";
@@ -41,6 +41,8 @@ export function AuthenticatedAppShell(): ReactNode {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [incomingNotification, setIncomingNotification] = useState<NotificationView | null>(null);
+  const seenNotificationIdsRef = useRef<Set<string> | null>(null);
   const canReadSettings = auth.permissionKeys.includes("settings.read");
   const canReadOrganizationContext = auth.permissionKeys.includes("organization_context.read");
   const canSwitchOrganizationContext = auth.permissionKeys.includes("organization_context.switch");
@@ -54,6 +56,9 @@ export function AuthenticatedAppShell(): ReactNode {
   const canReadNotifications = auth.permissionKeys.includes("notifications.read_own");
   const notificationsQuery = useNotifications(canReadNotifications);
   const markReadMutation = useMarkNotificationRead();
+  const markAllReadMutation = useMarkAllNotificationsRead();
+  const dismissMutation = useDismissNotification();
+  const notificationItems = notificationsQuery.data?.items ?? [];
   const courierOnly = routes.length === 1 && routes[0]?.path === "/my-route";
   usePageTitle(pageTitle, laboratoryName);
   const logoutMutation = useMutation({
@@ -93,6 +98,18 @@ export function AuthenticatedAppShell(): ReactNode {
   useEffect(() => {
     setIsMobileNavOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!canReadNotifications || notificationsQuery.isLoading) return;
+    const currentIds = new Set(notificationItems.map((notification) => notification.id));
+    if (seenNotificationIdsRef.current === null) {
+      seenNotificationIdsRef.current = currentIds;
+      return;
+    }
+    const newNotification = notificationItems.find((notification) => !seenNotificationIdsRef.current?.has(notification.id));
+    seenNotificationIdsRef.current = currentIds;
+    if (newNotification) setIncomingNotification(newNotification);
+  }, [canReadNotifications, notificationItems, notificationsQuery.isLoading]);
 
   useEffect(() => addUnauthorizedListener(() => {
     toast.clearToasts();
@@ -134,8 +151,9 @@ export function AuthenticatedAppShell(): ReactNode {
             <span>{pageTitle}</span>
             <small>{laboratoryName}</small>
           </div>
-          {canReadNotifications ? <button aria-label="Notificări" className="app-shell__notification-button" onClick={() => setIsNotificationsOpen(true)} type="button"><span aria-hidden="true">♢</span>{(notificationsQuery.data?.unreadCount ?? 0) > 0 ? <span aria-label={`${notificationsQuery.data?.unreadCount ?? 0} notificări necitite`} className="app-shell__notification-badge">{notificationsQuery.data?.unreadCount}</span> : null}</button> : null}
+          {canReadNotifications ? <button aria-label="Deschide centrul de notificări" className={`app-shell__notification-button${(notificationsQuery.data?.unreadCount ?? 0) > 0 ? " app-shell__notification-button--attention" : ""}`} onClick={() => setIsNotificationsOpen(true)} type="button"><span aria-hidden="true">🔔</span>{(notificationsQuery.data?.unreadCount ?? 0) > 0 ? <span aria-label={`${notificationsQuery.data?.unreadCount ?? 0} notificări necitite`} className="app-shell__notification-badge">{notificationsQuery.data?.unreadCount}</span> : null}</button> : null}
         </header>
+        {incomingNotification ? <div aria-live="assertive" className="app-shell__notification-alert" role="alert"><button className="app-shell__notification-alert-content" onClick={() => { if (!incomingNotification.readAt) markReadMutation.mutate(incomingNotification.id); setIncomingNotification(null); navigate(incomingNotification.deepLink); }} type="button"><span aria-hidden="true">🔔</span><span><strong>{incomingNotification.title}</strong><small>{incomingNotification.message}</small><em>Deschide lucrarea</em></span></button><button aria-label="Închide alerta" className="app-shell__notification-alert-close" onClick={() => setIncomingNotification(null)} type="button">×</button></div> : null}
         <AppHeader courierOnly={courierOnly} pageTitle={pageTitle} pathname={location.pathname} />
         {settingsQuery.isError && canReadSettings ? (
           <div className="app-shell__notice">
@@ -180,11 +198,11 @@ export function AuthenticatedAppShell(): ReactNode {
       />
       <Drawer isOpen={isNotificationsOpen} onOpenChange={setIsNotificationsOpen} position="right" title="Notificări">
         <div className="app-shell__notifications">
-          <div className="app-shell__notifications-actions"><span>{notificationsQuery.data?.unreadCount ?? 0} necitite</span></div>
+          <div className="app-shell__notifications-actions"><span>{notificationsQuery.data?.unreadCount ?? 0} necitite</span><Button isLoading={markAllReadMutation.isPending} onClick={() => markAllReadMutation.mutate()} variant="secondary">Marchează citite</Button></div>
           {notificationsQuery.isLoading ? <LoadingState text="Se încarcă notificările" /> : null}
           {notificationsQuery.error ? <ErrorState title="Notificările nu au putut fi încărcate" description="Încearcă din nou." /> : null}
-          {!notificationsQuery.isLoading && !notificationsQuery.error && (notificationsQuery.data?.items.length ?? 0) === 0 ? <p className="app-shell__notifications-empty">Nu ai notificări noi.</p> : null}
-          {(notificationsQuery.data?.items ?? []).map((notification) => <button className={`app-shell__notification-item${notification.readAt ? "" : " app-shell__notification-item--unread"}`} key={notification.id} onClick={() => { if (!notification.readAt) markReadMutation.mutate(notification.id); setIsNotificationsOpen(false); navigate(notification.deepLink); }} type="button"><span className={`app-shell__notification-severity app-shell__notification-severity--${notification.severity.toLowerCase()}`} /><span><strong>{notification.title}</strong><small>{notification.message}</small><time dateTime={notification.createdAt}>{new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(notification.createdAt))}</time>{notification.resolvedAt ? <em>Rezolvată</em> : null}</span></button>)}
+          {!notificationsQuery.isLoading && !notificationsQuery.error && (notificationsQuery.data?.items.length ?? 0) === 0 ? <p className="app-shell__notifications-empty">Nu ai notificări.</p> : null}
+          {notificationItems.map((notification) => <div className="app-shell__notification-row" key={notification.id}><button className={`app-shell__notification-item${notification.readAt ? "" : " app-shell__notification-item--unread"}`} onClick={() => { if (!notification.readAt) markReadMutation.mutate(notification.id); setIsNotificationsOpen(false); navigate(notification.deepLink); }} type="button"><span className={`app-shell__notification-severity app-shell__notification-severity--${notification.severity.toLowerCase()}`} /><span><strong>{notification.title}</strong><small>{notification.message}</small><time dateTime={notification.createdAt}>{new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(notification.createdAt))}</time></span></button><Button isLoading={dismissMutation.isPending && dismissMutation.variables === notification.id} onClick={() => dismissMutation.mutate(notification.id)} variant="secondary">Șterge</Button></div>)}
         </div>
       </Drawer>
     </div>

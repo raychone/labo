@@ -42,28 +42,25 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   public async list(userId: string, page = 1, pageSize = 25): Promise<PaginatedNotificationsView> {
-    await this.authorizationService.requirePermission({ permission: "notifications.read_own", requiredScope: "ALL", userId });
-    await this.reconcileSafely("unpriced work types", () => this.reconcileUnpricedWorkTypes());
-    await this.reconcileSafely("billing", () => this.reconcileBilling());
-    await this.reconcileSafely("deadlines", () => this.evaluateDeadlines());
+    await this.authorizationService.requirePermission({ permission: "notifications.read_own", userId });
     const boundedPage = Math.max(1, page);
     const boundedSize = Math.min(100, Math.max(1, pageSize));
-    const where = { recipientUserId: userId };
+    const where = { recipientUserId: userId, resolvedAt: null };
     const [total, unreadCount, rows] = await Promise.all([
       this.prisma.notification.count({ where }),
       this.prisma.notification.count({ where: { ...where, readAt: null } }),
-      this.prisma.notification.findMany({ orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (boundedPage - 1) * boundedSize, take: boundedSize, where }),
+      this.prisma.notification.findMany({ orderBy: [{ resolvedAt: "asc" }, { createdAt: "desc" }, { id: "desc" }], skip: (boundedPage - 1) * boundedSize, take: boundedSize, where }),
     ]);
     return { items: rows.map(toNotificationView), page: boundedPage, pageCount: Math.max(1, Math.ceil(total / boundedSize)), pageSize: boundedSize, total, unreadCount };
   }
 
   public async unreadCount(userId: string): Promise<number> {
-    await this.authorizationService.requirePermission({ permission: "notifications.read_own", requiredScope: "ALL", userId });
-    return this.prisma.notification.count({ where: { recipientUserId: userId, readAt: null } });
+    await this.authorizationService.requirePermission({ permission: "notifications.read_own", userId });
+    return this.prisma.notification.count({ where: { recipientUserId: userId, readAt: null, resolvedAt: null } });
   }
 
   public async markRead(userId: string, notificationId: string): Promise<NotificationView> {
-    await this.authorizationService.requirePermission({ permission: "notifications.mark_read_own", requiredScope: "ALL", userId });
+    await this.authorizationService.requirePermission({ permission: "notifications.mark_read_own", userId });
     const existing = await this.prisma.notification.findFirst({ where: { id: notificationId, recipientUserId: userId } });
     if (!existing) throw new NotFoundException("Notificarea nu a fost găsită pentru utilizatorul curent.");
     const row = await this.prisma.notification.update({ data: { readAt: existing.readAt ?? new Date() }, where: { id: notificationId } });
@@ -71,9 +68,20 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   public async markAllRead(userId: string): Promise<{ readonly updated: number }> {
-    await this.authorizationService.requirePermission({ permission: "notifications.mark_read_own", requiredScope: "ALL", userId });
+    await this.authorizationService.requirePermission({ permission: "notifications.mark_read_own", userId });
     const result = await this.prisma.notification.updateMany({ data: { readAt: new Date() }, where: { recipientUserId: userId, readAt: null } });
     return { updated: result.count };
+  }
+
+  public async dismiss(userId: string, notificationId: string): Promise<NotificationView> {
+    await this.authorizationService.requirePermission({ permission: "notifications.dismiss_own", userId });
+    const existing = await this.prisma.notification.findFirst({ where: { id: notificationId, recipientUserId: userId } });
+    if (!existing) throw new NotFoundException("Notificarea nu a fost găsită pentru utilizatorul curent.");
+    const row = await this.prisma.notification.update({
+      data: { readAt: existing.readAt ?? new Date(), resolvedAt: existing.resolvedAt ?? new Date() },
+      where: { id: notificationId },
+    });
+    return toNotificationView(row);
   }
 
   public async publish(input: PublishInput): Promise<void> {

@@ -430,11 +430,11 @@ export function createLogisticsSummary(items: readonly LogisticsCenterItem[], to
     inProduction: items.filter((item) => item.logistics.status === "IN_PRODUCTION").length,
     overdue: items.filter((item) => item.dueState === "OVERDUE").length,
     receivedToday: items.filter((item) => isSameUtcDay(new Date(item.createdAt), new Date())).length,
-    toDeliver: items.filter((item) => item.technicalReadiness === "PROBE_READY" || item.technicalReadiness === "FINAL_READY").length,
+    toDeliver: items.filter((item) => item.requiresLogisticsAction && (item.technicalReadiness === "PROBE_READY" || item.technicalReadiness === "FINAL_READY")).length,
     toPickup,
     unassigned: items.filter((item) => item.workflow.status === "ACTIVE" && item.workflow.assignedUserName === null).length,
     urgent: items.filter((item) => item.priority === "URGENT").length,
-    waiting: items.filter((item) => item.logistics.status === "BLOCKED").length,
+    waiting: items.filter((item) => item.operationalStatus === "IN_ASTEPTARE").length,
   };
 }
 

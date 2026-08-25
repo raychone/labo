@@ -49,7 +49,7 @@
   border-bottom: var(--dl-border-width) solid var(--dl-color-border);
   display: grid;
   gap: var(--dl-space-3);
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   min-height: 4rem;
   padding: var(--dl-space-2) var(--dl-space-3);
   position: sticky;
@@ -77,12 +77,25 @@
   min-width: 0;
 }
 
-.app-shell__notification-button { margin-left: auto; position: relative; border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 1.35rem; padding: .45rem .7rem; }
-.app-shell__notification-badge { position: absolute; right: 0; top: 0; min-width: 1.15rem; padding: .08rem .25rem; border-radius: 999px; background: #b91c1c; color: #fff; font-size: .68rem; font-weight: 700; }
+.app-shell__notification-button { align-items: center; background: var(--dl-color-surface); border: 2px solid var(--app-brand-primary); border-radius: var(--dl-radius-md); color: inherit; cursor: pointer; display: inline-grid; font-size: 1.65rem; min-height: 3rem; min-width: 3.25rem; padding: .35rem .7rem; place-items: center; position: relative; }
+.app-shell__notification-button:hover, .app-shell__notification-button:focus-visible { background: var(--dl-color-accent-subtle); transform: scale(1.03); }
+.app-shell__notification-button--attention { animation: app-shell-notification-pulse 1.4s ease-in-out infinite; }
+.app-shell__notification-badge { align-items: center; background: #b91c1c; border: 2px solid var(--dl-color-surface); border-radius: 999px; color: #fff; display: inline-grid; font-size: .75rem; font-weight: 800; min-height: 1.35rem; min-width: 1.35rem; padding: .08rem .3rem; place-items: center; position: absolute; right: -.35rem; top: -.35rem; }
+.app-shell__notification-alert { align-items: stretch; background: #fff7ed; border: 3px solid #ea580c; border-radius: var(--dl-radius-md); box-shadow: 0 12px 35px rgb(15 23 42 / 22%); display: flex; gap: .5rem; margin: var(--dl-space-3) var(--dl-space-3) 0; max-width: 42rem; position: fixed; right: var(--dl-space-4); top: var(--dl-space-4); z-index: 100; }
+.app-shell__notification-alert-content { align-items: center; background: transparent; border: 0; color: inherit; cursor: pointer; display: flex; font: inherit; gap: .75rem; padding: .9rem 1rem; text-align: left; }
+.app-shell__notification-alert-content > span:first-child { font-size: 1.7rem; }
+.app-shell__notification-alert-content > span:last-child { display: grid; gap: .2rem; }
+.app-shell__notification-alert-content small, .app-shell__notification-alert-content em { color: #9a3412; display: block; font-size: .85rem; }
+.app-shell__notification-alert-content em { font-style: normal; font-weight: 700; }
+.app-shell__notification-alert-close { align-self: flex-start; background: transparent; border: 0; color: #9a3412; cursor: pointer; font-size: 1.4rem; padding: .35rem .55rem; }
+@keyframes app-shell-notification-pulse { 50% { box-shadow: 0 0 0 .35rem rgb(234 88 12 / 18%); } }
 .app-shell__notifications { display: grid; gap: .75rem; min-width: min(28rem, 86vw); }
 .app-shell__notifications-actions { align-items: center; display: flex; justify-content: space-between; gap: .5rem; }
+.app-shell__notification-row { align-items: stretch; border-bottom: 1px solid #e2e8f0; display: flex; gap: .5rem; }
+.app-shell__notification-row--resolved { opacity: .68; }
+.app-shell__notification-row > button:last-child { align-self: center; flex: 0 0 auto; }
 .app-shell__notifications-empty { color: #64748b; padding: 1rem 0; }
-.app-shell__notification-item { align-items: flex-start; background: transparent; border: 0; border-bottom: 1px solid #e2e8f0; color: inherit; cursor: pointer; display: flex; gap: .65rem; padding: .75rem .25rem; text-align: left; width: 100%; }
+.app-shell__notification-item { align-items: flex-start; background: transparent; border: 0; color: inherit; cursor: pointer; display: flex; gap: .65rem; padding: .75rem .25rem; text-align: left; width: 100%; }
 .app-shell__notification-item--unread { background: #f0fdfa; }
 .app-shell__notification-item > span:last-child { display: grid; gap: .2rem; min-width: 0; }
 .app-shell__notification-item small, .app-shell__notification-item time, .app-shell__notification-item em { color: #64748b; display: block; font-size: .78rem; overflow-wrap: anywhere; }
@@ -893,9 +906,7 @@
     flex: 1;
   }
 
-  .app-shell__topbar {
-    display: none;
-  }
+  .app-shell__topbar { display: grid; padding-inline: var(--dl-space-5); }
 
   .app-shell__header {
     padding: var(--dl-space-5) var(--dl-space-5) 0;

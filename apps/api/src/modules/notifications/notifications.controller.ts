@@ -33,4 +33,10 @@ export class NotificationsController {
   public markAllRead(@CurrentUser() user: AuthenticatedUser): Promise<{ readonly updated: number }> {
     return this.notificationsService.markAllRead(user.id);
   }
+
+  @Patch(":id/dismiss")
+  @UseGuards(AuthGuard, CsrfGuard)
+  public dismiss(@CurrentUser() user: AuthenticatedUser, @Param("id") notificationId: string): Promise<NotificationView> {
+    return this.notificationsService.dismiss(user.id, notificationId);
+  }
 }

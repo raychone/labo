@@ -142,9 +142,10 @@
 }
 
 .status-tv-page__summary-card span {
+  color: #111827;
   margin-top: 0;
   font-size: 0.8rem;
-  font-weight: var(--dl-font-weight-semibold);
+  font-weight: 700;
   text-transform: uppercase;
 }
 

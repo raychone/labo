@@ -29,7 +29,7 @@ import { DEMO_INVOICE_SERIES, DEMO_PASSWORD, DEMO_PROFORMA_SERIES } from "./demo
 import { assertDemoDatasetConsistency, buildDemoDataset, getDocumentSeries, type DemoBillingDocumentSeed, type DemoDataset, type DemoWorkSeed } from "./demo-data.js";
 import { resetDemoData } from "./demo-reset.js";
 
-export async function seedDemoData(prisma: PrismaClient, now = new Date()): Promise<DemoDataset> {
+export async function seedDemoData(prisma: PrismaClient, now = new Date(), options: { readonly includeTechnicalCatalog?: boolean } = {}): Promise<DemoDataset> {
   const dataset = buildDemoDataset(now);
   assertDemoDatasetConsistency(dataset);
 
@@ -37,19 +37,19 @@ export async function seedDemoData(prisma: PrismaClient, now = new Date()): Prom
 
   await resetDemoData(prisma);
   await seedDemoUsers(prisma, dataset, passwordHash);
-  await seedDemoProbeTypes(prisma, dataset);
+  if (options.includeTechnicalCatalog) await seedDemoProbeTypes(prisma, dataset);
   await seedDemoSettings(prisma);
   await seedDemoClinics(prisma, dataset);
   await seedDemoDoctors(prisma, dataset);
   await seedDemoWorkTypes(prisma, dataset);
   await seedDemoPricing(prisma);
-  await seedCreativeWorkCatalog(prisma);
+  if (options.includeTechnicalCatalog) await seedCreativeWorkCatalog(prisma);
   await seedDemoWorkFormTemplates(prisma);
   await seedDemoWorkflowTemplates(prisma);
   await seedDemoPatients(prisma, dataset);
   await seedDemoWorks(prisma, dataset);
   await seedDemoOptionalIntakeWorks(prisma, now);
-  await seedDemoTechnicianOperations(prisma, now);
+  if (options.includeTechnicalCatalog) await seedDemoTechnicianOperations(prisma, now);
   await seedDemoWorkflowExecutions(prisma, dataset);
   await seedDemoBilling(prisma, dataset);
   await seedDemoStornoAndSharing(prisma, now);

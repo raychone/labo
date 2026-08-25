@@ -264,8 +264,9 @@
 }
 
 .works-page__metric span {
-  color: var(--dl-color-text-muted);
+  color: #111827;
   font-size: var(--dl-font-size-sm);
+  font-weight: 700;
 }
 
 .works-page__metric strong {

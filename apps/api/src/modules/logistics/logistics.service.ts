@@ -670,7 +670,11 @@ export class LogisticsService {
       include: logisticsWorkInclude,
       where: this.toWorkWhere(summaryQuery),
     });
-    const items = workOrders.map((work) => toLogisticsCenterItem(work, actionContext, now)).filter((item) => item.requiresLogisticsAction);
+    // KPI-urile must match the rows returned by the corresponding category.
+    // Only "Toate" is restricted to actionable logistics work; overdue and
+    // operational-state categories also include rows that are not currently
+    // actionable (for example a received work with an overdue deadline).
+    const items = workOrders.map((work) => toLogisticsCenterItem(work, actionContext, now));
     const toPickup = await this.prisma.pickupRequest.count({ where: this.toPickupWhere(query) });
     const summary = createLogisticsSummary(items, toPickup);
     const toDeliver = items.filter(
@@ -1174,7 +1178,7 @@ export class LogisticsService {
   }
 
   private matchesCategory(item: ReturnType<typeof toLogisticsCenterItem>, category: LogisticsCenterCategory): boolean {
-    if (category === "ALL") return item.requiresLogisticsAction;
+    if (category === "ALL") return true;
     if (category === "INTRARI_ASTAZI") return isToday(new Date(item.createdAt));
     if (category === "DE_VERIFICAT") return item.workflow.status === "COMPLETED" && item.technicalReadiness === null;
     if (category === "IN_PRODUCTIE") return item.logistics.status === "IN_PRODUCTION";
@@ -1183,7 +1187,7 @@ export class LogisticsService {
     if (category === "URGENTE") return item.priority === "URGENT";
     if (category === "INTARZIATE") return item.dueState === "OVERDUE";
     if (category === "FINALIZATE_AZI") return item.workflow.completedAt !== null && isToday(new Date(item.workflow.completedAt));
-    if (category === "IN_ASTEPTARE") return item.logistics.status === "BLOCKED";
+    if (category === "IN_ASTEPTARE") return item.operationalStatus === "IN_ASTEPTARE";
     if (category === "DE_LIVRAT") return item.requiresLogisticsAction && (item.requiresDelivery || item.logisticsActionReasons.includes("READY_FOR_PROBE_DELIVERY") || item.logisticsActionReasons.includes("READY_FOR_FINAL_DELIVERY"));
     if (category === "DE_RIDICAT") return item.requiresLogisticsAction && item.requiresPickup;
     return item.billing.documentId === null;

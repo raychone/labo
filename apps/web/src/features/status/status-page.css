@@ -104,9 +104,9 @@
 }
 
 .status-page__tabs span {
-  color: color-mix(in srgb, var(--tab-accent-text) 74%, var(--dl-color-text-muted));
+  color: #111827;
   font-size: 0.8rem;
-  font-weight: var(--dl-font-weight-semibold);
+  font-weight: 700;
   text-transform: uppercase;
   white-space: nowrap;
 }

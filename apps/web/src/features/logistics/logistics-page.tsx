@@ -218,7 +218,9 @@ export function LogisticsPage(): ReactNode {
     });
   }
 
-  const assignedStopKeys = useMemo(() => new Set((routesQuery.data?.items ?? []).flatMap((route) => route.stops.map((stop) => `${stop.type}:${stop.workOrderId ?? stop.pickupRequestId ?? stop.id}`))), [routesQuery.data?.items]);
+  const assignedStopKeys = useMemo(() => new Set((routesQuery.data?.items ?? [])
+    .filter((route) => route.status !== "CANCELLED")
+    .flatMap((route) => route.stops.filter((stop) => stop.outcomeStatus === "PENDING").map((stop) => `${stop.type}:${stop.workOrderId ?? stop.pickupRequestId ?? stop.id}`))), [routesQuery.data?.items]);
 
   function queueRouteStop(stop: { readonly pickupRequestId?: string | null; readonly type: "DELIVERY" | "PICKUP"; readonly workOrderId?: string | null }, successMessage: string): void {
     const draft = routesQuery.data?.items.find((route) => route.status === "DRAFT" && route.courier === null && route.name === "Lista pentru viitoarele trasee");

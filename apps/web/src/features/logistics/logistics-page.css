@@ -110,8 +110,9 @@
 
 .logistics-page__summary-card-main span {
   display: block;
-  color: var(--color-muted-foreground);
+  color: #111827;
   font-size: var(--font-size-sm);
+  font-weight: 700;
 }
 
 .logistics-page__summary-card-main strong {

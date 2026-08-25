@@ -162,6 +162,15 @@ model LaboratorySettings {
   @@map("laboratory_settings")
 }
 
+model SeedRun {
+  key         String   @id @db.VarChar(120)
+  completedAt DateTime @default(now()) @map("completed_at")
+  version     String?  @db.VarChar(40)
+  metadata    Json?
+
+  @@map("seed_runs")
+}
+
 model LegalEntity {
   id                           String                     @id @default(cuid())
   code                         String                     @unique @db.VarChar(8)

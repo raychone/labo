@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest";
 import { createLogisticsSummary, resolveEffectiveLogisticsStatus, type LogisticsCenterItem } from "./logistics.view.js";
 
 function item(input: Pick<LogisticsCenterItem, "dueState" | "logistics" | "billing" | "workflow" | "priority">): LogisticsCenterItem {
-  return input as LogisticsCenterItem;
+  return {
+    ...input,
+    operationalStatus: input.logistics.status === "BLOCKED" ? "IN_ASTEPTARE" : "RECEPTIE",
+    requiresLogisticsAction: true,
+  } as LogisticsCenterItem;
 }
 
 describe("createLogisticsSummary", () => {

@@ -34,6 +34,11 @@ async function markAllNotificationsRead(): Promise<void> {
   await apiFetch("/notifications/read-all", { headers: { "x-csrf-token": csrfToken }, method: "POST" });
 }
 
+async function dismissNotification(id: string): Promise<void> {
+  const csrfToken = await fetchCsrfToken();
+  await apiFetch(`/notifications/${encodeURIComponent(id)}/dismiss`, { headers: { "x-csrf-token": csrfToken }, method: "PATCH" });
+}
+
 export function useNotifications(enabled: boolean) {
   return useQuery({ enabled, queryFn: fetchNotifications, queryKey: ["notifications", "list"], refetchInterval: 30_000, refetchOnWindowFocus: true, retry: false });
 }
@@ -46,4 +51,9 @@ export function useMarkNotificationRead() {
 export function useMarkAllNotificationsRead() {
   const queryClient = useQueryClient();
   return useMutation({ mutationFn: markAllNotificationsRead, onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["notifications"] }); } });
+}
+
+export function useDismissNotification() {
+  const queryClient = useQueryClient();
+  return useMutation({ mutationFn: dismissNotification, onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["notifications"] }); } });
 }

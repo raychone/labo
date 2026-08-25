@@ -18,7 +18,6 @@ import {
 import {
   formatMoneyMinor,
   getCanonicalWorkOrderCompositionTeeth,
-  isAdultFdiTooth,
   type ClaimWorksListParams,
   type AdultFdiTooth,
   type WorkSummary,

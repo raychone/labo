@@ -106,7 +106,7 @@ export class ProbeCyclesService {
     });
     await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.caseReceived, actorUserId: input.actorUserId, metadata: { nextProbeTypeName: created.probeTypeNameSnapshot, probeNumber: created.sequence, workOrderLabel: work.code, deadlineAt: deadlineAt.toISOString() }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: work.id, resourceType: "work_order" });
     await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.activeProbeCycleStarted, actorUserId: input.actorUserId, metadata: { probeTypeName: created.probeTypeNameSnapshot, probeNumber: created.sequence, workOrderLabel: work.code }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: created.id, resourceType: "probe_cycle" });
-    await this.notificationsService?.publishProbeAvailable({ workOrderId: work.id, probeCycleId: created.id, code: work.code, patientName: work.code, sequence: created.sequence, probeTypeName: created.probeTypeNameSnapshot, deadlineAt: created.deadlineAt.toISOString() });
+    await this.notificationsService?.publishProbeAvailable({ workOrderId: work.id, probeCycleId: created.id, code: work.code, patientName: work.patientName, sequence: created.sequence, probeTypeName: created.probeTypeNameSnapshot, deadlineAt: created.deadlineAt.toISOString() });
     return toProbeCycleView(created);
   }
 
@@ -132,7 +132,7 @@ export class ProbeCyclesService {
       return cycle;
     });
     await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.probeReady, actorUserId: input.actorUserId, metadata: { probeNumber: completed.sequence, probeTypeName: completed.probeTypeNameSnapshot, deadlineAt: completed.deadlineAt.toISOString(), workOrderLabel: work.code, notificationEvent: B17_LOGISTICS_NOTIFICATION_EVENTS.probeReady, notificationKey: getB17LogisticsNotificationKey(B17_LOGISTICS_NOTIFICATION_EVENTS.probeReady, { workOrderId: input.workOrderId, probeCycleId: completed.id }) }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: completed.id, resourceType: "probe_cycle" });
-    await this.notificationsService?.publishProbe({ workOrderId: input.workOrderId, probeCycleId: completed.id, code: work.code, patientName: work.code, sequence: completed.sequence, probeTypeName: completed.probeTypeNameSnapshot, deadlineAt: completed.deadlineAt.toISOString() });
+    await this.notificationsService?.publishProbe({ workOrderId: input.workOrderId, probeCycleId: completed.id, code: work.code, patientName: work.patientName, sequence: completed.sequence, probeTypeName: completed.probeTypeNameSnapshot, deadlineAt: completed.deadlineAt.toISOString() });
   }
 
   public async finalizeWork(input: { readonly actorUserId: string; readonly workOrderId: string; readonly legalEntity?: LegalEntityContext; readonly requestMetadata?: RequestMetadata }): Promise<void> {
@@ -171,7 +171,7 @@ export class ProbeCyclesService {
       });
       if (updated) {
         await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.workOrderFinalized, actorUserId: input.actorUserId, metadata: { workOrderLabel: work.code, notificationEvent: B17_LOGISTICS_NOTIFICATION_EVENTS.finalWorkReady, notificationKey: getB17LogisticsNotificationKey(B17_LOGISTICS_NOTIFICATION_EVENTS.finalWorkReady, { workOrderId: input.workOrderId }) }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: input.workOrderId, resourceType: "work_order" });
-        await this.notificationsService?.publishFinal({ workOrderId: input.workOrderId, code: work.code, patientName: work.code });
+        await this.notificationsService?.publishFinal({ workOrderId: input.workOrderId, code: work.code, patientName: work.patientName });
       }
       return;
     }
@@ -188,19 +188,19 @@ export class ProbeCyclesService {
       return cycle;
     });
     await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.workOrderFinalized, actorUserId: input.actorUserId, metadata: { probeTypeName: completed.probeTypeNameSnapshot, workOrderLabel: work.code, notificationEvent: B17_LOGISTICS_NOTIFICATION_EVENTS.finalWorkReady, notificationKey: getB17LogisticsNotificationKey(B17_LOGISTICS_NOTIFICATION_EVENTS.finalWorkReady, { workOrderId: input.workOrderId }) }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: input.workOrderId, resourceType: "work_order" });
-    await this.notificationsService?.publishFinal({ workOrderId: input.workOrderId, code: work.code, patientName: work.code });
+    await this.notificationsService?.publishFinal({ workOrderId: input.workOrderId, code: work.code, patientName: work.patientName });
   }
 
-  private async findVisibleWork(actorUserId: string, workOrderId: string, legalEntity?: LegalEntityContext): Promise<{ readonly id: string; readonly code: string; readonly items: readonly { readonly workType: { readonly probeTypeCodes: unknown } | null }[] }> {
+  private async findVisibleWork(actorUserId: string, workOrderId: string, legalEntity?: LegalEntityContext): Promise<{ readonly id: string; readonly code: string; readonly patientName: string; readonly items: readonly { readonly workType: { readonly probeTypeCodes: unknown } | null }[] }> {
     const visibleWhere = await getVisibleWorkWhere(this.authorizationService, actorUserId);
-    const work = await this.prisma.workOrder.findFirst({ select: { code: true, id: true, items: { select: { workType: { select: { probeTypeCodes: true } } }, where: { archivedAt: null } } }, where: { AND: [{ id: workOrderId }, visibleWhere, ...(legalEntity ? [{ executionLegalEntityId: legalEntity.id }] : [])] } });
+    const work = await this.prisma.workOrder.findFirst({ select: { code: true, id: true, patientName: true, items: { select: { workType: { select: { probeTypeCodes: true } } }, where: { archivedAt: null } } }, where: { AND: [{ id: workOrderId }, visibleWhere, ...(legalEntity ? [{ executionLegalEntityId: legalEntity.id }] : [])] } });
     if (!work) throw new NotFoundException("Lucrarea nu a fost găsită.");
     return work;
   }
 
-  private async findTransitionWork(actorUserId: string, workOrderId: string, legalEntity?: LegalEntityContext): Promise<{ readonly id: string; readonly code: string; readonly status: string; readonly activeProbeCycleId: string | null; readonly claimStatus: string; readonly claimedByUserId: string | null; readonly executionLegalEntityId: string | null; readonly claimRevision: number }> {
+  private async findTransitionWork(actorUserId: string, workOrderId: string, legalEntity?: LegalEntityContext): Promise<{ readonly id: string; readonly code: string; readonly patientName: string; readonly status: string; readonly activeProbeCycleId: string | null; readonly claimStatus: string; readonly claimedByUserId: string | null; readonly executionLegalEntityId: string | null; readonly claimRevision: number }> {
     const visibleWhere = await getVisibleWorkWhere(this.authorizationService, actorUserId);
-    const work = await this.prisma.workOrder.findFirst({ select: { activeProbeCycleId: true, claimRevision: true, claimStatus: true, claimedByUserId: true, code: true, executionLegalEntityId: true, id: true, status: true }, where: { AND: [{ id: workOrderId }, visibleWhere, ...(legalEntity ? [{ executionLegalEntityId: legalEntity.id }] : [])] } });
+    const work = await this.prisma.workOrder.findFirst({ select: { activeProbeCycleId: true, claimRevision: true, claimStatus: true, claimedByUserId: true, code: true, executionLegalEntityId: true, id: true, patientName: true, status: true }, where: { AND: [{ id: workOrderId }, visibleWhere, ...(legalEntity ? [{ executionLegalEntityId: legalEntity.id }] : [])] } });
     if (!work) throw new NotFoundException("Lucrarea nu a fost găsită.");
     return work;
   }
