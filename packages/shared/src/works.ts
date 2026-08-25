@@ -41,10 +41,12 @@ export const WORK_TECHNICAL_READINESS = ["PROBE_READY", "FINAL_READY"] as const;
 export type WorkTechnicalReadiness = (typeof WORK_TECHNICAL_READINESS)[number];
 
 export interface ProbeTypeView {
+  readonly code?: string | null;
   readonly id: string;
   readonly name: string;
   readonly sortOrder: number;
   readonly isArchived: boolean;
+  readonly symbol?: string | null;
 }
 
 export interface ProbeCycleView {
@@ -73,11 +75,16 @@ export interface WorkTypeSnapshot {
   readonly code: string;
   readonly id: string;
   readonly name: string;
+  readonly probeTypeCodes?: readonly string[];
   readonly symbol: string;
 }
 
 export interface WorkTypeFormOption extends WorkTypeSnapshot {
   readonly unit: string;
+  readonly probeFamily?: string | null;
+  readonly probeTypeCodes?: readonly string[];
+  readonly allowedAddOns?: readonly { readonly code: string; readonly label: string; readonly amountMinor: number | null }[];
+  readonly exclusiveGroup?: string | null;
 }
 
 export interface WorkWorkflowSummary {
@@ -193,6 +200,8 @@ export type ExecutionSnapshotView = {
 };
 
 export interface WorkSummary {
+  /** Active work cycle; cycle 1 is the initial intake, later cycles are returns. */
+  readonly cycleNumber?: number | null;
   readonly clinic: WorkClinicSummary | null;
   readonly code: string;
   readonly createdAt: string;
@@ -381,7 +390,7 @@ export interface PaginatedWorksResponse {
 }
 
 export type ClaimWorkInput = {
-  readonly executionLegalEntityCode: LegalEntityCode;
+  readonly executionLegalEntityCode?: LegalEntityCode;
   readonly expectedClaimRevision: number;
 };
 

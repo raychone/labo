@@ -54,7 +54,7 @@ export interface ScanContextView {
     readonly activeGroup: { readonly code: string; readonly id: string; readonly status: "DRAFT" | "READY" | "CANCELLED" } | null;
     readonly blockedReason: string | null;
     readonly locationCode: "RECEPTIE" | "PRODUCTIE" | "RAFT_FINISARE" | "ZONA_AMBALARE" | "GATA_LIVRARE" | null;
-    readonly status: "RECEIVED" | "IN_PRODUCTION" | "BLOCKED" | "READY_FOR_PACKING" | "PACKING" | "READY_FOR_DELIVERY" | "HANDED_TO_DELIVERY" | "DELIVERED";
+    readonly status: "RECEIVED" | "IN_PRODUCTION" | "BLOCKED" | "HANDED_TO_DELIVERY" | "DELIVERED";
   };
   readonly realLabSheet: {
     readonly cycleNumber: number | null;
@@ -396,9 +396,9 @@ export class ScanService {
     const completed = execution?.stages.filter((stage) => stage.status === WorkStageExecutionStatus.COMPLETED).length ?? 0;
     const realLabSheet = this.toRealLabSheetSummary(work.status, work.activeCycle);
     const persistedLogisticsStatus = logisticsState?.status ?? null;
-    const logisticsStatus = work.status === "FINALIZATA"
-      && (persistedLogisticsStatus === null || persistedLogisticsStatus === "RECEIVED" || persistedLogisticsStatus === "IN_PRODUCTION")
-      ? "READY_FOR_PACKING"
+    const legacyPackingStatus = persistedLogisticsStatus === "READY_FOR_PACKING" || persistedLogisticsStatus === "PACKING" || persistedLogisticsStatus === "READY_FOR_DELIVERY";
+    const logisticsStatus = legacyPackingStatus
+      ? (work.status === "FINALIZATA" ? "RECEIVED" : "IN_PRODUCTION")
       : persistedLogisticsStatus ?? (execution?.status === WorkWorkflowExecutionStatus.ACTIVE ? "IN_PRODUCTION" : "RECEIVED");
 
     return {

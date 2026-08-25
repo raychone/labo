@@ -78,6 +78,8 @@ export interface BillingDocumentDetail extends BillingDocumentSummary {
   readonly lines: readonly BillingDocumentLineView[];
   readonly notes: string | null;
   readonly payments: readonly PaymentView[];
+  readonly paymentNoteIssuedAt: string | null;
+  readonly paymentNoteSnapshot: unknown | null;
   readonly subtotalMinor: number;
   readonly taxMinor: number;
 }
@@ -276,6 +278,8 @@ export function toBillingDocumentDetail(document: BillingDocumentRecord): Billin
       .slice()
       .sort((first, second) => first.paymentDate.getTime() - second.paymentDate.getTime())
       .map(toPaymentView),
+    paymentNoteIssuedAt: document.paymentNoteIssuedAt?.toISOString() ?? null,
+    paymentNoteSnapshot: document.paymentNoteSnapshot,
     subtotalMinor: document.subtotalMinor,
     taxMinor: document.taxMinor,
   };

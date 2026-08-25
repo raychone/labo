@@ -10,4 +10,6 @@ export const WORK_TYPES_AUDIT_ACTIONS = {
   priceUpdated: "work_types.price_updated",
   restored: "work_types.restored",
   updated: "work_types.updated",
+  intakeCatalogCreated: "work_types.intake_catalog_created",
+  catalogPriceConfigured: "work_types.catalog_price_configured",
 } as const;

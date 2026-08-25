@@ -41,7 +41,7 @@ export function toWorkTypeFormValues(workType: WorkTypeDetail | undefined): Work
   }
 
   return {
-    basePriceDecimal: minorToDecimalString(workType.basePriceMinor),
+    basePriceDecimal: workType.basePriceMinor === null ? "" : minorToDecimalString(workType.basePriceMinor),
     description: workType.description,
     name: workType.name,
     symbol: workType.symbol,

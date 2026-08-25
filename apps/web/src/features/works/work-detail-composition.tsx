@@ -1,6 +1,7 @@
 import {
   ADULT_FDI_TEETH,
   ANATOMICAL_SCOPE_LABELS_RO,
+  formatWorkTypeCategory,
   getCanonicalWorkOrderCompositionTeeth,
   type AnatomicalScopeType,
   type WorkDetail,
@@ -15,7 +16,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { ToothDiagram } from "../../components/dental/tooth-diagram.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
-import { fetchWorkCompatibility, useWorkCompositionMutations } from "./works-api.js";
+import { fetchWorkCompatibility, saveOperationalWorkTypeName, useWorkCompositionMutations } from "./works-api.js";
 import { MultiItemWorkEditor, type DraftToothConnection, type DraftWorkOrderItem } from "./multi-item-work-editor.js";
 import "./work-detail-composition.css";
 
@@ -31,26 +32,30 @@ function itemToDraft(item: WorkOrderItemView): DraftWorkOrderItem {
     scope: item.scope,
     teeth: item.teeth.map((tooth) => tooth.fdiTooth),
     workTypeId: item.workTypeId ?? "",
+    customWorkTypeSnapshot: item.customWorkTypeSnapshot,
     shade: item.shade,
     implantPlatform: item.implantPlatform,
     implantPlatformCustom: snapshotValue(item.customImplantPlatformSnapshot),
     restorationType: item.restorationType,
     technicalCodeNotes: item.technicalCodeNotes,
     notes: item.notes,
+    ...(item.selectedAddOns ? { selectedAddOns: item.selectedAddOns } : {}),
   };
 }
 
-function draftToInput(item: DraftWorkOrderItem): WorkOrderItemInput {
+function draftToInput(item: DraftWorkOrderItem, canEditTechnicalCode: boolean): WorkOrderItemInput {
   return {
     scope: item.scope,
     teeth: item.teeth,
     workTypeId: item.workTypeId || null,
+    customWorkTypeSnapshot: item.workTypeId ? null : item.customWorkTypeSnapshot ?? null,
     shade: item.shade,
     implantPlatform: item.implantPlatform,
     customImplantPlatformSnapshot: item.implantPlatform === "Alt tip" && item.implantPlatformCustom ? { value: item.implantPlatformCustom } : null,
     restorationType: item.restorationType,
-    technicalCodeNotes: item.technicalCodeNotes,
+    ...(canEditTechnicalCode ? { technicalCodeNotes: item.technicalCodeNotes } : {}),
     notes: item.notes,
+    ...(item.selectedAddOns ? { selectedAddOns: item.selectedAddOns } : {}),
   };
 }
 
@@ -64,17 +69,25 @@ function snapshotValue(snapshot: Readonly<Record<string, unknown>> | null): stri
 }
 
 function itemDisplayValue(item: WorkOrderItemView, field: "workType" | "platform"): string | null {
-  if (field === "workType") return item.workType?.name ?? snapshotValue(item.customWorkTypeSnapshot);
+  if (field === "workType") return item.workType?.name ? displayWorkTypeName(item.workType.name) : snapshotValue(item.customWorkTypeSnapshot);
   return item.implantPlatform ?? snapshotValue(item.customImplantPlatformSnapshot);
+}
+
+const WORK_TYPE_COLORS = ["#2563eb", "#eab308", "#dc2626", "#7c3aed", "#f97316", "#0891b2", "#db2777", "#65a30d", "#92400e", "#475569"] as const;
+
+function displayWorkTypeName(name: string): string {
+  return name.replace(/\s*-\s*(bucată|bucata|element|arcadă|arcada|lucrare)\s*$/iu, "").trim();
 }
 
 export function WorkDetailComposition({
   canEdit,
+  canEditTechnicalCode = false,
   isOpen,
   work,
   workTypeOptions,
 }: {
   readonly canEdit: boolean;
+  readonly canEditTechnicalCode?: boolean;
   readonly isOpen: boolean;
   readonly work: WorkDetail;
   readonly workTypeOptions: readonly WorkTypeFormOption[];
@@ -92,6 +105,33 @@ export function WorkDetailComposition({
   const [draftConnections, setDraftConnections] = useState<readonly DraftToothConnection[]>(() => (work.toothConnections ?? []).map(({ toothA, toothB }) => ({ toothA, toothB })));
   const mutations = useWorkCompositionMutations();
   const compositionTeeth = useMemo(() => getCanonicalWorkOrderCompositionTeeth(draftItems), [draftItems]);
+  const workTypeVisualization = useMemo(() => {
+    const colorByWorkType = new Map<string, string>();
+    const legend: { color: string; label: string; symbol: string }[] = [];
+    const toothColors = new Map<number, string[]>();
+    for (const item of items) {
+      if (item.scope === "CASE" || !item.workType) continue;
+      const workType = item.workType;
+      const key = workType.id;
+      let color = colorByWorkType.get(key);
+      if (!color) {
+        color = WORK_TYPE_COLORS[colorByWorkType.size % WORK_TYPE_COLORS.length]!;
+        colorByWorkType.set(key, color);
+        legend.push({ color, label: displayWorkTypeName(workType.name), symbol: workType.symbol });
+      }
+      const unit = effectiveWorkTypeOptions.find((option) => option.id === workType.id)?.unit;
+      for (const tooth of unit === "UNIT" ? item.teeth.slice(0, 1) : item.teeth) {
+        const colors = toothColors.get(tooth.fdiTooth) ?? [];
+        if (!colors.includes(color)) colors.push(color);
+        toothColors.set(tooth.fdiTooth, colors);
+      }
+    }
+    const resolvedToothColors: Record<number, string> = {};
+    for (const [tooth, colors] of toothColors.entries()) {
+      resolvedToothColors[tooth] = colors.length === 1 ? colors[0]! : `linear-gradient(90deg, ${colors.join(", ")})`;
+    }
+    return { legend, toothColors: resolvedToothColors };
+  }, [effectiveWorkTypeOptions, items]);
   const savePending = mutations.updateComposition.isPending;
   const saveError = mutations.updateComposition.error;
 
@@ -106,7 +146,7 @@ export function WorkDetailComposition({
     const input: WorkOrderCompositionInput = {
       items: draftItems.map((draft) => ({
         ...(draft.id.startsWith("draft-") ? {} : { id: draft.id }),
-        ...draftToInput(draft),
+        ...draftToInput(draft, canEditTechnicalCode),
       })),
       toothConnections: draftConnections,
     };
@@ -138,13 +178,14 @@ export function WorkDetailComposition({
         </div>
         {editing ? (
           <>
-            <MultiItemWorkEditor disabled={savePending} items={draftItems} connections={draftConnections} workTypeOptions={effectiveWorkTypeOptions} onChange={(items, connections) => { setDraftItems(items); setDraftConnections(connections); }} />
+            <MultiItemWorkEditor canEditTechnicalCode={canEditTechnicalCode} canSaveCustomWorkType onSaveCustomWorkType={saveOperationalWorkTypeName} disabled={savePending} items={draftItems} connections={draftConnections} workTypeOptions={effectiveWorkTypeOptions} onChange={(items, connections) => { setDraftItems(items); setDraftConnections(connections); }} />
             {saveError ? <ErrorState title="Componentele nu au fost salvate" description={getErrorMessage(saveError)} /> : null}
             <div className="works-page__actions"><Button disabled={savePending} isLoading={savePending} onClick={() => void saveComposition()} type="button">Salvează componentele</Button><Button disabled={savePending} onClick={() => setEditing(false)} type="button" variant="outline">Anulează</Button></div>
           </>
         ) : (
           <>
-            <ToothDiagram availableTeeth={ADULT_FDI_TEETH} configuredTeeth={compositionTeeth} connectionTeeth={compositionTeeth} connections={work.toothConnections ?? []} mode="readOnly" showShortcuts={false} />
+            <ToothDiagram availableTeeth={ADULT_FDI_TEETH} configuredTeeth={compositionTeeth} connectionTeeth={compositionTeeth} connections={work.toothConnections ?? []} mode="readOnly" showShortcuts={false} toothColors={workTypeVisualization.toothColors} />
+            {workTypeVisualization.legend.length > 0 ? <div className="works-page__work-type-legend" aria-label="Legendă tipuri de lucrări">{workTypeVisualization.legend.map((entry) => <span key={entry.label}><i aria-hidden="true" style={{ background: entry.color }} />{entry.symbol} · {entry.label}</span>)}</div> : null}
             {items.length > 0 ? <div className="works-page__composition-items">{items.map((item, index) => <WorkItemCard item={item} index={index} key={item.id} />)}</div> : <p className="works-page__muted">Nu există componente canonice active. Datele istorice rămân afișate separat; conversia explicită a lucrărilor legacy nu este disponibilă în B09.</p>}
           </>
         )}
@@ -155,7 +196,10 @@ export function WorkDetailComposition({
 }
 
 function WorkItemCard({ item, index }: { readonly item: WorkOrderItemView; readonly index: number }): ReactNode {
-  return <article className="works-page__composition-item"><div className="works-page__composition-item-title"><strong>Componenta {index + 1}</strong><StatusBadge label={ANATOMICAL_SCOPE_LABELS_RO[item.scope]} variant="registered" /></div><div className="works-page__detail-section-grid"><DetailValue label="Tip lucrare" value={itemDisplayValue(item, "workType")} /><DetailValue label="Domeniu" value={scopeLabel(item.scope, item.teeth.map((tooth) => tooth.fdiTooth))} /><DetailValue label="Culoare" value={item.shade} /><DetailValue label="Platformă implant" value={itemDisplayValue(item, "platform")} /><DetailValue label="Tip restaurare" value={item.restorationType} /><DetailValue label="Cod / detalii tehnice" value={item.technicalCodeNotes} /><DetailValue label="Note componentă" value={item.notes} /></div></article>;
+  const unit = item.workType?.unit;
+  const quantity = unit === "ELEMENT" ? Math.max(1, item.teeth.length) : unit === "UNIT" ? 1 : null;
+  const isImplantWorkType = item.workType?.name?.toLocaleLowerCase("ro-RO").includes("implant") ?? false;
+  return <article className="works-page__composition-item"><div className="works-page__composition-item-title"><strong>Componenta {index + 1}</strong><StatusBadge label={ANATOMICAL_SCOPE_LABELS_RO[item.scope]} variant="registered" /></div><div className="works-page__detail-section-grid"><DetailValue label="Categorie" value={formatWorkTypeCategory(item.workType?.probeFamily)} /><DetailValue label="Tip lucrare" value={itemDisplayValue(item, "workType")} /><DetailValue label="Unitate / cantitate" value={quantity === null ? unit ?? null : `${unit === "ELEMENT" ? "Elemente" : "Bucată"}: ${quantity}`} /><DetailValue label="Domeniu" value={scopeLabel(item.scope, item.teeth.map((tooth) => tooth.fdiTooth))} /><DetailValue label="Culoare" value={item.shade} />{isImplantWorkType ? <><DetailValue label="Platformă implant" value={itemDisplayValue(item, "platform")} /><DetailValue label="Tip restaurare" value={item.restorationType} /></> : null}<DetailValue label="Cod / detalii tehnice" value={item.technicalCodeNotes} /><DetailValue label="Note componentă" value={item.notes} /></div></article>;
 }
 
 function DetailValue({ label, value }: { readonly label: string; readonly value: string | null | undefined }): ReactNode {

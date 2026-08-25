@@ -20,6 +20,10 @@ function workType(overrides: Partial<WorkType> = {}): WorkType {
     description: "Coroana zirconiu",
     id: "work_type_1",
     isActive: true,
+    probeFamily: null,
+    probeTypeCodes: null,
+    allowedAddOns: null,
+    exclusiveGroup: null,
     name: "Coroana zirconiu",
     symbol: "Zr",
     unit: "UNIT",
@@ -35,6 +39,41 @@ function createService(prisma: unknown, codeService: unknown = { generate: vi.fn
 }
 
 describe("WorkTypesService", () => {
+  it("creates and reuses an unpriced operational catalog name", async () => {
+    const created = workType({ basePriceMinor: null, code: "CU-ABC", name: "Gutieră specială", symbol: "custom-ABC" });
+    const findFirst = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(created);
+    const create = vi.fn().mockResolvedValue(created);
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+        workType: { create, findFirst },
+      })),
+    });
+
+    const result = await service.saveOperationalNameToCatalog({ actorUserId: "actor_1", requestMetadata: {} }, "  Gutieră   specială ");
+
+    expect(create).toHaveBeenCalledWith({ data: expect.objectContaining({ basePriceMinor: null, name: "Gutieră specială" }) });
+    expect(result.name).toBe("Gutieră specială");
+  });
+
+  it("propagates only the first configured price to unresolved active items", async () => {
+    const before = workType({ basePriceMinor: null });
+    const after = workType({ basePriceMinor: 35000, version: 2 });
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+        workOrderItem: { findMany: vi.fn().mockResolvedValue([{ workOrder: { code: "WO-1" } }]), updateMany },
+        workType: { update: vi.fn().mockResolvedValue(after) },
+      })),
+      workType: { findUnique: vi.fn().mockResolvedValue(before) },
+    });
+
+    await service.updateWorkType({ actorUserId: "actor_1", requestMetadata: {} }, "work_type_1", { basePriceMinor: 35000 });
+
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ archivedAt: null, baseUnitPriceMinor: null, commercialSnapshot: { equals: expect.anything() }, totalPriceMinor: null, workTypeId: "work_type_1" }) }));
+  });
+
   it("creates a work type with a generated immutable code and audit entry", async () => {
     const createdWorkType = workType();
     const auditCreate = vi.fn().mockResolvedValue({});

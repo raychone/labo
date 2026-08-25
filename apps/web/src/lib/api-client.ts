@@ -125,7 +125,12 @@ export async function parseApiResponse<TResponse>(response: Response): Promise<T
     throw error;
   }
 
-  return response.json() as Promise<TResponse>;
+  if (response.status === 204) {
+    return undefined as TResponse;
+  }
+
+  const body = await response.text();
+  return body.trim().length === 0 ? undefined as TResponse : JSON.parse(body) as TResponse;
 }
 
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {

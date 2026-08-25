@@ -4,9 +4,11 @@ import {
   IsIn,
   IsOptional,
   IsString,
+  IsInt,
   Matches,
   MaxLength,
   MinLength,
+  Min,
   ValidateBy,
 } from "class-validator";
 import { Transform } from "class-transformer";
@@ -80,6 +82,12 @@ function normalizeHexColor(value: unknown): string | undefined {
 }
 
 export class UpdateSettingsDto {
+  @IsOptional()
+  @Transform(({ value }) => value === null || value === undefined || value === "" ? value : Number(value))
+  @IsInt()
+  @Min(0)
+  public readonly largeOutstandingThresholdMinor?: number | null;
+
   @IsEmpty()
   public readonly activeLegalEntityId?: never;
 

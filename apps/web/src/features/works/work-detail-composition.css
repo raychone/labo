@@ -21,6 +21,27 @@
   gap: var(--dl-space-3);
 }
 
+.works-page__work-type-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-2) var(--dl-space-4);
+  margin-top: var(--dl-space-3);
+}
+
+.works-page__work-type-legend span {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--dl-space-2);
+  font-weight: var(--dl-font-weight-semibold);
+}
+
+.works-page__work-type-legend i {
+  border-radius: 999px;
+  display: inline-block;
+  height: 0.75rem;
+  width: 0.75rem;
+}
+
 .works-page__composition-item {
   background: var(--dl-color-surface-muted);
   border: 1px solid var(--dl-color-border);

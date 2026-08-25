@@ -184,7 +184,10 @@ describe("WorkScanPage", () => {
 
     renderWithProviders(<WorkScanPage />);
 
-    fireEvent.change(await screen.findByLabelText("Clinică"), { target: { value: "clinic_1" } });
+    const clinicSelect = await screen.findByLabelText("Clinică");
+    fireEvent.focus(clinicSelect);
+    fireEvent.change(clinicSelect, { target: { value: "" } });
+    fireEvent.click(await screen.findByRole("option", { name: "NC · Clinica Test" }));
     fireEvent.change(await screen.findByLabelText("Medic"), { target: { value: "Dr. Ana Popescu" } });
     fireEvent.change(await screen.findByLabelText("Nume pacient"), { target: { value: "Ion Pop" } });
 

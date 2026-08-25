@@ -1,9 +1,10 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
-import { WorkFormTemplateKind, WorkStageEventType, WorkStageExecutionStatus, type Prisma, type WorkStatus } from "@prisma/client";
+import { Prisma, WorkFormTemplateKind, WorkStageEventType, WorkStageExecutionStatus, type WorkStatus } from "@prisma/client";
 import { Buffer } from "node:buffer";
 
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
 import type { LegalEntityContext } from "../organization-context/organization-context.view.js";
 import { PatientsService } from "../patients/patients.service.js";
 import { AuthorizationService } from "../rbac/authorization.service.js";
@@ -12,6 +13,7 @@ import { DEFAULT_LABORATORY_SETTINGS, SETTINGS_SINGLETON_KEY } from "../settings
 import { WorkQrTokenService } from "../qr/work-qr-token.service.js";
 import { PricingResolverService, type PricingResolution } from "../pricing/pricing-resolver.service.js";
 import { WorkFormSubmissionValidationService } from "../work-forms/work-form-submission-validation.service.js";
+import { B17_LOGISTICS_NOTIFICATION_EVENTS, getB17LogisticsNotificationKey } from "@dental-lab/shared";
 import { WORK_FORM_SUBMISSIONS_RESOURCE_TYPE, WORK_FORMS_AUDIT_ACTIONS } from "../work-forms/work-forms.constants.js";
 import { WorkflowExecutionService } from "../workflow-execution/workflow-execution.service.js";
 import { WORK_ORDER_AUDIT_ACTIONS, WORK_ORDER_RESOURCE_TYPE } from "./works.constants.js";
@@ -45,7 +47,6 @@ import {
 } from "./work-execution-snapshot.js";
 import { accumulateDeadlineDashboardSummary, createEmptyDeadlineDashboardSummary, isDeadlineInFilter } from "./work-deadline-visual.js";
 import { WorkOrderCodeService } from "./work-order-code.service.js";
-import { ProbeTypesService } from "./probe-types.service.js";
 import { getVisibleWorkWhere } from "./work-readability.js";
 import {
   getCanonicalWorkOrderCompositionTeeth,
@@ -83,9 +84,9 @@ interface ActorContext {
 }
 
 interface PricingSnapshot {
-  readonly baseUnitPriceMinor: number;
+  readonly baseUnitPriceMinor: number | null;
   readonly currency: string;
-  readonly totalPriceMinor: number;
+  readonly totalPriceMinor: number | null;
 }
 
 type WorkDeadlinePrismaUpdate = ReturnType<typeof deadlineDataToPrisma>;
@@ -428,7 +429,7 @@ export class WorksService {
     @Inject(WorkflowExecutionService) private readonly workflowExecutionService: WorkflowExecutionService,
     @Inject(WorkDeadlineService) private readonly workDeadlineService: WorkDeadlineService,
     @Inject(PricingResolverService) private readonly pricingResolverService: PricingResolverService,
-    @Optional() @Inject(ProbeTypesService) private readonly probeTypesService?: ProbeTypesService,
+    @Optional() @Inject(NotificationsService) private readonly notificationsService?: NotificationsService,
   ) {}
 
   public async listWorks(actorUserId: string, query: ListWorksQueryDto, includePricing: boolean): Promise<PaginatedWorksView> {
@@ -570,7 +571,7 @@ export class WorksService {
     return workOrder;
   }
 
-  public async listWorkTypeFormOptions(): Promise<readonly WorkTypeFormOptionView[]> {
+  public async listWorkTypeFormOptions(actorUserId?: string): Promise<readonly WorkTypeFormOptionView[]> {
     const workTypes = await this.prisma.workType.findMany({
       orderBy: {
         name: "asc",
@@ -579,6 +580,10 @@ export class WorksService {
         code: true,
         id: true,
         name: true,
+        probeFamily: true,
+        probeTypeCodes: true,
+        allowedAddOns: true,
+        exclusiveGroup: true,
         symbol: true,
         unit: true,
       },
@@ -587,7 +592,12 @@ export class WorksService {
       },
     });
 
-    return workTypes.map(toWorkTypeFormOptionView);
+    const canReadPricing = actorUserId === undefined
+      ? true
+      : (await this.authorizationService.hasPermission({ permission: "pricing.read", requiredScope: "ALL", userId: actorUserId })).allowed;
+    return workTypes.map(toWorkTypeFormOptionView).map((option) => canReadPricing || !option.allowedAddOns
+      ? option
+      : { ...option, allowedAddOns: option.allowedAddOns.map((addOn) => ({ ...addOn, amountMinor: null })) });
   }
 
   public async getWork(actorUserId: string, workOrderId: string, includePricing: boolean): Promise<WorkDetailView> {
@@ -1046,27 +1056,48 @@ export class WorksService {
       requiredScope: "ASSIGNED",
       userId: context.actorUserId,
     });
-    const legalEntity = await this.validateExecutionLegalEntity(this.prisma, dto.executionLegalEntityCode);
     const before = await this.findWorkOrderOrThrow(workOrderId);
     this.assertClaimRevision(before, dto.expectedClaimRevision);
     this.assertClaimable(before);
+    const inlineClinicLegalEntityCode = (before.clinic as typeof before.clinic & { readonly legalEntity?: { readonly code: string } | null } | null)?.legalEntity?.code;
+    const clinicLegalEntity = inlineClinicLegalEntityCode
+      ? null
+      : before.clinicId
+        ? await this.prisma.clinic.findUnique({ select: { legalEntity: { select: { code: true } } }, where: { id: before.clinicId } })
+        : null;
+    const clinicLegalEntityCode = inlineClinicLegalEntityCode ?? clinicLegalEntity?.legalEntity?.code;
+    const legalEntity = clinicLegalEntityCode === "CDT" || clinicLegalEntityCode === "NG"
+      ? await this.validateExecutionLegalEntity(this.prisma, clinicLegalEntityCode)
+      : null;
+    if (!before.activeCycle) {
+      throw new ConflictException("Lucrarea nu are un ciclu activ.");
+    }
 
     const nextRevision = before.claimRevision + 1;
     const after = await this.prisma.$transaction(async (tx) => {
       const operationNow = new Date();
-      const snapshot = await this.prepareExecutionSnapshot(tx, {
-        actorUserId: context.actorUserId,
-        claimedAt: operationNow,
-        legalEntity,
-        nextClaimRevision: nextRevision,
-        requestMetadata: context.requestMetadata,
-        source: "TECHNICIAN_FIRST_CLAIM",
-        technicianId: context.actorUserId,
-        workOrder: before,
-      });
+      let snapshot: Awaited<ReturnType<WorksService["prepareExecutionSnapshot"]>> | null = null;
+      if (legalEntity) {
+        try {
+          snapshot = await this.prepareExecutionSnapshot(tx, {
+            actorUserId: context.actorUserId,
+            claimedAt: operationNow,
+            legalEntity,
+            nextClaimRevision: nextRevision,
+            requestMetadata: context.requestMetadata,
+            source: "TECHNICIAN_FIRST_CLAIM",
+            technicianId: context.actorUserId,
+            workOrder: before,
+          });
+        } catch (error) {
+          if (!(error instanceof ConflictException) || !error.message.includes("nu există un preț aplicabil")) throw error;
+          // Claiming work must not be blocked by pricing setup. The execution
+          // snapshot will be created once the manager configures the clinic/pricing.
+        }
+      }
       const result = await tx.workOrder.updateMany({
         data: {
-          ...(snapshot.deadlineUpdate ?? {}),
+          ...(snapshot?.deadlineUpdate ?? {}),
           assignedTechnicianId: context.actorUserId,
           assignmentUpdatedAt: operationNow,
           claimedAt: operationNow,
@@ -1076,7 +1107,7 @@ export class WorksService {
           claimStatus: "CLAIMED",
           completedAt: null,
           completedByUserId: null,
-          executionLegalEntityId: legalEntity.id,
+          executionLegalEntityId: legalEntity?.id ?? null,
           releaseReason: null,
           releasedAt: null,
           releasedByUserId: null,
@@ -1156,10 +1187,10 @@ export class WorksService {
       await tx.workAssignmentEvent.create({
         data: {
           actorUserId: context.actorUserId,
-          executionSnapshotStatus: snapshot.status,
-          executionSnapshotVersion: snapshot.version,
+          executionSnapshotStatus: snapshot?.status ?? null,
+          executionSnapshotVersion: snapshot?.version ?? null,
           eventType: "CLAIMED",
-          newLegalEntityId: legalEntity.id,
+          newLegalEntityId: legalEntity?.id ?? null,
           newTechnicianId: context.actorUserId,
           revision: nextRevision,
           workOrderId,
@@ -1176,15 +1207,17 @@ export class WorksService {
         requestMetadata: context.requestMetadata,
         resourceId: workOrderId,
       });
-      await this.recordSnapshotAudit(tx, {
-        action: snapshot.created ? WORK_ORDER_AUDIT_ACTIONS.executionSnapshotCreated : WORK_ORDER_AUDIT_ACTIONS.executionSnapshotReused,
-        actorUserId: context.actorUserId,
-        requestMetadata: context.requestMetadata,
-        resourceId: workOrderId,
-        snapshot,
-        workCode: before.code,
-      });
-      if (snapshot.created) {
+      if (snapshot) {
+        await this.recordSnapshotAudit(tx, {
+          action: snapshot.created ? WORK_ORDER_AUDIT_ACTIONS.executionSnapshotCreated : WORK_ORDER_AUDIT_ACTIONS.executionSnapshotReused,
+          actorUserId: context.actorUserId,
+          requestMetadata: context.requestMetadata,
+          resourceId: workOrderId,
+          snapshot,
+          workCode: before.code,
+        });
+      }
+      if (snapshot?.created) {
         await this.recordSnapshotAudit(tx, {
           action: WORK_ORDER_AUDIT_ACTIONS.executionSnapshotLocked,
           actorUserId: context.actorUserId,
@@ -1202,6 +1235,7 @@ export class WorksService {
       throw error;
     });
 
+    await this.notificationsService?.resolveAvailability(workOrderId);
     return toWorkDetailView(after, false, await this.createClaimAccess(context.actorUserId));
   }
 
@@ -1574,16 +1608,11 @@ export class WorksService {
     const requestedDeliveryDate = parseDateOnly(dto.requestedDeliveryDate, true);
     const operationNow = new Date();
     const manualDueAt = dto.manualDueAt ? new Date(dto.manualDueAt) : null;
-    const probeDeadlineAt = dto.probeDeadlineAt ? new Date(dto.probeDeadlineAt) : null;
-    if (dto.probeTypeId && (!probeDeadlineAt || !Number.isFinite(probeDeadlineAt.getTime()))) throw new BadRequestException("Termenul probei curente nu este valid.");
     if (manualDueAt && !canSetManualDeadline) {
       throw new BadRequestException("Nu ai permisiunea necesară pentru termen manual.");
     }
 
     const aggregateItems = dto.items?.length ? dto.items : null;
-    if (dto.items !== undefined && (!dto.probeTypeId || !probeDeadlineAt)) {
-      throw new BadRequestException("Alege tipul probei și termenul explicit al probei curente.");
-    }
     const legacyWorkTypeId = dto.workTypeId ?? aggregateItems?.[0]?.workTypeId ?? null;
     if (!legacyWorkTypeId) {
       throw new BadRequestException("Adaugă cel puțin un element cu tip de lucrare.");
@@ -1596,9 +1625,7 @@ export class WorksService {
       this.rejectConflictingPatientPayload(dto.patientId, dto.patientName);
       const patient = await this.patientsService.findActivePatientOrThrow(tx, dto.patientId);
       const workType = await this.validateWorkType(tx, legacyWorkTypeId, true);
-      const probeType = dto.probeTypeId && probeDeadlineAt && this.probeTypesService
-        ? await this.probeTypesService.requireSelectable(dto.probeTypeId, tx)
-        : null;
+      if (!aggregateItems && workType.unit === "UNIT" && dto.quantity !== 1) throw new BadRequestException("O lucrare de tip bucată are întotdeauna cantitatea 1.");
       const itemInputs: WorkOrderItemInput[] = aggregateItems
         ? aggregateItems.map((item) => this.validateAggregateItem(item))
         : [{
@@ -1607,13 +1634,25 @@ export class WorksService {
             workTypeId: legacyWorkTypeId,
             shade: dto.shade ?? null,
             implantPlatform: dto.implantPlatform ?? null,
-            technicalCodeNotes: dto.technicalCodeNotes ?? null,
-          }];
+          technicalCodeNotes: dto.technicalCodeNotes ?? null,
+        }];
       for (const item of itemInputs) {
-        await this.validateWorkType(tx, item.workTypeId ?? legacyWorkTypeId, true);
+        if (item.customWorkTypeSnapshot) await this.authorizationService.requirePermission({ permission: "works.custom_type.use", requiredScope: "ALL", userId: context.actorUserId });
+        if (item.customImplantPlatformSnapshot) await this.authorizationService.requirePermission({ permission: "works.custom_platform.use", requiredScope: "ALL", userId: context.actorUserId });
       }
-      const quantity = aggregateItems ? itemInputs.length : dto.quantity;
-      const pricing = await this.createPricingSnapshot(tx, workType.basePriceMinor, quantity);
+      const itemConfigs = await Promise.all(itemInputs.map((item) => this.validateWorkType(tx, item.workTypeId ?? legacyWorkTypeId, true)));
+      validateAggregateCatalogRules(itemInputs, itemConfigs);
+      const primaryConfig = itemConfigs[0];
+      if (!primaryConfig) throw new BadRequestException("Compoziția lucrării nu are o configurație validă.");
+      const canonicalItemAddOns = itemInputs.map((item, index) => canonicalSelectedAddOns(itemConfigs[index]!.allowedAddOns, item.selectedAddOns));
+      const itemQuantities = itemInputs.map((item, index) => itemConfigs[index]!.unit === "ELEMENT" ? Math.max(1, item.teeth?.length ?? 0) : 1);
+      const quantity = aggregateItems ? itemQuantities.reduce((total, value) => total + value, 0) : workType.unit === "UNIT" ? 1 : dto.quantity;
+      const pricing = aggregateItems
+        ? await this.createPricingSnapshot(tx, itemInputs.length === 1 ? primaryConfig.basePriceMinor : null, quantity)
+        : await this.createPricingSnapshot(tx, workType.basePriceMinor, quantity);
+      const aggregateTotalPriceMinor = aggregateItems
+        ? itemConfigs.reduce((total, config, index) => total + calculateTotalPriceMinor((config.basePriceMinor ?? 0) + addOnAmountMinor(config.allowedAddOns, canonicalItemAddOns[index]), itemQuantities[index]!), 0)
+        : pricing.totalPriceMinor;
       const deadline = await this.workDeadlineService.resolveForWork({
         clinicId,
         doctorId,
@@ -1653,7 +1692,7 @@ export class WorksService {
         status: "RECEPTIE",
         statusChangedAt: operationNow,
         statusChangedByUserId: context.actorUserId,
-        totalPriceMinor: pricing.totalPriceMinor,
+        totalPriceMinor: aggregateTotalPriceMinor,
         updatedByUserId: context.actorUserId,
         workTypeId: legacyWorkTypeId,
       };
@@ -1676,44 +1715,6 @@ export class WorksService {
         include: WORK_ORDER_INCLUDE,
       });
 
-      const initialCycle = await tx.workCycle.create({
-        data: {
-          createdByUserId: context.actorUserId,
-          cycleNumber: 1,
-          clinicId: createdWorkOrder.clinicId,
-          deadlineEffectiveDueAtSnapshot: createdWorkOrder.effectiveDueAt,
-          deadlineModeSnapshot: createdWorkOrder.deadlineMode,
-          ...(createdWorkOrder.deadlineRuleSnapshot !== null ? { deadlineSnapshotJson: createdWorkOrder.deadlineRuleSnapshot } : {}),
-          doctorId: createdWorkOrder.doctorId,
-          openedAt: operationNow,
-          reason: "INITIAL",
-          status: "ACTIVE",
-          workOrderId: createdWorkOrder.id,
-        },
-      });
-
-      const initialProbeCycle = probeType && probeDeadlineAt ? await tx.probeCycle.create({
-        data: {
-          createdByUserId: context.actorUserId,
-          deadlineAt: probeDeadlineAt,
-          openedAt: operationNow,
-          probeTypeId: probeType.id,
-          probeTypeNameSnapshot: probeType.name,
-          sequence: 1,
-          status: "ACTIVE",
-          workOrderId: createdWorkOrder.id,
-        },
-      }) : null;
-
-      await tx.workOrder.update({
-        data: {
-          activeCycleId: initialCycle.id,
-          ...(initialProbeCycle ? { activeProbeCycleId: initialProbeCycle.id } : {}),
-          ...(initialProbeCycle ? { deadlineMode: "MANUAL", effectiveDueAt: probeDeadlineAt, manualDueAt: probeDeadlineAt, deadlineSource: "CREATION", deadlineRevision: { increment: 1 } } : {}),
-        },
-        where: { id: createdWorkOrder.id },
-      });
-
       if (aggregateItems) {
         for (const [sortOrder, item] of itemInputs.entries()) {
           await tx.workOrderItem.create({
@@ -1729,6 +1730,11 @@ export class WorksService {
               restorationType: item.restorationType ?? null,
               technicalCodeNotes: item.technicalCodeNotes ?? null,
               notes: item.notes ?? null,
+              baseUnitPriceMinor: itemConfigs[sortOrder]!.basePriceMinor,
+              totalPriceMinor: calculateTotalPriceMinor((itemConfigs[sortOrder]!.basePriceMinor ?? 0) + addOnAmountMinor(itemConfigs[sortOrder]!.allowedAddOns, canonicalItemAddOns[sortOrder]), itemQuantities[sortOrder]!),
+              currency: pricing.currency,
+              commercialSnapshot: { selectedAddOns: canonicalItemAddOns[sortOrder] ?? [] },
+              selectedAddOns: canonicalItemAddOns[sortOrder] ? canonicalItemAddOns[sortOrder] as Prisma.InputJsonValue : Prisma.JsonNull,
               teeth: { create: (item.teeth ?? []).map((fdiTooth, toothSortOrder) => ({ fdiTooth, sortOrder: toothSortOrder })) },
             },
           });
@@ -1743,21 +1749,62 @@ export class WorksService {
         }
       }
 
+      // Every new work starts with an active intake cycle.  Claiming a new work
+      // must not depend on the return-cycle flow having run first.
+      const initialCycle = await tx.workCycle.create({
+        data: {
+          clinicId,
+          createdByUserId: context.actorUserId,
+          cycleNumber: 1,
+          deadlineEffectiveDueAtSnapshot: deadline.effectiveDueAt,
+          deadlineModeSnapshot: deadline.deadlineMode,
+          deadlineSnapshotJson: deadline.deadlineRuleSnapshot,
+          doctorId,
+          openedAt: operationNow,
+          reason: "INITIAL",
+          status: "ACTIVE",
+          workOrderId: createdWorkOrder.id,
+        },
+      });
+      await tx.workOrder.update({
+        data: { activeCycleId: initialCycle.id },
+        where: { id: createdWorkOrder.id },
+      });
       await this.workflowExecutionService.createSnapshotForWork(tx, {
         actorUserId: context.actorUserId,
-        workCycleId: initialCycle.id,
-        ...(dto.expectedWorkflowTemplateId ? { expectedWorkflowTemplateId: dto.expectedWorkflowTemplateId } : {}),
-        ...(dto.expectedWorkflowTemplateVersion ? { expectedWorkflowTemplateVersion: dto.expectedWorkflowTemplateVersion } : {}),
         requestMetadata: context.requestMetadata,
         workCode: createdWorkOrder.code,
+        workCycleId: initialCycle.id,
         workOrderId: createdWorkOrder.id,
         workTypeId: createdWorkOrder.workTypeId,
+      });
+      const initialLogisticsState = await tx.workLogisticsState.create({
+        data: {
+          physicalLocationCode: "RECEPTIE",
+          status: "RECEIVED",
+          workCycleId: initialCycle.id,
+          workOrderId: createdWorkOrder.id,
+        },
+      });
+      await tx.logisticsEvent.create({
+        data: {
+          actorUserId: context.actorUserId,
+          logisticsStateId: initialLogisticsState.id,
+          metadata: { cycleId: initialCycle.id, cycleNumber: 1, newStatus: "RECEIVED", workCode: createdWorkOrder.code, workId: createdWorkOrder.id },
+          type: "WORK_RECEIVED",
+          workCycleId: initialCycle.id,
+          workOrderId: createdWorkOrder.id,
+        },
       });
 
       await this.recordAudit(tx, {
         action: WORK_ORDER_AUDIT_ACTIONS.created,
         actorUserId: context.actorUserId,
-        metadata: this.createAuditMetadata(createdWorkOrder),
+        metadata: {
+          ...this.createAuditMetadata(createdWorkOrder),
+          notificationEvent: B17_LOGISTICS_NOTIFICATION_EVENTS.newWork,
+          notificationKey: getB17LogisticsNotificationKey(B17_LOGISTICS_NOTIFICATION_EVENTS.newWork, { workOrderId: createdWorkOrder.id }),
+        },
         requestMetadata: context.requestMetadata,
         resourceId: createdWorkOrder.id,
       });
@@ -1796,11 +1843,19 @@ export class WorksService {
       });
     });
 
-    return toWorkDetailView(workOrder, true, await this.createClaimAccess(context.actorUserId));
+    await this.notificationsService?.publishNewWork({ workOrderId: workOrder.id, code: workOrder.code, patientName: workOrder.patientName, clinicName: workOrder.clinic?.name ?? null, technicianAvailable: workOrder.claimStatus === "UNCLAIMED" && workOrder.technicalReadiness === null });
+    return toWorkDetailView(workOrder, await this.canReadPricing(context.actorUserId), await this.createClaimAccess(context.actorUserId));
   }
 
   public async updateWork(context: ActorContext, legalEntity: LegalEntityContext, workOrderId: string, dto: UpdateWorkDto): Promise<WorkDetailView> {
     const before = await this.findWorkOrderOrThrow(workOrderId);
+    const hasTechnicalCode = Object.prototype.hasOwnProperty.call(dto, "technicalCodeNotes");
+    if (hasTechnicalCode) {
+      const codePermission = await this.authorizationService.hasPermission({ permission: "works.technical_code.edit", userId: context.actorUserId });
+      if (!codePermission.allowed || before.status === "FINALIZATA" || before.technicalReadiness === "FINAL_READY") {
+        throw new ForbiddenException("Codul tehnic nu poate fi modificat de acest utilizator.");
+      }
+    }
     if (dto.urgency !== undefined) {
       await this.authorizationService.requirePermission({ permission: "works.urgency.update", requiredScope: "ALL", userId: context.actorUserId });
       if (before.status === "FINALIZATA") throw new BadRequestException("Urgența nu mai poate fi modificată după finalizarea lucrării.");
@@ -1956,11 +2011,24 @@ export class WorksService {
           resourceId: workOrderId,
         });
       }
+      if (hasTechnicalCode && before.technicalCodeNotes !== updatedWorkOrder.technicalCodeNotes) {
+        await this.recordAudit(tx, {
+          action: WORK_ORDER_AUDIT_ACTIONS.technicalCodeUpdated,
+          actorUserId: context.actorUserId,
+          metadata: {
+            from: before.technicalCodeNotes ?? null,
+            to: updatedWorkOrder.technicalCodeNotes ?? null,
+            workCode: before.code,
+          },
+          requestMetadata: context.requestMetadata,
+          resourceId: workOrderId,
+        });
+      }
 
       return updatedWorkOrder;
     });
 
-    return toWorkDetailView(after, true, await this.createClaimAccess(context.actorUserId));
+    return toWorkDetailView(after, await this.canReadPricing(context.actorUserId), await this.createClaimAccess(context.actorUserId));
   }
 
   public async recalculateDeadline(context: ActorContext, legalEntity: LegalEntityContext, workOrderId: string, dto: RecalculateWorkDeadlineDto): Promise<WorkDetailView> {
@@ -2001,7 +2069,7 @@ export class WorksService {
       return updated;
     });
 
-    return toWorkDetailView(after, true, await this.createClaimAccess(context.actorUserId));
+    return toWorkDetailView(after, await this.canReadPricing(context.actorUserId), await this.createClaimAccess(context.actorUserId));
   }
 
   public async setManualDeadline(context: ActorContext, legalEntity: LegalEntityContext, workOrderId: string, dto: SetManualWorkDeadlineDto): Promise<WorkDetailView> {
@@ -2043,7 +2111,7 @@ export class WorksService {
       return updated;
     });
 
-    return toWorkDetailView(after, true, await this.createClaimAccess(context.actorUserId));
+    return toWorkDetailView(after, await this.canReadPricing(context.actorUserId), await this.createClaimAccess(context.actorUserId));
   }
 
   private async findWorkOrderOrThrow(workOrderId: string): Promise<WorkOrderRecord> {
@@ -2059,6 +2127,11 @@ export class WorksService {
     }
 
     return workOrder;
+  }
+
+  private async canReadPricing(userId: string): Promise<boolean> {
+    const result = await this.authorizationService.hasPermission({ permission: "pricing.read", requiredScope: "ALL", userId });
+    return result.allowed;
   }
 
   private async findRealLabSheetContextOrThrow(workOrderId: string, cycleId: string): Promise<{ readonly cycle: RealLabSheetCycleRecord; readonly workOrder: RealLabSheetWorkRecord }> {
@@ -2269,13 +2342,15 @@ export class WorksService {
 
     if (dto.workTypeId !== undefined) {
       const workType = await this.validateWorkType(this.prisma, dto.workTypeId, true);
+      if (workType.unit === "UNIT" && nextQuantity !== 1) throw new BadRequestException("O lucrare de tip bucată are întotdeauna cantitatea 1.");
       const pricing = await this.createPricingSnapshot(this.prisma, workType.basePriceMinor, nextQuantity);
       data.workTypeId = dto.workTypeId;
       data.baseUnitPriceMinor = pricing.baseUnitPriceMinor;
       data.currency = pricing.currency;
       data.totalPriceMinor = pricing.totalPriceMinor;
     } else if (dto.quantity !== undefined) {
-      data.totalPriceMinor = calculateTotalPriceMinor(before.baseUnitPriceMinor, dto.quantity);
+      if (before.workType?.unit === "UNIT" && dto.quantity !== 1) throw new BadRequestException("O lucrare de tip bucată are întotdeauna cantitatea 1.");
+      data.totalPriceMinor = before.baseUnitPriceMinor === null ? null : calculateTotalPriceMinor(before.baseUnitPriceMinor, dto.quantity);
     }
 
     if (dto.patientId !== undefined || dto.patientName !== undefined) {
@@ -2412,11 +2487,15 @@ export class WorksService {
     client: Prisma.TransactionClient | PrismaService,
     workTypeId: string,
     requireActive: boolean,
-  ): Promise<{ readonly basePriceMinor: number }> {
+  ): Promise<{ readonly allowedAddOns: Prisma.JsonValue | null; readonly basePriceMinor: number | null; readonly exclusiveGroup: string | null; readonly id: string; readonly unit: string }> {
     const workType = await client.workType.findUnique({
       select: {
+        allowedAddOns: true,
         basePriceMinor: true,
+        exclusiveGroup: true,
         isActive: true,
+        id: true,
+        unit: true,
       },
       where: {
         id: workTypeId,
@@ -2434,7 +2513,7 @@ export class WorksService {
     return workType;
   }
 
-  private async createPricingSnapshot(client: Prisma.TransactionClient | PrismaService, baseUnitPriceMinor: number, quantity: number): Promise<PricingSnapshot> {
+  private async createPricingSnapshot(client: Prisma.TransactionClient | PrismaService, baseUnitPriceMinor: number | null, quantity: number): Promise<PricingSnapshot> {
     const settings = await client.laboratorySettings.upsert({
       create: {
         ...DEFAULT_LABORATORY_SETTINGS,
@@ -2449,7 +2528,7 @@ export class WorksService {
     return {
       baseUnitPriceMinor,
       currency: settings.currency,
-      totalPriceMinor: calculateTotalPriceMinor(baseUnitPriceMinor, quantity),
+      totalPriceMinor: baseUnitPriceMinor === null ? null : calculateTotalPriceMinor(baseUnitPriceMinor, quantity),
     };
   }
 
@@ -3073,6 +3152,55 @@ export function calculateTotalPriceMinor(baseUnitPriceMinor: number, quantity: n
   }
 
   return total;
+}
+
+function addOnAmountMinor(allowedAddOns: Prisma.JsonValue | null, selectedAddOns: WorkOrderItemInput["selectedAddOns"]): number {
+  const amounts = new Map<string, number>();
+  if (Array.isArray(allowedAddOns)) {
+    for (const entry of allowedAddOns) {
+      if (typeof entry !== "object" || entry === null || Array.isArray(entry)) continue;
+      if (typeof entry.code === "string" && typeof entry.amountMinor === "number") amounts.set(entry.code, entry.amountMinor);
+    }
+  }
+  return (selectedAddOns ?? []).reduce((total, selected) => total + (amounts.get(selected.code) ?? 0), 0);
+}
+
+function canonicalSelectedAddOns(allowedAddOns: Prisma.JsonValue | null, selectedAddOns: WorkOrderItemInput["selectedAddOns"]): readonly { readonly code: string; readonly amountMinor: number | null }[] {
+  const amounts = new Map<string, number>();
+  if (Array.isArray(allowedAddOns)) {
+    for (const entry of allowedAddOns) {
+      if (typeof entry !== "object" || entry === null || Array.isArray(entry)) continue;
+      if (typeof entry.code === "string" && typeof entry.amountMinor === "number") amounts.set(entry.code, entry.amountMinor);
+    }
+  }
+  return (selectedAddOns ?? []).map((selected) => ({ code: selected.code, amountMinor: amounts.get(selected.code) ?? null }));
+}
+
+function validateAggregateCatalogRules(
+  items: readonly WorkOrderItemInput[],
+  configs: readonly { readonly allowedAddOns: Prisma.JsonValue | null; readonly exclusiveGroup: string | null; readonly id: string; readonly unit: string }[],
+): void {
+  const workTypeCounts = new Map<string, number>();
+  const exclusiveCounts = new Map<string, number>();
+  items.forEach((item, index) => {
+    const config = configs[index];
+    if (!config) throw new BadRequestException("Configurația tipului de lucrare nu a fost găsită.");
+    const count = (workTypeCounts.get(config.id) ?? 0) + 1;
+    workTypeCounts.set(config.id, count);
+    if (config.unit === "UNIT" && count > 1) throw new BadRequestException("O lucrare de tip bucată poate fi adăugată o singură dată în aceeași lucrare.");
+    if (config.exclusiveGroup) {
+      const groupCount = (exclusiveCounts.get(config.exclusiveGroup) ?? 0) + 1;
+      exclusiveCounts.set(config.exclusiveGroup, groupCount);
+      if (groupCount > 1) throw new BadRequestException(`Lucrările din grupul ${config.exclusiveGroup} nu pot fi combinate în aceeași lucrare.`);
+    }
+    const allowed = new Set(Array.isArray(config.allowedAddOns) ? config.allowedAddOns.flatMap((entry) => typeof entry === "object" && entry !== null && !Array.isArray(entry) && typeof entry.code === "string" ? [entry.code] : []) : []);
+    const selected = new Set<string>();
+    for (const addOn of item.selectedAddOns ?? []) {
+      if (selected.has(addOn.code)) throw new BadRequestException("Același adaos nu poate fi selectat de două ori pentru aceeași componentă.");
+      selected.add(addOn.code);
+      if (!allowed.has(addOn.code)) throw new BadRequestException("Adaosul selectat nu este permis pentru această lucrare.");
+    }
+  });
 }
 
 export function assignNullableCreateValue(

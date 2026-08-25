@@ -124,6 +124,12 @@
   border-radius: var(--dl-radius-md);
 }
 
+.tooth-diagram__tooth--work-colored .tooth-diagram__tooth-image-wrap {
+  background: var(--tooth-work-color);
+  border-radius: var(--dl-radius-md);
+  padding: 0.15rem;
+}
+
 .tooth-diagram__tooth--selected .tooth-diagram__tooth-image-wrap {
   border: 2px solid var(--dl-color-accent);
 }

@@ -30,12 +30,32 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
     await tx.courierRoute.deleteMany({
       where: { id: { startsWith: `${DEMO_ID_PREFIX}route_` } },
     });
+    // Pickup requests are referenced with RESTRICT by route stops. Clear any
+    // legacy/demo references explicitly before deleting the requests so a
+    // partially seeded database can be reset safely as well.
+    await tx.courierRouteStop.updateMany({
+      data: { pickupRequestId: null },
+      where: { pickupRequestId: { startsWith: `${DEMO_ID_PREFIX}pickup_` } },
+    });
     await tx.auditLog.deleteMany({
       where: {
         OR: [
           { resourceId: { startsWith: `${DEMO_ID_PREFIX}invoice_` } },
           { action: { startsWith: "billing.document_share_" }, actorUserId: { startsWith: `${DEMO_ID_PREFIX}user_` } },
         ],
+      },
+    });
+    // Older demo runs can have pickup IDs without the current demo prefix,
+    // while the pickup itself is still selected for deletion by clinic.
+    // Delete those dependent stops by relation before deleting pickup rows.
+    await tx.courierRouteStop.deleteMany({
+      where: {
+        pickupRequest: {
+          OR: [
+            { id: { startsWith: `${DEMO_ID_PREFIX}pickup_` } },
+            { clinicId: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
+          ],
+        },
       },
     });
     await tx.pickupRequest.deleteMany({
@@ -71,7 +91,7 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
         OR: [
           { pricingAgreementId: { startsWith: `${DEMO_ID_PREFIX}pricing_agreement_` } },
           { priceCatalogItemId: { startsWith: `${DEMO_ID_PREFIX}price_catalog_` } },
-          { priceCatalogItem: { workTypeId: { startsWith: `${DEMO_ID_PREFIX}wt_` } } },
+          { priceCatalogItem: { workTypeId: { startsWith: DEMO_ID_PREFIX } } },
         ],
       },
     });
@@ -91,7 +111,7 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
         OR: [
           { id: { startsWith: `${DEMO_ID_PREFIX}execution_time_` } },
           { priceCatalogItemId: { startsWith: `${DEMO_ID_PREFIX}price_catalog_` } },
-          { priceCatalogItem: { workTypeId: { startsWith: `${DEMO_ID_PREFIX}wt_` } } },
+          { priceCatalogItem: { workTypeId: { startsWith: DEMO_ID_PREFIX } } },
         ],
       },
     });
@@ -100,7 +120,7 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
       where: {
         OR: [
           { id: { startsWith: `${DEMO_ID_PREFIX}price_catalog_` } },
-          { workTypeId: { startsWith: `${DEMO_ID_PREFIX}wt_` } },
+          { workTypeId: { startsWith: DEMO_ID_PREFIX } },
         ],
       },
     });
@@ -237,7 +257,8 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
       where: {
         OR: [
           { id: { startsWith: `${DEMO_ID_PREFIX}form_template_` } },
-          { workTypeId: { startsWith: `${DEMO_ID_PREFIX}wt_` } },
+          { id: { startsWith: `${DEMO_ID_PREFIX}real_lab_sheet_` } },
+          { workTypeId: { startsWith: DEMO_ID_PREFIX } },
         ],
       },
     });
@@ -246,7 +267,7 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
       where: {
         OR: [
           { id: { startsWith: `${DEMO_ID_PREFIX}workflow_template_` } },
-          { workTypeId: { startsWith: `${DEMO_ID_PREFIX}wt_` } },
+          { workTypeId: { startsWith: DEMO_ID_PREFIX } },
         ],
       },
     });
@@ -265,7 +286,7 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
     });
 
     await tx.workType.deleteMany({
-      where: { id: { startsWith: `${DEMO_ID_PREFIX}wt_` } },
+      where: { id: { startsWith: DEMO_ID_PREFIX } },
     });
 
     await tx.userRole.deleteMany({
@@ -356,7 +377,7 @@ function demoWorkOrderWhere(): Prisma.WorkOrderWhereInput {
       { id: { startsWith: `${DEMO_ID_PREFIX}work_` } },
       { clinicId: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
       { doctorId: { startsWith: `${DEMO_ID_PREFIX}doctor_` } },
-      { workTypeId: { startsWith: `${DEMO_ID_PREFIX}wt_` } },
+      { workTypeId: { startsWith: DEMO_ID_PREFIX } },
     ],
   };
 }
@@ -370,7 +391,7 @@ function demoWorkflowExecutionWhere(): Prisma.WorkWorkflowExecutionWhereInput {
         workflowTemplate: {
           OR: [
             { id: { startsWith: `${DEMO_ID_PREFIX}workflow_template_` } },
-            { workTypeId: { startsWith: `${DEMO_ID_PREFIX}wt_` } },
+            { workTypeId: { startsWith: DEMO_ID_PREFIX } },
           ],
         },
       },

@@ -33,6 +33,7 @@ export interface ToothDiagramProps {
   readonly onShortcut?: (teeth: readonly AdultFdiTooth[]) => void;
   readonly showShortcuts?: boolean;
   readonly className?: string;
+  readonly toothColors?: Readonly<Record<number, string>>;
 }
 
 const UPPER_TEETH = ADULT_FDI_TEETH.slice(0, 16);
@@ -86,6 +87,7 @@ export function ToothDiagram({
   onShortcut,
   showShortcuts = true,
   className,
+  toothColors = {},
 }: ToothDiagramProps) {
   const selected = new Set(selectedTeeth);
   const configured = new Set(configuredTeeth);
@@ -130,6 +132,7 @@ export function ToothDiagram({
           canMutateConnections={canMutateConnections}
           onToothToggle={onToothToggle}
           onConnectionToggle={onConnectionToggle}
+          toothColors={toothColors}
         />
         <ArchRow
           arch="lower"
@@ -146,6 +149,7 @@ export function ToothDiagram({
           canMutateConnections={canMutateConnections}
           onToothToggle={onToothToggle}
           onConnectionToggle={onConnectionToggle}
+          toothColors={toothColors}
         />
       </div>
     </section>
@@ -167,6 +171,7 @@ interface ArchRowProps {
   readonly canMutateConnections: boolean;
   readonly onToothToggle?: ((tooth: AdultFdiTooth) => void) | undefined;
   readonly onConnectionToggle?: ToothDiagramProps["onConnectionToggle"] | undefined;
+  readonly toothColors: Readonly<Record<number, string>>;
 }
 
 function ArchRow(props: ArchRowProps) {
@@ -188,6 +193,7 @@ function ArchRow(props: ArchRowProps) {
                 disabled={props.disabled.has(tooth) || !props.available.has(tooth)}
                 canMutate={props.canMutateTeeth}
                 onToggle={props.onToothToggle}
+                {...(props.toothColors[tooth] ? { color: props.toothColors[tooth] } : {})}
               />
               {index < props.teeth.length - 1 ? (
                 <ConnectionButton
@@ -215,18 +221,20 @@ interface ToothButtonProps {
   readonly disabled: boolean;
   readonly canMutate: boolean;
   readonly onToggle?: ((tooth: AdultFdiTooth) => void) | undefined;
+  readonly color?: string;
 }
 
-function ToothButton({ tooth, selected, configured, focused, disabled, canMutate, onToggle }: ToothButtonProps) {
+function ToothButton({ tooth, selected, configured, focused, disabled, canMutate, onToggle, color }: ToothButtonProps) {
   const stateLabel = disabled ? "indisponibil" : selected ? "selectat" : configured ? "configurat" : "neselectat";
   return (
     <button
       aria-label={`Dinte ${tooth}`}
       aria-pressed={selected}
-      className={["tooth-diagram__tooth", selected ? "tooth-diagram__tooth--selected" : "", configured ? "tooth-diagram__tooth--configured" : "", focused ? "tooth-diagram__tooth--focused" : "", disabled ? "tooth-diagram__tooth--disabled" : ""].filter(Boolean).join(" ")}
+      className={["tooth-diagram__tooth", color ? "tooth-diagram__tooth--work-colored" : "", selected ? "tooth-diagram__tooth--selected" : "", configured ? "tooth-diagram__tooth--configured" : "", focused ? "tooth-diagram__tooth--focused" : "", disabled ? "tooth-diagram__tooth--disabled" : ""].filter(Boolean).join(" ")}
       disabled={disabled || !canMutate}
       onClick={() => onToggle?.(tooth)}
       style={{
+        ...(color ? { "--tooth-work-color": color } : {}),
         "--tooth-asset-height-scale": getToothAssetPresentation(tooth).normalizationScale,
         "--tooth-order": CANONICAL_ORDER.get(tooth),
       } as CSSProperties}

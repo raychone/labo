@@ -36,6 +36,7 @@ export function ManagerTechniciansPage(): ReactNode {
   const canManageRates = hasPermission(permissionsQuery.data, "technician.rates.manage");
   const canCreatePayments = hasPermission(permissionsQuery.data, "technician.payments.create");
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>("");
+  const [includeRemoved, setIncludeRemoved] = useState(false);
   const [period, setPeriod] = useState<EarningsPeriod>("DAY");
   const [date, setDate] = useState(today());
   const [month, setMonth] = useState(currentMonth());
@@ -44,6 +45,8 @@ export function ManagerTechniciansPage(): ReactNode {
   const [effectiveFrom, setEffectiveFrom] = useState(today());
   const [paymentDecimal, setPaymentDecimal] = useState("");
   const [paymentNotes, setPaymentNotes] = useState("");
+  const [paymentDate, setPaymentDate] = useState(today());
+  const [paymentCurrency, setPaymentCurrency] = useState("RON");
   const [operationCode, setOperationCode] = useState("");
   const [operationName, setOperationName] = useState("");
   const [operationDescription, setOperationDescription] = useState("");
@@ -64,7 +67,8 @@ export function ManagerTechniciansPage(): ReactNode {
     month: period === "MONTH" ? month : undefined,
     period,
     technicianId: selectedTechnicianId || undefined,
-  }), [date, month, period, selectedTechnicianId]);
+    includeRemoved: includeRemoved || undefined,
+  }), [date, includeRemoved, month, period, selectedTechnicianId]);
   const earningsQuery = useManagerTechnicianEarnings(earningsParams, canReadAllEarnings);
   const setRateMutation = useSetTechnicianRate();
   const paymentMutation = useCreateTechnicianPayment();
@@ -105,7 +109,7 @@ export function ManagerTechniciansPage(): ReactNode {
       toast.showToast({ message: "Alege tehnicianul și introdu o sumă validă.", title: "Plata nu a fost salvată", variant: "error" });
       return;
     }
-    paymentMutation.mutate({ amountMinor: parsed.value, notes: paymentNotes || null, technicianId: selectedTechnicianId }, {
+    paymentMutation.mutate({ amountMinor: parsed.value, currency: paymentCurrency, notes: paymentNotes || null, ...(paymentDate ? { paidAt: `${paymentDate}T12:00:00.000Z` } : {}), technicianId: selectedTechnicianId }, {
       onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Plata nu a fost salvată", variant: "error" }),
       onSuccess: () => { setPaymentDecimal(""); setPaymentNotes(""); toast.showToast({ message: "Plata tehnicianului a fost înregistrată.", variant: "success" }); },
     });
@@ -121,7 +125,7 @@ export function ManagerTechniciansPage(): ReactNode {
 
   function submitOperation(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
-    const input: TechnicianOperationInput = { code: operationCode.trim(), description: operationDescription.trim() || null, name: operationName.trim() };
+    const input: TechnicianOperationInput = { category: "Altele", code: operationCode.trim(), description: operationDescription.trim() || null, name: operationName.trim() };
     if (input.code.length === 0 || input.name.length < 2) {
       toast.showToast({ message: "Completează codul și denumirea manoperei.", title: "Manopera nu a fost salvată", variant: "error" });
       return;
@@ -184,6 +188,7 @@ export function ManagerTechniciansPage(): ReactNode {
               options={[{ label: "Toți tehnicienii", value: "" }, ...technicians.map((technician) => ({ label: technician.displayName, value: technician.id }))]}
               value={selectedTechnicianId}
             />
+            <label className="manager-technicians__muted"><input checked={includeRemoved} onChange={(event) => setIncludeRemoved(event.target.checked)} type="checkbox" /> Include manopere eliminate</label>
           </CardContent>
         </Card>
 
@@ -262,10 +267,12 @@ export function ManagerTechniciansPage(): ReactNode {
         ) : null}
         {selectedTechnicianId ? (
           <Card>
-            <CardHeader><CardTitle>Înregistrează achitarea</CardTitle><CardDescription>Achitarea reduce automat suma restantă pentru tehnicianul selectat.</CardDescription></CardHeader>
+            <CardHeader><CardTitle>Înregistrează achitarea</CardTitle><CardDescription>Soldul cumulativ și valuta sunt verificate server-side la data plății.</CardDescription></CardHeader>
             <CardContent>
               <form className="manager-technicians__rate-form" onSubmit={submitPayment}>
-                <NumberInput label="Sumă RON" onChange={(event) => setPaymentDecimal(event.target.value)} value={paymentDecimal} />
+                <Select label="Valută" onChange={(event) => setPaymentCurrency(event.target.value)} options={[...new Set((earningsQuery.data?.currencyTotals ?? []).map((total) => total.currency)), "RON"].map((currency) => ({ label: currency, value: currency }))} value={paymentCurrency} />
+                <NumberInput label={`Sumă ${paymentCurrency}`} onChange={(event) => setPaymentDecimal(event.target.value)} value={paymentDecimal} />
+                <DateInput label="Data plății" onChange={(event) => setPaymentDate(event.target.value)} value={paymentDate} />
                 <label className="manager-technicians__field"><span>Notă</span><input onChange={(event) => setPaymentNotes(event.target.value)} value={paymentNotes} /></label>
                 <Button disabled={!canCreatePayments || paymentMutation.isPending} type="submit">Înregistrează plata</Button>
               </form>

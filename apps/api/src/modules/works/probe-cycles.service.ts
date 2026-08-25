@@ -1,11 +1,12 @@
-import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { POSTMEETING_AUDIT_ACTIONS, type ProbeCycleView } from "@dental-lab/shared";
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
+import { B17_LOGISTICS_NOTIFICATION_EVENTS, getB17LogisticsNotificationKey, POSTMEETING_AUDIT_ACTIONS, type ProbeCycleView } from "@dental-lab/shared";
 
 import { AuditService } from "../auth/audit.service.js";
 import type { RequestMetadata } from "../auth/auth.types.js";
 import type { LegalEntityContext } from "../organization-context/organization-context.view.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { AuthorizationService } from "../rbac/authorization.service.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
 import { getVisibleWorkWhere } from "./work-readability.js";
 import { ProbeTypesService } from "./probe-types.service.js";
 import type { SelectProbeTypeDto } from "./dto/probe-cycles.dto.js";
@@ -17,6 +18,7 @@ export class ProbeCyclesService {
     @Inject(AuditService) private readonly auditService: AuditService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(ProbeTypesService) private readonly probeTypesService: ProbeTypesService,
+    @Optional() @Inject(NotificationsService) private readonly notificationsService?: NotificationsService,
   ) {}
 
   public async selectProbeType(input: {
@@ -86,6 +88,10 @@ export class ProbeCyclesService {
     const deadlineAt = new Date(input.deadlineAt);
     if (!Number.isFinite(deadlineAt.getTime())) throw new BadRequestException("Termenul probei nu este valid.");
     const nextType = await this.probeTypesService.requireSelectable(input.probeTypeId, this.prisma);
+    const configuredProbeCodes = intersectConfiguredProbeCodes((work.items ?? []).map((item) => jsonStringArray(item.workType?.probeTypeCodes)));
+    if (configuredProbeCodes.length > 0 && (!nextType.code || !configuredProbeCodes.includes(nextType.code))) {
+      throw new BadRequestException("Tipul probei nu este compatibil cu tipurile de lucrări ale acestei reveniri.");
+    }
     const created = await this.prisma.$transaction(async (tx) => {
       const current = await tx.workOrder.findUnique({ select: { activeProbeCycleId: true, status: true, technicalReadiness: true }, where: { id: work.id } });
       if (!current) throw new NotFoundException("Lucrarea nu a fost găsită.");
@@ -100,12 +106,16 @@ export class ProbeCyclesService {
     });
     await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.caseReceived, actorUserId: input.actorUserId, metadata: { nextProbeTypeName: created.probeTypeNameSnapshot, probeNumber: created.sequence, workOrderLabel: work.code, deadlineAt: deadlineAt.toISOString() }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: work.id, resourceType: "work_order" });
     await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.activeProbeCycleStarted, actorUserId: input.actorUserId, metadata: { probeTypeName: created.probeTypeNameSnapshot, probeNumber: created.sequence, workOrderLabel: work.code }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: created.id, resourceType: "probe_cycle" });
+    await this.notificationsService?.publishProbeAvailable({ workOrderId: work.id, probeCycleId: created.id, code: work.code, patientName: work.code, sequence: created.sequence, probeTypeName: created.probeTypeNameSnapshot, deadlineAt: created.deadlineAt.toISOString() });
     return toProbeCycleView(created);
   }
 
   public async markProbeReady(input: { readonly actorUserId: string; readonly workOrderId: string; readonly legalEntity?: LegalEntityContext; readonly requestMetadata?: RequestMetadata }): Promise<void> {
     await this.authorizationService.requirePermission({ permission: "works.change_status", requiredScope: "OWN_STAGE", userId: input.actorUserId });
-    const work = await this.findTransitionWork(input.actorUserId, input.workOrderId, input.legalEntity);
+    // Technician transitions are authorized by ownership, not by the currently
+    // selected organization context. A technician may work on a clinic whose
+    // CDT/NG collaboration differs from the context currently active in the UI.
+    const work = await this.findTransitionWork(input.actorUserId, input.workOrderId);
     this.assertTechnicianOwnsWork(work, input.actorUserId);
     if (work.status === "FINALIZATA") throw new ConflictException("Lucrarea este deja finalizată.");
     if (!work.activeProbeCycleId) throw new ConflictException("Lucrarea nu are o probă activă.");
@@ -121,15 +131,50 @@ export class ProbeCyclesService {
       await tx.workAssignmentEvent.create({ data: { actorUserId: input.actorUserId, eventType: "RELEASED", previousLegalEntityId: work.executionLegalEntityId, previousTechnicianId: work.claimedByUserId, reason: "Probă gata.", revision: work.claimRevision + 1, workOrderId: input.workOrderId } });
       return cycle;
     });
-    await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.probeReady, actorUserId: input.actorUserId, metadata: { probeNumber: completed.sequence, probeTypeName: completed.probeTypeNameSnapshot, deadlineAt: completed.deadlineAt.toISOString(), workOrderLabel: work.code }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: completed.id, resourceType: "probe_cycle" });
+    await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.probeReady, actorUserId: input.actorUserId, metadata: { probeNumber: completed.sequence, probeTypeName: completed.probeTypeNameSnapshot, deadlineAt: completed.deadlineAt.toISOString(), workOrderLabel: work.code, notificationEvent: B17_LOGISTICS_NOTIFICATION_EVENTS.probeReady, notificationKey: getB17LogisticsNotificationKey(B17_LOGISTICS_NOTIFICATION_EVENTS.probeReady, { workOrderId: input.workOrderId, probeCycleId: completed.id }) }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: completed.id, resourceType: "probe_cycle" });
+    await this.notificationsService?.publishProbe({ workOrderId: input.workOrderId, probeCycleId: completed.id, code: work.code, patientName: work.code, sequence: completed.sequence, probeTypeName: completed.probeTypeNameSnapshot, deadlineAt: completed.deadlineAt.toISOString() });
   }
 
   public async finalizeWork(input: { readonly actorUserId: string; readonly workOrderId: string; readonly legalEntity?: LegalEntityContext; readonly requestMetadata?: RequestMetadata }): Promise<void> {
     await this.authorizationService.requirePermission({ permission: "works.change_status", requiredScope: "OWN_STAGE", userId: input.actorUserId });
-    const work = await this.findTransitionWork(input.actorUserId, input.workOrderId, input.legalEntity);
+    const work = await this.findTransitionWork(input.actorUserId, input.workOrderId);
     this.assertTechnicianOwnsWork(work, input.actorUserId);
     if (work.status === "FINALIZATA") throw new ConflictException("Lucrarea este deja finalizată.");
-    if (!work.activeProbeCycleId) throw new ConflictException("Lucrarea nu are context tehnic activ.");
+    if (!work.activeProbeCycleId) {
+      const now = new Date();
+      const updated = await this.prisma.$transaction(async (tx) => {
+        const workUpdate = await tx.workOrder.updateMany({
+          data: {
+            claimStatus: "UNCLAIMED",
+            claimedAt: null,
+            claimedByUserId: null,
+            completedAt: now,
+            completedByUserId: input.actorUserId,
+            finalizedAt: now,
+            releaseReason: "Finalizată.",
+            releasedAt: now,
+            releasedByUserId: input.actorUserId,
+            assignedTechnicianId: null,
+            status: "FINALIZATA",
+            statusChangedAt: now,
+            statusChangedByUserId: input.actorUserId,
+            technicalReadiness: "FINAL_READY",
+            updatedByUserId: input.actorUserId,
+            version: { increment: 1 },
+            waitingStartedAt: null,
+          },
+          where: { claimStatus: "CLAIMED", id: input.workOrderId, status: { not: "FINALIZATA" } },
+        });
+        if (workUpdate.count !== 1) throw new ConflictException("Lucrarea a fost modificată simultan. Reîncarcă detaliile.");
+        await tx.workAssignmentEvent.create({ data: { actorUserId: input.actorUserId, eventType: "RELEASED", previousLegalEntityId: work.executionLegalEntityId, previousTechnicianId: work.claimedByUserId, reason: "Finalizată.", revision: work.claimRevision + 1, workOrderId: input.workOrderId } });
+        return true;
+      });
+      if (updated) {
+        await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.workOrderFinalized, actorUserId: input.actorUserId, metadata: { workOrderLabel: work.code, notificationEvent: B17_LOGISTICS_NOTIFICATION_EVENTS.finalWorkReady, notificationKey: getB17LogisticsNotificationKey(B17_LOGISTICS_NOTIFICATION_EVENTS.finalWorkReady, { workOrderId: input.workOrderId }) }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: input.workOrderId, resourceType: "work_order" });
+        await this.notificationsService?.publishFinal({ workOrderId: input.workOrderId, code: work.code, patientName: work.code });
+      }
+      return;
+    }
     const activeCycleId = work.activeProbeCycleId;
     const now = new Date();
     const completed = await this.prisma.$transaction(async (tx) => {
@@ -142,12 +187,13 @@ export class ProbeCyclesService {
       await tx.workAssignmentEvent.create({ data: { actorUserId: input.actorUserId, eventType: "RELEASED", previousLegalEntityId: work.executionLegalEntityId, previousTechnicianId: work.claimedByUserId, reason: "Finalizată.", revision: work.claimRevision + 1, workOrderId: input.workOrderId } });
       return cycle;
     });
-    await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.workOrderFinalized, actorUserId: input.actorUserId, metadata: { probeTypeName: completed.probeTypeNameSnapshot, workOrderLabel: work.code }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: input.workOrderId, resourceType: "work_order" });
+    await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.workOrderFinalized, actorUserId: input.actorUserId, metadata: { probeTypeName: completed.probeTypeNameSnapshot, workOrderLabel: work.code, notificationEvent: B17_LOGISTICS_NOTIFICATION_EVENTS.finalWorkReady, notificationKey: getB17LogisticsNotificationKey(B17_LOGISTICS_NOTIFICATION_EVENTS.finalWorkReady, { workOrderId: input.workOrderId }) }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: input.workOrderId, resourceType: "work_order" });
+    await this.notificationsService?.publishFinal({ workOrderId: input.workOrderId, code: work.code, patientName: work.code });
   }
 
-  private async findVisibleWork(actorUserId: string, workOrderId: string, legalEntity?: LegalEntityContext): Promise<{ readonly id: string; readonly code: string }> {
+  private async findVisibleWork(actorUserId: string, workOrderId: string, legalEntity?: LegalEntityContext): Promise<{ readonly id: string; readonly code: string; readonly items: readonly { readonly workType: { readonly probeTypeCodes: unknown } | null }[] }> {
     const visibleWhere = await getVisibleWorkWhere(this.authorizationService, actorUserId);
-    const work = await this.prisma.workOrder.findFirst({ select: { code: true, id: true }, where: { AND: [{ id: workOrderId }, visibleWhere, ...(legalEntity ? [{ executionLegalEntityId: legalEntity.id }] : [])] } });
+    const work = await this.prisma.workOrder.findFirst({ select: { code: true, id: true, items: { select: { workType: { select: { probeTypeCodes: true } } }, where: { archivedAt: null } } }, where: { AND: [{ id: workOrderId }, visibleWhere, ...(legalEntity ? [{ executionLegalEntityId: legalEntity.id }] : [])] } });
     if (!work) throw new NotFoundException("Lucrarea nu a fost găsită.");
     return work;
   }
@@ -162,6 +208,16 @@ export class ProbeCyclesService {
   private assertTechnicianOwnsWork(work: { readonly claimStatus: string; readonly claimedByUserId: string | null }, actorUserId: string): void {
     if (work.claimStatus !== "CLAIMED" || work.claimedByUserId !== actorUserId) throw new ForbiddenException("Doar tehnicianul responsabil poate executa această acțiune.");
   }
+}
+
+function jsonStringArray(value: unknown): readonly string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+function intersectConfiguredProbeCodes(codeSets: readonly (readonly string[])[]): readonly string[] {
+  const configured = codeSets.filter((codes) => codes.length > 0);
+  if (configured.length === 0) return [];
+  return configured.slice(1).reduce((common, codes) => common.filter((code) => codes.includes(code)), [...configured[0]!]);
 }
 
 function toProbeCycleView(cycle: { id: string; sequence: number; status: "ACTIVE" | "COMPLETED"; probeType: { id: string; name: string; sortOrder: number; isArchived: boolean }; probeTypeNameSnapshot: string; openedAt: Date; completedAt: Date | null; deadlineAt: Date }): ProbeCycleView {

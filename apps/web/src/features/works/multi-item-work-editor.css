@@ -13,6 +13,93 @@
   min-width: 0;
 }
 
+.multi-item-work-editor__categories {
+  display: grid;
+  gap: var(--dl-space-2);
+  grid-column: 1 / -1;
+}
+
+.multi-item-work-editor__field-label {
+  color: var(--dl-color-text-secondary);
+  font-size: var(--dl-font-size-label);
+  font-weight: var(--dl-font-weight-semibold);
+}
+
+.multi-item-work-editor__category-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-2);
+}
+
+.multi-item-work-editor__category {
+  background: var(--dl-color-surface);
+  border: 1px solid var(--dl-color-border);
+  border-radius: 999px;
+  color: var(--dl-color-text-primary);
+  cursor: pointer;
+  padding: 0.45rem 0.75rem;
+}
+
+.multi-item-work-editor__category--active {
+  background: var(--dl-color-primary, #0f766e);
+  border-color: var(--dl-color-primary, #0f766e);
+  color: #fff;
+}
+
+.multi-item-work-editor__restoration {
+  min-width: 0;
+}
+
+.multi-item-work-editor__restoration .dl-radio-group__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-3);
+}
+
+.multi-item-work-editor__addons {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-3);
+  grid-column: 1 / -1;
+}
+
+.multi-item-work-editor__custom-type {
+  align-items: end;
+  display: grid;
+  gap: var(--dl-space-3);
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.multi-item-work-editor__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-2) var(--dl-space-4);
+  margin-top: var(--dl-space-3);
+}
+
+.multi-item-work-editor__legend span {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--dl-space-2);
+  font-size: var(--dl-font-size-label);
+  font-weight: var(--dl-font-weight-semibold);
+}
+
+.multi-item-work-editor__legend i {
+  border-radius: 999px;
+  display: inline-block;
+  height: 0.75rem;
+  width: 0.75rem;
+}
+
+@media (max-width: 30rem) {
+  .multi-item-work-editor__custom-type {
+    grid-template-columns: 1fr;
+  }
+}
+
 .multi-item-work-editor__actions,
 .multi-item-work-editor__item > div:last-child {
   display: flex;

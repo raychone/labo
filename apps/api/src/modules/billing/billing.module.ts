@@ -5,6 +5,7 @@ import { AuthModule } from "../auth/auth.module.js";
 import { DatabaseModule } from "../database/database.module.js";
 import { OrganizationContextModule } from "../organization-context/organization-context.module.js";
 import { RbacModule } from "../rbac/rbac.module.js";
+import { NotificationsModule } from "../notifications/notifications.module.js";
 import { BillingController } from "./billing.controller.js";
 import { BillingExportService } from "./billing-export.service.js";
 import { BillingPdfExportService } from "./billing-pdf-export.service.js";
@@ -14,7 +15,7 @@ import { BillingStatementService } from "./billing-statement.service.js";
 
 @Module({
   controllers: [BillingController],
-  imports: [AuthModule, DatabaseModule, OrganizationContextModule, RbacModule],
+  imports: [AuthModule, DatabaseModule, OrganizationContextModule, RbacModule, NotificationsModule],
   providers: [AuditService, BillingExportService, BillingPdfExportService, BillingPrintService, BillingService, BillingStatementService],
 })
 export class BillingModule {}

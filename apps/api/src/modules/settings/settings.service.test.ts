@@ -23,6 +23,7 @@ const baseSettings: LegalEntitySettings = {
   iban: "RO49AAAA1B31007593840000",
   id: "settings_nc",
   legalEntityId: "legal_nc",
+  largeOutstandingThresholdMinor: null,
   legalName: "NC Demo Tehnică Dentară",
   locale: "ro-RO",
   logoFileKey: null,

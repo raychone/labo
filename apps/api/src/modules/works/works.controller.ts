@@ -137,8 +137,8 @@ export class WorksController {
 
   @Get("work-type-options")
   @RequirePermission("works.create", "ALL")
-  public listWorkTypeFormOptions() {
-    return this.worksService.listWorkTypeFormOptions();
+  public listWorkTypeFormOptions(@CurrentUser() actor: AuthenticatedUser) {
+    return this.worksService.listWorkTypeFormOptions(actor.id);
   }
 
   @Get(":id/items")

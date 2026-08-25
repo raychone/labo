@@ -1,14 +1,19 @@
 import type { Prisma } from "@prisma/client";
+import type { WorkTypeAddOnOption, WorkTypeProbeFamily } from "@dental-lab/shared";
 
 export type WorkTypeRecord = Prisma.WorkTypeGetPayload<object>;
 
 export interface WorkTypeOptionView {
-  readonly basePriceMinor: number;
+  readonly basePriceMinor: number | null;
   readonly code: string;
   readonly id: string;
   readonly name: string;
   readonly symbol: string;
   readonly unit: string;
+  readonly probeFamily?: WorkTypeProbeFamily | null;
+  readonly probeTypeCodes?: readonly string[];
+  readonly allowedAddOns?: readonly WorkTypeAddOnOption[];
+  readonly exclusiveGroup?: string | null;
 }
 
 export interface WorkTypeSummaryView extends WorkTypeOptionView {
@@ -34,7 +39,7 @@ export interface PaginatedWorkTypesView {
   readonly total: number;
 }
 
-export function toWorkTypeOptionView(workType: Pick<WorkTypeRecord, "basePriceMinor" | "code" | "id" | "name" | "symbol" | "unit">): WorkTypeOptionView {
+export function toWorkTypeOptionView(workType: Pick<WorkTypeRecord, "basePriceMinor" | "code" | "id" | "name" | "symbol" | "unit" | "probeFamily" | "probeTypeCodes" | "allowedAddOns" | "exclusiveGroup">): WorkTypeOptionView {
   return {
     basePriceMinor: workType.basePriceMinor,
     code: workType.code,
@@ -42,7 +47,31 @@ export function toWorkTypeOptionView(workType: Pick<WorkTypeRecord, "basePriceMi
     name: workType.name,
     symbol: workType.symbol,
     unit: workType.unit,
+    ...(isProbeFamily(workType.probeFamily) ? { probeFamily: workType.probeFamily } : {}),
+    ...(jsonStringArray(workType.probeTypeCodes).length > 0 ? { probeTypeCodes: jsonStringArray(workType.probeTypeCodes) } : {}),
+    ...(jsonAddOns(workType.allowedAddOns).length > 0 ? { allowedAddOns: jsonAddOns(workType.allowedAddOns) } : {}),
+    ...(workType.exclusiveGroup ? { exclusiveGroup: workType.exclusiveGroup } : {}),
   };
+}
+
+function isProbeFamily(value: string | null): value is WorkTypeProbeFamily {
+  return value === "MC" || value === "ZR" || value === "ZRP" || value === "PRO" || value === "LA_GATA";
+}
+
+function jsonStringArray(value: Prisma.JsonValue | null): readonly string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+function jsonAddOns(value: Prisma.JsonValue | null): readonly WorkTypeAddOnOption[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return [];
+    const code = entry.code;
+    const label = entry.label;
+    const amountMinor = entry.amountMinor;
+    if ((code !== "PLACATA" && code !== "GINGIE") || typeof label !== "string") return [];
+    return [{ code, label, amountMinor: typeof amountMinor === "number" ? amountMinor : null }];
+  });
 }
 
 export function toWorkTypeSummaryView(workType: WorkTypeRecord): WorkTypeSummaryView {

@@ -1,9 +1,8 @@
 import { Transform, Type } from "class-transformer";
-import { IsBoolean, IsIn, IsInt, IsISO8601, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from "class-validator";
+import { IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from "class-validator";
 
 import { SORT_DIRECTIONS } from "../../work-types/work-types.constants.js";
 import { MAX_TECHNICIAN_RATE_MINOR } from "../technician-operations.constants.js";
-import { TECHNICIAN_MANEUVER_UNITS } from "@dental-lab/shared";
 
 export const TECHNICIAN_OPERATION_SORT_FIELDS = ["code", "createdAt", "name", "updatedAt"] as const;
 
@@ -86,6 +85,12 @@ export class TechnicianOperationMutationDto {
   @MaxLength(160)
   public readonly name!: string;
 
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  @MinLength(2)
+  @MaxLength(80)
+  public readonly category!: string;
+
   @IsOptional()
   @Transform(({ value }) => trimOptionalString(value))
   @IsString()
@@ -98,13 +103,6 @@ export class TechnicianOperationMutationDto {
   @Min(0)
   public readonly sortOrder?: number;
 
-  @IsOptional()
-  @IsIn(TECHNICIAN_MANEUVER_UNITS)
-  public readonly pricingUnit?: (typeof TECHNICIAN_MANEUVER_UNITS)[number];
-
-  @IsOptional()
-  @IsBoolean()
-  public readonly confirmPricingUnitChange?: boolean;
 }
 
 export class SetTechnicianRateDto {
@@ -184,6 +182,10 @@ export class TechnicianEarningsQueryDto {
   @IsOptional()
   @IsString()
   public readonly technicianId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === "true")
+  public readonly includeRemoved?: boolean;
 }
 
 export class CreateTechnicianPaymentDto {
@@ -224,6 +226,16 @@ export class PerformTechnicianOperationDto {
   @IsString()
   @MinLength(1)
   public readonly operationId!: string;
+
+  @IsArray()
+  @IsInt({ each: true })
+  public readonly selectedTeeth!: readonly number[];
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(1000)
+  public readonly notes?: string | null;
 }
 
 export class RemovePerformedTechnicianOperationDto {

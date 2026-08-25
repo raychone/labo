@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { DeliveryEventType, DeliveryPreparationGroupStatus, DeliveryStatus, Prisma, WorkLogisticsStatus } from "@prisma/client";
+import { DeliveryEventType, DeliveryPreparationGroupStatus, DeliveryStatus, Prisma } from "@prisma/client";
 
 import type { RequestMetadata, AuthenticatedUser } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
@@ -102,8 +102,8 @@ export class DeliveryService {
         if (item.workOrder.clinicId !== group.clinicId) {
           throw new BadRequestException("Toate lucrările livrării trebuie să aparțină aceleiași clinici.");
         }
-        if (item.workOrder.activeCycle?.logisticsState?.status !== WorkLogisticsStatus.READY_FOR_DELIVERY) {
-          throw new BadRequestException("Toate lucrările trebuie să fie gata de livrare.");
+        if (item.workOrder.technicalReadiness !== "PROBE_READY" && item.workOrder.technicalReadiness !== "FINAL_READY") {
+          throw new BadRequestException("Doar lucrările marcate Probă gata sau Finalizată pot fi trimise către clinică.");
         }
       }
 

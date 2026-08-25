@@ -3,21 +3,20 @@ export const TECHNICIAN_OPERATION_SORT_FIELDS = ["code", "createdAt", "name", "u
 export type TechnicianOperationSortField = (typeof TECHNICIAN_OPERATION_SORT_FIELDS)[number];
 
 export interface TechnicianOperationInput {
+  readonly category: string;
   readonly code: string;
   readonly description?: string | null;
   readonly name: string;
-  readonly pricingUnit?: TechnicianManeuverUnit;
-  readonly confirmPricingUnitChange?: boolean;
 }
 
 export interface TechnicianOperationSummary {
+  readonly category: string;
   readonly code: string;
   readonly createdAt: string;
   readonly description: string | null;
   readonly id: string;
   readonly isActive: boolean;
   readonly name: string;
-  readonly pricingUnit?: TechnicianManeuverUnit | null;
   readonly sortOrder: number;
   readonly updatedAt: string;
 }
@@ -31,10 +30,12 @@ export interface TechnicianOperationDetail extends TechnicianOperationSummary {
 }
 
 export interface TechnicianOperationOption {
+  readonly category: string;
   readonly code: string;
+  readonly currency?: string | null;
   readonly id: string;
   readonly name: string;
-  readonly pricingUnit?: TechnicianManeuverUnit | null;
+  readonly rateMinor?: number | null;
 }
 
 export interface TechnicianOperationsListParams {
@@ -95,6 +96,8 @@ export interface TechnicianRateResolution {
 
 export interface PerformedTechnicianOperationInput {
   readonly operationId: string;
+  readonly selectedTeeth: readonly number[];
+  readonly notes?: string | null;
   readonly workOrderId: string;
 }
 
@@ -109,6 +112,14 @@ export interface PerformedTechnicianOperationView {
   readonly earningMinor: number;
   readonly id: string;
   readonly operation: TechnicianOperationOption;
+  readonly operationCodeSnapshot: string | null;
+  readonly operationNameSnapshot: string | null;
+  readonly probeCycle: { readonly id: string; readonly sequence: number; readonly status: string } | null;
+  readonly probeCycleId: string | null;
+  readonly selectedTeeth: readonly number[];
+  readonly quantity: number | null;
+  readonly rateMinorSnapshot: number | null;
+  readonly notes: string | null;
   readonly performedAt: string;
   readonly rateId: string;
   readonly removalReason: string | null;
@@ -130,9 +141,19 @@ export interface TechnicianEarningsParams {
 export interface TechnicianEarningsOperationBreakdown {
   readonly currency: string;
   readonly earningMinor: number;
+  readonly isLegacy: boolean;
   readonly operation: TechnicianOperationOption;
+  readonly operationCodeSnapshot: string | null;
+  readonly operationNameSnapshot: string | null;
+  readonly probeCycle: { readonly id: string; readonly sequence: number; readonly status: string } | null;
+  readonly quantity: number | null;
+  readonly rateMinorSnapshot: number | null;
+  readonly selectedTeeth: readonly number[];
   readonly performedAt: string;
   readonly performedOperationId: string;
+  readonly removedAt: string | null;
+  readonly removalReason: string | null;
+  readonly technician: { readonly id: string; readonly displayName: string } | null;
 }
 
 export interface TechnicianEarningsWorkBreakdown {
@@ -146,11 +167,12 @@ export interface TechnicianEarningsWorkBreakdown {
 
 export interface TechnicianEarningsSummary {
   readonly currency: string;
+  readonly currencyTotals: readonly TechnicianCurrencyTotal[];
   readonly generatedAt: string;
   readonly period: TechnicianEarningsPeriod;
   readonly periodEnd: string;
   readonly periodStart: string;
-  readonly settlementStatus: "PARTIALLY_PAID" | "PAID" | "UNPAID" | "EARNED_NOT_SETTLED";
+  readonly settlementStatus: "PARTIALLY_PAID" | "PAID" | "UNPAID" | "EARNED_NOT_SETTLED" | "OVERPAID";
   readonly technician: {
     readonly displayName: string;
     readonly id: string;
@@ -160,6 +182,20 @@ export interface TechnicianEarningsSummary {
   readonly remainingMinor: number;
   readonly payments: readonly TechnicianPaymentView[];
   readonly works: readonly TechnicianEarningsWorkBreakdown[];
+}
+
+export interface TechnicianCurrencyTotal {
+  readonly currency: string;
+  readonly periodEarnedMinor: number;
+  readonly periodPaidMinor: number;
+  readonly cumulativeEarnedMinor: number;
+  readonly cumulativePaidMinor: number;
+  readonly balanceMinor: number;
+  readonly settlementStatus: "PARTIALLY_PAID" | "PAID" | "UNPAID" | "EARNED_NOT_SETTLED" | "OVERPAID";
+  /** Backward-compatible aliases for consumers not yet migrated to explicit semantics. */
+  readonly totalMinor: number;
+  readonly paidMinor: number;
+  readonly remainingMinor: number;
 }
 
 export interface TechnicianPaymentView {
@@ -180,4 +216,3 @@ export interface TechnicianPaymentInput {
   readonly paidAt?: string;
   readonly technicianId: string;
 }
-import type { TechnicianManeuverUnit } from "./postmeeting-contract.js";

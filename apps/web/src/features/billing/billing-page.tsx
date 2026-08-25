@@ -72,7 +72,7 @@ import { fetchClinic, fetchDoctor } from "../clinics/clinics-api.js";
 import "./billing-page.css";
 
 const pageSize = 20;
-type BillingTabId = "overview" | "uninvoiced" | "proformas" | "invoices" | "storno" | "payments" | "receivables" | "statements" | "month-close" | "series";
+type BillingTabId = "overview" | "uninvoiced" | "invoices" | "storno" | "payments" | "receivables" | "statements" | "month-close";
 type StatementSource = "documents" | "works";
 type AdjustmentScope = BillingAdjustmentInput["scope"];
 type AdjustmentMode = BillingAdjustmentInput["mode"];
@@ -249,14 +249,12 @@ function currentMonthRange(now = new Date()): { readonly dateFrom: string; reado
 
 function isBillingTabId(value: string | null): value is BillingTabId {
   return value === "uninvoiced"
-    || value === "proformas"
     || value === "invoices"
     || value === "payments"
     || value === "storno"
     || value === "receivables"
     || value === "statements"
-    || value === "month-close"
-    || value === "series";
+    || value === "month-close";
 }
 
 function isDocumentPaymentFilter(value: string | null): value is DocumentPaymentFilter {

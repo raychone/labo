@@ -1,30 +1,35 @@
 import {
   ANATOMICAL_SCOPE_LABELS_RO,
   ADULT_FDI_TEETH,
+  formatWorkTypeCategory,
   isAdjacentAdultFdiPair,
   normalizeConnectionPair,
   type AdultFdiTooth,
   type AnatomicalScopeType,
   type WorkTypeFormOption,
 } from "@dental-lab/shared";
-import { Button, FormGrid, FormGridFull, RadioGroup, Select, TextInput, Textarea } from "@dental-lab/ui";
+import { Button, Checkbox, FormGrid, FormGridFull, RadioGroup, TextInput, Textarea } from "@dental-lab/ui";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { SearchablePickerField } from "./work-form.js";
 import { IMPLANT_PLATFORM_OPTIONS, RESTORATION_TYPE_OPTIONS, WORK_SHADE_OPTIONS } from "./works-page.schema.js";
 import { ToothDiagram } from "../../components/dental/tooth-diagram.js";
 
+const CUSTOM_WORK_TYPE_CATEGORY = "__CUSTOM__";
+
 export interface DraftWorkOrderItem {
   readonly id: string;
   readonly scope: AnatomicalScopeType;
   readonly teeth: readonly AdultFdiTooth[];
   readonly workTypeId: string;
+  readonly customWorkTypeSnapshot?: Readonly<Record<string, unknown>> | null;
   readonly shade: string | null;
   readonly implantPlatform: string | null;
   readonly implantPlatformCustom: string | null;
   readonly restorationType: string | null;
   readonly technicalCodeNotes: string | null;
   readonly notes: string | null;
+  readonly selectedAddOns?: readonly { readonly code: string; readonly amountMinor: number | null }[];
 }
 
 export interface DraftToothConnection {
@@ -73,75 +78,163 @@ function formatWorkTypeUnit(unit: WorkTypeFormOption["unit"]): string {
   return unit === "ELEMENT" ? "Element" : unit === "UNIT" ? "Bucată" : unit === "ARCH" ? "Arcadă" : unit === "CASE" ? "Lucrare" : unit;
 }
 
+function displayWorkTypeName(name: string): string {
+  return name.replace(/\s*-\s*(bucată|bucata|element|arcadă|arcada|lucrare)\s*$/iu, "").trim();
+}
+
+function inferAnatomicalScope(teeth: readonly AdultFdiTooth[]): AnatomicalScopeType {
+  const selected = new Set(teeth);
+  const upper = ADULT_FDI_TEETH.slice(0, 16).every((tooth) => selected.has(tooth));
+  const lower = ADULT_FDI_TEETH.slice(16).every((tooth) => selected.has(tooth));
+  if (upper && lower) return "BOTH_ARCHES";
+  if (upper) return "UPPER_ARCH";
+  if (lower) return "LOWER_ARCH";
+  return teeth.length > 1 ? "TEETH" : "TOOTH";
+}
+
 export function MultiItemWorkEditor({
+  canSaveCustomWorkType = false,
+  canEditTechnicalCode = false,
   disabled,
   items,
   onChange,
   workTypeOptions,
+  onSaveCustomWorkType,
   connections,
 }: {
+  readonly canSaveCustomWorkType?: boolean;
+  readonly canEditTechnicalCode?: boolean;
   readonly disabled: boolean;
   readonly items: readonly DraftWorkOrderItem[];
   readonly onChange: (items: readonly DraftWorkOrderItem[], connections: readonly DraftToothConnection[]) => void;
   readonly workTypeOptions: readonly WorkTypeFormOption[];
+  readonly onSaveCustomWorkType?: (name: string) => Promise<WorkTypeFormOption>;
   readonly connections: readonly DraftToothConnection[];
 }): ReactNode {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [scope, setScope] = useState<AnatomicalScopeType>("TOOTH");
   const [selectedTeeth, setSelectedTeeth] = useState<AdultFdiTooth[]>([]);
   const [workTypeId, setWorkTypeId] = useState("");
+  const [customWorkTypeName, setCustomWorkTypeName] = useState("");
   const [workTypeSearch, setWorkTypeSearch] = useState("");
+  const [workTypeCategory, setWorkTypeCategory] = useState("");
+  const [shadeSearch, setShadeSearch] = useState("");
+  const [platformSearch, setPlatformSearch] = useState("");
   const [shade, setShade] = useState<string | null>(null);
   const [implantPlatform, setImplantPlatform] = useState<string | null>(null);
   const [implantPlatformCustom, setImplantPlatformCustom] = useState<string | null>(null);
   const [restorationType, setRestorationType] = useState<string | null>(null);
   const [technicalCodeNotes, setTechnicalCodeNotes] = useState<string | null>(null);
   const [notes, setNotes] = useState<string | null>(null);
+  const [selectedAddOns, setSelectedAddOns] = useState<readonly { readonly code: string; readonly amountMinor: number | null }[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [savingCustomType, setSavingCustomType] = useState(false);
 
   const compositionTeeth = useMemo(() => getDraftCompositionTeeth(items), [items]);
   const effectiveConnectionComposition = useMemo(
     () => getDraftCompositionTeeth([...items, { scope, teeth: selectedTeeth }]),
     [items, scope, selectedTeeth],
   );
-  const workTypeSearchOptions = useMemo(() => workTypeOptions.map((option) => ({
-    label: option.name,
-    secondary: `${option.symbol} · ${formatWorkTypeUnit(option.unit)}`,
-    value: option.id,
-  })), [workTypeOptions]);
+  const workTypeCategories = useMemo(() => [...new Set(workTypeOptions.map((option) => option.probeFamily).filter((family): family is string => Boolean(family)))], [workTypeOptions]);
+  const workTypeSearchOptions = useMemo(() => {
+    if (workTypeCategory === CUSTOM_WORK_TYPE_CATEGORY) {
+      return [{ label: "Alt tip de lucrare", secondary: "Valoare personalizată", value: CUSTOM_WORK_TYPE_CATEGORY }];
+    }
+    const categoryOptions = workTypeCategory === "" ? workTypeOptions : workTypeOptions.filter((option) => option.probeFamily === workTypeCategory);
+    return categoryOptions.map((option) => ({
+      label: displayWorkTypeName(option.name),
+      secondary: `${option.probeFamily ? `${formatWorkTypeCategory(option.probeFamily)} · ` : ""}${option.symbol} · ${formatWorkTypeUnit(option.unit)}`,
+      value: option.id,
+    }));
+  }, [workTypeCategory, workTypeOptions]);
+  const selectedWorkType = useMemo(() => workTypeOptions.find((option) => option.id === workTypeId) ?? null, [workTypeId, workTypeOptions]);
+  const isImplantWorkType = selectedWorkType?.name.toLocaleLowerCase("ro-RO").includes("implant") ?? false;
   const visibleWorkTypeOptions = useMemo(() => {
     const normalized = workTypeSearch.trim().normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
-    return normalized === "" ? workTypeSearchOptions.slice(0, 3) : workTypeSearchOptions.filter((option) => option.label.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().includes(normalized));
+    const matched = normalized === "" ? workTypeSearchOptions : workTypeSearchOptions.filter((option) => `${option.label} ${option.secondary}`.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().includes(normalized));
+    return normalized === "" && workTypeCategory === "" ? matched.slice(0, 3) : matched;
   }, [workTypeSearch, workTypeSearchOptions]);
+  const shadeOptions = useMemo(() => filterEditorOptions(WORK_SHADE_OPTIONS.map((value) => ({ label: value, secondary: undefined, value })), shadeSearch), [shadeSearch]);
+  const platformOptions = useMemo(() => filterEditorOptions(IMPLANT_PLATFORM_OPTIONS.map((value) => ({ label: value, secondary: undefined, value })), platformSearch), [platformSearch]);
+  const workTypeVisualization = useMemo(() => {
+    const colors = ["#0057b8", "#7a1fa2", "#c2410c", "#00796b", "#b91c1c", "#a16207", "#0369a1", "#be185d", "#4d7c0f", "#4338ca", "#c026d3", "#0f766e"] as const;
+    const colorByWorkType = new Map<string, string>();
+    const legend: { readonly color: string; readonly label: string; readonly symbol: string }[] = [];
+    const toothColors = new Map<number, string[]>();
+    const addWorkType = (key: string, label: string, symbol: string, teeth: readonly AdultFdiTooth[]) => {
+      let color = colorByWorkType.get(key);
+      if (!color) {
+        color = colors[colorByWorkType.size % colors.length]!;
+        colorByWorkType.set(key, color);
+        legend.push({ color, label, symbol });
+      }
+      for (const tooth of teeth) {
+        const current = toothColors.get(tooth) ?? [];
+        if (!current.includes(color)) current.push(color);
+        toothColors.set(tooth, current);
+      }
+    };
+    for (const item of items) {
+      const option = workTypeOptions.find((candidate) => candidate.id === item.workTypeId);
+      addWorkType(item.workTypeId || `custom-${item.id}`, displayWorkTypeName(option?.name ?? (snapshotValue(item.customWorkTypeSnapshot) || "Alt tip de lucrare")), option?.symbol ?? "ALT", option?.unit === "UNIT" ? item.teeth.slice(0, 1) : item.teeth);
+    }
+    const activeOption = workTypeOptions.find((option) => option.id === workTypeId);
+    if (selectedTeeth.length > 0 && (activeOption || customWorkTypeName.trim() !== "")) {
+      addWorkType(workTypeId || "__CUSTOM_DRAFT__", displayWorkTypeName(activeOption?.name ?? (customWorkTypeName.trim() || "Alt tip de lucrare")), activeOption?.symbol ?? "ALT", activeOption?.unit === "UNIT" ? selectedTeeth.slice(0, 1) : selectedTeeth);
+    }
+    const resolvedToothColors: Record<number, string> = {};
+    for (const [tooth, current] of toothColors.entries()) resolvedToothColors[tooth] = current.length === 1 ? current[0]! : `linear-gradient(90deg, ${current.join(", ")})`;
+    return { legend, toothColors: resolvedToothColors };
+  }, [customWorkTypeName, items, selectedTeeth, workTypeId, workTypeOptions]);
 
   function resetDraft(): void {
     setEditingId(null);
     setScope("TOOTH");
     setSelectedTeeth([]);
     setWorkTypeId("");
+    setCustomWorkTypeName("");
     setWorkTypeSearch("");
+    setWorkTypeCategory("");
+    setShadeSearch("");
+    setPlatformSearch("");
     setShade(null);
     setImplantPlatform(null);
     setImplantPlatformCustom(null);
     setRestorationType(null);
     setTechnicalCodeNotes(null);
     setNotes(null);
+    setSelectedAddOns([]);
     setError(null);
   }
 
+  useEffect(() => {
+    if (!isImplantWorkType) {
+      setImplantPlatform(null);
+      setImplantPlatformCustom(null);
+      setPlatformSearch("");
+      setRestorationType(null);
+    }
+  }, [isImplantWorkType]);
+
   function selectShortcut(teeth: readonly AdultFdiTooth[]): void {
     setSelectedTeeth([...teeth]);
+    setScope(inferAnatomicalScope(teeth));
     setError(null);
   }
 
   function toggleTooth(tooth: AdultFdiTooth): void {
-    setSelectedTeeth((current) => current.includes(tooth) ? current.filter((value) => value !== tooth) : [...current, tooth]);
+    setSelectedTeeth((current) => {
+      const next = current.includes(tooth) ? current.filter((value) => value !== tooth) : [...current, tooth];
+      setScope(inferAnatomicalScope(next));
+      return next;
+    });
     setError(null);
   }
 
   function saveItem(): void {
-    const requiredCount = scope === "TOOTH" ? 1 : scope === "TEETH" ? 2 : 0;
-    if (workTypeId === "") {
+    const selectedWorkType = workTypeOptions.find((option) => option.id === workTypeId);
+    const requiredCount = selectedWorkType?.unit === "UNIT" ? 1 : scope === "TOOTH" ? 1 : scope === "TEETH" ? 2 : 0;
+    if (workTypeId === "" && customWorkTypeName.trim() === "") {
       setError("Alege tipul de lucrare pentru componentă.");
       return;
     }
@@ -149,17 +242,26 @@ export function MultiItemWorkEditor({
       setError(scope === "TOOTH" ? "Selectează un dinte." : "Selectează cel puțin doi dinți.");
       return;
     }
+    const isUnit = selectedWorkType?.unit === "UNIT";
+    const effectiveScope = isUnit ? "TOOTH" : scope;
+    const effectiveTeeth = isUnit ? selectedTeeth.slice(0, 1) : selectedTeeth;
+    if (selectedWorkType?.unit === "UNIT" && items.some((item) => item.id !== editingId && item.workTypeId === workTypeId)) {
+      setError("O lucrare de tip bucată poate fi adăugată o singură dată.");
+      return;
+    }
     const item: DraftWorkOrderItem = {
       id: editingId ?? `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      scope,
-      teeth: [...selectedTeeth].sort((a, b) => ADULT_FDI_TEETH.indexOf(a) - ADULT_FDI_TEETH.indexOf(b)),
+      scope: effectiveScope,
+      teeth: [...effectiveTeeth].sort((a, b) => ADULT_FDI_TEETH.indexOf(a) - ADULT_FDI_TEETH.indexOf(b)),
       workTypeId,
+      customWorkTypeSnapshot: workTypeId === "" ? { name: customWorkTypeName.trim() } : null,
       shade,
       implantPlatform,
       implantPlatformCustom: implantPlatform === "Alt tip" ? implantPlatformCustom : null,
       restorationType,
       technicalCodeNotes,
       notes,
+      selectedAddOns,
     };
     const nextItems = editingId ? items.map((current) => current.id === editingId ? item : current) : [...items, item];
     const nextConnections = filterDraftConnections(connections, getDraftCompositionTeeth(nextItems));
@@ -167,18 +269,44 @@ export function MultiItemWorkEditor({
     resetDraft();
   }
 
+  async function saveCustomWorkType(): Promise<void> {
+    const name = customWorkTypeName.trim();
+    if (!onSaveCustomWorkType || name.length < 2) {
+      setError("Denumirea tipului personalizat trebuie să aibă cel puțin 2 caractere.");
+      return;
+    }
+    setSavingCustomType(true);
+    try {
+      const option = await onSaveCustomWorkType(name);
+      setWorkTypeId(option.id);
+      setWorkTypeCategory(option.probeFamily ?? "");
+      setWorkTypeSearch(option.name);
+      setCustomWorkTypeName("");
+      setError(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Tipul personalizat nu a putut fi salvat în catalog.");
+    } finally {
+      setSavingCustomType(false);
+    }
+  }
+
   function editItem(item: DraftWorkOrderItem): void {
     setEditingId(item.id);
     setScope(item.scope);
     setSelectedTeeth([...item.teeth]);
     setWorkTypeId(item.workTypeId);
-    setWorkTypeSearch(workTypeOptions.find((option) => option.id === item.workTypeId)?.name ?? "");
+    setWorkTypeCategory(item.workTypeId === "" ? CUSTOM_WORK_TYPE_CATEGORY : workTypeOptions.find((option) => option.id === item.workTypeId)?.probeFamily ?? "");
+    setCustomWorkTypeName(snapshotValue(item.customWorkTypeSnapshot));
+    setWorkTypeSearch(item.workTypeId ? workTypeOptions.find((option) => option.id === item.workTypeId)?.name ?? "" : "Alt tip de lucrare");
     setShade(item.shade);
+    setShadeSearch(item.shade ?? "");
     setImplantPlatform(item.implantPlatform);
+    setPlatformSearch(item.implantPlatform ?? "");
     setImplantPlatformCustom(item.implantPlatformCustom);
     setRestorationType(item.restorationType);
     setTechnicalCodeNotes(item.technicalCodeNotes);
     setNotes(item.notes);
+    setSelectedAddOns(item.selectedAddOns ?? []);
     setError(null);
   }
 
@@ -211,11 +339,22 @@ export function MultiItemWorkEditor({
           onToothToggle={toggleTooth}
           selectedTeeth={selectedTeeth}
           semanticScope={scope === "UPPER_ARCH" || scope === "LOWER_ARCH" || scope === "BOTH_ARCHES" ? scope : null}
+          toothColors={workTypeVisualization.toothColors}
         />
+        {workTypeVisualization.legend.length > 0 ? <div className="multi-item-work-editor__legend" aria-label="Legendă tipuri de lucrări">
+          {workTypeVisualization.legend.map((entry) => <span key={`${entry.symbol}-${entry.label}`}><i aria-hidden="true" style={{ background: entry.color }} />{entry.symbol} · {entry.label}</span>)}
+        </div> : null}
       </div>
       <div className="multi-item-work-editor__fields">
         <FormGrid>
-          <Select label="Domeniu anatomic" options={Object.entries(ANATOMICAL_SCOPE_LABELS_RO).map(([value, label]) => ({ label, value }))} value={scope} onChange={(event) => { setScope(event.target.value as AnatomicalScopeType); setSelectedTeeth([]); }} />
+          {workTypeCategories.length > 0 ? <div className="multi-item-work-editor__categories" aria-label="Categorii tipuri de lucrări">
+            <span className="multi-item-work-editor__field-label">Categorie tip lucrare</span>
+            <div className="multi-item-work-editor__category-list">
+              <button aria-pressed={workTypeCategory === ""} className={workTypeCategory === "" ? "multi-item-work-editor__category multi-item-work-editor__category--active" : "multi-item-work-editor__category"} onClick={() => { setWorkTypeCategory(""); setWorkTypeId(""); setWorkTypeSearch(""); }} type="button">Toate</button>
+              {workTypeCategories.map((category) => <button aria-pressed={workTypeCategory === category} className={workTypeCategory === category ? "multi-item-work-editor__category multi-item-work-editor__category--active" : "multi-item-work-editor__category"} key={category} onClick={() => { setWorkTypeCategory(category); setWorkTypeId(""); setWorkTypeSearch(""); }} type="button">{formatWorkTypeCategory(category)}</button>)}
+              <button aria-pressed={workTypeCategory === CUSTOM_WORK_TYPE_CATEGORY} className={workTypeCategory === CUSTOM_WORK_TYPE_CATEGORY ? "multi-item-work-editor__category multi-item-work-editor__category--active" : "multi-item-work-editor__category"} onClick={() => { setWorkTypeCategory(CUSTOM_WORK_TYPE_CATEGORY); setWorkTypeId(""); setWorkTypeSearch("Alt tip de lucrare"); }} type="button">Alt tip</button>
+            </div>
+          </div> : null}
           <SearchablePickerField
             disabled={disabled}
             emptyMessage="Nu există tipuri de lucrări potrivite."
@@ -223,18 +362,43 @@ export function MultiItemWorkEditor({
             id="draft-work-type"
             label="Tip lucrare"
             onSearchChange={setWorkTypeSearch}
-            onSelect={(value) => setWorkTypeId(value)}
+            onSelect={(value) => {
+              if (value === CUSTOM_WORK_TYPE_CATEGORY) {
+                setWorkTypeCategory(CUSTOM_WORK_TYPE_CATEGORY);
+                setWorkTypeId("");
+                setCustomWorkTypeName("");
+                return;
+              }
+              setWorkTypeId(value);
+              setCustomWorkTypeName("");
+            }}
             options={visibleWorkTypeOptions}
             placeholder="Caută tipul lucrării"
-            required
+            required={false}
             searchValue={workTypeSearch}
             selectedValue={workTypeId}
           />
-          <Select label="Culoare" options={[{ label: "Fără culoare", value: "" }, ...WORK_SHADE_OPTIONS.map((value) => ({ label: value, value }))]} value={shade ?? ""} onChange={(event) => setShade(event.target.value || null)} />
-          <Select label="Platformă implant" options={[{ label: "Fără platformă", value: "" }, ...IMPLANT_PLATFORM_OPTIONS.map((value) => ({ label: value, value }))]} value={implantPlatform ?? ""} onChange={(event) => setImplantPlatform(event.target.value || null)} />
-          {implantPlatform === "Alt tip" ? <TextInput label="Alt tip platformă" value={implantPlatformCustom ?? ""} onChange={(event) => setImplantPlatformCustom(event.target.value || null)} /> : null}
-          <RadioGroup label="Tip restaurare" name="draft-restoration-type" options={RESTORATION_TYPE_OPTIONS} value={restorationType ?? ""} onValueChange={(value) => setRestorationType(value || null)} />
-          <TextInput label="Cod tehnic" value={technicalCodeNotes ?? ""} onChange={(event) => setTechnicalCodeNotes(event.target.value || null)} />
+          {workTypeCategory === CUSTOM_WORK_TYPE_CATEGORY ? <div className="multi-item-work-editor__custom-type">
+            <TextInput label="Denumire tip personalizat" required value={customWorkTypeName} onChange={(event) => setCustomWorkTypeName(event.target.value)} />
+            {canSaveCustomWorkType ? <Button disabled={disabled || savingCustomType} isLoading={savingCustomType} onClick={() => void saveCustomWorkType()} type="button" variant="outline">Salvează în catalog</Button> : null}
+          </div> : null}
+          {(workTypeOptions.find((option) => option.id === workTypeId)?.allowedAddOns ?? []).length > 0 ? <div className="multi-item-work-editor__addons">
+            {(workTypeOptions.find((option) => option.id === workTypeId)?.allowedAddOns ?? []).map((addOn) => (
+              <Checkbox
+                checked={selectedAddOns.some((selected) => selected.code === addOn.code)}
+                key={addOn.code}
+                label={addOn.label}
+                onChange={(event) => setSelectedAddOns((current) => event.target.checked
+                  ? [...current, { code: addOn.code, amountMinor: addOn.amountMinor }]
+                  : current.filter((selected) => selected.code !== addOn.code))}
+              />
+            ))}
+          </div> : null}
+          <SearchablePickerField disabled={disabled} emptyMessage="Nu există culori potrivite." error={undefined} id="draft-shade" label="Culoare" onSearchChange={(value) => { setShadeSearch(value); if (value === "") setShade(null); }} onSelect={(value) => setShade(value || null)} options={shadeOptions} placeholder="Alege culoarea" required={false} searchValue={shadeSearch} selectedValue={shade ?? ""} />
+          {isImplantWorkType ? <SearchablePickerField disabled={disabled} emptyMessage="Nu există platforme potrivite." error={undefined} id="draft-implant-platform" label="Platformă implant" onSearchChange={(value) => { setPlatformSearch(value); if (value === "") setImplantPlatform(null); }} onSelect={(value) => setImplantPlatform(value || null)} options={platformOptions} placeholder="Alege platforma" required={false} searchValue={platformSearch} selectedValue={implantPlatform ?? ""} /> : null}
+          {isImplantWorkType && implantPlatform === "Alt tip" ? <TextInput label="Alt tip platformă" value={implantPlatformCustom ?? ""} onChange={(event) => setImplantPlatformCustom(event.target.value || null)} /> : null}
+          {isImplantWorkType ? <RadioGroup className="multi-item-work-editor__restoration" label="Tip restaurare" name="draft-restoration-type" options={RESTORATION_TYPE_OPTIONS} value={restorationType ?? ""} onValueChange={(value) => setRestorationType((current) => current === value ? null : value)} /> : null}
+          {canEditTechnicalCode ? <TextInput label="Cod tehnic" value={technicalCodeNotes ?? ""} onChange={(event) => setTechnicalCodeNotes(event.target.value || null)} /> : null}
           <FormGridFull><Textarea label="Note componentă" rows={2} value={notes ?? ""} onChange={(event) => setNotes(event.target.value || null)} /></FormGridFull>
         </FormGrid>
       </div>
@@ -246,11 +410,22 @@ export function MultiItemWorkEditor({
       {items.length > 0 ? <div className="multi-item-work-editor__list" aria-label="Componentele lucrării">
         {items.map((item, index) => (
           <div className="multi-item-work-editor__item" key={item.id}>
-            <div><strong>{index + 1}. {workTypeOptions.find((option) => option.id === item.workTypeId)?.name ?? "Tip lucrare"}</strong><span>{ANATOMICAL_SCOPE_LABELS_RO[item.scope]}{item.teeth.length > 0 ? ` · ${item.teeth.join(", ")}` : ""}</span></div>
+            <div><strong>{index + 1}. {workTypeOptions.find((option) => option.id === item.workTypeId)?.name ?? snapshotValue(item.customWorkTypeSnapshot) ?? "Tip lucrare"}</strong><span>{formatWorkTypeCategory(workTypeOptions.find((option) => option.id === item.workTypeId)?.probeFamily)} · {workTypeOptions.find((option) => option.id === item.workTypeId)?.unit === "ELEMENT" ? `Elemente: ${item.teeth.length || 1}` : workTypeOptions.find((option) => option.id === item.workTypeId)?.unit === "UNIT" ? "Bucată: 1" : ANATOMICAL_SCOPE_LABELS_RO[item.scope]}{item.teeth.length > 0 ? ` · ${item.teeth.join(", ")}` : ""}</span></div>
             <div><Button disabled={disabled} onClick={() => editItem(item)} type="button" variant="outline">Editează</Button><Button disabled={disabled} onClick={() => removeItem(item.id)} type="button" variant="outline">Elimină</Button></div>
           </div>
         ))}
       </div> : <p className="multi-item-work-editor__empty">Adaugă cel puțin o componentă.</p>}
     </div>
   );
+}
+
+function snapshotValue(snapshot: Readonly<Record<string, unknown>> | null | undefined): string {
+  const value = snapshot?.name ?? snapshot?.value;
+  return typeof value === "string" ? value : "";
+}
+
+function filterEditorOptions<T extends { readonly label: string; readonly secondary: string | undefined; readonly value: string }>(options: readonly T[], searchValue: string): readonly T[] {
+  const normalized = searchValue.trim().normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+  const matched = normalized === "" ? options : options.filter((option) => `${option.label} ${option.secondary ?? ""}`.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().includes(normalized));
+  return normalized === "" ? matched.slice(0, 8) : matched;
 }

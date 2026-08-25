@@ -708,8 +708,6 @@ describe("WorksPage", () => {
     expect(await screen.findByText(/1\. Punte zirconiu/)).toBeDefined();
     fireEvent.change(screen.getByLabelText("Data termenului"), { target: { value: "2026-08-20" } });
     fireEvent.change(screen.getByLabelText("Ora termenului"), { target: { value: "09:30" } });
-    fireEvent.focus(screen.getByLabelText("Tip probă curentă"));
-    fireEvent.click(await screen.findByRole("option", { name: "Lingură" }));
     fireEvent.change(screen.getByLabelText("Note"), { target: { value: "Lucrare prioritară" } });
     fireEvent.submit(document.getElementById("create-work-form")!);
 
@@ -724,11 +722,13 @@ describe("WorksPage", () => {
       patientId: "patient_1",
       quantity: 1,
       requestedDeliveryDate: "2026-08-20",
-      shade: null,
+      shade: "A2",
       workTypeId: "work_type_2",
-      items: [expect.objectContaining({ scope: "TOOTH", teeth: [11], workTypeId: "work_type_2", shade: null })],
+      items: [expect.objectContaining({ scope: "TOOTH", teeth: [11], workTypeId: "work_type_2", shade: "A2" })],
     });
     expect(body.manualDueAt).toEqual(expect.stringMatching(/^2026-08-20T/));
+    expect(body).not.toHaveProperty("probeTypeId");
+    expect(body).not.toHaveProperty("probeDeadlineAt");
   });
 
   it("submits boolean and radio dynamic fields through the create form contract", async () => {

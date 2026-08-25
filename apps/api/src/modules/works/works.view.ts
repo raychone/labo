@@ -241,9 +241,14 @@ export interface WorkTypeFormOptionView {
   readonly name: string;
   readonly symbol: string;
   readonly unit: string;
+  readonly probeFamily: string | null;
+  readonly probeTypeCodes: readonly string[];
+  readonly allowedAddOns: readonly { readonly code: string; readonly label: string; readonly amountMinor: number | null }[];
+  readonly exclusiveGroup: string | null;
 }
 
 export interface WorkSummaryView {
+  readonly cycleNumber: number | null;
   readonly clinic: {
     readonly code: string;
     readonly id: string;
@@ -296,6 +301,7 @@ export interface WorkSummaryView {
     readonly code: string;
     readonly id: string;
     readonly name: string;
+    readonly probeTypeCodes?: readonly string[];
     readonly symbol: string;
   };
 }
@@ -523,18 +529,26 @@ export interface PaginatedWorksView {
   readonly total: number;
 }
 
-export function toWorkTypeFormOptionView(workType: { readonly code: string; readonly id: string; readonly name: string; readonly symbol: string; readonly unit: string }): WorkTypeFormOptionView {
+export function toWorkTypeFormOptionView(workType: { readonly code: string; readonly id: string; readonly name: string; readonly symbol: string; readonly unit: string; readonly probeFamily: string | null; readonly probeTypeCodes: Prisma.JsonValue | null; readonly allowedAddOns: Prisma.JsonValue | null; readonly exclusiveGroup: string | null }): WorkTypeFormOptionView {
   return {
     code: workType.code,
     id: workType.id,
     name: workType.name,
     symbol: workType.symbol,
     unit: workType.unit,
+    probeFamily: workType.probeFamily,
+    probeTypeCodes: Array.isArray(workType.probeTypeCodes) ? workType.probeTypeCodes.filter((value): value is string => typeof value === "string") : [],
+    allowedAddOns: Array.isArray(workType.allowedAddOns) ? workType.allowedAddOns.flatMap((value) => {
+      if (typeof value !== "object" || value === null || Array.isArray(value) || typeof value.code !== "string" || typeof value.label !== "string") return [];
+      return [{ code: value.code, label: value.label, amountMinor: typeof value.amountMinor === "number" ? value.amountMinor : null }];
+    }) : [],
+    exclusiveGroup: workType.exclusiveGroup,
   };
 }
 
 export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: boolean, access: WorkClaimAccessViewInput): WorkSummaryView {
   return {
+    cycleNumber: workOrder.activeCycle?.cycleNumber ?? null,
     clinic: workOrder.clinic
       ? {
           code: workOrder.clinic.code,
@@ -584,8 +598,8 @@ export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: bo
     completedAt: workOrder.completedAt?.toISOString() ?? null,
     completedByUserId: workOrder.completedByUserId,
     totalPriceMinor: includePricing ? workOrder.totalPriceMinor : null,
-    urgencySurchargeMinor: includePricing && workOrder.urgency ? calculateUrgencySurchargeMinor(workOrder.totalPriceMinor, workOrder.urgency as keyof typeof URGENCY_SURCHARGE_PERCENT) : null,
-    urgencyAdjustedTotalMinor: includePricing && workOrder.urgency ? workOrder.totalPriceMinor + calculateUrgencySurchargeMinor(workOrder.totalPriceMinor, workOrder.urgency as keyof typeof URGENCY_SURCHARGE_PERCENT) : null,
+    urgencySurchargeMinor: includePricing && workOrder.urgency && workOrder.totalPriceMinor !== null ? calculateUrgencySurchargeMinor(workOrder.totalPriceMinor, workOrder.urgency as keyof typeof URGENCY_SURCHARGE_PERCENT) : null,
+    urgencyAdjustedTotalMinor: includePricing && workOrder.urgency && workOrder.totalPriceMinor !== null ? workOrder.totalPriceMinor + calculateUrgencySurchargeMinor(workOrder.totalPriceMinor, workOrder.urgency as keyof typeof URGENCY_SURCHARGE_PERCENT) : null,
     executionSnapshot: toExecutionSnapshotView(workOrder, includePricing),
     updatedAt: workOrder.updatedAt.toISOString(),
     workflow: toWorkflowSummaryView(workOrder.activeCycle?.workflowExecution ?? null),
@@ -593,6 +607,7 @@ export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: bo
       code: workOrder.workType.code,
       id: workOrder.workType.id,
       name: workOrder.workType.name,
+      probeTypeCodes: Array.isArray(workOrder.workType.probeTypeCodes) ? workOrder.workType.probeTypeCodes.filter((value): value is string => typeof value === "string") : [],
       symbol: workOrder.workType.symbol,
     },
   };
@@ -781,7 +796,7 @@ export function toWorkDetailView(workOrder: WorkOrderRecord, includePricing: boo
           reason: "Acțiunile se verifică pe endpointul dedicat de workflow.",
         })
       : null,
-    items: (workOrder.items ?? []).map(toWorkOrderItemView),
+    items: (workOrder.items ?? []).map((item) => toWorkOrderItemView(item, includePricing)),
     toothConnections: (workOrder.toothConnections ?? []).map(toToothConnectionView),
     activeProbeCycle: workOrder.activeProbeCycle ? toProbeCycleView(workOrder.activeProbeCycle) : null,
     completedProbeCycles: (workOrder.probeCycles ?? []).map(toProbeCycleView),

@@ -14,7 +14,7 @@ Give technicians a personal queue and operational workbench.
 
 ## Domain Concepts
 
-Available work, claimed work, current technician, final operational state, technician details, `Cod`, manopere modal shell, real laboratory sheet status.
+Available work, claimed work, current technician, final operational state, technician details, `Cod`, categorized technician labor operations, snapshot-based earnings, and real laboratory sheet status.
 
 ## Business Rules
 
@@ -22,7 +22,7 @@ Technicians can claim available works, view own claimed works, open details for 
 
 ## Data Model
 
-`WorkOrder` ownership, operational status fields and `technicalCodeNotes`, `WorkAssignmentEvent`, workflow stage execution models.
+`WorkOrder` ownership, operational status fields and `technicalCodeNotes`, `WorkAssignmentEvent`, workflow stage execution models, `TechnicianOperation`, `TechnicianOperationRate`, and `TechnicianPerformedOperation` with immutable rate/earning snapshots.
 
 ## API
 
@@ -30,7 +30,7 @@ Technicians can claim available works, view own claimed works, open details for 
 
 ## UI
 
-`/workbench` is labelled as the technician workspace and now centers on `Lucrări de preluat` and `Lucrările mele`. Available cards expose `Preia` while keeping the existing `NC`/`NG` execution company selector in the claim modal. Own cards expose `Detalii`, `Manopere`, and `Finalizata`; `Detalii` opens an editable modal with reception context, notes and `Cod`; `Manopere` is a full-screen shell until the operation catalog and earning snapshot tasks provide real selectable data. Technician navigation is intentionally limited to the workbench and owned-work paths; operational status remains the shared read view for work discovery and shows only the technician color badge, not the technician name. Owned work detail drawers now place the live execution summary, workflow section, and real sheet section before the historical dossier sections so the current action is always visible first.
+`/workbench` is labelled as the technician workspace and now centers on `Lucrări de preluat` and `Lucrările mele`. Available cards expose `Preia` while keeping the existing `NC`/`NG` execution company selector in the claim modal. Own cards expose `Detalii`, `Manopere`, and `Finalizata`; `Manopere` groups the official catalog by category and uses a keyboard-accessible card control with green active state. Completed operations persist through the existing performed-operation model and use the rate snapshot for earnings. The WorkOrder composition view derives deterministic WorkType colors for ELEMENT teeth and renders a legend; BUCATA remains case-level and is not duplicated by tooth references.
 
 ## Audit
 

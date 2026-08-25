@@ -127,10 +127,11 @@ export class ListClaimWorksQueryDto extends ListWorksQueryDto {
 }
 
 export class ClaimWorkDto {
+  @IsOptional()
   @Transform(({ value }) => trimRequiredString(value))
   @IsString()
   @IsIn(["CDT", "NG"])
-  public readonly executionLegalEntityCode!: "CDT" | "NG";
+  public readonly executionLegalEntityCode?: "CDT" | "NG";
 
   @Type(() => Number)
   @IsInt()
@@ -152,6 +153,10 @@ export class ReleaseWorkDto {
 }
 
 export class ReassignWorkDto extends ClaimWorkDto {
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  @IsIn(["CDT", "NG"])
+  public override readonly executionLegalEntityCode: "CDT" | "NG" = "CDT";
   @Transform(({ value }) => trimRequiredString(value))
   @IsString()
   public readonly technicianId!: string;
@@ -387,16 +392,6 @@ export class CreateWorkDto extends WorkMutationDto {
 
   @IsISO8601({ strict: true })
   public declare readonly requestedDeliveryDate: string;
-
-  @IsOptional()
-  @Transform(({ value }) => trimOptionalString(value))
-  @IsString()
-  public readonly probeTypeId?: string | null;
-
-  @IsOptional()
-  @IsISO8601({ strict: true })
-  @Matches(/^\d{4}-\d{2}-\d{2}T.+(?:Z|[+-]\d{2}:\d{2})$/)
-  public readonly probeDeadlineAt?: string;
 
   @IsOptional()
   @IsISO8601({ strict: true })

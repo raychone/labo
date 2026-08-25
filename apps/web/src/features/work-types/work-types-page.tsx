@@ -128,7 +128,7 @@ export function WorkTypesPage(): ReactNode {
       header: "Preț bază",
       id: "basePriceMinor",
       isSortable: true,
-      renderCell: (workType) => formatMoneyMinor(workType.basePriceMinor, currency, locale),
+      renderCell: (workType) => workType.basePriceMinor === null ? "Preț neconfigurat" : formatMoneyMinor(workType.basePriceMinor, currency, locale),
     },
     { header: "Unitate", id: "unit", renderCell: (workType) => workType.unit },
     { header: "Status", id: "status", renderCell: (workType) => <ActiveBadge isActive={workType.isActive} /> },

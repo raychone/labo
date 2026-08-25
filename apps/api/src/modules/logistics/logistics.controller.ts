@@ -33,7 +33,7 @@ import {
   UpdatePickupRequestDto,
   UpdateCourierRouteDto,
 } from "./dto/logistics.dto.js";
-import { LogisticsService, type UploadedAttachmentFile } from "./logistics.service.js";
+import { LogisticsService, type FastTransportInput, type UploadedAttachmentFile } from "./logistics.service.js";
 
 @Controller()
 @UseGuards(AuthGuard, PermissionsGuard)
@@ -50,6 +50,18 @@ export class LogisticsController {
   @RequirePermission("logistics.center.read", "ASSIGNED")
   public getCenterSummary(@CurrentUser() actor: AuthenticatedUser, @Query() query: LogisticsCenterQueryDto) {
     return this.logisticsService.getCenterSummary(actor, query);
+  }
+
+  @Post("logistics/works/:workId/fast-delegate")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("logistics.manage_groups", "ALL")
+  public fastDelegate(
+    @Param("workId") workOrderId: string,
+    @Body() dto: FastTransportInput,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Req() request: Request,
+  ) {
+    return this.logisticsService.fastDelegate({ actor, requestMetadata: getRequestMetadata(request) }, workOrderId, dto);
   }
 
   @Get("routes")
@@ -190,42 +202,6 @@ export class LogisticsController {
     @Req() request: Request,
   ) {
     return this.logisticsService.unblockWork({ actor, requestMetadata: getRequestMetadata(request) }, workOrderId, dto);
-  }
-
-  @Post("works/:workId/logistics/ready-for-packing")
-  @UseGuards(CsrfGuard)
-  @RequirePermission("logistics.prepare_work", "ALL")
-  public readyForPacking(
-    @Body() dto: LogisticsTransitionDto,
-    @CurrentUser() actor: AuthenticatedUser,
-    @Param("workId") workOrderId: string,
-    @Req() request: Request,
-  ) {
-    return this.logisticsService.confirmReadyForPacking({ actor, requestMetadata: getRequestMetadata(request) }, workOrderId, dto);
-  }
-
-  @Post("works/:workId/logistics/start-packing")
-  @UseGuards(CsrfGuard)
-  @RequirePermission("logistics.prepare_work", "ALL")
-  public startPacking(
-    @Body() dto: LogisticsTransitionDto,
-    @CurrentUser() actor: AuthenticatedUser,
-    @Param("workId") workOrderId: string,
-    @Req() request: Request,
-  ) {
-    return this.logisticsService.startPacking({ actor, requestMetadata: getRequestMetadata(request) }, workOrderId, dto);
-  }
-
-  @Post("works/:workId/logistics/complete-packing")
-  @UseGuards(CsrfGuard)
-  @RequirePermission("logistics.prepare_work", "ALL")
-  public completePacking(
-    @Body() dto: LogisticsTransitionDto,
-    @CurrentUser() actor: AuthenticatedUser,
-    @Param("workId") workOrderId: string,
-    @Req() request: Request,
-  ) {
-    return this.logisticsService.completePacking({ actor, requestMetadata: getRequestMetadata(request) }, workOrderId, dto);
   }
 
   @Get("delivery-preparation-groups")

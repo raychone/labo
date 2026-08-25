@@ -100,12 +100,15 @@ describe("ClinicsPage", () => {
     const clinicSelect = await screen.findByLabelText("Clinică");
     const doctorSelect = await screen.findByLabelText("Medic");
 
-    fireEvent.change(clinicSelect, { target: { value: "clinic_1" } });
-    await screen.findByRole("option", { name: "Dr. Ana Popescu" });
-    fireEvent.change(doctorSelect, { target: { value: "doctor_1" } });
-    expect(doctorSelect).toHaveProperty("value", "doctor_1");
+    fireEvent.focus(clinicSelect);
+    fireEvent.click(await screen.findByRole("option", { name: "CL-0001 · Clinica Test" }));
+    fireEvent.focus(doctorSelect);
+    fireEvent.click(await screen.findByRole("option", { name: "Dr. Ana Popescu" }));
+    expect(doctorSelect).toHaveProperty("value", "Dr. Ana Popescu");
 
-    fireEvent.change(clinicSelect, { target: { value: "clinic_2" } });
+    fireEvent.focus(clinicSelect);
+    fireEvent.change(clinicSelect, { target: { value: "" } });
+    fireEvent.click(await screen.findByRole("option", { name: "CL-0002 · Clinica Noua" }));
     await waitFor(() => expect(doctorSelect).toHaveProperty("value", ""));
 
     fireEvent.click(await screen.findByRole("button", { name: "Adaugă medic" }));

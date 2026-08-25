@@ -4,6 +4,7 @@ import { AuthModule } from "../auth/auth.module.js";
 import { DatabaseModule } from "../database/database.module.js";
 import { DeliveryProofModule } from "../delivery-proof/delivery-proof.module.js";
 import { RbacModule } from "../rbac/rbac.module.js";
+import { NotificationsModule } from "../notifications/notifications.module.js";
 import { DeliveryCodeService } from "./delivery-code.service.js";
 import { DeliveryController } from "./delivery.controller.js";
 import { DeliveryService } from "./delivery.service.js";
@@ -11,8 +12,8 @@ import { DeliveryTransitionService } from "./delivery-transition.service.js";
 
 @Module({
   controllers: [DeliveryController],
-  exports: [DeliveryService],
-  imports: [AuthModule, DatabaseModule, DeliveryProofModule, RbacModule],
+  exports: [DeliveryCodeService, DeliveryService],
+  imports: [AuthModule, DatabaseModule, DeliveryProofModule, NotificationsModule, RbacModule],
   providers: [DeliveryCodeService, DeliveryService, DeliveryTransitionService],
 })
 export class DeliveryModule {}

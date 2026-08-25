@@ -177,7 +177,10 @@ describe("StatusPage", () => {
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("sortDirection=desc"), expect.anything());
 
     fireEvent.click(screen.getByRole("button", { name: "Afișează filtrele" }));
-    fireEvent.change(screen.getByLabelText("CDT / NG"), { target: { value: "CDT" } });
+    const legalEntitySelect = screen.getByLabelText("CDT / NG");
+    fireEvent.focus(legalEntitySelect);
+    fireEvent.change(legalEntitySelect, { target: { value: "" } });
+    fireEvent.click(await screen.findByRole("option", { name: "CDT" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("executionLegalEntityCode=CDT"), expect.anything()));
   });
 

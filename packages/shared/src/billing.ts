@@ -95,6 +95,8 @@ export interface BillingDocumentDetail extends BillingDocumentSummary {
   readonly lines: readonly BillingDocumentLineView[];
   readonly notes: string | null;
   readonly payments: readonly PaymentView[];
+  readonly paymentNoteIssuedAt: string | null;
+  readonly paymentNoteSnapshot: unknown | null;
   readonly subtotalMinor: number;
   readonly taxMinor: number;
 }

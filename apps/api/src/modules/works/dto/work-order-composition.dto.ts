@@ -66,6 +66,11 @@ export class WorkOrderCompositionItemDto {
   @IsString()
   @MaxLength(2000)
   public readonly notes?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsObject({ each: true })
+  public readonly selectedAddOns?: readonly { readonly code: string; readonly amountMinor?: number | null }[];
 }
 
 export class UpdateWorkOrderCompositionDto {

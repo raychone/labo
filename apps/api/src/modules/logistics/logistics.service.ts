@@ -10,7 +10,8 @@ import {
   PickupRequestStatus,
   WorkLogisticsStatus,
   WorkWorkflowExecutionStatus,
-  type LogisticsLocationCode,
+  DeliveryEventType,
+  DeliveryStatus,
   type Prisma,
   type WorkLogisticsState,
 } from "@prisma/client";
@@ -21,6 +22,8 @@ import type { LegalEntityContext } from "../organization-context/organization-co
 import { AuthorizationService } from "../rbac/authorization.service.js";
 import { CreateWorkDto } from "../works/dto/works.dto.js";
 import { WorksService } from "../works/works.service.js";
+import { DeliveryCodeService } from "../delivery/delivery-code.service.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
 import { LOGISTICS_ATTACHMENT_LIMITS, LOGISTICS_AUDIT_ACTIONS, LOGISTICS_RESOURCE_TYPES } from "./logistics.constants.js";
 import type {
   BlockWorkDto,
@@ -100,6 +103,12 @@ export interface WorkAttachmentSummary {
 export interface LogisticsWorkCreateResponse {
   readonly attachments: readonly WorkAttachmentSummary[];
   readonly work: Awaited<ReturnType<WorksService["createWork"]>>;
+}
+
+export interface FastTransportInput {
+  readonly direction: "DELIVERY" | "PICKUP";
+  readonly courierUserId?: string | null;
+  readonly version: number;
 }
 
 export interface PickupRequestView {
@@ -189,7 +198,73 @@ export class LogisticsService {
     @Inject(AuthorizationService) private readonly authorizationService: AuthorizationService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(WorksService) private readonly worksService: WorksService,
+    @Inject(DeliveryCodeService) private readonly deliveryCodeService?: DeliveryCodeService,
+    @Inject(NotificationsService) private readonly notificationsService?: NotificationsService,
   ) {}
+
+  public async fastDelegate(context: ActorContext, workOrderId: string, input: FastTransportInput): Promise<{ readonly direction: FastTransportInput["direction"]; readonly id: string; readonly workOrderId: string; readonly status: string }> {
+    await this.ensurePermission(context.actor.id, "logistics.manage_groups");
+    let resolvedFailedDeliveryId: string | null = null;
+    const result = await this.prisma.$transaction(async (tx) => {
+      const work = await tx.workOrder.findUnique({
+        include: { activeCycle: { include: { logisticsState: true } }, deliveryPreparationItems: { include: { group: { include: { deliveries: { where: { isActive: true } } } } }, where: { isActive: true } } },
+        where: { id: workOrderId },
+      });
+      if (!work) throw new NotFoundException("Lucrarea nu a fost găsită.");
+      if ((work.activeCycle?.logisticsState?.version ?? work.version) !== input.version) throw new ConflictException("Datele logistice au fost modificate. Reîncarcă înainte de acțiune.");
+      if (input.direction === "DELIVERY" && work.technicalReadiness !== "PROBE_READY" && work.technicalReadiness !== "FINAL_READY") {
+        throw new BadRequestException("Doar lucrările marcate Probă gata sau Finalizată pot fi trimise către clinică.");
+      }
+      if (input.direction === "PICKUP") {
+        if (!work.requiresPickup) throw new ConflictException("Lucrarea nu mai necesită ridicare.");
+        const existing = await tx.courierRouteStop.findFirst({ where: { outcomeStatus: "PENDING", type: "PICKUP", workOrderId } });
+        if (existing) throw new ConflictException("Lucrarea este deja în fluxul curierului.");
+        const routeDate = new Date();
+        const route = await tx.courierRoute.create({
+          data: {
+            courierUserId: input.courierUserId ?? null,
+            createdByUserId: context.actor.id,
+            name: "Ridicare rapidă",
+            routeDate,
+            routeNumber: await this.nextRouteNumber(tx, routeDate),
+            status: input.courierUserId ? "ASSIGNED" : "DRAFT",
+            updatedByUserId: context.actor.id,
+            stops: { create: [{ stopOrder: 1, type: "PICKUP", workOrder: { connect: { id: workOrderId } } }] },
+          },
+        });
+        await tx.workOrder.update({ data: { requiresPickup: false, updatedByUserId: context.actor.id, version: { increment: 1 } }, where: { id: workOrderId } });
+        await this.recordAudit(tx, context, LOGISTICS_AUDIT_ACTIONS.routeCreated, route.id, { direction: input.direction, workOrderId, courierUserId: input.courierUserId ?? null });
+        return { direction: input.direction, id: route.id, status: route.status, workOrderId };
+      }
+      const existingGroup = work.deliveryPreparationItems[0]?.group ?? null;
+      const activeDelivery = existingGroup?.deliveries[0] ?? null;
+      if (activeDelivery && activeDelivery.status !== DeliveryStatus.FAILED) throw new ConflictException("Lucrarea este deja în fluxul livrărilor.");
+      if (activeDelivery) {
+        resolvedFailedDeliveryId = activeDelivery.id;
+        await tx.delivery.update({ data: { isActive: false, updatedByUserId: context.actor.id, version: { increment: 1 } }, where: { id: activeDelivery.id } });
+      }
+      if (!work.clinicId) throw new BadRequestException("Lucrarea nu are o clinică pentru livrare.");
+      const group = existingGroup && existingGroup.status !== "CANCELLED"
+        ? existingGroup
+        : await tx.deliveryPreparationGroup.create({ data: { clinicId: work.clinicId, code: await this.generateGroupCode(tx), createdByUserId: context.actor.id, updatedByUserId: context.actor.id } });
+      if (!existingGroup || activeDelivery) {
+        await tx.deliveryPreparationItem.create({ data: { addedByUserId: context.actor.id, groupId: group.id, workCycleId: work.activeCycle?.id ?? null, workOrderId } });
+      }
+      await tx.deliveryPreparationGroup.update({ data: { status: "READY", plannedDate: new Date(), updatedByUserId: context.actor.id, version: { increment: 1 } }, where: { id: group.id } });
+      const now = new Date();
+      if (input.courierUserId) await this.assertCourier(tx, input.courierUserId);
+      if (!this.deliveryCodeService) throw new BadRequestException("Fluxul de livrare nu este disponibil.");
+      const code = await this.deliveryCodeService.generate(tx, now);
+      const delivery = await tx.delivery.create({ data: { assignedAt: input.courierUserId ? now : null, assignedByUserId: input.courierUserId ? context.actor.id : null, clinicId: work.clinicId, code, courierUserId: input.courierUserId ?? null, createdByUserId: context.actor.id, plannedDate: now, preparationGroupId: group.id, status: input.courierUserId ? "ASSIGNED" : "PLANNED", updatedByUserId: context.actor.id } });
+      await tx.workOrder.update({ data: { requiresDelivery: false, updatedByUserId: context.actor.id, version: { increment: 1 } }, where: { id: workOrderId } });
+      await tx.deliveryEvent.create({ data: { actorUserId: context.actor.id, deliveryId: delivery.id, type: DeliveryEventType.DELIVERY_CREATED, metadata: { direction: input.direction, workOrderId } } });
+      await this.recordAudit(tx, context, LOGISTICS_AUDIT_ACTIONS.groupMarkedReady, group.id, { direction: input.direction, deliveryId: delivery.id, workOrderId, courierUserId: input.courierUserId ?? null });
+      return { direction: input.direction, id: delivery.id, status: delivery.status, workOrderId };
+    });
+    await this.notificationsService?.resolveLogisticsReadiness(workOrderId);
+    if (resolvedFailedDeliveryId) await this.notificationsService?.resolve("DELIVERY_FAILED", `delivery-failed:${resolvedFailedDeliveryId}`);
+    return result;
+  }
 
   public async createWorkWithAttachments(
     context: ActorContext,
@@ -352,6 +427,14 @@ export class LogisticsService {
         },
         include: courierRouteInclude,
       });
+      await Promise.all(dto.stops.filter((stop): stop is typeof dto.stops[number] & { readonly workOrderId: string } => Boolean(stop.workOrderId)).map((stop) => tx.workOrder.update({
+        data: {
+          ...(stop.type === "DELIVERY" ? { requiresDelivery: false } : { requiresPickup: false }),
+          updatedByUserId: context.actor.id,
+          version: { increment: 1 },
+        },
+        where: { id: stop.workOrderId },
+      })));
       await this.recordRouteEvent(tx, context, created.id, CourierRouteEventType.ROUTE_CREATED, {
         routeDate: created.routeDate.toISOString().slice(0, 10),
         routeId: created.id,
@@ -461,10 +544,13 @@ export class LogisticsService {
         select: { routeNumber: true },
         where: {
           courierUserId: current.courierUserId,
-          routeDate: current.routeDate,
-          routeNumber: { lt: current.routeNumber },
           status: { notIn: [CourierRouteStatus.COMPLETED, CourierRouteStatus.CANCELLED] },
+          OR: [
+            { routeDate: { lt: current.routeDate } },
+            { routeDate: current.routeDate, routeNumber: { lt: current.routeNumber } },
+          ],
         },
+        orderBy: [{ routeDate: "asc" }, { routeNumber: "asc" }],
       });
       if (previous) {
         throw new ConflictException("Finalizează traseul anterior înainte să începi acest traseu.");
@@ -554,6 +640,7 @@ export class LogisticsService {
     const filtered = workOrders
       .map((work) => toLogisticsCenterItem(work, actionContext, now))
       .filter((item) => this.matchesComputedFilters(item, query));
+    filtered.sort((left, right) => logisticsActionPriority(left) - logisticsActionPriority(right) || new Date(left.requestedDeliveryDate).getTime() - new Date(right.requestedDeliveryDate).getTime());
     const pageSize = Math.min(query.pageSize, 100);
     const page = Math.max(query.page, 1);
     const start = (page - 1) * pageSize;
@@ -583,7 +670,7 @@ export class LogisticsService {
       include: logisticsWorkInclude,
       where: this.toWorkWhere(summaryQuery),
     });
-    const items = workOrders.map((work) => toLogisticsCenterItem(work, actionContext, now));
+    const items = workOrders.map((work) => toLogisticsCenterItem(work, actionContext, now)).filter((item) => item.requiresLogisticsAction);
     const toPickup = await this.prisma.pickupRequest.count({ where: this.toPickupWhere(query) });
     const summary = createLogisticsSummary(items, toPickup);
     const toDeliver = items.filter(
@@ -657,7 +744,7 @@ export class LogisticsService {
     const state = await this.prisma.$transaction(async (tx) => {
       const current = await this.ensureState(tx, workOrderId);
       this.assertVersion(current, dto.version);
-      if (current.status === WorkLogisticsStatus.READY_FOR_DELIVERY) {
+      if (current.status === WorkLogisticsStatus.HANDED_TO_DELIVERY || current.status === WorkLogisticsStatus.DELIVERED) {
         throw new BadRequestException("Lucrările gata de livrare nu pot fi blocate în acest task.");
       }
       const updated = await tx.workLogisticsState.update({
@@ -723,68 +810,6 @@ export class LogisticsService {
         workId: workOrderId,
       });
       return updated;
-    });
-    return this.getWorkLogistics(context.actor, state.workOrderId);
-  }
-
-  public async confirmReadyForPacking(context: ActorContext, workOrderId: string, dto: LogisticsTransitionDto): Promise<WorkLogisticsView> {
-    await this.ensurePermission(context.actor.id, "logistics.prepare_work");
-    const state = await this.prisma.$transaction(async (tx) => {
-      const current = await this.ensureState(tx, workOrderId);
-      this.assertVersion(current, dto.version);
-      if (current.status === WorkLogisticsStatus.BLOCKED) {
-        throw new BadRequestException("Deblochează lucrarea înainte de pregătirea pentru ambalare.");
-      }
-      await this.assertWorkflowCompletedOrOverride(tx, workOrderId, dto.workflowOverride === true);
-      const updated = await tx.workLogisticsState.update({
-        data: {
-          physicalLocationCode: "RAFT_FINISARE",
-          readyForPackingAt: new Date(),
-          readyForPackingByUserId: context.actor.id,
-          status: WorkLogisticsStatus.READY_FOR_PACKING,
-          updatedByUserId: context.actor.id,
-          version: { increment: 1 },
-        },
-        where: { id: current.id },
-      });
-      await this.recordLogisticsEvent(tx, context, workOrderId, updated.workCycleId, updated.id, LogisticsEventType.READY_FOR_PACKING_CONFIRMED, {
-        newStatus: updated.status,
-        oldStatus: current.status,
-        workflowOverride: dto.workflowOverride === true,
-        workId: workOrderId,
-      });
-      await this.recordAudit(tx, context, LOGISTICS_AUDIT_ACTIONS.readyForPackingConfirmed, workOrderId, {
-        logisticsStateId: updated.id,
-        newStatus: updated.status,
-        oldStatus: current.status,
-        workflowOverride: dto.workflowOverride === true,
-        workId: workOrderId,
-      });
-      return updated;
-    });
-    return this.getWorkLogistics(context.actor, state.workOrderId);
-  }
-
-  public async startPacking(context: ActorContext, workOrderId: string, dto: LogisticsTransitionDto): Promise<WorkLogisticsView> {
-    await this.ensurePermission(context.actor.id, "logistics.prepare_work");
-    const state = await this.transitionStatus(context, workOrderId, dto.version, WorkLogisticsStatus.READY_FOR_PACKING, WorkLogisticsStatus.PACKING, {
-      eventType: LogisticsEventType.PACKING_STARTED,
-      locationCode: "ZONA_AMBALARE",
-      timestampField: "packingStartedAt",
-      userField: "packingStartedByUserId",
-      auditAction: LOGISTICS_AUDIT_ACTIONS.packingStarted,
-    });
-    return this.getWorkLogistics(context.actor, state.workOrderId);
-  }
-
-  public async completePacking(context: ActorContext, workOrderId: string, dto: LogisticsTransitionDto): Promise<WorkLogisticsView> {
-    await this.ensurePermission(context.actor.id, "logistics.prepare_work");
-    const state = await this.transitionStatus(context, workOrderId, dto.version, WorkLogisticsStatus.PACKING, WorkLogisticsStatus.READY_FOR_DELIVERY, {
-      eventType: LogisticsEventType.PACKING_COMPLETED,
-      locationCode: "GATA_LIVRARE",
-      timestampField: "readyForDeliveryAt",
-      userField: "readyForDeliveryByUserId",
-      auditAction: LOGISTICS_AUDIT_ACTIONS.packingCompleted,
     });
     return this.getWorkLogistics(context.actor, state.workOrderId);
   }
@@ -880,13 +905,15 @@ export class LogisticsService {
       if (!groupRecord || !work) {
         throw new NotFoundException("Grupul sau lucrarea nu a fost găsită.");
       }
-      const status = work.activeCycle?.logisticsState?.status ?? WorkLogisticsStatus.RECEIVED;
+      if (work.technicalReadiness !== "PROBE_READY" && work.technicalReadiness !== "FINAL_READY") {
+        throw new BadRequestException("Adaugă în livrare doar o lucrare marcată Probă gata sau Finalizată.");
+      }
       if (!canAddWorkToPreparationGroup({
         groupClinicId: groupRecord.clinicId,
         groupStatus: groupRecord.status,
           hasActiveGroup: work.deliveryPreparationItems.some((item) => item.workCycleId === work.activeCycleId),
         workClinicId: work.clinicId ?? "",
-        workLogisticsStatus: status,
+        technicalReadiness: work.technicalReadiness,
       })) {
         throw new BadRequestException("Lucrarea trebuie să fie gata de livrare, fără grup activ și din aceeași clinică.");
       }
@@ -991,52 +1018,6 @@ export class LogisticsService {
     return toDeliveryPreparationGroupDetail(group, await this.createActionContext(context.actor.id), new Date());
   }
 
-  private async transitionStatus(
-    context: ActorContext,
-    workOrderId: string,
-    version: number,
-    expected: WorkLogisticsStatus,
-    next: WorkLogisticsStatus,
-    options: {
-      readonly auditAction: string;
-      readonly eventType: LogisticsEventType;
-      readonly locationCode: LogisticsLocationCode;
-      readonly timestampField: "packingStartedAt" | "readyForDeliveryAt";
-      readonly userField: "packingStartedByUserId" | "readyForDeliveryByUserId";
-    },
-  ): Promise<WorkLogisticsState> {
-    return this.prisma.$transaction(async (tx) => {
-      const current = await this.ensureState(tx, workOrderId);
-      this.assertVersion(current, version);
-      if (current.status !== expected) {
-        throw new BadRequestException(`Tranziția necesită statusul ${expected}.`);
-      }
-      const updated = await tx.workLogisticsState.update({
-        data: {
-          [options.timestampField]: new Date(),
-          [options.userField]: context.actor.id,
-          physicalLocationCode: options.locationCode,
-          status: next,
-          updatedByUserId: context.actor.id,
-          version: { increment: 1 },
-        },
-        where: { id: current.id },
-      });
-      await this.recordLogisticsEvent(tx, context, workOrderId, updated.workCycleId, updated.id, options.eventType, {
-        newStatus: next,
-        oldStatus: current.status,
-        workId: workOrderId,
-      });
-      await this.recordAudit(tx, context, options.auditAction, workOrderId, {
-        logisticsStateId: updated.id,
-        newStatus: next,
-        oldStatus: current.status,
-        workId: workOrderId,
-      });
-      return updated;
-    });
-  }
-
   private async ensureState(tx: LogisticsTx, workOrderId: string): Promise<WorkLogisticsState> {
       const work = await tx.workOrder.findUnique({ include: { activeCycle: { include: { logisticsState: true, workflowExecution: true } } }, where: { id: workOrderId } });
     if (!work) {
@@ -1048,16 +1029,12 @@ export class LogisticsService {
     if (work.activeCycle.logisticsState) {
       return work.activeCycle.logisticsState;
     }
-    const status = work.status === "FINALIZATA"
-      ? WorkLogisticsStatus.READY_FOR_PACKING
-      : work.activeCycle.workflowExecution?.status === WorkWorkflowExecutionStatus.ACTIVE
+    const status = work.activeCycle.workflowExecution?.status === WorkWorkflowExecutionStatus.ACTIVE
         ? WorkLogisticsStatus.IN_PRODUCTION
         : WorkLogisticsStatus.RECEIVED;
     const state = await tx.workLogisticsState.create({
       data: {
-        physicalLocationCode: status === WorkLogisticsStatus.READY_FOR_PACKING ? "RAFT_FINISARE" : status === WorkLogisticsStatus.IN_PRODUCTION ? "PRODUCTIE" : "RECEPTIE",
-        readyForPackingAt: status === WorkLogisticsStatus.READY_FOR_PACKING ? work.completedAt : null,
-        readyForPackingByUserId: status === WorkLogisticsStatus.READY_FOR_PACKING ? work.completedByUserId : null,
+        physicalLocationCode: status === WorkLogisticsStatus.IN_PRODUCTION ? "PRODUCTIE" : "RECEPTIE",
         status,
         workCycleId: work.activeCycle.id,
         workOrderId,
@@ -1075,28 +1052,9 @@ export class LogisticsService {
     return state;
   }
 
-  private async assertWorkflowCompletedOrOverride(tx: LogisticsTx, workOrderId: string, override: boolean): Promise<void> {
-    const work = await tx.workOrder.findUnique({ select: { status: true }, where: { id: workOrderId } });
-    if (work?.status === "FINALIZATA") {
-      return;
-    }
-    const execution = await tx.workWorkflowExecution.findFirst({ select: { status: true }, where: { workCycle: { activeForWorkOrder: { id: workOrderId } }, workOrderId } });
-    if (execution?.status === WorkWorkflowExecutionStatus.COMPLETED) {
-      return;
-    }
-    if (override) {
-      return;
-    }
-    throw new BadRequestException("Fluxul lucrării trebuie finalizat sau confirmat explicit ca excepție.");
-  }
-
   private async deriveNonBlockedStatus(tx: LogisticsTx, workOrderId: string): Promise<WorkLogisticsStatus> {
-    const work = await tx.workOrder.findUnique({ select: { status: true }, where: { id: workOrderId } });
-    if (work?.status === "FINALIZATA") {
-      return WorkLogisticsStatus.READY_FOR_PACKING;
-    }
-    const execution = await tx.workWorkflowExecution.findFirst({ select: { status: true }, where: { workCycle: { activeForWorkOrder: { id: workOrderId } }, workOrderId } });
-    return execution?.status === WorkWorkflowExecutionStatus.COMPLETED ? WorkLogisticsStatus.READY_FOR_PACKING : WorkLogisticsStatus.IN_PRODUCTION;
+    const work = await tx.workOrder.findUnique({ select: { technicalReadiness: true }, where: { id: workOrderId } });
+    return work?.technicalReadiness === "PROBE_READY" || work?.technicalReadiness === "FINAL_READY" ? WorkLogisticsStatus.RECEIVED : WorkLogisticsStatus.IN_PRODUCTION;
   }
 
   private async findWork(workOrderId: string): Promise<LogisticsWorkRecord> {
@@ -1142,6 +1100,7 @@ export class LogisticsService {
     if (query.workflowStageKey) {
       and.push({ activeCycle: { is: { workflowExecution: { is: { currentStage: { is: { stageKeySnapshot: query.workflowStageKey } } } } } } });
     }
+    and.push({ courierRouteStops: { none: { outcomeStatus: "PENDING", route: { status: { not: "CANCELLED" } } } } });
     if (dateRange) {
       // Finalized works belong to the day they were completed; other works remain date-filtered by deadline.
       and.push({
@@ -1179,6 +1138,7 @@ export class LogisticsService {
     );
     return {
       status: PickupRequestStatus.SCHEDULED,
+      routeStops: { none: { outcomeStatus: "PENDING", route: { status: { not: "CANCELLED" } } } },
       ...(query.clinicId ? { clinicId: query.clinicId } : {}),
       ...(query.doctorId ? { doctorId: query.doctorId } : {}),
       ...(query.receptionUserId ? { createdByUserId: query.receptionUserId } : {}),
@@ -1214,21 +1174,18 @@ export class LogisticsService {
   }
 
   private matchesCategory(item: ReturnType<typeof toLogisticsCenterItem>, category: LogisticsCenterCategory): boolean {
-    if (category === "ALL") return true;
+    if (category === "ALL") return item.requiresLogisticsAction;
     if (category === "INTRARI_ASTAZI") return isToday(new Date(item.createdAt));
-    if (category === "DE_VERIFICAT") return item.workflow.status === "COMPLETED" && item.logistics.status !== "READY_FOR_PACKING";
+    if (category === "DE_VERIFICAT") return item.workflow.status === "COMPLETED" && item.technicalReadiness === null;
     if (category === "IN_PRODUCTIE") return item.logistics.status === "IN_PRODUCTION";
     if (category === "NEASIGNATE") return item.workflow.status === "ACTIVE" && item.workflow.assignedUserName === null;
     if (category === "BLOCARE") return item.logistics.status === "BLOCKED";
     if (category === "URGENTE") return item.priority === "URGENT";
     if (category === "INTARZIATE") return item.dueState === "OVERDUE";
     if (category === "FINALIZATE_AZI") return item.workflow.completedAt !== null && isToday(new Date(item.workflow.completedAt));
-    if (category === "DE_AMBALAT") return item.logistics.status === "READY_FOR_PACKING";
-    if (category === "IN_AMBALARE") return item.logistics.status === "PACKING";
-    if (category === "GATA_DE_LIVRARE") return item.logistics.status === "READY_FOR_DELIVERY";
     if (category === "IN_ASTEPTARE") return item.logistics.status === "BLOCKED";
-    if (category === "DE_LIVRAT") return (item.requiresDelivery || item.logistics.status === "READY_FOR_DELIVERY") && item.logistics.status !== "DELIVERED";
-    if (category === "DE_RIDICAT") return item.requiresPickup && item.logistics.status !== "DELIVERED";
+    if (category === "DE_LIVRAT") return item.requiresLogisticsAction && (item.requiresDelivery || item.logisticsActionReasons.includes("READY_FOR_PROBE_DELIVERY") || item.logisticsActionReasons.includes("READY_FOR_FINAL_DELIVERY"));
+    if (category === "DE_RIDICAT") return item.requiresLogisticsAction && item.requiresPickup;
     return item.billing.documentId === null;
   }
 
@@ -1581,11 +1538,16 @@ export class LogisticsService {
     };
   }
 
-  private async ensurePermission(userId: string, permission: "files.upload" | "works.create" | "pickup.create" | "pickup.read" | "pickup.update" | "pickup.cancel" | "routes.assign" | "routes.cancel" | "routes.create" | "routes.read" | "logistics.update_location" | "logistics.block_work" | "logistics.unblock_work" | "logistics.prepare_work" | "logistics.manage_groups"): Promise<void> {
+  private async ensurePermission(userId: string, permission: "files.upload" | "works.create" | "pickup.create" | "pickup.read" | "pickup.update" | "pickup.cancel" | "routes.assign" | "routes.cancel" | "routes.create" | "routes.read" | "logistics.update_location" | "logistics.block_work" | "logistics.unblock_work" | "logistics.manage_groups"): Promise<void> {
     const result = await this.authorizationService.hasPermission({ permission, requiredScope: "ALL", userId });
     if (!result.allowed) {
       throw new ForbiddenException("Nu ai permisiunea necesară pentru această acțiune logistică.");
     }
+  }
+
+  private async assertCourier(tx: LogisticsTx, courierUserId: string): Promise<void> {
+    const user = await tx.user.findFirst({ select: { id: true }, where: { id: courierUserId, isActive: true, roles: { some: { role: { key: "CURIER" } } } } });
+    if (!user) throw new BadRequestException("Curierul selectat nu este activ.");
   }
 
   private async ensureRoutePermission(userId: string, permission: "routes.create" | "routes.update"): Promise<void> {
@@ -1604,10 +1566,9 @@ export class LogisticsService {
   }
 
   private async createActionContext(userId: string): Promise<ActionContext> {
-    const [canBlock, canManageGroups, canPrepare, canUnblock, canUpdateLocation] = await Promise.all([
+    const [canBlock, canManageGroups, canUnblock, canUpdateLocation] = await Promise.all([
       this.authorizationService.hasPermission({ permission: "logistics.block_work", requiredScope: "ALL", userId }),
       this.authorizationService.hasPermission({ permission: "logistics.manage_groups", requiredScope: "ALL", userId }),
-      this.authorizationService.hasPermission({ permission: "logistics.prepare_work", requiredScope: "ALL", userId }),
       this.authorizationService.hasPermission({ permission: "logistics.unblock_work", requiredScope: "ALL", userId }),
       this.authorizationService.hasPermission({ permission: "logistics.update_location", requiredScope: "ALL", userId }),
     ]);
@@ -1615,7 +1576,6 @@ export class LogisticsService {
     return {
       canBlock: canBlock.allowed,
       canManageGroups: canManageGroups.allowed,
-      canPrepare: canPrepare.allowed,
       canUnblock: canUnblock.allowed,
       canUpdateLocation: canUpdateLocation.allowed,
     };
@@ -1685,6 +1645,15 @@ export class LogisticsService {
   }
 }
 
+function logisticsActionPriority(item: ReturnType<typeof toLogisticsCenterItem>): number {
+  if (item.logisticsActionReasons.includes("FAILED_DELIVERY")) return 0;
+  if (item.dueState === "OVERDUE") return 1;
+  if (item.priority === "URGENT") return 2;
+  if (item.dueState === "DUE_SOON") return 3;
+  if (item.logisticsActionReasons.includes("READY_FOR_PROBE_DELIVERY") || item.logisticsActionReasons.includes("READY_FOR_FINAL_DELIVERY")) return 4;
+  return 5;
+}
+
 function isToday(date: Date): boolean {
   const now = new Date();
   return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
@@ -1737,10 +1706,10 @@ function canAddWorkToPreparationGroup(input: {
   readonly groupStatus: DeliveryPreparationGroupStatus;
   readonly hasActiveGroup: boolean;
   readonly workClinicId: string;
-  readonly workLogisticsStatus: WorkLogisticsStatus;
+  readonly technicalReadiness: "PROBE_READY" | "FINAL_READY" | null;
 }): boolean {
   return input.groupStatus === DeliveryPreparationGroupStatus.DRAFT
     && input.groupClinicId === input.workClinicId
     && !input.hasActiveGroup
-    && input.workLogisticsStatus === WorkLogisticsStatus.READY_FOR_DELIVERY;
+    && (input.technicalReadiness === "PROBE_READY" || input.technicalReadiness === "FINAL_READY");
 }

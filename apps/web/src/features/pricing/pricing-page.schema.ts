@@ -1,4 +1,4 @@
-import { PRICING_ADJUSTMENT_TYPES, PRICING_AGREEMENT_SUBJECT_TYPES, PRICING_CATEGORIES, PRICING_RULE_SCOPES, TECHNICIAN_MANEUVER_UNITS, WORK_TYPE_UNITS } from "@dental-lab/shared";
+import { PRICING_ADJUSTMENT_TYPES, PRICING_AGREEMENT_SUBJECT_TYPES, PRICING_CATEGORIES, PRICING_RULE_SCOPES, WORK_TYPE_UNITS } from "@dental-lab/shared";
 import { z } from "zod";
 
 const moneyDecimal = z
@@ -84,10 +84,10 @@ export const previewFormSchema = z.object({
 });
 
 export const technicianOperationFormSchema = z.object({
+  category: z.string().trim().min(2, "Categoria este obligatorie.").max(80),
   code: z.string().trim().min(1, "Codul este obligatoriu.").max(40),
   description: z.string().trim().max(1000).optional(),
   name: z.string().trim().min(2, "Denumirea este obligatorie.").max(160),
-  pricingUnit: z.enum(TECHNICIAN_MANEUVER_UNITS, { message: "Alege unitatea de tarifare." }),
 });
 
 export const technicianRateFormSchema = z.object({

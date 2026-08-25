@@ -53,6 +53,7 @@ export type PermissionKey =
   | "works.deadline.override_lock"
   | "works.technical_details.read"
   | "works.technical_details.update"
+  | "works.technical_code.edit"
   | "works.production.finalize"
   | "works.production.probe_ready"
   | "works.claim.available.read"
@@ -121,7 +122,6 @@ export type PermissionKey =
   | "logistics.update_location"
   | "logistics.block_work"
   | "logistics.unblock_work"
-  | "logistics.prepare_work"
   | "logistics.manage_groups"
   | "logistics.alerts.update"
   | "logistics.delivery_marker.update"
@@ -254,6 +254,7 @@ export const PERMISSION_REGISTRY = [
   definePermission("works.deadline.override_lock", "Override locked work order deadlines."),
   definePermission("works.technical_details.read", "Read technician-editable work technical details."),
   definePermission("works.technical_details.update", "Update technician-editable work technical details."),
+  definePermission("works.technical_code.edit", "Set or edit the user-facing technical Cod field."),
   definePermission("works.production.finalize", "Mark technical production as finalized."),
   definePermission("works.production.probe_ready", "Mark the active technical probe as Probă gata."),
   definePermission("works.claim.available.read", "Read work orders available for technician claim."),
@@ -276,8 +277,8 @@ export const PERMISSION_REGISTRY = [
   definePermission("works.connections.manage", "Manage persisted adjacent-tooth connections in the authorized case context."),
   definePermission("works.custom_type.use", "Use a one-off custom work type without catalog persistence."),
   definePermission("works.custom_platform.use", "Use a one-off custom implant platform without catalog persistence."),
-  definePermission("works.custom_type.save_to_catalog", "Save a custom work type to the reusable catalog; final role remains unresolved."),
-  definePermission("works.custom_platform.save_to_catalog", "Save a custom implant platform to the reusable catalog; final role remains unresolved."),
+  definePermission("works.custom_type.save_to_catalog", "Save a custom work type name to the reusable intake catalog."),
+  definePermission("works.custom_platform.save_to_catalog", "Save a custom implant platform name to the reusable intake catalog."),
   definePermission("cycles.read", "Read current work cycle state."),
   definePermission("cycles.history.read", "Read work cycle history."),
   definePermission("cycles.create_next", "Register a returned work and create the next work cycle."),
@@ -322,7 +323,6 @@ export const PERMISSION_REGISTRY = [
   definePermission("logistics.update_location", "Update work physical location."),
   definePermission("logistics.block_work", "Block work for operational reasons."),
   definePermission("logistics.unblock_work", "Unblock work after issue resolution."),
-  definePermission("logistics.prepare_work", "Confirm packing readiness and packing transitions."),
   definePermission("logistics.manage_groups", "Manage internal delivery preparation groups."),
   definePermission("logistics.alerts.update", "Update logistics alert color markers."),
   definePermission("logistics.delivery_marker.update", "Update delivery or pickup route-preparation markers."),
@@ -503,7 +503,6 @@ export const ROLE_PERMISSION_MATRIX = {
     "logistics.center.read": "ALL",
     "logistics.manage_groups": "ALL",
     "logistics.plan": "ALL",
-    "logistics.prepare_work": "ALL",
     "logistics.prepare_delivery": "ALL",
     "logistics.read": "ALL",
     "logistics.unblock_work": "ALL",
@@ -534,11 +533,13 @@ export const ROLE_PERMISSION_MATRIX = {
     "works.claim.history.read": "ALL",
     "works.create": "ALL",
     "works.deadline.read": "ALL",
+    "works.deadline.set_manual": "ALL",
     "works.execution_snapshot.read": "ALL",
     "works.execution_snapshot.read_deadline": "ALL",
     "works.execution_snapshot.history.read": "ALL",
     "works.read_all": "ALL",
     "works.read_assigned": "ASSIGNED",
+    "works.technical_code.edit": "ALL",
     "works.technical_details.read": "ALL",
     "works.update": "ALL",
     "works.urgency.update": "ALL",
@@ -561,6 +562,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "works.execution_snapshot.read_deadline": "OWN_CLINIC",
   }),
   RECEPTIE: grants({
+    "clinics.create": "ALL",
     "clinics.read": "ALL",
     "comments.create": "ALL",
     "comments.read_external": "ALL",
@@ -576,6 +578,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "delivery.proof.print": "ALL",
     "delivery.signature.read": "ALL",
     "doctors.read": "ALL",
+    "doctors.create": "ALL",
     "forms.read": "ALL",
     "work_forms.real.finalize": "ALL",
     "work_forms.real.history.read": "ALL",
@@ -598,6 +601,8 @@ export const ROLE_PERMISSION_MATRIX = {
     "works.connections.manage": "ALL",
     "works.custom_platform.use": "ALL",
     "works.custom_type.use": "ALL",
+    "works.custom_type.save_to_catalog": "ALL",
+    "works.custom_platform.save_to_catalog": "ALL",
     "works.item.create": "ALL",
     "works.item.remove": "ALL",
     "works.item.update": "ALL",
@@ -653,6 +658,10 @@ export const ROLE_PERMISSION_MATRIX = {
     "technician.operations.manage_own": "ASSIGNED",
     "technician.operations.read": "ALL",
     "technician.operations.scope.select": "ASSIGNED",
+    "works.custom_type.use": "ASSIGNED",
+    "works.custom_platform.use": "ASSIGNED",
+    "works.custom_type.save_to_catalog": "ALL",
+    "works.custom_platform.save_to_catalog": "ALL",
     "workflow.complete_stage": "OWN_STAGE",
     "workflow.pause_stage": "OWN_STAGE",
     "workflow.read": "ASSIGNED",
@@ -673,6 +682,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "works.read_assigned": "OWN_STAGE",
     "works.technical_details.read": "ASSIGNED",
     "works.technical_details.update": "ASSIGNED",
+    "works.technical_code.edit": "ASSIGNED",
   }),
 } as const satisfies PermissionGrantMatrix;
 
@@ -729,7 +739,6 @@ export const OVERRIDE_ELIGIBLE_PERMISSION_KEYS = [
   "logistics.center.read",
   "logistics.delivery_marker.update",
   "logistics.manage_groups",
-  "logistics.prepare_work",
   "logistics.unblock_work",
   "logistics.update_location",
   "patients.archive",

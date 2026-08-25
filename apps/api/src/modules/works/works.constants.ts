@@ -18,6 +18,7 @@ export const WORK_ORDER_AUDIT_ACTIONS = {
   claimConflict: "work_orders.claim_conflict",
   statusChanged: "work_orders.status_changed",
   technicalDetailsUpdated: "work_orders.technical_details_updated",
+  technicalCodeUpdated: "work_orders.technical_code_updated",
   released: "work_orders.released",
   assigned: "work_orders.assigned",
   reassigned: "work_orders.reassigned",

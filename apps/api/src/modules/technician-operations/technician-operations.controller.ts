@@ -35,8 +35,8 @@ export class TechnicianOperationsController {
 
   @Get("options")
   @RequirePermission("technician.operations.read")
-  public listOperationOptions() {
-    return this.technicianOperationsService.listOperationOptions();
+  public listOperationOptions(@CurrentUser() actor: AuthenticatedUser) {
+    return this.technicianOperationsService.listOperationOptions(actor.id);
   }
 
   @Get("rates")

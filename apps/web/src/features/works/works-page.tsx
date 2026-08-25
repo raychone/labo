@@ -66,7 +66,7 @@ import { useActiveWorkFormTemplate } from "../work-forms/work-form-templates-api
 import { WorkForm, WorkFormActions, defaultWorkFormValues, toPersistedWorkFormValues, toWorkDeadlinePreviewInput, toWorkFormValues, toWorkMutationInput } from "./work-form.js";
 import { WorkFormFieldRenderer } from "./work-dynamic-form.js";
 import { WorkWorkflowSection } from "./work-workflow-section.js";
-import { downloadWorkAttachment, useCreateNextWorkCycle, useCreateWork, useFinalizeRealLabSheet, useProbeTypes, useRealLabSheet, useReceiveProbe, useSelectProbeType, useUpdateActiveProbeDeadline, useUpdateWork, useUpdateTechnicianWorkDetails, useUploadWorkAttachments, useUpsertRealLabSheet, useWork, useWorkCycles, useWorkDeadlinePreview, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
+import { downloadWorkAttachment, saveOperationalWorkTypeName, useCreateNextWorkCycle, useCreateWork, useFinalizeRealLabSheet, useProbeTypes, useRealLabSheet, useReceiveProbe, useSelectProbeType, useUpdateActiveProbeDeadline, useUpdateWork, useUpdateTechnicianWorkDetails, useUploadWorkAttachments, useUpsertRealLabSheet, useWork, useWorkCycles, useWorkDeadlinePreview, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
 import { workFormSchema, type WorkFormValues } from "./works-page.schema.js";
 import { WorkQrModal } from "./work-qr-modal.js";
 import { filterDraftConnections, getDraftCompositionTeeth, MultiItemWorkEditor, type DraftToothConnection, type DraftWorkOrderItem } from "./multi-item-work-editor.js";
@@ -97,7 +97,7 @@ const defaultListParams: WorksListParams = {
 
 const EMPTY_WORK_ATTACHMENTS = [] as const;
 
-const urgencyFilterOptions = [{ label: "Toate", value: "" }, ...URGENCY_LEVELS.map((value) => ({ label: `${URGENCY_LABELS_RO[value]} · +${value === "NORMAL" ? 0 : value === "URGENCY_1" ? 25 : value === "URGENCY_2" ? 50 : value === "URGENCY_3" ? 75 : 100}%`, value }))] as const;
+const urgencyFilterOptions = [{ label: "Toate", value: "" }, ...URGENCY_LEVELS.map((value) => ({ label: URGENCY_LABELS_RO[value], value }))] as const;
 
 const deadlineFilterOptions = [
   { label: "Toate", value: "" },
@@ -190,7 +190,7 @@ function formatPrice(value: number | null, currency: string, locale: string): st
 
 function urgencyLabel(value: import("@dental-lab/shared").UrgencyLevel | null | undefined): string {
   if (!value) return "Prioritate istorică";
-  return `${URGENCY_LABELS_RO[value]} · +${value === "NORMAL" ? 0 : value === "URGENCY_1" ? 25 : value === "URGENCY_2" ? 50 : value === "URGENCY_3" ? 75 : 100}%`;
+  return URGENCY_LABELS_RO[value];
 }
 
 function getSafeColor(value: string | null | undefined): string | null {
@@ -294,9 +294,10 @@ export function WorksPage(): ReactNode {
   const canCreateNextCycle = hasPermission(permissionsQuery.data, "cycles.create_next");
   const canSelectProbeType = hasPermission(permissionsQuery.data, "cycles.probe_type.select");
   const canReadPricing = hasPermission(permissionsQuery.data, "pricing.read");
-  const canEditTechnicalCode = hasPermission(permissionsQuery.data, "works.technical_details.update");
+  const canEditTechnicalCode = hasPermission(permissionsQuery.data, "works.technical_code.edit");
   const canUploadFiles = hasPermission(permissionsQuery.data, "files.upload");
   const canReadTechnicianOptions = hasPermission(permissionsQuery.data, "technician.workload.read");
+  const canUpdateTechnicianDetails = hasPermission(permissionsQuery.data, "works.technical_details.update");
   const worksQuery = useWorks(params, canRead, true);
   const selectedWorkQuery = useWork(selectedWorkId, canRead);
   const clinicOptionsQuery = useQuery({ enabled: canRead || canCreate, queryFn: fetchClinicOptions, queryKey: ["clinics", "options"], retry: false });
@@ -393,7 +394,15 @@ export function WorksPage(): ReactNode {
   }
 
   function handleUpdate(input: UpdateWorkInput): void {
-    const updateInput = input;
+    // Keep the technical code out of the general Reception edit payload. The
+    // server remains authoritative, but the UI must not submit a field that
+    // this role cannot mutate.
+    const updateInput: UpdateWorkInput = canEditTechnicalCode
+      ? input
+      : (() => {
+          const { technicalCodeNotes: _technicalCodeNotes, ...safeInput } = input;
+          return safeInput;
+        })();
     updateMutation.mutate({ input: updateInput, workOrderId: selectedWorkId ?? "" }, {
       onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost salvată", variant: "error" }),
       onSuccess: (work) => {
@@ -536,6 +545,7 @@ export function WorksPage(): ReactNode {
       </section>
 
       <CreateWorkModal
+        canEditTechnicalCode={canEditTechnicalCode}
         clinicOptions={clinicOptionsQuery.data ?? []}
         formWorkTypeOptions={formWorkTypeOptionsQuery.data ?? []}
         isOpen={isCreateOpen}
@@ -543,8 +553,7 @@ export function WorksPage(): ReactNode {
         initialDoctorId={initialDoctorId ?? undefined}
         initialPatient={initialPatientQuery.data}
         initialPatientId={initialPatientId ?? undefined}
-        pricingWorkTypeOptions={pricingWorkTypeOptionsQuery.data ?? []}
-        probeTypeOptions={probeTypesQuery.data ?? []}
+        pricingWorkTypeOptions={(pricingWorkTypeOptionsQuery.data ?? []).filter((option) => option.basePriceMinor !== null) as readonly { readonly basePriceMinor: number; readonly id: string }[]}
         isSaving={createMutation.isPending}
         onOpenChange={setIsCreateOpen}
         onSubmit={handleCreate}
@@ -553,15 +562,16 @@ export function WorksPage(): ReactNode {
         locale={locale}
       />
 
-      <WorkDetailsDrawer
-        canEditTechnicalCode={canEditTechnicalCode}
+        <WorkDetailsDrawer
+        canEditTechnicalCode={canEditTechnicalCode && selectedWork?.status !== "FINALIZATA" && selectedWork?.technicalReadiness !== "FINAL_READY"}
         canUploadFiles={canUploadFiles}
         canCreateNextCycle={canCreateNextCycle}
         canSelectProbeType={canSelectProbeType}
         canReadCycles={canShowLegacyCycles}
         canShowLegacyExecution={canShowLegacyExecution}
         canReadPricing={canReadPricing}
-        canUpdate={canUpdate}
+          canUpdate={canUpdate}
+          canUpdateTechnicianDetails={canUpdateTechnicianDetails}
         clinicOptions={clinicOptionsQuery.data ?? []}
         currency={currency}
         formWorkTypeOptions={formWorkTypeOptionsQuery.data ?? []}
@@ -575,7 +585,7 @@ export function WorksPage(): ReactNode {
         }}
         onSubmit={handleUpdate}
         onShowQr={(workId) => setQrWorkId(workId)}
-        pricingWorkTypeOptions={pricingWorkTypeOptionsQuery.data ?? []}
+        pricingWorkTypeOptions={(pricingWorkTypeOptionsQuery.data ?? []).filter((option) => option.basePriceMinor !== null) as readonly { readonly basePriceMinor: number; readonly id: string }[]}
         probeTypeOptions={probeTypesQuery.data ?? []}
         submitError={updateMutation.error}
         work={selectedWork}
@@ -601,6 +611,7 @@ function WorkMetric({ label, value }: { readonly label: string; readonly value: 
 }
 
 function CreateWorkModal({
+  canEditTechnicalCode = false,
   clinicOptions,
   formWorkTypeOptions,
   currency,
@@ -614,9 +625,9 @@ function CreateWorkModal({
   onOpenChange,
   onSubmit,
   pricingWorkTypeOptions,
-  probeTypeOptions,
   submitError,
 }: {
+  readonly canEditTechnicalCode?: boolean;
   readonly clinicOptions: readonly { readonly code: string; readonly id: string; readonly name: string }[];
   readonly currency: string;
   readonly formWorkTypeOptions: readonly { readonly code: string; readonly id: string; readonly name: string; readonly symbol: string; readonly unit: string }[];
@@ -630,7 +641,6 @@ function CreateWorkModal({
   readonly onOpenChange: (isOpen: boolean) => void;
   readonly onSubmit: (input: CreateWorkInput) => void;
   readonly pricingWorkTypeOptions: readonly { readonly basePriceMinor: number; readonly id: string }[];
-  readonly probeTypeOptions: readonly import("@dental-lab/shared").ProbeTypeView[];
   readonly submitError: unknown;
 }): ReactNode {
   const [isPatientCreateOpen, setPatientCreateOpen] = useState(false);
@@ -771,17 +781,19 @@ function CreateWorkModal({
                 scope: item.scope,
                 teeth: item.teeth,
                 workTypeId: item.workTypeId,
+                customWorkTypeSnapshot: item.workTypeId ? null : item.customWorkTypeSnapshot ?? null,
                 shade: item.shade,
                 implantPlatform: item.implantPlatform === "Alt tip" ? item.implantPlatformCustom : item.implantPlatform,
                 restorationType: item.restorationType,
                 technicalCodeNotes: item.technicalCodeNotes,
                 notes: item.notes,
+                ...(item.selectedAddOns ? { selectedAddOns: item.selectedAddOns } : {}),
               })),
               toothConnections: filterDraftConnections(draftConnections, getDraftCompositionTeeth(draftItems)),
             });
           }}
           multiItem
-          workDetailsSlot={<MultiItemWorkEditor connections={draftConnections} disabled={isSaving} items={draftItems} onChange={(items, connections) => {
+          workDetailsSlot={<MultiItemWorkEditor canEditTechnicalCode={canEditTechnicalCode} canSaveCustomWorkType onSaveCustomWorkType={saveOperationalWorkTypeName} connections={draftConnections} disabled={isSaving} items={draftItems} onChange={(items, connections) => {
             setDraftItems(items);
             setDraftConnections(connections);
             const first = items[0];
@@ -793,7 +805,6 @@ function CreateWorkModal({
           isDeadlinePreviewLoading={deadlinePreviewQuery.isFetching}
           workTypeOptions={formWorkTypeOptions}
           patientOptions={patientOptions}
-          probeTypeOptions={probeTypeOptions}
         />
       </Modal>
       <QuickPatientModal
@@ -820,7 +831,7 @@ function CreateWorkModal({
         isOpen={isDoctorCreateOpen}
         isSaving={createDoctorMutation.isPending}
         onOpenChange={setDoctorCreateOpen}
-        onSubmit={(values) => createDoctorMutation.mutate({ ...values, legalEntityCode: values.legalEntityCode || null })}
+        onSubmit={(values) => createDoctorMutation.mutate(values)}
         submitError={createDoctorMutation.error}
       />
       {closeGuard.confirmModal}
@@ -983,6 +994,38 @@ function WorkCodeAndFilesFields({
   );
 }
 
+function TechnicianTechnicalDetailsEditor({ canEdit, work }: { readonly canEdit: boolean; readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
+  const toast = useToast();
+  const updateMutation = useUpdateTechnicianWorkDetails();
+  const [clinicalNotes, setClinicalNotes] = useState(work.clinicalNotes ?? "");
+  const [internalNotes, setInternalNotes] = useState(work.internalNotes ?? "");
+  const [technicalCodeNotes, setTechnicalCodeNotes] = useState(work.technicalCodeNotes ?? "");
+
+  useEffect(() => {
+    setClinicalNotes(work.clinicalNotes ?? "");
+    setInternalNotes(work.internalNotes ?? "");
+    setTechnicalCodeNotes(work.technicalCodeNotes ?? "");
+  }, [work.clinicalNotes, work.id, work.internalNotes, work.technicalCodeNotes]);
+
+  if (!canEdit) return null;
+  return <Card>
+    <CardHeader><CardTitle>Detalii tehnice</CardTitle><CardDescription>Editează informațiile tehnice ale lucrării.</CardDescription></CardHeader>
+    <CardContent>
+      <FormGrid>
+        <Textarea label="Note clinice" onChange={(event) => setClinicalNotes(event.target.value)} rows={3} value={clinicalNotes} />
+        <Textarea label="Note interne" onChange={(event) => setInternalNotes(event.target.value)} rows={3} value={internalNotes} />
+        <Textarea label="Cod tehnic" onChange={(event) => setTechnicalCodeNotes(event.target.value)} rows={3} value={technicalCodeNotes} />
+      </FormGrid>
+      <div className="works-page__actions">
+        <Button disabled={updateMutation.isPending} isLoading={updateMutation.isPending} onClick={() => updateMutation.mutate({ input: { clinicalNotes: clinicalNotes.trim() || null, internalNotes: internalNotes.trim() || null, technicalCodeNotes: technicalCodeNotes.trim() || null }, workOrderId: work.id }, {
+          onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Detaliile tehnice nu au fost salvate", variant: "error" }),
+          onSuccess: () => toast.showToast({ message: "Detaliile tehnice au fost salvate.", variant: "success" }),
+        })} type="button">Salvează detaliile tehnice</Button>
+      </div>
+    </CardContent>
+  </Card>;
+}
+
 function WorkDetailsDrawer({
   canEditTechnicalCode,
   canUploadFiles,
@@ -992,6 +1035,7 @@ function WorkDetailsDrawer({
   canShowLegacyExecution,
   canReadPricing,
   canUpdate,
+  canUpdateTechnicianDetails,
   clinicOptions,
   currency,
   formWorkTypeOptions,
@@ -1016,6 +1060,7 @@ function WorkDetailsDrawer({
   readonly canShowLegacyExecution: boolean;
   readonly canReadPricing: boolean;
   readonly canUpdate: boolean;
+  readonly canUpdateTechnicianDetails: boolean;
   readonly clinicOptions: readonly { readonly code: string; readonly id: string; readonly name: string }[];
   readonly currency: string;
   readonly formWorkTypeOptions: readonly { readonly code: string; readonly id: string; readonly name: string; readonly symbol: string; readonly unit: string }[];
@@ -1142,7 +1187,8 @@ function WorkDetailsDrawer({
               {canUpdate ? <Button onClick={() => setEditingCaseFields(true)} type="button" variant="outline">Editează datele lucrării</Button> : null}
             </div>
             {work.activeProbeCycle ? <ActiveProbeDeadlineCard canEdit={canUpdate} work={work} /> : <DeadlineDetailCard work={work} />}
-            <WorkDetailComposition canEdit={canUpdate} isOpen={isOpen} work={work} workTypeOptions={formWorkTypeOptions} />
+            <WorkDetailComposition canEdit={canUpdate} canEditTechnicalCode={canEditTechnicalCode} isOpen={isOpen} work={work} workTypeOptions={formWorkTypeOptions} />
+            <TechnicianTechnicalDetailsEditor canEdit={canUpdateTechnicianDetails} work={work} />
             {canReadCycles && !work.activeProbeCycle && ((work.completedProbeCycles ?? []).length === 0 || work.technicalReadiness === "PROBE_READY") ? (
               <WorkCyclesSection
                 canCreateNextCycle={canCreateNextCycle}
@@ -1184,7 +1230,6 @@ function WorkDetailsDrawer({
               isDeadlinePreviewLoading={deadlinePreviewQuery.isFetching}
               workTypeOptions={formWorkTypeOptions}
               patientOptions={work.patient ? [{ birthDate: work.patient.birthDate ?? null, firstName: work.patient.firstName, fullName: work.patient.fullName, id: work.patient.id, lastName: work.patient.lastName, workCount: 0 }] : []}
-              probeTypeOptions={probeTypeOptions}
               workDetailsSlot={<WorkCodeAndFilesFields canEditCode={canEditTechnicalCode} canUploadFiles={canUploadFiles} work={work} />}
             /> : null}
             {editingCaseFields ? <WorkFormActions
@@ -1658,12 +1703,16 @@ function CanonicalReceiveProbeModal({
 }): ReactNode {
   const [probeTypeId, setProbeTypeId] = useState("");
   const [deadlineAt, setDeadlineAt] = useState("");
+  const configuredCodes = work.items?.flatMap((item) => item.workType?.probeTypeCodes ?? []) ?? [];
+  const selectableProbeTypes = configuredCodes.length > 0
+    ? probeTypes.filter((type) => typeof type.code === "string" && configuredCodes.includes(type.code))
+    : probeTypes;
   useEffect(() => {
     if (isOpen) {
-      setProbeTypeId(probeTypes[0]?.id ?? "");
+      setProbeTypeId(selectableProbeTypes[0]?.id ?? "");
       setDeadlineAt("");
     }
-  }, [isOpen, probeTypes]);
+  }, [isOpen, selectableProbeTypes]);
   const canSubmit = probeTypeId !== "" && deadlineAt !== "";
   return <Modal
     description={`${work.code} · ultima probă a fost marcată gata; aceeași lucrare continuă.`}
@@ -1674,7 +1723,7 @@ function CanonicalReceiveProbeModal({
   >
     <FormLayout>
       <p className="works-page__muted">Ultima probă finalizată rămâne în istoric. Alege tipul și termenul explicit pentru următoarea probă.</p>
-      <Select label="Tip probă nouă" options={probeTypes.map((type) => ({ label: type.name, value: type.id }))} value={probeTypeId} onChange={(event) => setProbeTypeId(event.target.value)} required />
+      <Select label="Tip probă nouă" options={selectableProbeTypes.map((type) => ({ label: type.name, value: type.id }))} value={probeTypeId} onChange={(event) => setProbeTypeId(event.target.value)} required />
       <label className="works-page__detail-field"><span>Termen nou</span><input aria-label="Termen probă nouă" className="dl-control" onChange={(event) => setDeadlineAt(event.target.value)} type="datetime-local" value={deadlineAt} required /></label>
     </FormLayout>
   </Modal>;
@@ -1913,7 +1962,10 @@ const quickClinicSchema = z.object({
   legalEntityCode: z.union([z.enum(["CDT", "NG"]), z.literal("")]),
   name: z.string().trim().min(2, "Numele clinicii este obligatoriu."),
 });
-type QuickClinicValues = z.infer<typeof quickClinicSchema>;
+type QuickClinicValues = {
+  readonly legalEntityCode: "CDT" | "NG" | "";
+  readonly name: string;
+};
 
 function QuickClinicModal({
   isOpen,
@@ -1935,7 +1987,7 @@ function QuickClinicModal({
     <FormLayout id="quick-clinic-form" onSubmit={(event) => void form.handleSubmit((values) => onSubmit(values))(event)}>
       <FormGrid>
         <TextInput error={form.formState.errors.name?.message} id="quickClinicName" label="Nume clinică" required {...form.register("name")} />
-        <Select error={form.formState.errors.legalEntityCode?.message} id="quickClinicLegalEntity" label="Entitate juridică" options={[{ label: "CDT", value: "CDT" }, { label: "NG", value: "NG" }]} placeholder="Se poate completa ulterior de Manager" {...form.register("legalEntityCode")} />
+        <Select error={form.formState.errors.legalEntityCode?.message} id="quickClinicLegalEntity" label="Colaborare laborator (opțional)" options={[{ label: "CDT", value: "CDT" }, { label: "NG", value: "NG" }]} placeholder="Poate fi configurată ulterior de Manager" {...form.register("legalEntityCode")} />
       </FormGrid>
     </FormLayout>
   </Modal>;
@@ -1945,7 +1997,6 @@ const quickDoctorSchema = z.object({
   clinicId: z.string().min(1, "Alege clinica."),
   firstName: z.string().trim().min(2, "Prenumele este obligatoriu."),
   lastName: z.string().trim().min(2, "Numele este obligatoriu."),
-  legalEntityCode: z.union([z.enum(["CDT", "NG"]), z.literal("")]),
 });
 type QuickDoctorValues = z.infer<typeof quickDoctorSchema>;
 
@@ -1964,16 +2015,15 @@ function QuickDoctorModal({
   readonly onSubmit: (values: QuickDoctorValues) => void;
   readonly submitError: unknown;
 }): ReactNode {
-  const form = useForm<QuickDoctorValues>({ defaultValues: { clinicId, firstName: "", lastName: "", legalEntityCode: "" }, resolver: zodResolver(quickDoctorSchema) });
+  const form = useForm<QuickDoctorValues>({ defaultValues: { clinicId, firstName: "", lastName: "" }, resolver: zodResolver(quickDoctorSchema) });
   useEffect(() => { form.setValue("clinicId", clinicId); }, [clinicId, form]);
-  useEffect(() => { if (!isOpen) form.reset({ clinicId, firstName: "", lastName: "", legalEntityCode: "" }); }, [clinicId, form, isOpen]);
+  useEffect(() => { if (!isOpen) form.reset({ clinicId, firstName: "", lastName: "" }); }, [clinicId, form, isOpen]);
   useEffect(() => { if (submitError) applyApiErrorsToForm(form, submitError); }, [form, submitError]);
-  return <Modal description="Doctorul este verificat server-side pentru compatibilitatea entității juridice." footer={<FormActions formId="quick-doctor-form" isSubmitting={isSaving} submitLabel="Creează medicul" />} isOpen={isOpen} onOpenChange={onOpenChange} title="Medic nou">
+  return <Modal description="Entitatea juridică este preluată automat din clinica selectată." footer={<FormActions formId="quick-doctor-form" isSubmitting={isSaving} submitLabel="Creează medicul" />} isOpen={isOpen} onOpenChange={onOpenChange} title="Medic nou">
     <FormLayout id="quick-doctor-form" onSubmit={(event) => void form.handleSubmit((values) => onSubmit(values))(event)}>
       <FormGrid>
         <TextInput error={form.formState.errors.firstName?.message} id="quickDoctorFirstName" label="Prenume" required {...form.register("firstName")} />
         <TextInput error={form.formState.errors.lastName?.message} id="quickDoctorLastName" label="Nume" required {...form.register("lastName")} />
-        <Select error={form.formState.errors.legalEntityCode?.message} id="quickDoctorLegalEntity" label="Entitate juridică" options={[{ label: "CDT", value: "CDT" }, { label: "NG", value: "NG" }]} placeholder="Se poate completa ulterior de Manager" {...form.register("legalEntityCode")} />
       </FormGrid>
     </FormLayout>
   </Modal>;

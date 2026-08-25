@@ -28,7 +28,7 @@ export function CourierRoutePage(): ReactNode {
   const routes = (routesQuery.data?.items ?? [])
     .filter((route) => route.status !== "CANCELLED")
     .slice()
-    .sort((left, right) => left.routeNumber.localeCompare(right.routeNumber));
+    .sort((left, right) => left.routeDate.localeCompare(right.routeDate) || left.routeNumber.localeCompare(right.routeNumber));
   const inProgressRoute = routes.find((route) => route.status === "IN_PROGRESS");
   const startableRoute = inProgressRoute
     ? undefined

@@ -1,14 +1,16 @@
-import { BadRequestException } from "@nestjs/common";
-import type { TechnicianOperation, TechnicianOperationRate } from "@prisma/client";
+import { BadRequestException, ConflictException } from "@nestjs/common";
+import { Prisma, type TechnicianOperation, type TechnicianOperationRate } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
 
 import type { PrismaService } from "../database/prisma.service.js";
 import { TechnicianOperationsService } from "./technician-operations.service.js";
+import { toTechnicianEarningsSummaryView } from "./technician-operations.view.js";
 
 function operation(overrides: Partial<TechnicianOperation> = {}): TechnicianOperation {
   return {
     archivedAt: null,
     archivedByUserId: null,
+    category: "Altele",
     code: "CERAMICA",
     createdAt: new Date("2026-08-20T10:00:00.000Z"),
     createdByUserId: "manager_1",
@@ -16,7 +18,6 @@ function operation(overrides: Partial<TechnicianOperation> = {}): TechnicianOper
     id: "operation_1",
     isActive: true,
     name: "Ceramică",
-    pricingUnit: null,
     sortOrder: 0,
     updatedAt: new Date("2026-08-20T10:00:00.000Z"),
     updatedByUserId: "manager_1",
@@ -55,7 +56,14 @@ function performedOperation(overrides: Record<string, unknown> = {}) {
     currency: "RON",
     earningMinor: 3000,
     id: "performed_1",
+    operationCodeSnapshot: "CERAMICA",
+    operationNameSnapshot: "Ceramică",
     operationId,
+    probeCycle: null,
+    probeCycleId: null,
+    quantity: 1,
+    rateMinorSnapshot: 3000,
+    notes: null,
     performedAt: new Date("2026-08-20T10:05:00.000Z"),
     rateId: "rate_1",
     removalReason: null,
@@ -63,6 +71,7 @@ function performedOperation(overrides: Record<string, unknown> = {}) {
     removedByUserId: null,
     technicianId,
     workOrderId,
+    teeth: [{ fdiTooth: 11 }],
     ...overrides,
     operation: operation({ id: operationId }),
     technician: {
@@ -96,7 +105,7 @@ describe("TechnicianOperationsService", () => {
 
     const result = await service.createOperation(
       { actorUserId: "manager_1", requestMetadata: { ipAddress: "127.0.0.1" } },
-      { code: "glaze", description: null, name: "Glazurare", pricingUnit: "PER_ELEMENT" },
+      { category: "Altele", code: "glaze", description: null, name: "Glazurare" },
     );
 
     expect(create).toHaveBeenCalledWith({
@@ -186,34 +195,24 @@ describe("TechnicianOperationsService", () => {
     expect(result.rateMinor).toBe(4000);
   });
 
-  it("requires explicit confirmation before changing a classified maneuver unit and closes active rates", async () => {
-    const auditCreate = vi.fn().mockResolvedValue({});
-    const before = operation({ pricingUnit: "PER_ELEMENT" });
-    const update = vi.fn().mockResolvedValue(operation({ pricingUnit: "PER_CASE" }));
-    const closeRates = vi.fn().mockResolvedValue({ count: 1 });
+  it("translates the database open-rate uniqueness race into a readable conflict", async () => {
     const service = createService({
-      technicianOperation: { findUnique: vi.fn().mockResolvedValue(before) },
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
-        auditLog: { create: auditCreate },
-        technicianOperation: { update },
-        technicianOperationRate: { updateMany: closeRates },
+        technicianOperation: {
+          findFirst: vi.fn().mockResolvedValue({ id: "operation_1" }),
+        },
+        technicianOperationRate: {
+          create: vi.fn().mockRejectedValue(new Prisma.PrismaClientKnownRequestError("unique", { code: "P2002", clientVersion: "test" })),
+          findFirst: vi.fn().mockResolvedValue(null),
+        },
+        user: { findFirst: vi.fn().mockResolvedValue({ id: "tech_1" }) },
       })),
     });
 
-    await expect(service.updateOperation(
+    await expect(service.setRate(
       { actorUserId: "manager_1", requestMetadata: {} },
-      "operation_1",
-      { code: "CERAMICA", description: "Stratificare ceramică", name: "Ceramică", pricingUnit: "PER_CASE" },
-    )).rejects.toThrow("Confirmă explicit");
-    expect(closeRates).not.toHaveBeenCalled();
-
-    await service.updateOperation(
-      { actorUserId: "manager_1", requestMetadata: {} },
-      "operation_1",
-      { code: "CERAMICA", description: "Stratificare ceramică", name: "Ceramică", pricingUnit: "PER_CASE", confirmPricingUnitChange: true },
-    );
-    expect(closeRates).toHaveBeenCalledWith({ data: { validUntil: expect.any(Date) }, where: { operationId: "operation_1", validUntil: null } });
-    expect(auditCreate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: "technician_operations.unit_changed", metadata: expect.objectContaining({ from: "Per element", to: "Per lucrare" }) }) }));
+      { operationId: "operation_1", rateMinor: 3500, technicianId: "tech_1" },
+    )).rejects.toThrow("Există deja o rată deschisă");
   });
 
   it("rejects setting a rate for an inactive or missing technician", async () => {
@@ -249,6 +248,14 @@ describe("TechnicianOperationsService", () => {
           technicianPerformedOperation: {
             create,
             findFirst: vi.fn().mockResolvedValue(null),
+            findUniqueOrThrow: vi.fn().mockResolvedValue(performedOperation({ selectedTeeth: [11] })),
+          },
+          technicianPerformedOperationTooth: {
+            createMany: vi.fn().mockResolvedValue({ count: 1 }),
+            findMany: vi.fn().mockResolvedValue([]),
+          },
+          workOrderItem: {
+            findMany: vi.fn().mockResolvedValue([{ archivedAt: null, scope: "TOOTH", teeth: [{ fdiTooth: 11 }] }]),
           },
           workOrder: { findUnique: vi.fn().mockResolvedValue({ assignedTechnicianId: "tech_1", claimedByUserId: "tech_1", id: "work_1" }) },
         }),
@@ -257,7 +264,7 @@ describe("TechnicianOperationsService", () => {
 
     const result = await service.performOperation(
       { actorUserId: "tech_1", requestMetadata: {} },
-      { operationId: "operation_1", workOrderId: "work_1" },
+      { operationId: "operation_1", selectedTeeth: [11], workOrderId: "work_1" },
     );
 
     expect(create).toHaveBeenCalledWith({
@@ -277,6 +284,100 @@ describe("TechnicianOperationsService", () => {
       }),
     });
     expect(result.earningMinor).toBe(3000);
+  });
+
+  it("stores one canonical quantity and immutable snapshots for multiple selected teeth", async () => {
+    const create = vi.fn().mockResolvedValue(performedOperation({ earningMinor: 9000 }));
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+        technicianOperation: { findFirst: vi.fn().mockResolvedValue({ code: "CERAMICA", id: "operation_1", name: "Ceramică" }) },
+        technicianOperationRate: { findFirst: vi.fn().mockResolvedValue(rate({ rateMinor: 3000 })) },
+        technicianPerformedOperation: { create, findFirst: vi.fn().mockResolvedValue(null), findUniqueOrThrow: vi.fn().mockResolvedValue(performedOperation({ earningMinor: 9000, quantity: 3, teeth: [{ fdiTooth: 11 }, { fdiTooth: 12 }, { fdiTooth: 13 }] })) },
+        technicianPerformedOperationTooth: { createMany: vi.fn().mockResolvedValue({ count: 3 }), findMany: vi.fn().mockResolvedValue([]) },
+        workOrderItem: { findMany: vi.fn().mockResolvedValue([{ archivedAt: null, scope: "TEETH", teeth: [{ fdiTooth: 11 }, { fdiTooth: 12 }, { fdiTooth: 13 }] }]) },
+        workOrder: { findUnique: vi.fn().mockResolvedValue({ activeProbeCycleId: "cycle_1", assignedTechnicianId: "tech_1", claimedByUserId: "tech_1", id: "work_1", status: "IN_LUCRU" }) },
+      })),
+    });
+
+    const result = await service.performOperation(
+      { actorUserId: "tech_1", requestMetadata: {} },
+      { operationId: "operation_1", selectedTeeth: [11, 12, 13, 11], notes: "stratificare", workOrderId: "work_1" },
+    );
+
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        operationCodeSnapshot: "CERAMICA",
+        operationNameSnapshot: "Ceramică",
+        probeCycleId: "cycle_1",
+        quantity: 3,
+        rateMinorSnapshot: 3000,
+        notes: "stratificare",
+        earningMinor: 9000,
+      }),
+      include: expect.any(Object),
+    }));
+    expect(result.selectedTeeth).toEqual([11, 12, 13]);
+  });
+
+  it("rejects teeth outside the active composition before creating an operation", async () => {
+    const create = vi.fn();
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        technicianOperation: { findFirst: vi.fn().mockResolvedValue({ code: "CERAMICA", id: "operation_1", name: "Ceramică" }) },
+        technicianPerformedOperation: { create, findFirst: vi.fn().mockResolvedValue(null) },
+        workOrderItem: { findMany: vi.fn().mockResolvedValue([{ archivedAt: null, scope: "TOOTH", teeth: [{ fdiTooth: 11 }] }]) },
+        workOrder: { findUnique: vi.fn().mockResolvedValue({ activeProbeCycleId: null, assignedTechnicianId: "tech_1", claimedByUserId: "tech_1", id: "work_1", status: "IN_LUCRU" }) },
+      })),
+    });
+
+    await expect(service.performOperation(
+      { actorUserId: "tech_1", requestMetadata: {} },
+      { operationId: "operation_1", selectedTeeth: [12], workOrderId: "work_1" },
+    )).rejects.toThrow("nu fac parte din compoziția activă");
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("records a pure CASE composition as one technician earning unit without inventing teeth", async () => {
+    const create = vi.fn().mockResolvedValue(performedOperation({ earningMinor: 3000, quantity: 1, teeth: [] }));
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+        technicianOperation: { findFirst: vi.fn().mockResolvedValue({ code: "CERAMICA", id: "operation_1", name: "Ceramică" }) },
+        technicianOperationRate: { findFirst: vi.fn().mockResolvedValue(rate({ rateMinor: 3000 })) },
+        technicianPerformedOperation: { create, findFirst: vi.fn().mockResolvedValue(null), findUniqueOrThrow: vi.fn().mockResolvedValue(performedOperation({ earningMinor: 3000, quantity: 1, teeth: [] })) },
+        technicianPerformedOperationTooth: { findMany: vi.fn().mockResolvedValue([]) },
+        workOrderItem: { findMany: vi.fn().mockResolvedValue([{ archivedAt: null, scope: "CASE", teeth: [] }]) },
+        workOrder: { findUnique: vi.fn().mockResolvedValue({ activeProbeCycleId: null, assignedTechnicianId: "tech_1", claimedByUserId: "tech_1", id: "work_1", status: "IN_LUCRU" }) },
+      })),
+    });
+
+    const result = await service.performOperation(
+      { actorUserId: "tech_1", requestMetadata: {} },
+      { operationId: "operation_1", selectedTeeth: [], workOrderId: "work_1" },
+    );
+
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ earningMinor: 3000, quantity: 1 }) }));
+    expect(result.selectedTeeth).toEqual([]);
+  });
+
+  it("rejects an active tooth conflict before insert and preserves the operation", async () => {
+    const create = vi.fn();
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        technicianOperation: { findFirst: vi.fn().mockResolvedValue({ code: "CERAMICA", id: "operation_1", name: "Ceramică" }) },
+        technicianPerformedOperation: { create, findFirst: vi.fn().mockResolvedValue(null) },
+        technicianPerformedOperationTooth: { findMany: vi.fn().mockResolvedValue([{ fdiTooth: 12 }]) },
+        workOrderItem: { findMany: vi.fn().mockResolvedValue([{ archivedAt: null, scope: "TEETH", teeth: [{ fdiTooth: 11 }, { fdiTooth: 12 }] }]) },
+        workOrder: { findUnique: vi.fn().mockResolvedValue({ activeProbeCycleId: null, assignedTechnicianId: "tech_1", claimedByUserId: "tech_1", id: "work_1", status: "IN_LUCRU" }) },
+      })),
+    });
+
+    await expect(service.performOperation(
+      { actorUserId: "tech_1", requestMetadata: {} },
+      { operationId: "operation_1", selectedTeeth: [11, 12], workOrderId: "work_1" },
+    )).rejects.toBeInstanceOf(ConflictException);
+    expect(create).not.toHaveBeenCalled();
   });
 
   it("reads the immutable earning snapshot instead of recalculating from later rates", async () => {
@@ -316,6 +417,9 @@ describe("TechnicianOperationsService", () => {
             findUnique: vi.fn().mockResolvedValue(existing),
             update,
           },
+          technicianPerformedOperationTooth: {
+            updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+          },
           workOrder: { findUnique: vi.fn().mockResolvedValue({ assignedTechnicianId: "tech_1", claimedByUserId: "tech_1", id: "work_1" }) },
         }),
       ),
@@ -342,6 +446,24 @@ describe("TechnicianOperationsService", () => {
       }),
     });
     expect(result.earningMinor).toBe(3000);
+  });
+
+  it("does not let the current owner remove another technician's maneuver", async () => {
+    const update = vi.fn();
+    const existing = performedOperation({ technicianId: "tech_2", teeth: [{ fdiTooth: 11 }] });
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        technicianPerformedOperation: { findUnique: vi.fn().mockResolvedValue(existing), update },
+        workOrder: { findUnique: vi.fn().mockResolvedValue({ assignedTechnicianId: "tech_1", claimedByUserId: "tech_1", id: "work_1" }) },
+      })),
+    });
+
+    await expect(service.removePerformedOperation(
+      { actorUserId: "tech_1", requestMetadata: {} },
+      "performed_1",
+      { reason: "Corecție" },
+    )).rejects.toThrow("Poți elimina doar manopera înregistrată de tine");
+    expect(update).not.toHaveBeenCalled();
   });
 
   it("aggregates own daily earnings from immutable performed-operation snapshots", async () => {
@@ -420,6 +542,41 @@ describe("TechnicianOperationsService", () => {
         technicianId: "tech_1",
       },
     });
+  });
+
+  it("separates period activity from cumulative balance and preserves overpayment", () => {
+    const result = toTechnicianEarningsSummaryView({
+      generatedAt: new Date("2026-09-01T00:00:00.000Z"),
+      period: "MONTH",
+      periodStart: new Date("2026-08-01T00:00:00.000Z"),
+      periodEnd: new Date("2026-09-01T00:00:00.000Z"),
+      performedOperations: [performedOperation({ earningMinor: 1000 })],
+      payments: [{ amountMinor: 500, currency: "RON", createdAt: new Date("2026-08-20T00:00:00.000Z"), createdByUserId: "manager_1", id: "payment_1", notes: null, paidAt: new Date("2026-08-20T00:00:00.000Z"), technicianId: "tech_1" }],
+      cumulativePerformedOperations: [performedOperation({ earningMinor: 1000 }), performedOperation({ earningMinor: 100, id: "performed_2", performedAt: new Date("2026-07-20T00:00:00.000Z") })],
+      cumulativePayments: [{ amountMinor: 500, currency: "RON", createdAt: new Date("2026-08-20T00:00:00.000Z"), createdByUserId: "manager_1", id: "payment_1", notes: null, paidAt: new Date("2026-08-20T00:00:00.000Z"), technicianId: "tech_1" }],
+      technician: { displayName: "Tehnician A", id: "tech_1" },
+    } as never);
+    expect(result.currencyTotals[0]).toMatchObject({ balanceMinor: 600, cumulativeEarnedMinor: 1100, cumulativePaidMinor: 500, periodEarnedMinor: 1000, periodPaidMinor: 500 });
+
+    const overpaid = toTechnicianEarningsSummaryView({
+      generatedAt: new Date(), period: "DAY", periodStart: new Date(), periodEnd: new Date(),
+      performedOperations: [performedOperation({ earningMinor: 80 })],
+      payments: [{ amountMinor: 100, currency: "RON", createdAt: new Date(), createdByUserId: "manager_1", id: "payment_2", notes: null, paidAt: new Date(), technicianId: "tech_1" }],
+      technician: { displayName: "Tehnician A", id: "tech_1" },
+    } as never);
+    expect(overpaid.currencyTotals[0]).toMatchObject({ balanceMinor: -20, settlementStatus: "OVERPAID" });
+  });
+
+  it("never merges work totals across currencies and keeps technician context", () => {
+    const result = toTechnicianEarningsSummaryView({
+      generatedAt: new Date(), period: "DAY", periodStart: new Date(), periodEnd: new Date(),
+      performedOperations: [performedOperation({ earningMinor: 100, currency: "RON" }), performedOperation({ earningMinor: 20, currency: "EUR", id: "performed_eur" })],
+      payments: [],
+      technician: null,
+    } as never);
+    expect(result.works).toHaveLength(2);
+    expect(result.works.map((work) => [work.currency, work.totalMinor])).toEqual([["RON", 100], ["EUR", 20]]);
+    expect(result.works.every((work) => work.operations[0]?.technician?.displayName === "Tehnician A")).toBe(true);
   });
 
   it("rejects a payment that exceeds earnings completed by the payment date", async () => {

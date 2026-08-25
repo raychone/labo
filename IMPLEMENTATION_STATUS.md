@@ -6,6 +6,20 @@
 
 85%
 
+## PRE-B20 INTAKE / CATALOG HARDENING (2026-08-25)
+
+Implementation is in progress and is not marked complete until the remaining
+regression suite is classified and resolved.
+
+- Canonical creative work catalog: 45 active WorkTypes from the laboratory table.
+- ELEMENT quantity is derived from selected teeth; UNIT/Bucată is always 1 and cannot repeat in one composition.
+- Add-ons, exclusive groups, probe families and return-probe compatibility are validated server-side.
+- Initial intake creates no ProbeCycle and no legacy WorkCycle; a real probe cycle is created only on a valid return after a completed probe.
+- Mixed-work probe compatibility uses the intersection of configured probe types.
+- Demo reset now removes creative catalog/template records and can be rerun after partial seed failure.
+- Add-on amounts are canonicalized from the catalog; non-pricing roles receive masked amounts.
+- Local demo database was migrated and reseeded only on `dental_lab_dev`; production Neon was not modified.
+
 ## ROADMAP
 
 - [x] ROADMAP-REALIGN-002 - Realign product roadmap to validated laboratory workflow (COMPLETED)
@@ -903,6 +917,14 @@ Remaining risks:
 
 - Physical phone signature capture and physical print output still need real-device validation.
 - Backend shutdown still shows the existing `pg` deprecation warning, without request failures.
+
+## Technician labor / WorkOrder visualization update
+
+- Reused `TechnicianOperation`, `TechnicianOperationRate`, and `TechnicianPerformedOperation`; no parallel labor model was introduced.
+- Added a persistent operation category with a non-destructive migration. Demo operations now follow the official grouped catalog: Coroană zirconiu, Coroană ceramică, and Altele.
+- Technician labor selection is rendered as responsive, keyboard-accessible cards; active cards use a readable green state and persisted performed operations remain active after reload.
+- Earnings continue to use the existing immutable rate and earning snapshots, separate from clinic WorkType pricing and invoices.
+- WorkOrder details now derive deterministic WorkType colors for ELEMENT teeth and show a legend. CASE/BUCATĂ components remain case-level and are not multiplied by tooth references.
 
 ### DELIVERY-001 - Courier planning and delivery execution
 

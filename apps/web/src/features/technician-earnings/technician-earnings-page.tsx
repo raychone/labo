@@ -1,5 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, DateInput, ErrorState, LoadingState, Select } from "@dental-lab/ui";
-import { formatMoneyMinor, type TechnicianEarningsParams, type TechnicianEarningsSummary, type TechnicianEarningsWorkBreakdown } from "@dental-lab/shared";
+import { ADULT_FDI_TEETH, formatMoneyMinor, type TechnicianEarningsParams, type TechnicianEarningsSummary, type TechnicianEarningsWorkBreakdown } from "@dental-lab/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState, type ReactNode } from "react";
 
@@ -124,27 +124,30 @@ export function EarningsContent({
   const works = data.works ?? [];
   const payments = data.payments ?? [];
   const paidMinor = data.paidMinor ?? 0;
-  const remainingMinor = data.remainingMinor ?? Math.max(0, data.totalMinor - paidMinor);
+  const remainingMinor = data.remainingMinor ?? data.totalMinor - paidMinor;
+  const currencyTotals = data.currencyTotals ?? [{ currency: data.currency, periodEarnedMinor: data.totalMinor, periodPaidMinor: paidMinor, cumulativeEarnedMinor: data.totalMinor, cumulativePaidMinor: paidMinor, balanceMinor: remainingMinor, settlementStatus: "UNPAID" as const, totalMinor: data.totalMinor, paidMinor, remainingMinor }];
+  const formatTotals = (key: "periodEarnedMinor" | "periodPaidMinor" | "balanceMinor") => currencyTotals.map((item) => `${formatMoneyMinor(item[key], item.currency)}`).join(" · ");
+  const hasOverpayment = currencyTotals.some((item) => item.balanceMinor < 0);
 
   return (
     <>
       <div className="technician-earnings__summary">
         <Card>
           <CardHeader>
-            <CardTitle>{formatMoneyMinor(data.totalMinor, data.currency)}</CardTitle>
-            <CardDescription>Câștigat</CardDescription>
+            <CardTitle>{formatTotals("periodEarnedMinor")}</CardTitle>
+            <CardDescription>Câștigat în perioadă</CardDescription>
           </CardHeader>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>{formatMoneyMinor(paidMinor, data.currency)}</CardTitle>
-            <CardDescription>{paymentPerspective === "manager" ? "Achitat" : "Primit"}</CardDescription>
+            <CardTitle>{formatTotals("periodPaidMinor")}</CardTitle>
+            <CardDescription>{paymentPerspective === "manager" ? "Plătit în perioadă" : "Primit în perioadă"}</CardDescription>
           </CardHeader>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>{formatMoneyMinor(remainingMinor, data.currency)}</CardTitle>
-            <CardDescription>{paymentPerspective === "manager" ? "Restant de achitat" : "Restant de primit"}</CardDescription>
+            <CardTitle>{formatTotals("balanceMinor")}</CardTitle>
+            <CardDescription>{hasOverpayment ? "Plătit în plus" : paymentPerspective === "manager" ? "Sold de plată" : "De primit"}</CardDescription>
           </CardHeader>
         </Card>
         <Card>
@@ -160,7 +163,7 @@ export function EarningsContent({
           <CardDescription>Valorile sunt snapshots istorice din manoperele efectuate.</CardDescription>
         </CardHeader>
         <CardContent>
-          {works.length === 0 ? <p className="technician-earnings__muted">Nu există câștiguri în perioada selectată.</p> : <EarningsBreakdown works={works} />}
+          {works.length === 0 ? <p className="technician-earnings__muted">Nu există câștiguri în perioada selectată.</p> : <EarningsBreakdown showTechnician={paymentPerspective === "manager" && data.technician === null} works={works} />}
         </CardContent>
       </Card>
       <Card>
@@ -171,7 +174,7 @@ export function EarningsContent({
   );
 }
 
-function EarningsBreakdown({ works }: { readonly works: readonly TechnicianEarningsWorkBreakdown[] }): ReactNode {
+function EarningsBreakdown({ showTechnician, works }: { readonly showTechnician: boolean; readonly works: readonly TechnicianEarningsWorkBreakdown[] }): ReactNode {
   return (
     <div className="technician-earnings__work-list">
       {works.map((work) => (
@@ -194,7 +197,14 @@ function EarningsBreakdown({ works }: { readonly works: readonly TechnicianEarni
             <tbody>
               {work.operations.map((operation) => (
                 <tr key={operation.performedOperationId}>
-                  <td data-label="Manoperă">{operation.operation.code} · {operation.operation.name}</td>
+                  <td data-label="Manoperă">
+                    {operation.operation.code} · {operation.operation.name}
+                    {operation.isLegacy ? <small> · istoric, fără scop tarifar disponibil</small> : operation.quantity !== null && operation.rateMinorSnapshot !== null ? <small> · {operation.quantity} × {formatMoneyMinor(operation.rateMinorSnapshot, operation.currency)}</small> : null}
+                    {(operation.selectedTeeth ?? []).length > 0 ? <small> · FDI {(operation.selectedTeeth ?? []).slice().sort((a, b) => ADULT_FDI_TEETH.indexOf(a as never) - ADULT_FDI_TEETH.indexOf(b as never)).join(", ")}</small> : null}
+                    {operation.probeCycle ? <small> · Proba {operation.probeCycle.sequence}</small> : null}
+                    {showTechnician && operation.technician ? <small> · {operation.technician.displayName}</small> : null}
+                    {operation.removedAt ? <small> · Eliminată{operation.removalReason ? `: ${operation.removalReason}` : ""}</small> : null}
+                  </td>
                   <td data-label="Performare">{new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(operation.performedAt))}</td>
                   <td data-label="Câștig">{formatMoneyMinor(operation.earningMinor, operation.currency)}</td>
                 </tr>

@@ -8,7 +8,7 @@ import { getRequestMetadata } from "../auth/request-metadata.js";
 import type { AuthenticatedUser } from "../auth/auth.types.js";
 import { PermissionsGuard } from "../rbac/permissions.guard.js";
 import { RequirePermission } from "../rbac/require-permission.decorator.js";
-import { CreateWorkTypeDto, ListWorkTypesQueryDto, UpdateWorkTypeDto } from "./dto/work-types.dto.js";
+import { CreateOperationalWorkTypeDto, CreateWorkTypeDto, ListWorkTypesQueryDto, UpdateWorkTypeDto } from "./dto/work-types.dto.js";
 import { WorkTypesService } from "./work-types.service.js";
 
 @Controller("work-types")
@@ -39,6 +39,13 @@ export class WorkTypesController {
   @RequirePermission("pricing.create", "ALL")
   public createWorkType(@Body() dto: CreateWorkTypeDto, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
     return this.workTypesService.createWorkType({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, dto);
+  }
+
+  @Post("operational-name")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("works.custom_type.save_to_catalog", "ALL")
+  public saveOperationalName(@Body() dto: CreateOperationalWorkTypeDto, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
+    return this.workTypesService.saveOperationalNameToCatalog({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, dto.name);
   }
 
   @Patch(":id")

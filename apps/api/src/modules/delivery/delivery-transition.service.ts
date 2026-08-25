@@ -8,6 +8,9 @@ import { AuthorizationService } from "../rbac/authorization.service.js";
 import { DELIVERY_AUDIT_ACTIONS, DELIVERY_RESOURCE_TYPE } from "./delivery.constants.js";
 import { STALE_DELIVERY_MESSAGE } from "../delivery-proof/delivery-proof.constants.js";
 import { DeliveryProofService } from "../delivery-proof/delivery-proof.service.js";
+import { B17_LOGISTICS_NOTIFICATION_EVENTS, getB17LogisticsNotificationKey } from "@dental-lab/shared";
+import { DeliveryCodeService } from "./delivery-code.service.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
 import type { CompleteDeliveryDto, FailDeliveryDto, RescheduleDeliveryDto } from "./dto/delivery.dto.js";
 import { deliveryInclude, type DeliveryDetail, toDeliveryDetail } from "./delivery.view.js";
 
@@ -19,7 +22,9 @@ export class DeliveryTransitionService {
     @Inject(AuthorizationService) private readonly authorizationService: AuthorizationService,
     @Inject(DeliveryService) private readonly deliveryService: DeliveryService,
     @Inject(DeliveryProofService) private readonly deliveryProofService: DeliveryProofService,
+    @Inject(DeliveryCodeService) private readonly deliveryCodeService: DeliveryCodeService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(NotificationsService) private readonly notificationsService: NotificationsService,
   ) {}
 
   public async pickup(context: ActorContext, deliveryId: string, version: number): Promise<DeliveryDetail> {
@@ -31,13 +36,13 @@ export class DeliveryTransitionService {
         throw new BadRequestException("Doar livrările atribuite pot fi preluate.");
       }
       for (const item of current.preparationGroup.items) {
-        if (item.workOrder.activeCycle?.logisticsState?.status !== WorkLogisticsStatus.READY_FOR_DELIVERY) {
-          throw new BadRequestException("Toate lucrările trebuie să fie gata de livrare.");
+        if (item.workOrder.technicalReadiness !== "PROBE_READY" && item.workOrder.technicalReadiness !== "FINAL_READY") {
+          throw new BadRequestException("Doar lucrările marcate Probă gata sau Finalizată pot fi predate curierului.");
         }
       }
       const now = new Date();
       await tx.workLogisticsState.updateMany({
-        data: { physicalLocationCode: "GATA_LIVRARE", status: WorkLogisticsStatus.HANDED_TO_DELIVERY, updatedByUserId: context.actor.id, version: { increment: 1 } },
+        data: { status: WorkLogisticsStatus.HANDED_TO_DELIVERY, updatedByUserId: context.actor.id, version: { increment: 1 } },
         where: { workCycleId: { in: current.preparationGroup.items.map((item) => item.workCycleId).filter((id): id is string => id !== null) } },
       });
       const updated = await tx.delivery.update({
@@ -104,6 +109,7 @@ export class DeliveryTransitionService {
         deliveryId: updated.id,
       });
       await this.record(tx, context, updated.id, DeliveryEventType.DELIVERY_COMPLETED, DELIVERY_AUDIT_ACTIONS.completed, current.status, updated.status);
+      for (const item of updated.preparationGroup.items) await this.notificationsService.publishDeliveryInTransaction(tx, { deliveryId: updated.id, workOrderId: item.workOrderId, code: item.workOrder.code, patientName: item.workOrder.patientName, failed: false });
       return updated;
     });
     return toDeliveryDetail(delivery, await this.deliveryService.createAccessContext(context.actor.id), new Date());
@@ -132,7 +138,12 @@ export class DeliveryTransitionService {
         include: deliveryInclude,
         where: { id: deliveryId },
       });
+      await tx.workOrder.updateMany({
+        data: { requiresDelivery: true, updatedByUserId: context.actor.id, version: { increment: 1 } },
+        where: { id: { in: current.preparationGroup.items.map((item) => item.workOrderId) } },
+      });
       await this.record(tx, context, updated.id, DeliveryEventType.DELIVERY_FAILED, DELIVERY_AUDIT_ACTIONS.failed, current.status, updated.status);
+      for (const item of updated.preparationGroup.items) await this.notificationsService.publishDeliveryInTransaction(tx, { deliveryId: updated.id, workOrderId: item.workOrderId, code: item.workOrder.code, patientName: item.workOrder.patientName, failed: true, failureReason: updated.failureDetails ?? updated.failureReasonCode });
       return updated;
     });
     return toDeliveryDetail(delivery, await this.deliveryService.createAccessContext(context.actor.id), new Date());
@@ -151,23 +162,37 @@ export class DeliveryTransitionService {
         throw new BadRequestException("Doar livrările nereușite pot fi replanificate.");
       }
       const nextStatus = current.courierUserId ? DeliveryStatus.ASSIGNED : DeliveryStatus.PLANNED;
-      const updated = await tx.delivery.update({
+      const now = new Date();
+      const historical = await tx.delivery.update({
         data: {
-          failedAt: null,
-          failureDetails: null,
-          failureReasonCode: null,
-          plannedDate,
           rescheduledFor: plannedDate,
-          sequenceOrder: dto.sequenceOrder ?? current.sequenceOrder,
-          status: nextStatus,
+          isActive: false,
           updatedByUserId: context.actor.id,
           version: { increment: 1 },
         },
         include: deliveryInclude,
         where: { id: deliveryId },
       });
-      await this.record(tx, context, updated.id, DeliveryEventType.DELIVERY_RESCHEDULED, DELIVERY_AUDIT_ACTIONS.rescheduled, current.status, updated.status);
-      return updated;
+      const code = await this.deliveryCodeService.generate(tx, now);
+      const retry = await tx.delivery.create({
+        data: {
+          assignedAt: current.courierUserId ? now : null,
+          assignedByUserId: current.courierUserId ? context.actor.id : null,
+          clinicId: current.clinicId,
+          code,
+          courierUserId: current.courierUserId,
+          createdByUserId: context.actor.id,
+          plannedDate,
+          preparationGroupId: current.preparationGroupId,
+          sequenceOrder: dto.sequenceOrder ?? current.sequenceOrder,
+          status: nextStatus,
+          updatedByUserId: context.actor.id,
+        },
+        include: deliveryInclude,
+      });
+      await this.record(tx, context, historical.id, DeliveryEventType.DELIVERY_RESCHEDULED, DELIVERY_AUDIT_ACTIONS.rescheduled, current.status, current.status);
+      await this.record(tx, context, retry.id, DeliveryEventType.DELIVERY_CREATED, DELIVERY_AUDIT_ACTIONS.created, DeliveryStatus.PLANNED, retry.status);
+      return retry;
     });
     return toDeliveryDetail(delivery, await this.deliveryService.createAccessContext(context.actor.id), new Date());
   }
@@ -201,8 +226,28 @@ export class DeliveryTransitionService {
   }
 
   private async record(tx: DeliveryTx, context: ActorContext, deliveryId: string, type: DeliveryEventType, action: string, oldStatus: DeliveryStatus, newStatus: DeliveryStatus): Promise<void> {
-    const delivery = await tx.delivery.findUniqueOrThrow({ select: { code: true }, where: { id: deliveryId } });
-    const metadata = { actorUserId: context.actor.id, deliveryCode: delivery.code, deliveryId, newStatus, oldStatus };
+    const delivery = await tx.delivery.findUniqueOrThrow({
+      select: { code: true, failureDetails: true, failureReasonCode: true, preparationGroup: { select: { items: { where: { isActive: true }, select: { workOrderId: true } } } } },
+      where: { id: deliveryId },
+    });
+    const notificationEvent = type === DeliveryEventType.DELIVERY_COMPLETED
+      ? B17_LOGISTICS_NOTIFICATION_EVENTS.deliveryCompleted
+      : type === DeliveryEventType.DELIVERY_FAILED
+        ? B17_LOGISTICS_NOTIFICATION_EVENTS.deliveryFailed
+        : null;
+    const workOrderIds = delivery.preparationGroup.items.map((item) => item.workOrderId);
+    const metadata = {
+      actorUserId: context.actor.id,
+      deliveryCode: delivery.code,
+      deliveryId,
+      newStatus,
+      oldStatus,
+      ...(notificationEvent ? {
+        notificationEvent,
+        notificationKeys: workOrderIds.map((workOrderId) => getB17LogisticsNotificationKey(notificationEvent, { movementId: deliveryId, workOrderId })),
+        ...(notificationEvent === B17_LOGISTICS_NOTIFICATION_EVENTS.deliveryFailed ? { failureDetails: delivery.failureDetails, failureReasonCode: delivery.failureReasonCode } : {}),
+      } : {}),
+    };
     const auditData: Prisma.AuditLogUncheckedCreateInput = {
       action,
       actorUserId: context.actor.id,

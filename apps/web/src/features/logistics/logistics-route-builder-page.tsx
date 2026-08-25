@@ -36,6 +36,7 @@ export function LogisticsRouteBuilderPage(): ReactNode {
   const [routeName, setRouteName] = useState("Traseu");
   const [selectedStops, setSelectedStops] = useState<readonly SelectedStop[]>([]);
   const [editingRouteId, setEditingRouteId] = useState<string | null>(null);
+  const [editingRouteStatus, setEditingRouteStatus] = useState<CourierRouteView["status"] | null>(null);
   const [editingVersion, setEditingVersion] = useState<number | null>(null);
   const [assigningRouteId, setAssigningRouteId] = useState<string | null>(null);
   const [assigningCourierId, setAssigningCourierId] = useState("");
@@ -81,6 +82,7 @@ export function LogisticsRouteBuilderPage(): ReactNode {
   }), [listCourierId, listRouteId, printRouteId, routesQuery.data?.items]);
   function editRoute(route: CourierRouteView): void {
     setEditingRouteId(route.id);
+    setEditingRouteStatus(route.status);
     setEditingVersion(route.version);
     setRouteName(route.name);
     setRouteDate(route.routeDate);
@@ -222,6 +224,7 @@ export function LogisticsRouteBuilderPage(): ReactNode {
         setSelectedStops([]);
         setEditingRouteId(null);
         setEditingVersion(null);
+        setEditingRouteStatus(null);
         toast.showToast({ message: "Traseul a fost creat.", variant: "success" });
       },
     };
@@ -308,7 +311,7 @@ export function LogisticsRouteBuilderPage(): ReactNode {
                   ))}
                   {selectedStops.length === 0 ? <p className="logistics-page__empty">Selectează lucrări sau ridicări în ordinea dorită.</p> : null}
                   <Button disabled={!canCreate || selectedStops.length === 0 || createRoute.isPending} onClick={submit} type="button">
-                    {editingRouteId ? "Salvează lista" : courierUserId ? "Expediază lista" : "Adaugă lista"}
+                    {editingRouteId ? (editingRouteStatus === "DRAFT" ? "Creează traseu" : "Salvează lista") : courierUserId ? "Expediază lista" : "Adaugă în draft"}
                   </Button>
                 </CardContent>
               </Card>
@@ -361,7 +364,8 @@ export function LogisticsRouteBuilderPage(): ReactNode {
                 <span className="logistics-page__screen-only">{route.status} · versiunea {route.version}</span>
                 <ol className="logistics-page__print-stops">{route.stops.map((stop) => <li key={stop.id}><strong>{stop.type === "DELIVERY" ? "Livrare" : "Ridicare"}</strong><span>{stop.targetLabel}</span><span>Adresă: {stop.addressOverride || "-"}</span><span>Telefon: {stop.phoneOverride || "-"}</span></li>)}</ol>
                 <div className="logistics-page__group-actions">
-                  {canAssign ? <Button onClick={() => startAssigning(route)} size="small" type="button" variant="outline">{route.courier ? "Schimbă curierul" : "Asignează curier"}</Button> : null}
+                  {route.status === "DRAFT" ? <Button onClick={() => editRoute(route)} size="small" type="button" variant="outline">Creează traseu</Button> : null}
+                  {canAssign ? <Button onClick={() => startAssigning(route)} size="small" type="button" variant="outline">{route.courier ? "Schimbă curierul" : "Expediază curierului"}</Button> : null}
                   {assigningRouteId === route.id ? (
                     <>
                       <Select aria-label={`Curier pentru ${route.routeNumber}`} label="Curier" onChange={(event) => setAssigningCourierId(event.target.value)} options={(couriersQuery.data ?? []).map((courier) => ({ label: courier.displayName, value: courier.id }))} placeholder="Selectează curierul" value={assigningCourierId} />

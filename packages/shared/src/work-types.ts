@@ -4,13 +4,43 @@ export const WORK_TYPE_SORT_FIELDS = ["basePriceMinor", "code", "createdAt", "na
 export type WorkTypeUnit = (typeof WORK_TYPE_UNITS)[number];
 export type WorkTypeSortField = (typeof WORK_TYPE_SORT_FIELDS)[number];
 
+export const WORK_TYPE_PROBE_FAMILIES = ["MC", "ZR", "ZRP", "PRO", "LA_GATA"] as const;
+export type WorkTypeProbeFamily = (typeof WORK_TYPE_PROBE_FAMILIES)[number];
+
+export const WORK_TYPE_PROBE_FAMILY_LABELS = {
+  LA_GATA: "La gata",
+  MC: "Metalo-ceramică",
+  PRO: "Proteze",
+  ZR: "Zirconia",
+  ZRP: "Zirconia placată",
+} as const satisfies Record<WorkTypeProbeFamily, string>;
+
+export function formatWorkTypeCategory(probeFamily: WorkTypeProbeFamily | string | null | undefined): string {
+  return probeFamily && Object.prototype.hasOwnProperty.call(WORK_TYPE_PROBE_FAMILY_LABELS, probeFamily)
+    ? WORK_TYPE_PROBE_FAMILY_LABELS[probeFamily as WorkTypeProbeFamily]
+    : "Alte lucrări";
+}
+
+export const WORK_TYPE_ADD_ON_CODES = ["PLACATA", "GINGIE"] as const;
+export type WorkTypeAddOnCode = (typeof WORK_TYPE_ADD_ON_CODES)[number];
+
+export interface WorkTypeAddOnOption {
+  readonly code: WorkTypeAddOnCode;
+  readonly label: string;
+  readonly amountMinor: number | null;
+}
+
 export interface WorkTypeOption {
-  readonly basePriceMinor: number;
+  readonly basePriceMinor: number | null;
   readonly code: string;
   readonly id: string;
   readonly name: string;
   readonly symbol: string;
   readonly unit: WorkTypeUnit;
+  readonly probeFamily?: WorkTypeProbeFamily | null;
+  readonly probeTypeCodes?: readonly string[];
+  readonly allowedAddOns?: readonly WorkTypeAddOnOption[];
+  readonly exclusiveGroup?: string | null;
 }
 
 export interface WorkTypeSummary extends WorkTypeOption {
@@ -29,11 +59,15 @@ export interface WorkTypeDetail extends WorkTypeSummary {
 }
 
 export interface CreateWorkTypeInput {
-  readonly basePriceMinor: number;
+  readonly basePriceMinor: number | null;
   readonly description?: string | null;
   readonly name: string;
   readonly symbol: string;
   readonly unit: WorkTypeUnit;
+  readonly probeFamily?: WorkTypeProbeFamily | null;
+  readonly probeTypeCodes?: readonly string[];
+  readonly allowedAddOns?: readonly WorkTypeAddOnOption[];
+  readonly exclusiveGroup?: string | null;
 }
 
 export type UpdateWorkTypeInput = Partial<CreateWorkTypeInput>;

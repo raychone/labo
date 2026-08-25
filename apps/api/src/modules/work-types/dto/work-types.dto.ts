@@ -128,4 +128,12 @@ export class CreateWorkTypeDto extends WorkTypeMutationDto {
   public override readonly unit: (typeof WORK_TYPE_UNITS)[number] = "UNIT";
 }
 
+export class CreateOperationalWorkTypeDto {
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  @MinLength(2)
+  @MaxLength(160)
+  public readonly name!: string;
+}
+
 export class UpdateWorkTypeDto extends WorkTypeMutationDto {}

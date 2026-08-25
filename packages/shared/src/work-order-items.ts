@@ -28,6 +28,7 @@ export interface WorkOrderItemInput {
   readonly totalPriceMinor?: number;
   readonly currency?: string | null;
   readonly commercialSnapshot?: Readonly<Record<string, unknown>> | null;
+  readonly selectedAddOns?: readonly { readonly code: string; readonly amountMinor?: number | null }[];
 }
 
 export interface WorkOrderCompositionItemInput extends WorkOrderItemInput {
@@ -51,7 +52,7 @@ export interface WorkOrderItemView {
   readonly sortOrder: number;
   readonly scope: WorkOrderItemScope;
   readonly teeth: readonly WorkOrderItemToothView[];
-  readonly workType: { readonly code: string; readonly id: string; readonly name: string; readonly symbol: string } | null;
+  readonly workType: { readonly code: string; readonly id: string; readonly name: string; readonly symbol: string; readonly unit?: string; readonly probeFamily?: string | null; readonly probeTypeCodes?: readonly string[]; } | null;
   readonly workTypeId: string | null;
   readonly customWorkTypeSnapshot: Readonly<Record<string, unknown>> | null;
   readonly shade: string | null;
@@ -64,6 +65,7 @@ export interface WorkOrderItemView {
   readonly totalPriceMinor: number | null;
   readonly currency: string | null;
   readonly commercialSnapshot: Readonly<Record<string, unknown>> | null;
+  readonly selectedAddOns?: readonly { readonly code: string; readonly amountMinor: number | null }[];
   readonly archivedAt: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;

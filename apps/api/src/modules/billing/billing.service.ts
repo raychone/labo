@@ -1,9 +1,11 @@
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import type { BillingDocumentType, Prisma, WorkStatus } from "@prisma/client";
+import { calculateUrgencySurchargeMinor, type UrgencyLevel } from "@dental-lab/shared";
 
 import { AuditService } from "../auth/audit.service.js";
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
 import type { LegalEntityContext } from "../organization-context/organization-context.view.js";
 import { DEFAULT_LABORATORY_SETTINGS } from "../settings/settings.constants.js";
 import {
@@ -149,6 +151,7 @@ export class BillingService {
   public constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AuditService) private readonly auditService: AuditService,
+    @Optional() @Inject(NotificationsService) private readonly notificationsService?: NotificationsService,
   ) {}
 
   public async getOverview(legalEntity: LegalEntityContext, query: BillingRangeQueryDto): Promise<BillingOverview> {
@@ -479,6 +482,12 @@ export class BillingService {
       document.type === "PROFORMA" ? BILLING_AUDIT_ACTIONS.proformaIssued : BILLING_AUDIT_ACTIONS.invoiceIssued,
       document,
     );
+    if (document.type === "INVOICE") {
+      for (const workOrderId of document.lines.map((line) => line.workOrderId)) {
+        await this.notificationsService?.resolve("INVOICE_REQUIRED", `invoice-required:work:${workOrderId}`);
+        await this.notificationsService?.resolve("PAYMENT_NOTE_REQUIRED", `payment-note-required:work:${workOrderId}`);
+      }
+    }
     return toBillingDocumentDetail(document);
   }
 
@@ -886,7 +895,7 @@ export class BillingService {
     const currency = await this.getCurrency(legalEntity);
     const pricing = this.createDraftPricing(works, dto.adjustments ?? []);
 
-    return this.prisma.billingDocument.create({
+    const document = await this.prisma.billingDocument.create({
       data: {
         ...this.createClinicSnapshot(clinic),
         clinicId: clinic.id,
@@ -913,6 +922,7 @@ export class BillingService {
       },
       include: BILLING_DOCUMENT_INCLUDE,
     });
+    return document;
   }
 
   private async findCompatibleWorks(legalEntity: LegalEntityContext, workOrderIds: readonly string[], documentType: BillingDocumentType, expectedClinicId?: string): Promise<readonly BillableWorkRecord[]> {
@@ -947,6 +957,9 @@ export class BillingService {
 
     const unbillable = works.find((work) => !this.isWorkCycleBillable(work));
     if (unbillable) {
+      if (unbillable.technicalReadiness === "FINAL_READY" && (this.getBillableCycle(unbillable)?.executionSnapshot?.pricingTotalMinor === null || this.getBillableCycle(unbillable)?.executionSnapshot?.pricingUnitPriceMinor === null)) {
+        throw new BadRequestException("Lucrarea conține poziții fără preț configurat.");
+      }
       throw new BadRequestException("Una sau mai multe lucrari nu au companie de executie si pret blocate pe ciclul activ.");
     }
 
@@ -988,9 +1001,33 @@ export class BillingService {
   }
 
   private createDraftPricing(works: readonly BillableWorkRecord[], adjustments: readonly BillingAdjustmentInput[]): DraftPricing {
+    // Canonical B19 order: base item subtotal -> item/work discounts ->
+    // patient discounts -> centralized WorkOrder urgency -> invoice discount.
     const lines = this.createLineInputs(works).map((line) => ({ ...line }));
     const subtotalMinor = lines.reduce((total, line) => total + line.lineTotalMinor, 0);
     this.assertBillingAdjustments(lines, adjustments);
+
+    // Keep the canonical order independent of request ordering:
+    // item/work discounts, then patient discounts, then urgency.
+    this.applyAdjustments(lines, [
+      ...adjustments.filter((adjustment) => adjustment.scope === "WORK"),
+      ...adjustments.filter((adjustment) => adjustment.scope === "PATIENT"),
+    ]);
+    const urgencyByWorkOrderId = new Map(works.map((work) => [work.id, work.urgency]));
+    for (const line of lines) {
+      const urgency = urgencyByWorkOrderId.get(line.workOrderId);
+      if (!urgency) continue;
+      const surcharge = calculateUrgencySurchargeMinor(line.lineTotalMinor, urgency as UrgencyLevel);
+      line.lineTotalMinor += surcharge;
+      line.unitPriceMinor = line.quantity > 0 ? Math.round(line.lineTotalMinor / line.quantity) : 0;
+    }
+    this.applyAdjustments(lines, adjustments.filter((adjustment) => adjustment.scope === "DOCUMENT"));
+
+    const totalMinor = lines.reduce((total, line) => total + line.lineTotalMinor, 0);
+    return { discountMinor: Math.max(0, subtotalMinor - totalMinor), lines, subtotalMinor, totalMinor };
+  }
+
+  private applyAdjustments(lines: Prisma.BillingDocumentLineUncheckedCreateWithoutBillingDocumentInput[], adjustments: readonly BillingAdjustmentInput[]): void {
 
     for (const adjustment of adjustments) {
       const lineIndexes = this.resolveAdjustmentLineIndexes(lines, adjustment);
@@ -1005,7 +1042,10 @@ export class BillingService {
           if (!currentLine) {
             continue;
           }
-          const discountMinor = Math.min(currentLine.lineTotalMinor, Math.round(currentLine.lineTotalMinor * (percentage / 100)));
+          const discountMinor = calculatePercentageMinor(currentLine.lineTotalMinor, percentage);
+          if (discountMinor > currentLine.lineTotalMinor) {
+            throw new BadRequestException("Reducerea nu poate depăși valoarea aplicabilă.");
+          }
           currentLine.lineTotalMinor -= discountMinor;
           currentLine.unitPriceMinor = currentLine.quantity > 0 ? Math.round(currentLine.lineTotalMinor / currentLine.quantity) : 0;
         }
@@ -1016,13 +1056,6 @@ export class BillingService {
       this.distributeFixedDiscount(lines, lineIndexes, amountMinor);
     }
 
-    const totalMinor = lines.reduce((total, line) => total + line.lineTotalMinor, 0);
-    return {
-      discountMinor: Math.max(0, subtotalMinor - totalMinor),
-      lines,
-      subtotalMinor,
-      totalMinor,
-    };
   }
 
   private assertBillingAdjustments(lines: readonly Prisma.BillingDocumentLineUncheckedCreateWithoutBillingDocumentInput[], adjustments: readonly BillingAdjustmentInput[]): void {
@@ -1062,7 +1095,10 @@ export class BillingService {
 
   private distributeFixedDiscount(lines: Prisma.BillingDocumentLineUncheckedCreateWithoutBillingDocumentInput[], lineIndexes: readonly number[], amountMinor: number): void {
     const currentTotalMinor = lineIndexes.reduce((total, lineIndex) => total + (lines[lineIndex]?.lineTotalMinor ?? 0), 0);
-    let remainingDiscountMinor = Math.min(amountMinor, currentTotalMinor);
+    if (amountMinor > currentTotalMinor) {
+      throw new BadRequestException("Reducerea fixă nu poate depăși valoarea aplicabilă.");
+    }
+    let remainingDiscountMinor = amountMinor;
     if (remainingDiscountMinor <= 0 || currentTotalMinor <= 0) {
       return;
     }
@@ -1111,7 +1147,8 @@ export class BillingService {
     const snapshot = cycle?.executionSnapshot ?? null;
 
     return Boolean(
-      cycle?.executionLegalEntityId
+      work.technicalReadiness === "FINAL_READY"
+      && cycle?.executionLegalEntityId
       && cycle.executionLegalEntityCodeSnapshot
       && snapshot?.status === "LOCKED"
       && snapshot.pricingTotalMinor !== null
@@ -1190,6 +1227,22 @@ export class BillingService {
         issuedAt: new Date(),
         issuedByUserId: actorUserId,
         number,
+        ...(document.type === "INVOICE" ? {
+          paymentNoteIssuedAt: new Date(),
+          paymentNoteSnapshot: {
+            currency: document.currency,
+            lines: (document.lines ?? []).map((line) => ({
+              description: line.description,
+              lineTotalMinor: line.lineTotalMinor,
+              patientName: line.patientNameSnapshot,
+              quantity: line.quantity,
+              unitPriceMinor: line.unitPriceMinor,
+              workCode: line.workCode,
+              workType: line.workTypeNameSnapshot,
+            })),
+            totalMinor: document.totalMinor,
+          },
+        } : {}),
         series: series.prefix,
         status: "ISSUED",
         updatedByUserId: actorUserId,
@@ -1587,4 +1640,18 @@ export class BillingService {
 
 function uniqueStrings(values: readonly (string | null)[]): readonly string[] {
   return [...new Set(values.filter((value): value is string => typeof value === "string" && value.length > 0))];
+}
+
+function calculatePercentageMinor(amountMinor: number, percentage: number): number {
+  if (!Number.isSafeInteger(amountMinor) || amountMinor < 0 || !Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
+    throw new BadRequestException("Procentul reducerii trebuie să fie între 0 și 100.");
+  }
+  const [whole = "0", fraction = ""] = String(percentage).split(".");
+  const boundedFraction = fraction.slice(0, 6);
+  const scale = 10 ** boundedFraction.length;
+  const numerator = Number(`${whole}${boundedFraction}`);
+  if (!Number.isSafeInteger(numerator)) {
+    throw new BadRequestException("Procentul reducerii nu este valid.");
+  }
+  return Math.floor((amountMinor * numerator + (100 * scale) / 2) / (100 * scale));
 }

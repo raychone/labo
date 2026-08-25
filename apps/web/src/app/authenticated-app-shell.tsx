@@ -9,6 +9,7 @@ import { OrganizationContextSwitch } from "../features/organization-context/orga
 import { useSettings } from "../features/settings/settings-api.js";
 import { addUnauthorizedListener, isUnauthorizedError } from "../lib/api-client.js";
 import { useAuthState } from "./auth-state.js";
+import { useMarkNotificationRead, useNotifications } from "../features/notifications/notifications-api.js";
 import { ShellErrorBoundary } from "./error-boundary.js";
 import { getNavigationRoutes, getRouteByPath } from "./route-registry.js";
 import { usePageTitle } from "./use-page-title.js";
@@ -39,6 +40,7 @@ export function AuthenticatedAppShell(): ReactNode {
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const canReadSettings = auth.permissionKeys.includes("settings.read");
   const canReadOrganizationContext = auth.permissionKeys.includes("organization_context.read");
   const canSwitchOrganizationContext = auth.permissionKeys.includes("organization_context.switch");
@@ -49,6 +51,9 @@ export function AuthenticatedAppShell(): ReactNode {
   const currentRoute = getRouteByPath(location.pathname);
   const pageTitle = currentRoute?.label ?? (location.pathname === "/forbidden" ? "Acces restricționat" : "Pagina");
   const routes = useMemo(() => getNavigationRoutes(auth.permissionKeys), [auth.permissionKeys]);
+  const canReadNotifications = auth.permissionKeys.includes("notifications.read_own");
+  const notificationsQuery = useNotifications(canReadNotifications);
+  const markReadMutation = useMarkNotificationRead();
   const courierOnly = routes.length === 1 && routes[0]?.path === "/my-route";
   usePageTitle(pageTitle, laboratoryName);
   const logoutMutation = useMutation({
@@ -129,6 +134,7 @@ export function AuthenticatedAppShell(): ReactNode {
             <span>{pageTitle}</span>
             <small>{laboratoryName}</small>
           </div>
+          {canReadNotifications ? <button aria-label="Notificări" className="app-shell__notification-button" onClick={() => setIsNotificationsOpen(true)} type="button"><span aria-hidden="true">♢</span>{(notificationsQuery.data?.unreadCount ?? 0) > 0 ? <span aria-label={`${notificationsQuery.data?.unreadCount ?? 0} notificări necitite`} className="app-shell__notification-badge">{notificationsQuery.data?.unreadCount}</span> : null}</button> : null}
         </header>
         <AppHeader courierOnly={courierOnly} pageTitle={pageTitle} pathname={location.pathname} />
         {settingsQuery.isError && canReadSettings ? (
@@ -172,6 +178,15 @@ export function AuthenticatedAppShell(): ReactNode {
         }}
         title="Confirmă deconectarea"
       />
+      <Drawer isOpen={isNotificationsOpen} onOpenChange={setIsNotificationsOpen} position="right" title="Notificări">
+        <div className="app-shell__notifications">
+          <div className="app-shell__notifications-actions"><span>{notificationsQuery.data?.unreadCount ?? 0} necitite</span></div>
+          {notificationsQuery.isLoading ? <LoadingState text="Se încarcă notificările" /> : null}
+          {notificationsQuery.error ? <ErrorState title="Notificările nu au putut fi încărcate" description="Încearcă din nou." /> : null}
+          {!notificationsQuery.isLoading && !notificationsQuery.error && (notificationsQuery.data?.items.length ?? 0) === 0 ? <p className="app-shell__notifications-empty">Nu ai notificări noi.</p> : null}
+          {(notificationsQuery.data?.items ?? []).map((notification) => <button className={`app-shell__notification-item${notification.readAt ? "" : " app-shell__notification-item--unread"}`} key={notification.id} onClick={() => { if (!notification.readAt) markReadMutation.mutate(notification.id); setIsNotificationsOpen(false); navigate(notification.deepLink); }} type="button"><span className={`app-shell__notification-severity app-shell__notification-severity--${notification.severity.toLowerCase()}`} /><span><strong>{notification.title}</strong><small>{notification.message}</small><time dateTime={notification.createdAt}>{new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(notification.createdAt))}</time>{notification.resolvedAt ? <em>Rezolvată</em> : null}</span></button>)}
+        </div>
+      </Drawer>
     </div>
   );
 }

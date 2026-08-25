@@ -50,11 +50,14 @@ describe("LogisticsRouteBuilderPage", () => {
             doctor: { id: "doctor_1", name: "Dr. Ana" },
             dueState: "ON_TRACK",
             id: "work_1",
-            logistics: { status: "READY_FOR_DELIVERY", statusLabel: "Gata de livrare", version: 1 },
+            logistics: { status: "RECEIVED", statusLabel: "Recepționată", version: 1 },
             patientName: "Ion Pop",
             patientReference: null,
             preparationGroup: null,
             priority: "NORMAL",
+            technicalReadiness: "PROBE_READY",
+            requiresDelivery: true,
+            requiresPickup: false,
             requestedDeliveryDate: "2026-08-21T00:00:00.000Z",
             workCode: "WO-26-0001",
             workflow: { assignedUserName: "Tech", completedAt: null, currentStageName: null, progressCompleted: 1, progressTotal: 1, status: "COMPLETED" },
@@ -101,7 +104,8 @@ describe("LogisticsRouteBuilderPage", () => {
     expect(await screen.findByRole("heading", { name: "Traseu" })).toBeDefined();
     fireEvent.click(await screen.findByRole("button", { name: "WO-26-0001 · Ion Pop" }));
     fireEvent.click(await screen.findByRole("button", { name: "Clinica Test · 09:30" }));
-    fireEvent.change(screen.getByLabelText("Curier"), { target: { value: "courier_1" } });
+    fireEvent.focus(screen.getByLabelText("Curier"));
+    fireEvent.click(await screen.findByRole("option", { name: "Curier Test" }));
     fireEvent.click(screen.getByRole("button", { name: "Expediază lista" }));
 
     await waitFor(() => expect(posts).toHaveLength(1));

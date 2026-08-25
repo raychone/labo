@@ -7,9 +7,6 @@ export const LOGISTICS_STATUSES = [
   "RECEIVED",
   "IN_PRODUCTION",
   "BLOCKED",
-  "READY_FOR_PACKING",
-  "PACKING",
-  "READY_FOR_DELIVERY",
   "HANDED_TO_DELIVERY",
   "DELIVERED",
 ] as const;
@@ -33,9 +30,6 @@ export const LOGISTICS_CENTER_CATEGORIES = [
   "URGENTE",
   "INTARZIATE",
   "FINALIZATE_AZI",
-  "DE_AMBALAT",
-  "IN_AMBALARE",
-  "GATA_DE_LIVRARE",
   "NEFACTURATE",
   "IN_ASTEPTARE",
   "DE_LIVRAT",
@@ -67,10 +61,7 @@ export type CourierRouteStopOutcome = (typeof COURIER_ROUTE_STOP_OUTCOMES)[numbe
 
 export interface LogisticsActionAvailability {
   readonly block: boolean;
-  readonly completePacking: boolean;
   readonly manageGroups: boolean;
-  readonly readyForPacking: boolean;
-  readonly startPacking: boolean;
   readonly unblock: boolean;
   readonly updateLocation: boolean;
 }
@@ -82,9 +73,6 @@ export interface LogisticsStateView {
   readonly blockedReasonNotes: string | null;
   readonly locationCode: LogisticsLocationCode | null;
   readonly locationLabel: string | null;
-  readonly packingStartedAt: string | null;
-  readonly readyForDeliveryAt: string | null;
-  readonly readyForPackingAt: string | null;
   readonly status: LogisticsStatus;
   readonly statusLabel: string;
   readonly version: number;
@@ -172,7 +160,12 @@ export interface LogisticsCenterItem {
   readonly workTypeName: string;
   readonly requiresDelivery: boolean;
   readonly requiresPickup: boolean;
+  readonly requiresLogisticsAction: boolean;
+  readonly logisticsActionReasons: readonly LogisticsActionReason[];
 }
+
+export const LOGISTICS_ACTION_REASONS = ["NEW_WORK", "READY_FOR_PROBE_DELIVERY", "READY_FOR_FINAL_DELIVERY", "FAILED_DELIVERY", "PICKUP_REQUIRED", "REPLAN_REQUIRED"] as const;
+export type LogisticsActionReason = (typeof LOGISTICS_ACTION_REASONS)[number];
 
 export interface WorkLogisticsView extends LogisticsCenterItem {
   readonly events: readonly LogisticsEventView[];
@@ -235,11 +228,7 @@ export interface LogisticsCenterSummary {
   readonly all: number;
   readonly blocked: number;
   readonly inProduction: number;
-  readonly inPacking: number;
   readonly overdue: number;
-  readonly readyForDelivery: number;
-  readonly readyForDeliveryUnbilled: number;
-  readonly readyForPacking: number;
   readonly receivedToday: number;
   readonly toDeliver: number;
   readonly toPickup: number;
@@ -416,9 +405,6 @@ export const LOGISTICS_STATUS_LABELS = {
   DELIVERED: "Livrată",
   HANDED_TO_DELIVERY: "Predată spre livrare",
   IN_PRODUCTION: "În producție",
-  PACKING: "În ambalare",
-  READY_FOR_DELIVERY: "Gata de livrare",
-  READY_FOR_PACKING: "De ambalat",
   RECEIVED: "Recepționată",
 } as const satisfies Record<LogisticsStatus, string>;
 
@@ -471,21 +457,18 @@ export function canAddWorkToPreparationGroup(input: {
   readonly groupStatus: DeliveryPreparationGroupStatus;
   readonly hasActiveGroup: boolean;
   readonly workClinicId: string;
-  readonly workLogisticsStatus: LogisticsStatus;
+  readonly technicalReadiness: "PROBE_READY" | "FINAL_READY" | null;
 }): boolean {
   return input.groupStatus === "DRAFT"
     && input.groupClinicId === input.workClinicId
     && !input.hasActiveGroup
-    && input.workLogisticsStatus === "READY_FOR_DELIVERY";
+    && (input.technicalReadiness === "PROBE_READY" || input.technicalReadiness === "FINAL_READY");
 }
 
 export function createDefaultLogisticsActions(): LogisticsActionAvailability {
   return {
     block: false,
-    completePacking: false,
     manageGroups: false,
-    readyForPacking: false,
-    startPacking: false,
     unblock: false,
     updateLocation: false,
   };

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { filterDraftConnections, getDraftCompositionTeeth, toggleDraftConnection, type DraftWorkOrderItem } from "./multi-item-work-editor.js";
+import { IMPLANT_PLATFORM_OPTIONS, WORK_SHADE_OPTIONS } from "./works-page.schema.js";
 
 function item(scope: DraftWorkOrderItem["scope"], teeth: DraftWorkOrderItem["teeth"] = []): DraftWorkOrderItem {
   return {
@@ -18,6 +19,14 @@ function item(scope: DraftWorkOrderItem["scope"], teeth: DraftWorkOrderItem["tee
 }
 
 describe("multi-item work draft", () => {
+  it("reuses the existing operational shade and implant-platform option lists", () => {
+    expect(WORK_SHADE_OPTIONS).toContain("A2");
+    expect(WORK_SHADE_OPTIONS).toContain("B1");
+    expect(IMPLANT_PLATFORM_OPTIONS).toContain("Alpha Bio");
+    expect(IMPLANT_PLATFORM_OPTIONS).toContain("Straumann");
+    expect(IMPLANT_PLATFORM_OPTIONS).toContain("Alt tip");
+  });
+
   it("keeps a lower-arch component as one item while exposing its anatomical composition", () => {
     expect(getDraftCompositionTeeth([item("LOWER_ARCH")])).toEqual([48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38]);
   });

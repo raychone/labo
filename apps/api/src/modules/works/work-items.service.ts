@@ -24,7 +24,7 @@ import { ToothConnectionsService } from "./tooth-connections.service.js";
 
 export const WORK_ORDER_ITEM_INCLUDE = {
   teeth: { orderBy: [{ sortOrder: "asc" as const }, { fdiTooth: "asc" as const }] },
-  workType: { select: { code: true, id: true, name: true, symbol: true } },
+  workType: { select: { code: true, id: true, name: true, symbol: true, unit: true, probeFamily: true, probeTypeCodes: true } },
 } satisfies PrismaTypes.WorkOrderItemInclude;
 
 export type WorkOrderItemRecord = PrismaTypes.WorkOrderItemGetPayload<{ include: typeof WORK_ORDER_ITEM_INCLUDE }>;
@@ -40,8 +40,9 @@ export class WorkItemsService {
 
   public async list(actorUserId: string, workOrderId: string, legalEntity?: LegalEntityContext): Promise<readonly WorkOrderItemView[]> {
     await this.findReadableWorkOrder(actorUserId, workOrderId, legalEntity);
+    const pricingPermission = await this.authorizationService.hasPermission({ permission: "pricing.read", requiredScope: "ALL", userId: actorUserId });
     const items = await this.prisma.workOrderItem.findMany({ include: WORK_ORDER_ITEM_INCLUDE, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], where: { workOrderId, archivedAt: null } });
-    return items.map(toWorkOrderItemView);
+    return items.map((item) => toWorkOrderItemView(item, pricingPermission.allowed));
   }
 
   public async create(input: {
@@ -54,7 +55,9 @@ export class WorkItemsService {
     await this.authorizationService.requirePermission({ permission: "works.item.create", requiredScope: "ALL", userId: input.actorUserId });
     const workOrder = await this.requireWorkOrder(input.workOrderId, input.legalEntity);
     const normalized = this.validateInput(input.dto);
-    await this.validateWorkType(normalized.workTypeId);
+    await this.requireCustomValuePermissions(input.actorUserId, normalized);
+    const config = await this.validateWorkType(normalized.workTypeId);
+    this.validateCatalogComposition([normalized], [config]);
     const nextSortOrder = await this.nextSortOrder(input.workOrderId);
     const item = await this.prisma.workOrderItem.create({
       data: this.toCreateData(input.workOrderId, normalized, nextSortOrder),
@@ -68,7 +71,8 @@ export class WorkItemsService {
       resourceId: item.id,
       resourceType: "work_order_item",
     });
-    return toWorkOrderItemView(item);
+    const pricingPermission = await this.authorizationService.hasPermission({ permission: "pricing.read", requiredScope: "ALL", userId: input.actorUserId });
+    return toWorkOrderItemView(item, pricingPermission.allowed);
   }
 
   public async update(input: {
@@ -100,7 +104,13 @@ export class WorkItemsService {
       : input.dto.customWorkTypeSnapshot;
     if (!effectiveWorkTypeId && !effectiveCustomWorkTypeSnapshot) throw new BadRequestException("Componenta tehnică necesită un tip de lucrare din catalog sau un snapshot personalizat.");
     if (effectiveWorkTypeId && effectiveCustomWorkTypeSnapshot) throw new BadRequestException("Alegeți tipul de lucrare din catalog sau valoarea personalizată, nu ambele.");
-    await this.validateWorkType(effectiveWorkTypeId);
+    const config = await this.validateWorkType(effectiveWorkTypeId);
+    this.validateCatalogComposition([{ ...input.dto, scope: nextScope, teeth: validation.teeth, workTypeId: effectiveWorkTypeId, customWorkTypeSnapshot: asRecord(effectiveCustomWorkTypeSnapshot as PrismaTypes.JsonValue) ?? null } as WorkOrderItemInput], [config]);
+    const canonicalAddOns = canonicalSelectedAddOns(config?.allowedAddOns ?? null, input.dto.selectedAddOns);
+    await this.requireCustomValuePermissions(input.actorUserId, {
+      customWorkTypeSnapshot: effectiveCustomWorkTypeSnapshot as Readonly<Record<string, unknown>> | null,
+      customImplantPlatformSnapshot: input.dto.customImplantPlatformSnapshot === undefined ? asRecord(existing.customImplantPlatformSnapshot) : input.dto.customImplantPlatformSnapshot,
+    });
     const item = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.workOrderItem.update({
         data: {
@@ -117,6 +127,7 @@ export class WorkItemsService {
         ...(input.dto.totalPriceMinor !== undefined ? { totalPriceMinor: input.dto.totalPriceMinor } : {}),
         ...(input.dto.currency !== undefined ? { currency: input.dto.currency ?? null } : {}),
         ...(input.dto.commercialSnapshot !== undefined ? { commercialSnapshot: jsonOrNull(input.dto.commercialSnapshot) } : {}),
+        ...(input.dto.selectedAddOns !== undefined ? { selectedAddOns: jsonOrNull(canonicalAddOns) } : {}),
         ...(scopeChanged || input.dto.teeth !== undefined ? { teeth: { deleteMany: {}, create: validation.teeth.map((fdiTooth, sortOrder) => ({ fdiTooth, sortOrder })) } } : {}),
           version: { increment: 1 },
         },
@@ -137,7 +148,8 @@ export class WorkItemsService {
       resourceId: item.id,
       resourceType: "work_order_item",
     });
-    return toWorkOrderItemView(item);
+    const pricingPermission = await this.authorizationService.hasPermission({ permission: "pricing.read", requiredScope: "ALL", userId: input.actorUserId });
+    return toWorkOrderItemView(item, pricingPermission.allowed);
   }
 
   public async archive(input: {
@@ -195,7 +207,9 @@ export class WorkItemsService {
       const normalized = this.validateInput(existing ? mergeExistingItemInput(existing, item) : item);
       return { ...normalized, id: item.id };
     });
-    for (const item of normalizedItems) await this.validateWorkType(item.workTypeId);
+    await Promise.all(normalizedItems.map((item) => this.requireCustomValuePermissions(input.actorUserId, item)));
+    const catalogConfigs = await Promise.all(normalizedItems.map((item) => this.validateWorkType(item.workTypeId)));
+    this.validateCatalogComposition(normalizedItems, catalogConfigs);
 
     const finalTeeth = getCanonicalWorkOrderCompositionTeeth(normalizedItems.map((item) => ({ archivedAt: null, scope: item.scope, teeth: item.teeth ?? [] })));
     const desiredConnections = new Map<string, { readonly toothA: number; readonly toothB: number }>();
@@ -225,6 +239,9 @@ export class WorkItemsService {
 
     if (normalizedItems.some((item) => !item.id)) await this.authorizationService.requirePermission({ permission: "works.item.create", requiredScope: "ALL", userId: input.actorUserId });
     if (changedItems.some((item) => item.id)) await this.authorizationService.requirePermission({ permission: "works.item.update", requiredScope: "ALL", userId: input.actorUserId });
+    if (changedItems.some((item) => item.id && existingById.get(item.id)?.technicalCodeNotes !== (item.technicalCodeNotes ?? null))) {
+      await this.authorizationService.requirePermission({ permission: "works.technical_code.edit", requiredScope: "ALL", userId: input.actorUserId });
+    }
     if (removedItems.length > 0) await this.authorizationService.requirePermission({ permission: "works.item.remove", requiredScope: "ALL", userId: input.actorUserId });
     if (scopeChanged) await this.authorizationService.requirePermission({ permission: "works.scope.update", requiredScope: "ALL", userId: input.actorUserId });
     if (removedConnections.length > 0 || addedConnections.length > 0) await this.authorizationService.requirePermission({ permission: "works.connections.manage", requiredScope: "ALL", userId: input.actorUserId });
@@ -251,6 +268,7 @@ export class WorkItemsService {
             restorationType: item.restorationType ?? null,
             technicalCodeNotes: item.technicalCodeNotes ?? null,
             notes: item.notes ?? null,
+            selectedAddOns: jsonOrNull(canonicalSelectedAddOns(catalogConfigs[normalizedItems.indexOf(item)]?.allowedAddOns ?? null, item.selectedAddOns)),
             teeth: { deleteMany: {}, create: normalizeWorkOrderItemTeeth(item.teeth).map((fdiTooth, sortOrder) => ({ fdiTooth, sortOrder })) },
             version: { increment: 1 },
           },
@@ -265,6 +283,9 @@ export class WorkItemsService {
         await tx.workOrderToothConnection.create({ data: { workOrderId: input.workOrderId, toothA: pair.toothA, toothB: pair.toothB } });
       }
       const finalItems = await tx.workOrderItem.findMany({ include: WORK_ORDER_ITEM_INCLUDE, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], where: { archivedAt: null, workOrderId: input.workOrderId } });
+      if (typeof tx.workOrder.update === "function") {
+        await tx.workOrder.update({ data: { quantity: finalItems.reduce((total, item) => total + (item.workType?.unit === "ELEMENT" ? Math.max(1, item.teeth.length) : 1), 0), version: { increment: 1 }, updatedByUserId: input.actorUserId }, where: { id: input.workOrderId } });
+      }
       const finalConnections = await tx.workOrderToothConnection.findMany({ orderBy: [{ toothA: "asc" }, { toothB: "asc" }], where: { workOrderId: input.workOrderId } });
       return { finalConnections, finalItems };
     });
@@ -277,7 +298,10 @@ export class WorkItemsService {
       ...addedConnections.map(([, pair]) => ({ action: POSTMEETING_AUDIT_ACTIONS.toothConnectionAdded, metadata: { toothNumbers: [pair.toothA, pair.toothB], workOrderLabel: workOrder.code }, resourceId: undefined })),
     ];
     await Promise.all(auditEvents.map((event) => this.auditService.record({ action: event.action, actorUserId: input.actorUserId, metadata: event.metadata, ...(event.resourceId ? { resourceId: event.resourceId } : {}), resourceType: event.action.includes("tooth_connection") ? "work_order_tooth_connection" : "work_order_item", ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}) })));
-    return { items: result.finalItems.map(toWorkOrderItemView), toothConnections: result.finalConnections.map((connection) => ({ createdAt: connection.createdAt.toISOString(), id: connection.id, toothA: connection.toothA as ToothConnectionView["toothA"], toothB: connection.toothB as ToothConnectionView["toothB"], workOrderId: connection.workOrderId })) };
+    const pricingPermission = typeof this.authorizationService.hasPermission === "function"
+      ? await this.authorizationService.hasPermission({ permission: "pricing.read", requiredScope: "ALL", userId: input.actorUserId })
+      : { allowed: false };
+    return { items: result.finalItems.map((item) => toWorkOrderItemView(item, pricingPermission.allowed)), toothConnections: result.finalConnections.map((connection) => ({ createdAt: connection.createdAt.toISOString(), id: connection.id, toothA: connection.toothA as ToothConnectionView["toothA"], toothB: connection.toothB as ToothConnectionView["toothB"], workOrderId: connection.workOrderId })) };
   }
 
   private async findReadableWorkOrder(actorUserId: string, workOrderId: string, legalEntity?: LegalEntityContext): Promise<{ readonly id: string }> {
@@ -318,10 +342,43 @@ export class WorkItemsService {
     return { ...dto, scope: dto.scope, teeth: validation.teeth };
   }
 
-  private async validateWorkType(workTypeId: string | null | undefined): Promise<void> {
-    if (!workTypeId) return;
-    const workType = await this.prisma.workType.findUnique({ select: { id: true }, where: { id: workTypeId } });
+  private async requireCustomValuePermissions(actorUserId: string, input: Pick<WorkOrderItemInput, "customWorkTypeSnapshot" | "customImplantPlatformSnapshot">): Promise<void> {
+    if (input.customWorkTypeSnapshot) await this.authorizationService.requirePermission({ permission: "works.custom_type.use", requiredScope: "ASSIGNED", userId: actorUserId });
+    if (input.customImplantPlatformSnapshot) await this.authorizationService.requirePermission({ permission: "works.custom_platform.use", requiredScope: "ASSIGNED", userId: actorUserId });
+  }
+
+  private async validateWorkType(workTypeId: string | null | undefined): Promise<{ readonly id: string; readonly unit: string; readonly exclusiveGroup: string | null; readonly allowedAddOns: PrismaTypes.JsonValue | null } | null> {
+    if (!workTypeId) return null;
+    const workType = await this.prisma.workType.findUnique({ select: { allowedAddOns: true, exclusiveGroup: true, id: true, unit: true }, where: { id: workTypeId } });
     if (!workType) throw new BadRequestException("Tipul de lucrare selectat nu există.");
+    return workType;
+  }
+
+  private validateCatalogComposition(
+    items: readonly WorkOrderItemInput[],
+    configs: readonly ({ readonly id: string; readonly unit: string; readonly exclusiveGroup: string | null; readonly allowedAddOns: PrismaTypes.JsonValue | null } | null)[],
+  ): void {
+    const workTypeCounts = new Map<string, number>();
+    const groupCounts = new Map<string, number>();
+    items.forEach((item, index) => {
+      const config = configs[index];
+      if (!config) return;
+      const count = (workTypeCounts.get(config.id) ?? 0) + 1;
+      workTypeCounts.set(config.id, count);
+      if (config.unit === "UNIT" && count > 1) throw new BadRequestException("O lucrare de tip bucată poate fi adăugată o singură dată în aceeași lucrare.");
+      if (config.exclusiveGroup) {
+        const groupCount = (groupCounts.get(config.exclusiveGroup) ?? 0) + 1;
+        groupCounts.set(config.exclusiveGroup, groupCount);
+        if (groupCount > 1) throw new BadRequestException(`Lucrările din grupul ${config.exclusiveGroup} nu pot fi combinate în aceeași lucrare.`);
+      }
+      const allowed = new Set(addOnCodes(config.allowedAddOns));
+      const selectedCodes = new Set<string>();
+      for (const selected of item.selectedAddOns ?? []) {
+        if (selectedCodes.has(selected.code)) throw new BadRequestException("Același adaos nu poate fi selectat de două ori pentru aceeași componentă.");
+        selectedCodes.add(selected.code);
+        if (!allowed.has(selected.code)) throw new BadRequestException("Adaosul selectat nu este permis pentru această lucrare.");
+      }
+    });
   }
 
   private toCreateData(workOrderId: string, input: WorkOrderItemInput, sortOrder: number): PrismaTypes.WorkOrderItemCreateInput {
@@ -337,6 +394,7 @@ export class WorkItemsService {
       restorationType: input.restorationType ?? null,
       technicalCodeNotes: input.technicalCodeNotes ?? null,
       notes: input.notes ?? null,
+      selectedAddOns: jsonOrNull(input.selectedAddOns),
       baseUnitPriceMinor: input.baseUnitPriceMinor ?? null,
       totalPriceMinor: input.totalPriceMinor ?? null,
       currency: input.currency ?? null,
@@ -346,18 +404,33 @@ export class WorkItemsService {
   }
 }
 
-function jsonOrNull(value: Readonly<Record<string, unknown>> | null | undefined): PrismaTypes.InputJsonValue | typeof Prisma.JsonNull {
+function jsonOrNull(value: unknown): PrismaTypes.InputJsonValue | typeof Prisma.JsonNull {
   return value === undefined || value === null ? Prisma.JsonNull : value as PrismaTypes.InputJsonValue;
 }
 
-export function toWorkOrderItemView(item: WorkOrderItemRecord): WorkOrderItemView {
+function jsonStringArray(value: PrismaTypes.JsonValue | null): readonly string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+function canonicalSelectedAddOns(allowedAddOns: PrismaTypes.JsonValue | null, selectedAddOns: WorkOrderItemInput["selectedAddOns"]): readonly { readonly code: string; readonly amountMinor: number | null }[] {
+  const amounts = new Map<string, number>();
+  if (Array.isArray(allowedAddOns)) {
+    for (const entry of allowedAddOns) {
+      if (typeof entry !== "object" || entry === null || Array.isArray(entry)) continue;
+      if (typeof entry.code === "string" && typeof entry.amountMinor === "number") amounts.set(entry.code, entry.amountMinor);
+    }
+  }
+  return (selectedAddOns ?? []).map((selected) => ({ code: selected.code, amountMinor: amounts.get(selected.code) ?? null }));
+}
+
+export function toWorkOrderItemView(item: WorkOrderItemRecord, includePricing = true): WorkOrderItemView {
   return {
     id: item.id,
     workOrderId: item.workOrderId,
     sortOrder: item.sortOrder,
     scope: item.scope,
     teeth: item.teeth.map((tooth) => ({ fdiTooth: tooth.fdiTooth as WorkOrderItemView["teeth"][number]["fdiTooth"], sortOrder: tooth.sortOrder })),
-    workType: item.workType,
+    workType: item.workType ? { ...item.workType, probeFamily: item.workType.probeFamily, probeTypeCodes: jsonStringArray(item.workType.probeTypeCodes) } : null,
     workTypeId: item.workTypeId,
     customWorkTypeSnapshot: asRecord(item.customWorkTypeSnapshot),
     shade: item.shade,
@@ -366,10 +439,11 @@ export function toWorkOrderItemView(item: WorkOrderItemRecord): WorkOrderItemVie
     restorationType: item.restorationType,
     technicalCodeNotes: item.technicalCodeNotes,
     notes: item.notes,
-    baseUnitPriceMinor: item.baseUnitPriceMinor,
-    totalPriceMinor: item.totalPriceMinor,
-    currency: item.currency,
-    commercialSnapshot: asRecord(item.commercialSnapshot),
+    baseUnitPriceMinor: includePricing ? item.baseUnitPriceMinor : null,
+    totalPriceMinor: includePricing ? item.totalPriceMinor : null,
+    currency: includePricing ? item.currency : null,
+    commercialSnapshot: includePricing ? asRecord(item.commercialSnapshot) : null,
+    selectedAddOns: jsonSelectedAddOns(item.selectedAddOns),
     archivedAt: item.archivedAt?.toISOString() ?? null,
     createdAt: item.createdAt.toISOString(),
     updatedAt: item.updatedAt.toISOString(),
@@ -394,13 +468,14 @@ function auditMetadata(code: string, item: { readonly scope: WorkOrderItemRecord
 function itemChangedRecord(existing: WorkOrderItemRecord, next: WorkOrderItemInput): boolean {
   return existing.scope !== next.scope
     || existing.workTypeId !== (next.workTypeId ?? null)
-    || JSON.stringify(existing.customWorkTypeSnapshot) !== JSON.stringify(next.customWorkTypeSnapshot ?? null)
-    || JSON.stringify(existing.customImplantPlatformSnapshot) !== JSON.stringify(next.customImplantPlatformSnapshot ?? null)
+    || JSON.stringify(existing.customWorkTypeSnapshot ?? null) !== JSON.stringify(next.customWorkTypeSnapshot ?? null)
+    || JSON.stringify(existing.customImplantPlatformSnapshot ?? null) !== JSON.stringify(next.customImplantPlatformSnapshot ?? null)
     || existing.shade !== (next.shade ?? null)
     || existing.implantPlatform !== (next.implantPlatform ?? null)
     || existing.restorationType !== (next.restorationType ?? null)
     || existing.technicalCodeNotes !== (next.technicalCodeNotes ?? null)
     || existing.notes !== (next.notes ?? null)
+    || JSON.stringify(existing.selectedAddOns ?? null) !== JSON.stringify(next.selectedAddOns ?? null)
     || existing.teeth.map((tooth) => tooth.fdiTooth).join(",") !== normalizeWorkOrderItemTeeth(next.teeth).join(",");
 }
 
@@ -417,6 +492,20 @@ function mergeExistingItemInput(existing: WorkOrderItemRecord, next: WorkOrderIt
     workTypeId: effectiveWorkTypeId,
     customWorkTypeSnapshot,
     customImplantPlatformSnapshot,
+    ...(next.selectedAddOns === undefined && existing.selectedAddOns ? { selectedAddOns: jsonSelectedAddOns(existing.selectedAddOns) } : {}),
     teeth: next.teeth ?? existing.teeth.map((tooth) => tooth.fdiTooth),
   };
+}
+
+function addOnCodes(value: PrismaTypes.JsonValue | null): readonly string[] {
+  return Array.isArray(value)
+    ? value.flatMap((entry) => typeof entry === "object" && entry !== null && !Array.isArray(entry) && typeof entry.code === "string" ? [entry.code] : [])
+    : [];
+}
+
+function jsonSelectedAddOns(value: PrismaTypes.JsonValue | null): readonly { readonly code: string; readonly amountMinor: number | null }[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => typeof entry === "object" && entry !== null && !Array.isArray(entry) && typeof entry.code === "string"
+    ? [{ code: entry.code, amountMinor: typeof entry.amountMinor === "number" ? entry.amountMinor : null }]
+    : []);
 }

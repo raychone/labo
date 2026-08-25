@@ -17,7 +17,7 @@ describe("logistics helpers", () => {
       groupStatus: "DRAFT",
       hasActiveGroup: false,
       workClinicId: "clinic_a",
-      workLogisticsStatus: "READY_FOR_DELIVERY",
+      technicalReadiness: "PROBE_READY",
     })).toBe(true);
 
     expect(canAddWorkToPreparationGroup({
@@ -25,7 +25,7 @@ describe("logistics helpers", () => {
       groupStatus: "DRAFT",
       hasActiveGroup: true,
       workClinicId: "clinic_a",
-      workLogisticsStatus: "READY_FOR_DELIVERY",
+      technicalReadiness: "FINAL_READY",
     })).toBe(false);
 
     expect(canAddWorkToPreparationGroup({
@@ -33,7 +33,15 @@ describe("logistics helpers", () => {
       groupStatus: "READY",
       hasActiveGroup: false,
       workClinicId: "clinic_a",
-      workLogisticsStatus: "READY_FOR_DELIVERY",
+      technicalReadiness: "PROBE_READY",
+    })).toBe(false);
+
+    expect(canAddWorkToPreparationGroup({
+      groupClinicId: "clinic_a",
+      groupStatus: "DRAFT",
+      hasActiveGroup: false,
+      workClinicId: "clinic_a",
+      technicalReadiness: null,
     })).toBe(false);
   });
 });

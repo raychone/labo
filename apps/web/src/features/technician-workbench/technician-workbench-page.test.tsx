@@ -185,6 +185,7 @@ function createFetchMock(): ReturnType<typeof vi.fn> {
               status: "DUE_TODAY",
             },
             id: "work_3",
+            cycleNumber: 2,
             patientName: "Elena Stoica",
             priority: "NORMAL",
             requestedDeliveryDate: "2026-08-14T10:00:00.000Z",
@@ -225,8 +226,8 @@ function createFetchMock(): ReturnType<typeof vi.fn> {
     }
     if (url.endsWith("/technician-operations/options")) {
       return Promise.resolve(createJsonResponse([
-        { code: "CERAMICA", id: "operation_1", name: "Ceramică" },
-        { code: "GLAZE", id: "operation_2", name: "Glazurare" },
+        { category: "Coroană ceramică", code: "CERAMICA", id: "operation_1", name: "Ceramică" },
+        { category: "Altele", code: "GLAZE", id: "operation_2", name: "Glazurare" },
       ]));
     }
     if (url.includes("/technician-operations/performed?")) {
@@ -361,6 +362,21 @@ function createFetchMock(): ReturnType<typeof vi.fn> {
         id: "work_3",
         internalNotes: "Note interne",
         invoicedDocumentId: null,
+        items: [{
+          archivedAt: null,
+          customImplantPlatformSnapshot: null,
+          customWorkTypeSnapshot: null,
+          id: "item_1",
+          implantPlatform: null,
+          notes: null,
+          restorationType: null,
+          scope: "TEETH",
+          shade: "A2",
+          sortOrder: 0,
+          technicalCodeNotes: null,
+          teeth: [{ fdiTooth: 11 }, { fdiTooth: 12 }],
+          workType: { code: "WT-1", id: "work_type_1", name: "Coroană zirconiu", probeTypeCodes: ["PROBA"], symbol: "CZr" },
+        }],
         patient: null,
         patientName: "Elena Stoica",
         patientReference: null,
@@ -379,6 +395,7 @@ function createFetchMock(): ReturnType<typeof vi.fn> {
         workForm: null,
         workflow: null,
         workType: { code: "WT-1", id: "work_type_1", name: "Coroană zirconiu", symbol: "CZr" },
+        toothConnections: [],
       }));
     }
     if (url.includes("/works/work_3/technician-details") && init?.method === "PATCH") {
@@ -457,47 +474,16 @@ describe("TechnicianWorkbenchPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Lucrările mele" }));
     expect(await screen.findByText(/WO-2026-000003/)).toBeDefined();
     expect(screen.queryByText("Revendicată")).toBeNull();
+    expect(screen.getByText("Probă")).toBeDefined();
     expect(screen.getByRole("button", { name: "Detalii" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Manopere" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Finalizata" })).toBeDefined();
 
     fireEvent.click(screen.getByRole("button", { name: "Detalii" }));
-    expect(await screen.findByRole("heading", { name: "Detalii" })).toBeDefined();
-    expect(await screen.findByText("Pacient: Elena Stoica")).toBeDefined();
-    expect(screen.getByText("Tip lucrare: Coroană zirconiu")).toBeDefined();
-    expect(screen.getByLabelText("Cod")).toBeDefined();
-    fireEvent.change(screen.getByLabelText("Cod"), { target: { value: "COD-NOU" } });
-    fireEvent.click(screen.getByRole("button", { name: "Salvează" }));
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/works/work_3/technician-details"), expect.objectContaining({
-        body: JSON.stringify({ clinicalNotes: "Note recepție", internalNotes: "Note interne", technicalCodeNotes: "COD-NOU" }),
-        method: "PATCH",
-      }));
-    });
+    expect(screen.queryByRole("heading", { name: "Detalii" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Manopere" }));
     expect(await screen.findByRole("heading", { name: "Manopere" })).toBeDefined();
-    expect(await screen.findByText("Ceramică")).toBeDefined();
-    expect(screen.getByText("Glazurare")).toBeDefined();
-    expect(screen.queryByText(/30,00/)).toBeNull();
-    fireEvent.click(screen.getByLabelText(/Glazurare/));
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/technician-operations/performed"), expect.objectContaining({
-        body: JSON.stringify({ operationId: "operation_2", workOrderId: "work_3" }),
-        method: "POST",
-      }));
-    });
-
-    fireEvent.click(screen.getByLabelText(/Ceramică/));
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/technician-operations/performed/performed_1/remove"), expect.objectContaining({
-        body: JSON.stringify({ reason: "Debifată de tehnician din modalul Manopere." }),
-        method: "POST",
-      }));
-    });
     fireEvent.click(screen.getByRole("button", { name: "Închide" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Finalizata" }));

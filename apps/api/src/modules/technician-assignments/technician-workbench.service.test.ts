@@ -126,8 +126,8 @@ describe("TechnicianWorkbenchService", () => {
     expect(result.total).toBe(3);
     expect(result.items.map((item) => item.workCode)).toEqual([
       "WO-2026-000199",
-      "WO-2026-000200",
       "WO-2026-000201",
+      "WO-2026-000200",
     ]);
   });
 

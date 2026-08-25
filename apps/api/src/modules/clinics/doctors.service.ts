@@ -116,10 +116,9 @@ export class DoctorsService {
 
   public async createDoctor(context: ActorContext, dto: CreateDoctorDto): Promise<DoctorDetailView> {
     const clinic = await this.getActiveClinic(dto.clinicId);
-    const legalEntity = await resolveCanonicalLegalEntity(this.prisma, dto.legalEntityCode) ?? clinic.legalEntity;
-    if (dto.legalEntityCode && clinic.legalEntity && dto.legalEntityCode !== clinic.legalEntity.code) {
-      throw new BadRequestException("Firma medicului trebuie să fie aceeași cu firma clinicii.");
-    }
+    // The clinic is the source of truth. A doctor must inherit its collaboration
+    // and cannot select a different CDT/NG entity independently.
+    const legalEntity = clinic.legalEntity;
     const displayName = this.buildDisplayName(dto.firstName, dto.lastName);
 
     const doctor = await this.prisma.$transaction(async (tx) => {

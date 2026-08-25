@@ -103,9 +103,9 @@ export interface LegacyCompatibilityItemView {
   readonly technicalCodeNotes: string | null;
   readonly notes: string | null;
   readonly quantity: number;
-  readonly baseUnitPriceMinor: number;
-  readonly totalPriceMinor: number;
-  readonly currency: string;
+  readonly baseUnitPriceMinor: number | null;
+  readonly totalPriceMinor: number | null;
+  readonly currency: string | null;
 }
 
 export interface WorkOrderCompatibilityView {
@@ -134,6 +134,6 @@ export interface WorkOrderCompatibilityView {
     readonly quantity: number;
     readonly baseUnitPriceMinor: number | null;
     readonly totalPriceMinor: number | null;
-    readonly currency: string;
+    readonly currency: string | null;
   };
 }

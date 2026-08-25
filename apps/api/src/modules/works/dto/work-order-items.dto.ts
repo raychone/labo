@@ -80,6 +80,11 @@ export class CreateWorkOrderItemDto {
   @IsOptional()
   @IsObject()
   public readonly commercialSnapshot?: Record<string, unknown> | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsObject({ each: true })
+  public readonly selectedAddOns?: readonly { readonly code: string; readonly amountMinor?: number | null }[];
 }
 
 export class UpdateWorkOrderItemDto {
@@ -154,4 +159,9 @@ export class UpdateWorkOrderItemDto {
   @IsOptional()
   @IsObject()
   public readonly commercialSnapshot?: Record<string, unknown> | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsObject({ each: true })
+  public readonly selectedAddOns?: readonly { readonly code: string; readonly amountMinor?: number | null }[];
 }

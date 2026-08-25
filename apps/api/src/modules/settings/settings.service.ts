@@ -33,6 +33,7 @@ const EDITABLE_FIELDS = [
   "email",
   "iban",
   "legalName",
+  "largeOutstandingThresholdMinor",
   "phone",
   "postalCode",
   "primaryColor",
@@ -189,7 +190,13 @@ export class SettingsService {
         throw new BadRequestException("Legal name is required.");
       }
 
-      this.assignUpdateValue(data, field, value);
+      if (field === "largeOutstandingThresholdMinor") {
+        if (value !== undefined) {
+          data.largeOutstandingThresholdMinor = value as number | null;
+        }
+      } else {
+        this.assignUpdateValue(data, field, value as string | null | undefined);
+      }
     }
 
     return data;
@@ -209,7 +216,7 @@ export class SettingsService {
 
   private assignUpdateValue(
     data: Prisma.LegalEntitySettingsUncheckedUpdateInput,
-    field: (typeof EDITABLE_FIELDS)[number],
+    field: Exclude<(typeof EDITABLE_FIELDS)[number], "largeOutstandingThresholdMinor">,
     value: string | null | undefined,
   ): void {
     if (value === undefined) {

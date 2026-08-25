@@ -6,6 +6,17 @@ function trim(value: unknown): unknown {
 }
 
 export class CreateProbeTypeDto {
+  @IsOptional()
+  @Transform(({ value }) => trim(value))
+  @IsString()
+  @MaxLength(40)
+  public readonly code?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => trim(value))
+  @IsString()
+  @MaxLength(16)
+  public readonly symbol?: string;
   @Transform(({ value }) => trim(value))
   @IsString()
   @MaxLength(120)
@@ -18,6 +29,17 @@ export class CreateProbeTypeDto {
 }
 
 export class UpdateProbeTypeDto {
+  @IsOptional()
+  @Transform(({ value }) => trim(value))
+  @IsString()
+  @MaxLength(40)
+  public readonly code?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => trim(value))
+  @IsString()
+  @MaxLength(16)
+  public readonly symbol?: string;
   @IsOptional()
   @Transform(({ value }) => trim(value))
   @IsString()

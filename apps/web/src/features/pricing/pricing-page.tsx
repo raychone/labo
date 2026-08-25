@@ -32,9 +32,6 @@ import {
   formatMoneyMinor,
   formatWorkTypeUnit,
   minorToDecimalString,
-  TECHNICIAN_MANEUVER_UNIT_HELP_RO,
-  TECHNICIAN_MANEUVER_UNIT_LABELS_RO,
-  TECHNICIAN_MANEUVER_UNITS,
   WORK_TYPE_UNITS,
   type ExecutionTimeRuleInput,
   type PriceCatalogItemInput,
@@ -260,19 +257,19 @@ function getEffectiveCatalogPrice(item: PriceCatalogItemSummary, agreement: Pric
 
 function getTechnicianOperationDefaults(): TechnicianOperationFormValues {
   return {
+    category: "Altele",
     code: "",
     description: "",
     name: "",
-    pricingUnit: "PER_ELEMENT",
   };
 }
 
 function toTechnicianOperationInput(values: TechnicianOperationFormValues): TechnicianOperationInput {
   return {
+    category: values.category,
     code: values.code,
     description: values.description || null,
     name: values.name,
-    pricingUnit: values.pricingUnit,
   };
 }
 
@@ -420,7 +417,6 @@ export function PricingPage(): ReactNode {
     { header: "Cod", id: "code", isSortable: true, renderCell: (item) => item.code },
     { header: "Manoperă", id: "name", isSortable: true, renderCell: (item) => item.name },
     { header: "Descriere", id: "description", renderCell: (item) => item.description ?? "-" },
-    { header: "Unitate de tarifare", id: "pricingUnit", renderCell: (item) => item.pricingUnit ? TECHNICIAN_MANEUVER_UNIT_LABELS_RO[item.pricingUnit] : "Neclasificată" },
     { header: "Status", id: "status", renderCell: (item) => <StatusBadge label={item.isActive ? "Activ" : "Arhivat"} variant={item.isActive ? "approved" : "closed"} /> },
     {
       header: "Acțiuni",
@@ -444,17 +440,15 @@ export function PricingPage(): ReactNode {
   const rateColumns = useMemo<readonly DataTableColumn<TechnicianRateView>[]>(() => [
     { header: "Tehnician", id: "technician", renderCell: (item) => item.technician.displayName },
     { header: "Manoperă", id: "operation", renderCell: (item) => `${item.operation.code} · ${item.operation.name}` },
-    { header: "Unitate", id: "unit", renderCell: (item) => item.operation.pricingUnit ? TECHNICIAN_MANEUVER_UNIT_LABELS_RO[item.operation.pricingUnit] : "Neclasificată" },
-    { align: "right", header: "Câștig", id: "rateMinor", renderCell: (item) => formatMoneyMinor(item.rateMinor, item.currency, locale) },
+    { align: "right", header: "Tarif / element", id: "rateMinor", renderCell: (item) => `${formatMoneyMinor(item.rateMinor, item.currency, locale)} / element` },
     { header: "Valabil de la", id: "effectiveFrom", renderCell: (item) => item.effectiveFrom.slice(0, 10) },
     { header: "Valabil până la", id: "validUntil", renderCell: (item) => item.validUntil?.slice(0, 10) ?? "rata curentă/viitoare" },
   ], [locale]);
   function saveOperation(values: TechnicianOperationFormValues, form: ReturnType<typeof useForm<TechnicianOperationFormValues>>): void {
     const input = toTechnicianOperationInput(values);
-    if (editingOperation && editingOperation.pricingUnit !== values.pricingUnit && !window.confirm("Schimbarea unității modifică sensul tarifării pentru calculele viitoare. Tarifele curente vor fi închise și trebuie configurate din nou. Continui?")) return;
     const onError = (error: unknown) => { applyApiErrorsToForm(form, error); toast.showToast({ message: getErrorMessage(error), title: "Manopera nu a fost salvată", variant: "error" }); };
     const onSuccess = () => { setSelectedOperationId(undefined); form.reset(getTechnicianOperationDefaults()); toast.showToast({ message: editingOperation ? "Manopera a fost modificată." : "Manopera a fost creată.", variant: "success" }); };
-    if (editingOperation) updateOperationMutation.mutate({ id: editingOperation.id, input: { ...input, ...(editingOperation.pricingUnit !== values.pricingUnit ? { confirmPricingUnitChange: true } : {}) } }, { onError, onSuccess });
+    if (editingOperation) updateOperationMutation.mutate({ id: editingOperation.id, input }, { onError, onSuccess });
     else createOperationMutation.mutate(input, { onError, onSuccess });
   }
 
@@ -1064,10 +1058,10 @@ function TechnicianOperationsTab({
 
   useEffect(() => {
     operationForm.reset(editingOperation ? {
+      category: editingOperation.category,
       code: editingOperation.code,
       description: editingOperation.description ?? "",
       name: editingOperation.name,
-      pricingUnit: editingOperation.pricingUnit ?? "PER_ELEMENT",
     } : getTechnicianOperationDefaults());
   }, [editingOperation, operationForm]);
 
@@ -1111,17 +1105,10 @@ function TechnicianOperationsTab({
         <CardContent>
           <FormLayout className="pricing-page__form" onSubmit={(event) => void operationForm.handleSubmit((values) => onOperationSubmit(values, operationForm))(event)}>
             <FormGrid>
+              <TextInput error={operationForm.formState.errors.category?.message} label="Categorie" {...operationForm.register("category")} />
               <TextInput error={operationForm.formState.errors.code?.message} label="Cod" {...operationForm.register("code")} />
               <TextInput error={operationForm.formState.errors.name?.message} label="Manoperă" {...operationForm.register("name")} />
-              <div>
-                <Select
-                  error={operationForm.formState.errors.pricingUnit?.message}
-                  label="Unitate de tarifare"
-                  options={TECHNICIAN_MANEUVER_UNITS.map((unit) => ({ label: TECHNICIAN_MANEUVER_UNIT_LABELS_RO[unit], value: unit }))}
-                  {...operationForm.register("pricingUnit")}
-                />
-                <p className="pricing-page__muted">{TECHNICIAN_MANEUVER_UNIT_HELP_RO[operationForm.watch("pricingUnit")]}</p>
-              </div>
+              <p className="pricing-page__muted">Tarif tehnician / element selectat.</p>
               <FormGridFull>
                 <Textarea error={operationForm.formState.errors.description?.message} label="Descriere" rows={3} {...operationForm.register("description")} />
               </FormGridFull>
@@ -1167,7 +1154,7 @@ function TechnicianOperationsTab({
                   placeholder="Alege manopera"
                   {...rateForm.register("operationId")}
                 />
-                {rateForm.watch("operationId") ? <p className="pricing-page__muted">Unitatea manoperei: {operations.find((operation) => operation.id === rateForm.watch("operationId"))?.pricingUnit ? TECHNICIAN_MANEUVER_UNIT_LABELS_RO[operations.find((operation) => operation.id === rateForm.watch("operationId"))?.pricingUnit as keyof typeof TECHNICIAN_MANEUVER_UNIT_LABELS_RO] : "Neclasificată"}</p> : null}
+                {rateForm.watch("operationId") ? <p className="pricing-page__muted">Tariful se aplică per element/dinte selectat.</p> : null}
                 <NumberInput error={rateForm.formState.errors.rateDecimal?.message} label={`Câștig ${currency}`} {...rateForm.register("rateDecimal")} />
                 <DateInput error={rateForm.formState.errors.effectiveFrom?.message} label="Valabil de la" {...rateForm.register("effectiveFrom")} />
               </FormGrid>

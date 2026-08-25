@@ -1,8 +1,11 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import type { Prisma } from "@prisma/client";
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
+import { createHash } from "node:crypto";
+import { Prisma, type Prisma as PrismaTypes } from "@prisma/client";
+import { B16_NOTIFICATION_EVENTS, getB16WorkTypePricingNotificationKey } from "@dental-lab/shared";
 
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
 import { WORK_TYPE_RESOURCE_TYPE, WORK_TYPES_AUDIT_ACTIONS } from "./work-types.constants.js";
 import type { CreateWorkTypeDto, ListWorkTypesQueryDto, UpdateWorkTypeDto } from "./dto/work-types.dto.js";
 import { WorkTypeCodeService } from "./work-type-code.service.js";
@@ -20,7 +23,7 @@ interface ActorContext {
   readonly requestMetadata: RequestMetadata;
 }
 
-type AuditClient = Pick<Prisma.TransactionClient, "auditLog"> | Pick<PrismaService, "auditLog">;
+type AuditClient = Pick<PrismaTypes.TransactionClient, "auditLog"> | Pick<PrismaService, "auditLog">;
 
 const WORK_TYPE_MUTATION_FIELDS = ["basePriceMinor", "description", "name", "symbol", "unit"] as const satisfies readonly (keyof UpdateWorkTypeDto)[];
 
@@ -29,6 +32,7 @@ export class WorkTypesService {
   public constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(WorkTypeCodeService) private readonly workTypeCodeService: WorkTypeCodeService,
+    @Optional() @Inject(NotificationsService) private readonly notificationsService?: NotificationsService,
   ) {}
 
   public async listWorkTypes(query: ListWorkTypesQueryDto): Promise<PaginatedWorkTypesView> {
@@ -85,13 +89,14 @@ export class WorkTypesService {
 
   public async getWorkType(workTypeId: string): Promise<WorkTypeDetailView> {
     const workType = await this.findWorkTypeOrThrow(workTypeId);
+    if (workType.basePriceMinor === null) await this.notificationsService?.publishUnpricedWorkType(workType);
     return toWorkTypeDetailView(workType);
   }
 
   public async createWorkType(context: ActorContext, dto: CreateWorkTypeDto): Promise<WorkTypeDetailView> {
     const workType = await this.prisma.$transaction(async (tx) => {
       const code = await this.workTypeCodeService.generate(tx);
-      const data: Prisma.WorkTypeUncheckedCreateInput = {
+      const data: PrismaTypes.WorkTypeUncheckedCreateInput = {
         basePriceMinor: dto.basePriceMinor,
         code,
         createdByUserId: context.actorUserId,
@@ -121,6 +126,51 @@ export class WorkTypesService {
     return toWorkTypeDetailView(workType);
   }
 
+  public async saveOperationalNameToCatalog(context: ActorContext, name: string): Promise<{ readonly code: string; readonly id: string; readonly name: string; readonly symbol: string; readonly unit: string }> {
+    const normalizedName = name.trim().replace(/\s+/g, " ");
+    if (normalizedName.length < 2 || normalizedName.length > 160) {
+      throw new BadRequestException("Denumirea personalizată trebuie să aibă între 2 și 160 de caractere.");
+    }
+    const key = normalizedName.toLocaleLowerCase("ro-RO");
+    const digest = createHash("sha256").update(key).digest("hex").slice(0, 16).toUpperCase();
+    const code = `CU-${digest}`;
+    const symbol = `custom-${digest}`;
+
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
+        const existing = await tx.workType.findFirst({ where: { name: { equals: normalizedName, mode: "insensitive" } } });
+        if (existing) return { code: existing.code, id: existing.id, name: existing.name, symbol: existing.symbol, unit: existing.unit };
+        const created = await tx.workType.create({
+          data: { basePriceMinor: null, code, createdByUserId: context.actorUserId, name: normalizedName, symbol, unit: "UNIT", updatedByUserId: context.actorUserId },
+        });
+        await this.recordAudit(tx, {
+          action: WORK_TYPES_AUDIT_ACTIONS.intakeCatalogCreated,
+          actorUserId: context.actorUserId,
+          metadata: {
+            catalogName: normalizedName,
+            code: created.code,
+            notificationEvent: B16_NOTIFICATION_EVENTS.newUnpricedWorkTypeRequiresManagerPricing,
+            notificationKey: getB16WorkTypePricingNotificationKey(created.id),
+            priceConfigured: false,
+            symbol: created.symbol,
+          },
+          requestMetadata: context.requestMetadata,
+          resourceId: created.id,
+        });
+        return { code: created.code, id: created.id, name: created.name, symbol: created.symbol, unit: created.unit };
+      }, { isolationLevel: "Serializable" });
+      await this.notificationsService?.publishUnpricedWorkType({ id: result.id, name: result.name });
+      return result;
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const existing = await this.prisma.workType.findFirst({ where: { code } });
+        if (existing) return { code: existing.code, id: existing.id, name: existing.name, symbol: existing.symbol, unit: existing.unit };
+        throw new ConflictException("Tipul personalizat există deja, dar nu a putut fi reutilizat automat.");
+      }
+      throw error;
+    }
+  }
+
   public async updateWorkType(context: ActorContext, workTypeId: string, dto: UpdateWorkTypeDto): Promise<WorkTypeDetailView> {
     const before = await this.findWorkTypeOrThrow(workTypeId);
 
@@ -138,9 +188,56 @@ export class WorkTypesService {
         data,
         where: {
           id: workTypeId,
+          ...(before.basePriceMinor === null ? { basePriceMinor: null } : {}),
         },
       });
       const changedFields = this.getChangedFields(before, updatedWorkType);
+
+      if (before.basePriceMinor === null && updatedWorkType.basePriceMinor !== null) {
+        const eligibleItems = await tx.workOrderItem.findMany({
+          select: { workOrder: { select: { code: true } } },
+          where: {
+            archivedAt: null,
+            baseUnitPriceMinor: null,
+            commercialSnapshot: { equals: Prisma.JsonNull },
+            totalPriceMinor: null,
+            workOrder: { invoicedDocumentId: null },
+            workTypeId,
+          },
+        });
+        const propagation = await tx.workOrderItem.updateMany({
+          data: {
+            baseUnitPriceMinor: updatedWorkType.basePriceMinor,
+            currency: "RON",
+            totalPriceMinor: updatedWorkType.basePriceMinor,
+          },
+          where: {
+            archivedAt: null,
+            baseUnitPriceMinor: null,
+            commercialSnapshot: { equals: Prisma.JsonNull },
+            totalPriceMinor: null,
+            workOrder: { invoicedDocumentId: null },
+            workTypeId,
+          },
+        });
+        await this.recordAudit(tx, {
+          action: WORK_TYPES_AUDIT_ACTIONS.catalogPriceConfigured,
+          actorUserId: context.actorUserId,
+          metadata: {
+            affectedItemCount: propagation.count,
+            affectedWorkOrderCodes: eligibleItems.map((item) => item.workOrder.code).slice(0, 100),
+            currency: "RON",
+            newPriceMinor: updatedWorkType.basePriceMinor,
+            notificationEvent: B16_NOTIFICATION_EVENTS.newUnpricedWorkTypeRequiresManagerPricing,
+            notificationKey: getB16WorkTypePricingNotificationKey(workTypeId),
+            previousPriceState: "UNCONFIGURED",
+            workTypeId,
+            workTypeName: updatedWorkType.name,
+          },
+          requestMetadata: context.requestMetadata,
+          resourceId: workTypeId,
+        });
+      }
 
       if (changedFields.length > 0) {
         const priceChanged = before.basePriceMinor !== updatedWorkType.basePriceMinor;
@@ -166,6 +263,7 @@ export class WorkTypesService {
       return updatedWorkType;
     });
 
+    if (before.basePriceMinor === null && after.basePriceMinor !== null) await this.notificationsService?.resolveUnpricedWorkType(workTypeId);
     return toWorkTypeDetailView(after);
   }
 

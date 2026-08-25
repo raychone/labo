@@ -410,10 +410,15 @@
   min-width: 0;
   overflow-wrap: anywhere;
   white-space: normal;
+  line-height: 1.35;
+  min-height: 3.75rem;
+  height: auto;
+  align-content: start;
 }
 
 .works-page__search-option strong,
 .works-page__search-option span {
+  display: block;
   min-width: 0;
   overflow-wrap: anywhere;
   white-space: normal;

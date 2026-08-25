@@ -157,6 +157,10 @@ export async function fetchWorkFormWorkTypeOptions(): Promise<readonly WorkTypeF
   return parseApiResponse<readonly WorkTypeFormOption[]>(response);
 }
 
+export async function saveOperationalWorkTypeName(name: string): Promise<WorkTypeFormOption> {
+  return sendJson<WorkTypeFormOption>("/work-types/operational-name", "POST", { name });
+}
+
 export async function fetchProbeTypes(includeArchived = false): Promise<readonly ProbeTypeView[]> {
   const response = await apiFetch(`/works/probe-types${includeArchived ? "?includeArchived=true" : ""}`);
   return parseApiResponse<readonly ProbeTypeView[]>(response);

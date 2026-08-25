@@ -13,8 +13,8 @@ import {
   TextInput,
   Textarea,
 } from "@dental-lab/ui";
-import { URGENCY_LABELS_RO, URGENCY_LEVELS } from "@dental-lab/shared";
-import type { ClinicOption, CreateWorkInput, DoctorOption, PatientOption, ProbeTypeView, UpdateWorkInput, WorkDeadlinePreview, WorkDeadlinePreviewInput, WorkDetail, WorkFormTemplateDetail, WorkTypeFormOption } from "@dental-lab/shared";
+import { formatWorkTypeCategory, URGENCY_LABELS_RO, URGENCY_LEVELS } from "@dental-lab/shared";
+import type { ClinicOption, CreateWorkInput, DoctorOption, PatientOption, UpdateWorkInput, WorkDeadlinePreview, WorkDeadlinePreviewInput, WorkDetail, WorkFormTemplateDetail, WorkTypeFormOption } from "@dental-lab/shared";
 import type { ReactNode } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { useEffect, useId, useMemo, useState } from "react";
@@ -32,7 +32,6 @@ export const defaultWorkFormValues: WorkFormValues = {
   implantPlatformCustom: null,
   patientId: "",
   patientReference: null,
-  probeTypeId: "",
   priority: "NORMAL",
   urgency: "NORMAL",
   quantity: 1,
@@ -54,7 +53,6 @@ const workFieldLabels: Record<keyof WorkFormValues, string> = {
   implantPlatformCustom: "Alt tip platformă",
   patientId: "Pacient",
   patientReference: "Identificator pacient",
-  probeTypeId: "Tip probă curentă",
   priority: "Prioritate",
   urgency: "Urgență",
   quantity: "Elemente",
@@ -92,7 +90,6 @@ export function toWorkFormValues(work: WorkDetail | undefined): WorkFormValues {
     implantPlatformCustom: work.implantPlatform && !IMPLANT_PLATFORM_OPTIONS.includes(work.implantPlatform as (typeof IMPLANT_PLATFORM_OPTIONS)[number]) ? work.implantPlatform : null,
     patientId: work.patient?.id ?? "",
     patientReference: work.patientReference,
-    probeTypeId: work.activeProbeCycle?.probeType.id ?? "",
     priority: work.priority,
     urgency: work.urgency ?? "NORMAL",
     quantity: work.quantity,
@@ -119,8 +116,6 @@ export function toWorkMutationInput(values: WorkFormValues, template: WorkFormTe
     patientReference: values.patientReference,
     priority: values.priority,
     urgency: values.urgency,
-    ...(includePatient ? { probeTypeId: values.probeTypeId } : {}),
-    ...(includePatient ? { probeDeadlineAt: toManualDueAt(values.requestedDeliveryDate, values.requestedDeliveryTime) ?? "" } : {}),
     quantity: values.quantity,
     requestedDeliveryDate: values.requestedDeliveryDate,
     ...(includeManualDueAt ? { manualDueAt: toManualDueAt(values.requestedDeliveryDate, values.requestedDeliveryTime) } : {}),
@@ -226,7 +221,6 @@ export function WorkForm({
   multiItem = false,
   workTypeOptions,
   patientOptions,
-  probeTypeOptions,
 }: {
   readonly clinicOptions: readonly ClinicOption[];
   readonly doctorOptions: readonly DoctorOption[];
@@ -246,7 +240,6 @@ export function WorkForm({
   readonly isDeadlinePreviewLoading?: boolean;
   readonly workTypeOptions: readonly WorkTypeFormOption[];
   readonly patientOptions: readonly PatientOption[];
-  readonly probeTypeOptions?: readonly ProbeTypeView[];
 }): ReactNode {
   const summaryRef = useErrorSummaryFocus(form.formState.errors, form.formState.submitCount);
   const summaryItems = form.formState.submitCount > 0
@@ -263,6 +256,7 @@ export function WorkForm({
   const implantPlatform = form.watch("implantPlatform");
   const selectedPatient = useMemo(() => patientOptions.find((patient) => patient.id === patientId) ?? null, [patientId, patientOptions]);
   const selectedWorkType = useMemo(() => workTypeOptions.find((workType) => workType.id === workTypeId) ?? null, [workTypeId, workTypeOptions]);
+  const isImplantWorkType = selectedWorkType?.name.toLocaleLowerCase("ro-RO").includes("implant") ?? false;
   const selectedClinic = useMemo(() => clinicOptions.find((clinic) => clinic.id === clinicId) ?? null, [clinicId, clinicOptions]);
   const selectedDoctor = useMemo(() => doctorOptions.find((doctor) => doctor.id === doctorId) ?? null, [doctorId, doctorOptions]);
 
@@ -277,6 +271,14 @@ export function WorkForm({
       setWorkTypeSearch(selectedWorkType.name);
     }
   }, [selectedWorkType, workTypeId]);
+
+  useEffect(() => {
+    if (!isImplantWorkType) {
+      form.setValue("implantPlatform", null, { shouldDirty: false, shouldValidate: true });
+      form.setValue("implantPlatformCustom", null, { shouldDirty: false, shouldValidate: true });
+      form.setValue("restorationType", null, { shouldDirty: false, shouldValidate: true });
+    }
+  }, [form, isImplantWorkType]);
 
   useEffect(() => {
     if (clinicId !== "" && selectedClinic) {
@@ -306,8 +308,8 @@ export function WorkForm({
     value: patient.id,
   })), patientSearch), [patientOptions, patientSearch]);
   const visibleWorkTypeOptions = useMemo(() => filterSearchableOptions(workTypeOptions.map((workType) => ({
-    label: workType.name,
-    secondary: `${workType.symbol} · ${formatWorkTypeUnit(workType.unit)}`,
+    label: displayWorkTypeName(workType.name),
+    secondary: `${workType.probeFamily ? `${formatWorkTypeCategory(workType.probeFamily)} · ` : ""}${workType.symbol} · ${formatWorkTypeUnit(workType.unit)}`,
     value: workType.id,
   })), workTypeSearch), [workTypeOptions, workTypeSearch]);
 
@@ -430,7 +432,7 @@ export function WorkForm({
             selectedValue={form.watch("shade") ?? ""}
             emptyMessage="Nu există culori potrivite."
           />
-          <SearchablePickerField
+          {isImplantWorkType ? <SearchablePickerField
             disabled={isDisabled}
             error={form.formState.errors.implantPlatform?.message}
             id="implantPlatform"
@@ -447,21 +449,21 @@ export function WorkForm({
             searchValue={implantPlatform ?? ""}
             selectedValue={implantPlatform ?? ""}
             emptyMessage="Nu există platforme potrivite."
-          />
-          {implantPlatform === "Alt tip" ? <TextInput disabled={isDisabled} error={form.formState.errors.implantPlatformCustom?.message} id="implantPlatformCustom" label="Alt tip platformă" placeholder="Introdu tipul platformei" {...form.register("implantPlatformCustom")} /> : null}
-          <RadioGroup
+          /> : null}
+          {isImplantWorkType && implantPlatform === "Alt tip" ? <TextInput disabled={isDisabled} error={form.formState.errors.implantPlatformCustom?.message} id="implantPlatformCustom" label="Alt tip platformă" placeholder="Introdu tipul platformei" {...form.register("implantPlatformCustom")} /> : null}
+          {isImplantWorkType ? <RadioGroup
             disabled={isDisabled}
             label="Tip restaurare"
             name="restorationType"
             onValueChange={(value) => {
               if (value === "cimentata" || value === "insurubata") {
-                form.setValue("restorationType", value, { shouldDirty: true, shouldValidate: true });
+                form.setValue("restorationType", form.watch("restorationType") === value ? null : value, { shouldDirty: true, shouldValidate: true });
               }
             }}
             options={RESTORATION_TYPE_OPTIONS}
             value={form.watch("restorationType") ?? ""}
-          />
-          {form.watch("restorationType") ? (
+          /> : null}
+          {isImplantWorkType && form.watch("restorationType") ? (
             <Button
               disabled={isDisabled}
               onClick={() => form.setValue("restorationType", null, { shouldDirty: true, shouldValidate: true })}
@@ -477,7 +479,6 @@ export function WorkForm({
 
       <FormSection title="Termen și urgență">
         <FormGrid>
-          <Select disabled={isDisabled} error={form.formState.errors.probeTypeId?.message} id="probeTypeId" label="Tip probă curentă" options={(probeTypeOptions ?? []).map((option) => ({ label: option.name, value: option.id }))} required {...form.register("probeTypeId")} />
           <DateInput
             disabled={isDisabled}
             error={form.formState.errors.requestedDeliveryDate?.message}
@@ -494,7 +495,7 @@ export function WorkForm({
             placeholder="HH:mm"
             {...form.register("requestedDeliveryTime")}
           />
-          <Select disabled={isDisabled} error={form.formState.errors.urgency?.message} id="urgency" label="Urgență" options={URGENCY_LEVELS.map((value) => ({ label: `${URGENCY_LABELS_RO[value]} · +${value === "NORMAL" ? 0 : value === "URGENCY_1" ? 25 : value === "URGENCY_2" ? 50 : value === "URGENCY_3" ? 75 : 100}%`, value }))} {...form.register("urgency")} />
+          <Select disabled={isDisabled} error={form.formState.errors.urgency?.message} id="urgency" label="Urgență" options={URGENCY_LEVELS.map((value) => ({ label: URGENCY_LABELS_RO[value], value }))} {...form.register("urgency")} />
         </FormGrid>
       </FormSection>
 
@@ -521,6 +522,10 @@ function formatWorkTypeUnit(unit: WorkTypeFormOption["unit"]): string {
           : unit === "REPAIR"
             ? "Reparație"
             : "Altă unitate";
+}
+
+function displayWorkTypeName(name: string): string {
+  return name.replace(/\s*-\s*(bucată|bucata|element|arcadă|arcada|lucrare)\s*$/iu, "").trim();
 }
 
 function formatSearchableDate(value: string): string {

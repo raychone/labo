@@ -35,7 +35,6 @@ export const workFormSchema = z.object({
   implantPlatformCustom: nullableTrimmedString(80),
   patientId: z.string().min(1, "Alege pacientul."),
   patientReference: nullableTrimmedString(80),
-  probeTypeId: z.string().min(1, "Alege tipul probei curente."),
   priority: z.enum(WORK_PRIORITIES),
   urgency: z.enum(URGENCY_LEVELS).catch("NORMAL"),
   quantity: z.number().int().min(1, "Numărul minim de elemente este 1.").max(99, "Numărul maxim de elemente este 99."),

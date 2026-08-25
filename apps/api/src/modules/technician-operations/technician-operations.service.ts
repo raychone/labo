@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import type { Prisma } from "@prisma/client";
-import { TECHNICIAN_MANEUVER_UNIT_LABELS_RO } from "@dental-lab/shared";
+import { Prisma, type Prisma as PrismaTypes } from "@prisma/client";
+import { calculateTechnicianManeuverElementQuantity, calculateTechnicianManeuverTotalMinor, getCanonicalWorkOrderCompositionTeeth, isAdultFdiTooth, type AdultFdiTooth } from "@dental-lab/shared";
 
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
@@ -44,7 +44,7 @@ interface ActorContext {
 type AuditClient = Pick<Prisma.TransactionClient, "auditLog"> | Pick<PrismaService, "auditLog">;
 type PerformedOperationTx = Pick<
   Prisma.TransactionClient,
-  "auditLog" | "technicianOperation" | "technicianOperationRate" | "technicianPerformedOperation" | "workOrder"
+  "auditLog" | "technicianOperation" | "technicianOperationRate" | "technicianPerformedOperation" | "technicianPerformedOperationTooth" | "workOrder" | "workOrderItem"
 >;
 
 @Injectable()
@@ -87,13 +87,21 @@ export class TechnicianOperationsService {
     };
   }
 
-  public async listOperationOptions(): Promise<readonly TechnicianOperationOptionView[]> {
+  public async listOperationOptions(technicianId?: string): Promise<readonly TechnicianOperationOptionView[]> {
     const operations = await this.prisma.technicianOperation.findMany({
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       where: { isActive: true },
     });
 
-    return operations.map(toTechnicianOperationOptionView);
+    if (!technicianId) return operations.map(toTechnicianOperationOptionView);
+    const now = new Date();
+    return Promise.all(operations.map(async (operation) => {
+      const rate = await this.prisma.technicianOperationRate.findFirst({
+        orderBy: { effectiveFrom: "desc" },
+        where: { effectiveFrom: { lte: now }, operationId: operation.id, technicianId, OR: [{ validUntil: null }, { validUntil: { gt: now } }] },
+      });
+      return { ...toTechnicianOperationOptionView(operation), currency: rate?.currency ?? null, rateMinor: rate?.rateMinor ?? null };
+    }));
   }
 
   public async getOperation(operationId: string): Promise<TechnicianOperationDetailView> {
@@ -101,17 +109,14 @@ export class TechnicianOperationsService {
   }
 
   public async createOperation(context: ActorContext, dto: TechnicianOperationMutationDto): Promise<TechnicianOperationDetailView> {
-    if (!dto.pricingUnit) {
-      throw new BadRequestException("Alege unitatea de tarifare a manoperei.");
-    }
     const operation = await this.prisma.$transaction(async (tx) => {
       const created = await tx.technicianOperation.create({
         data: {
+          category: normalizeText(dto.category),
           code: normalizeCode(dto.code),
           createdByUserId: context.actorUserId,
           description: dto.description ?? null,
           name: normalizeText(dto.name),
-          pricingUnit: dto.pricingUnit ?? null,
           sortOrder: dto.sortOrder ?? 0,
           updatedByUserId: context.actorUserId,
         },
@@ -138,24 +143,13 @@ export class TechnicianOperationsService {
       throw new BadRequestException("Archived technician operations must be restored before editing.");
     }
 
-    const nextPricingUnit = dto.pricingUnit === undefined ? before.pricingUnit : dto.pricingUnit;
-    const pricingUnitChanged = nextPricingUnit !== before.pricingUnit;
-    if (pricingUnitChanged && before.pricingUnit !== null && !dto.confirmPricingUnitChange) {
-      throw new BadRequestException("Confirmă explicit schimbarea unității de tarifare; tarifele active vor fi închise și trebuie configurate din nou.");
-    }
     const operation = await this.prisma.$transaction(async (tx) => {
-      if (pricingUnitChanged) {
-        await tx.technicianOperationRate.updateMany({
-          data: { validUntil: new Date() },
-          where: { operationId, validUntil: null },
-        });
-      }
       const updated = await tx.technicianOperation.update({
         data: {
+          category: normalizeText(dto.category),
           code: normalizeCode(dto.code),
           description: dto.description ?? null,
           name: normalizeText(dto.name),
-          ...(dto.pricingUnit === undefined ? {} : { pricingUnit: dto.pricingUnit }),
           ...(dto.sortOrder === undefined ? {} : { sortOrder: dto.sortOrder }),
           updatedByUserId: context.actorUserId,
           version: { increment: 1 },
@@ -171,21 +165,6 @@ export class TechnicianOperationsService {
         resourceId: operationId,
         resourceType: TECHNICIAN_OPERATION_RESOURCE_TYPES.operation,
       });
-
-      if (pricingUnitChanged) {
-        await this.recordAudit(tx, {
-          action: TECHNICIAN_OPERATION_AUDIT_ACTIONS.operationUnitChanged,
-          actorUserId: context.actorUserId,
-          metadata: {
-            from: before.pricingUnit ? TECHNICIAN_MANEUVER_UNIT_LABELS_RO[before.pricingUnit as keyof typeof TECHNICIAN_MANEUVER_UNIT_LABELS_RO] : "Neclasificată",
-            name: updated.name,
-            to: updated.pricingUnit ? TECHNICIAN_MANEUVER_UNIT_LABELS_RO[updated.pricingUnit as keyof typeof TECHNICIAN_MANEUVER_UNIT_LABELS_RO] : "Neclasificată",
-          },
-          requestMetadata: context.requestMetadata,
-          resourceId: operationId,
-          resourceType: TECHNICIAN_OPERATION_RESOURCE_TYPES.operation,
-        });
-      }
 
       return updated;
     });
@@ -309,17 +288,25 @@ export class TechnicianOperationsService {
         });
       }
 
-      const created = await tx.technicianOperationRate.create({
-        data: {
-          createdByUserId: context.actorUserId,
-          currency: dto.currency ?? "RON",
-          effectiveFrom,
-          operationId: dto.operationId,
-          rateMinor: dto.rateMinor,
-          technicianId: dto.technicianId,
-        },
-        include: technicianOperationRateInclude,
-      });
+      let created: PrismaTypes.TechnicianOperationRateGetPayload<{ include: typeof technicianOperationRateInclude }>;
+      try {
+        created = await tx.technicianOperationRate.create({
+          data: {
+            createdByUserId: context.actorUserId,
+            currency: dto.currency ?? "RON",
+            effectiveFrom,
+            operationId: dto.operationId,
+            rateMinor: dto.rateMinor,
+            technicianId: dto.technicianId,
+          },
+          include: technicianOperationRateInclude,
+        });
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          throw new ConflictException("Există deja o rată deschisă pentru acest tehnician și această manoperă.");
+        }
+        throw error;
+      }
 
       await this.recordAudit(tx, {
         action: TECHNICIAN_OPERATION_AUDIT_ACTIONS.rateSet,
@@ -369,7 +356,6 @@ export class TechnicianOperationsService {
       include: performedTechnicianOperationInclude,
       orderBy: [{ performedAt: "asc" }, { createdAt: "asc" }],
       where: {
-        removedAt: null,
         workOrderId,
       },
     });
@@ -388,35 +374,77 @@ export class TechnicianOperationsService {
   public async createPayment(context: ActorContext, dto: CreateTechnicianPaymentDto): Promise<TechnicianPaymentView> {
     const paidAt = dto.paidAt ? parseDate(dto.paidAt) : new Date();
     if (Number.isNaN(paidAt.getTime())) throw new BadRequestException("Invalid payment date.");
-    const payment = await this.prisma.$transaction(async (tx) => {
-      await this.validateTechnician(tx, dto.technicianId);
-      const [earned, alreadyPaid] = await Promise.all([
-        tx.technicianPerformedOperation.aggregate({
-          _sum: { earningMinor: true },
-          where: {
-            performedAt: { lte: paidAt },
-            removedAt: null,
-            technicianId: dto.technicianId,
-          },
-        }),
-        tx.technicianPayment.aggregate({
-          _sum: { amountMinor: true },
-          where: { technicianId: dto.technicianId },
-        }),
-      ]);
-      const earnedMinor = earned._sum.earningMinor ?? 0;
-      const alreadyPaidMinor = alreadyPaid._sum.amountMinor ?? 0;
-      if (alreadyPaidMinor + dto.amountMinor > earnedMinor) {
-        throw new BadRequestException("Plata nu poate depăși câștigurile realizate până la data plății.");
-      }
+    const currency = dto.currency ?? "RON";
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const payment = await this.prisma.$transaction(async (tx) => {
+          await this.validateTechnician(tx, dto.technicianId);
+          const [earned, alreadyPaid] = await Promise.all([
+            tx.technicianPerformedOperation.aggregate({
+              _sum: { earningMinor: true },
+              where: { currency, performedAt: { lte: paidAt }, removedAt: null, technicianId: dto.technicianId },
+            }),
+            tx.technicianPayment.aggregate({
+              _sum: { amountMinor: true },
+              where: { currency, paidAt: { lte: paidAt }, technicianId: dto.technicianId },
+            }),
+          ]);
+          const earnedMinor = earned._sum.earningMinor ?? 0;
+          const alreadyPaidMinor = alreadyPaid._sum.amountMinor ?? 0;
+          const availableMinor = earnedMinor - alreadyPaidMinor;
+          if (availableMinor <= 0) {
+            throw new BadRequestException("Tehnicianul nu are sold pozitiv disponibil pentru plată.");
+          }
+          if (dto.amountMinor > availableMinor) {
+            throw new BadRequestException("Plata nu poate depăși câștigurile realizate până la data plății.");
+          }
 
-      const created = await tx.technicianPayment.create({
-        data: { amountMinor: dto.amountMinor, currency: dto.currency ?? "RON", createdByUserId: context.actorUserId, notes: dto.notes ?? null, paidAt, technicianId: dto.technicianId },
-      });
-      await this.recordAudit(tx, { action: "technician.payment.created", actorUserId: context.actorUserId, metadata: { amountMinor: created.amountMinor, technicianId: created.technicianId }, requestMetadata: context.requestMetadata, resourceId: created.id, resourceType: "TECHNICIAN_PAYMENT" });
-      return created;
-    });
-    return toPaymentView(payment);
+          const performedFindMany = (tx.technicianPerformedOperation as unknown as { findMany?: (args: unknown) => Promise<readonly { earningMinor: number; performedAt: Date }[]> }).findMany;
+          const paymentFindMany = (tx.technicianPayment as unknown as { findMany?: (args: unknown) => Promise<readonly { amountMinor: number; paidAt: Date }[]> }).findMany;
+          if (performedFindMany && paymentFindMany) {
+            const [timelineEarnings, timelinePayments] = await Promise.all([
+              performedFindMany({ where: { currency, removedAt: null, technicianId: dto.technicianId }, select: { earningMinor: true, performedAt: true } }),
+              paymentFindMany({ where: { currency, technicianId: dto.technicianId }, select: { amountMinor: true, paidAt: true } }),
+            ]);
+            const events = [
+              ...timelineEarnings.map((entry) => ({ amount: entry.earningMinor, at: entry.performedAt, kind: "earning" as const })),
+              ...timelinePayments.map((entry) => ({ amount: entry.amountMinor, at: entry.paidAt, kind: "payment" as const })),
+              { amount: dto.amountMinor, at: paidAt, kind: "payment" as const },
+            ].sort((left, right) => left.at.getTime() - right.at.getTime() || (left.kind === "earning" ? -1 : 1));
+            let earnedToDate = 0;
+            let paidToDate = 0;
+            for (const event of events) {
+              if (event.kind === "earning") earnedToDate += event.amount;
+              else {
+                paidToDate += event.amount;
+                if (paidToDate > earnedToDate) {
+                  throw new BadRequestException("Plata ar face soldul istoric imposibil la data plății.");
+                }
+              }
+            }
+          }
+
+          const created = await tx.technicianPayment.create({
+            data: { amountMinor: dto.amountMinor, currency, createdByUserId: context.actorUserId, notes: dto.notes ?? null, paidAt, technicianId: dto.technicianId },
+          });
+          await this.recordAudit(tx, {
+            action: "technician.payment.created",
+            actorUserId: context.actorUserId,
+            metadata: { amountMinor: created.amountMinor, currency: created.currency, paidAt: created.paidAt.toISOString(), technicianId: created.technicianId },
+            requestMetadata: context.requestMetadata,
+            resourceId: created.id,
+            resourceType: "TECHNICIAN_PAYMENT",
+          });
+          return created;
+        }, { isolationLevel: "Serializable" });
+        return toPaymentView(payment);
+      } catch (error) {
+        if (isSerializationConflict(error) && attempt < 2) continue;
+        if (isSerializationConflict(error)) throw new ConflictException("Plata nu a putut fi înregistrată din cauza unei alte plăți simultane. Reîncearcă.");
+        throw error;
+      }
+    }
+    throw new ConflictException("Plata nu a putut fi înregistrată. Reîncearcă.");
   }
 
   private async listEarningsForTechnician(query: TechnicianEarningsQueryDto): Promise<TechnicianEarningsSummaryView> {
@@ -424,7 +452,7 @@ export class TechnicianOperationsService {
     const { periodEnd, periodStart } = getEarningsPeriodBounds(period, query);
     const technicianId = query.technicianId?.trim() || undefined;
 
-    const [technician, performedOperations, payments] = await Promise.all([
+    const [technician, performedOperations, payments, cumulativePerformedOperations, cumulativePayments] = await Promise.all([
       technicianId
         ? this.prisma.user.findUnique({
             select: { displayName: true, id: true },
@@ -439,7 +467,7 @@ export class TechnicianOperationsService {
             gte: periodStart,
             lt: periodEnd,
           },
-          removedAt: null,
+          ...(query.includeRemoved ? {} : { removedAt: null }),
           ...(technicianId ? { technicianId } : {}),
         },
       }),
@@ -452,12 +480,25 @@ export class TechnicianOperationsService {
             },
           })
         : Promise.resolve([]),
+      this.prisma.technicianPerformedOperation.findMany({
+        include: technicianEarningsInclude,
+        orderBy: [{ performedAt: "asc" }, { createdAt: "asc" }],
+        where: { removedAt: null, ...(technicianId ? { technicianId } : {}) },
+      }),
+      this.prisma.technicianPayment
+        ? this.prisma.technicianPayment.findMany({
+            orderBy: { paidAt: "asc" },
+            where: { ...(technicianId ? { technicianId } : {}) },
+          })
+        : Promise.resolve([]),
     ]);
 
     return toTechnicianEarningsSummaryView({
       generatedAt: new Date(),
       performedOperations,
       payments,
+      cumulativePerformedOperations,
+      cumulativePayments,
       period,
       periodEnd,
       periodStart,
@@ -470,6 +511,10 @@ export class TechnicianOperationsService {
 
     const performedOperation = await this.prisma.$transaction(async (tx) => {
       const technicianId = await this.ensureTechnicianOwnsWork(tx, context.actorUserId, dto.workOrderId);
+      const workOrder = await tx.workOrder.findUnique({ select: { activeProbeCycleId: true, status: true }, where: { id: dto.workOrderId } });
+      if (!workOrder || workOrder.status === "FINALIZATA") {
+        throw new BadRequestException("Manopera nu poate fi adăugată pentru această stare a lucrării.");
+      }
       const operation = await tx.technicianOperation.findFirst({
         select: { code: true, id: true, name: true },
         where: { id: dto.operationId, isActive: true },
@@ -478,33 +523,80 @@ export class TechnicianOperationsService {
         throw new BadRequestException("Technician operation not found or inactive.");
       }
 
-      const existing = await tx.technicianPerformedOperation.findFirst({
-        include: performedTechnicianOperationInclude,
-        where: {
-          operationId: dto.operationId,
-          removedAt: null,
-          technicianId,
-          workOrderId: dto.workOrderId,
-        },
+      const selectedTeeth = [...new Set(dto.selectedTeeth)];
+      if (selectedTeeth.some((tooth) => !isAdultFdiTooth(tooth))) {
+        throw new BadRequestException("Selectează doar dinți adulți FDI valizi.");
+      }
+      const validSelectedTeeth = selectedTeeth as AdultFdiTooth[];
+      const items = await tx.workOrderItem.findMany({
+        select: { archivedAt: true, scope: true, teeth: { select: { fdiTooth: true } } },
+        where: { archivedAt: null, workOrderId: dto.workOrderId },
       });
-      if (existing) {
-        throw new ConflictException("Technician operation is already selected for this work.");
+      const allowedTeeth = new Set(getCanonicalWorkOrderCompositionTeeth(items.map((item) => ({
+        archivedAt: item.archivedAt,
+        scope: item.scope,
+        teeth: item.teeth.map((tooth) => tooth.fdiTooth),
+      }))));
+      const isCaseLevel = allowedTeeth.size === 0 && items.some((item) => item.scope === "CASE");
+      if (allowedTeeth.size === 0 && !isCaseLevel) {
+        throw new BadRequestException("Lucrarea nu are dinți anatomici disponibili pentru această manoperă.");
+      }
+      if (!isCaseLevel && validSelectedTeeth.length === 0) {
+        throw new BadRequestException("Selectează cel puțin un dinte adult FDI valid.");
+      }
+      const outsideComposition = validSelectedTeeth.filter((tooth) => !allowedTeeth.has(tooth));
+      if (outsideComposition.length > 0) {
+        throw new BadRequestException(`Dinții ${outsideComposition.join(", ")} nu fac parte din compoziția activă a lucrării.`);
+      }
+      const conflicts = validSelectedTeeth.length === 0 ? [] : await tx.technicianPerformedOperationTooth.findMany({
+        select: { fdiTooth: true },
+        where: { fdiTooth: { in: validSelectedTeeth }, operationId: dto.operationId, releasedAt: null, workOrderId: dto.workOrderId },
+      });
+      if (conflicts.length > 0) {
+        const teeth = conflicts.map((conflict) => conflict.fdiTooth).sort((left, right) => left - right);
+        const noun = teeth.length === 1 ? "dintele" : "dinții";
+        throw new ConflictException(`Manopera „${operation.name}” este deja înregistrată pentru ${noun} ${teeth.join(", ")}.`);
       }
 
       const rate = await this.findApplicableRateOrThrow(tx, technicianId, dto.operationId, now);
-      const created = await tx.technicianPerformedOperation.create({
-        data: {
-          createdByUserId: context.actorUserId,
-          currency: rate.currency,
-          earningMinor: rate.rateMinor,
-          operationId: dto.operationId,
-          performedAt: now,
-          rateId: rate.id,
-          technicianId,
-          workOrderId: dto.workOrderId,
-        },
-        include: performedTechnicianOperationInclude,
-      });
+      const quantity = isCaseLevel ? 1 : calculateTechnicianManeuverElementQuantity(validSelectedTeeth);
+      const earningMinor = calculateTechnicianManeuverTotalMinor(quantity, rate.rateMinor);
+      let created: PrismaTypes.TechnicianPerformedOperationGetPayload<{ include: typeof performedTechnicianOperationInclude }>;
+      try {
+        created = await tx.technicianPerformedOperation.create({
+          data: {
+            createdByUserId: context.actorUserId,
+            currency: rate.currency,
+            earningMinor,
+            operationCodeSnapshot: operation.code,
+            operationNameSnapshot: operation.name,
+            notes: dto.notes ?? null,
+            operationId: dto.operationId,
+            performedAt: now,
+            probeCycleId: workOrder.activeProbeCycleId,
+            quantity,
+            rateId: rate.id,
+            rateMinorSnapshot: rate.rateMinor,
+            technicianId,
+            workOrderId: dto.workOrderId,
+          },
+          include: performedTechnicianOperationInclude,
+        });
+        if (validSelectedTeeth.length > 0) {
+          await tx.technicianPerformedOperationTooth.createMany({
+            data: validSelectedTeeth.map((fdiTooth) => ({ fdiTooth, operationId: dto.operationId, performedOperationId: created.id, workOrderId: dto.workOrderId })),
+          });
+        }
+        created = await tx.technicianPerformedOperation.findUniqueOrThrow({
+          include: performedTechnicianOperationInclude,
+          where: { id: created.id },
+        });
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          throw new ConflictException(`Manopera „${operation.name}” este deja înregistrată pentru unul dintre dinții selectați.`);
+        }
+        throw error;
+      }
 
       await this.recordAudit(tx, {
         action: TECHNICIAN_OPERATION_AUDIT_ACTIONS.performedOperationCreated,
@@ -512,6 +604,9 @@ export class TechnicianOperationsService {
         metadata: {
           currency: created.currency,
           earningMinor: created.earningMinor,
+          fdiTeeth: validSelectedTeeth,
+          quantity,
+          rateMinor: rate.rateMinor,
           operationCode: operation.code,
           operationId: created.operationId,
           rateId: created.rateId,
@@ -544,6 +639,9 @@ export class TechnicianOperationsService {
       }
 
       await this.ensureTechnicianOwnsWork(tx, context.actorUserId, existing.workOrderId);
+      if (existing.technicianId !== context.actorUserId) {
+        throw new ForbiddenException("Poți elimina doar manopera înregistrată de tine.");
+      }
 
       const updated = await tx.technicianPerformedOperation.update({
         data: {
@@ -554,6 +652,10 @@ export class TechnicianOperationsService {
         include: performedTechnicianOperationInclude,
         where: { id: performedOperationId },
       });
+      await tx.technicianPerformedOperationTooth.updateMany({
+        data: { releasedAt: now },
+        where: { performedOperationId, releasedAt: null },
+      });
 
       await this.recordAudit(tx, {
         action: TECHNICIAN_OPERATION_AUDIT_ACTIONS.performedOperationRemoved,
@@ -561,6 +663,7 @@ export class TechnicianOperationsService {
         metadata: {
           currency: existing.currency,
           earningMinor: existing.earningMinor,
+          fdiTeeth: (existing.teeth ?? []).map((tooth) => tooth.fdiTooth),
           operationId: existing.operationId,
           rateId: existing.rateId,
           reason: dto.reason ?? null,
@@ -708,6 +811,10 @@ function parseDate(value: string): Date {
   return new Date(value);
 }
 
+function isSerializationConflict(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034";
+}
+
 function getEarningsPeriodBounds(
   period: "DAY" | "MONTH" | "YEAR",
   query: Pick<TechnicianEarningsQueryDto, "date" | "month">,
@@ -741,8 +848,8 @@ function getEarningsPeriodBounds(
 }
 
 function getChangedOperationFields(
-  before: Pick<Prisma.TechnicianOperationGetPayload<object>, "code" | "description" | "name">,
-  after: Pick<Prisma.TechnicianOperationGetPayload<object>, "code" | "description" | "name">,
+  before: Pick<Prisma.TechnicianOperationGetPayload<object>, "category" | "code" | "description" | "name">,
+  after: Pick<Prisma.TechnicianOperationGetPayload<object>, "category" | "code" | "description" | "name">,
 ): readonly string[] {
-  return (["code", "description", "name"] as const).filter((field) => before[field] !== after[field]);
+  return (["category", "code", "description", "name"] as const).filter((field) => before[field] !== after[field]);
 }

@@ -4,6 +4,7 @@ import { AuthModule } from "../auth/auth.module.js";
 import { DatabaseModule } from "../database/database.module.js";
 import { DeadlinesModule } from "../deadlines/deadlines.module.js";
 import { OrganizationContextModule } from "../organization-context/organization-context.module.js";
+import { NotificationsModule } from "../notifications/notifications.module.js";
 import { PatientsModule } from "../patients/patients.module.js";
 import { PricingModule } from "../pricing/pricing.module.js";
 import { QrModule } from "../qr/qr.module.js";
@@ -22,7 +23,7 @@ import { ProbeCyclesService } from "./probe-cycles.service.js";
 
 @Module({
   controllers: [WorksController],
-  imports: [AuthModule, DatabaseModule, DeadlinesModule, OrganizationContextModule, PatientsModule, PricingModule, QrModule, RbacModule, WorkFormsModule, WorkflowExecutionModule],
+  imports: [AuthModule, DatabaseModule, DeadlinesModule, NotificationsModule, OrganizationContextModule, PatientsModule, PricingModule, QrModule, RbacModule, WorkFormsModule, WorkflowExecutionModule],
   providers: [LegacyCompatibilityService, ProbeCyclesService, ProbeTypesService, ToothConnectionsService, WorkDeadlineService, WorkOrderCodeService, WorkItemsService, WorksService],
   exports: [WorksService],
 })

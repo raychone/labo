@@ -37,6 +37,9 @@ describe("WorkDetailComposition", () => {
     expect(screen.getByText("Dinte 11")).toBeDefined();
     expect(screen.getAllByText("Arcada inferioară").length).toBeGreaterThan(0);
     expect(screen.getByText("Identitatea lucrării")).toBeDefined();
+    expect(screen.getByText("A · Coroană A")).toBeDefined();
+    expect(screen.getByText("B · Gutieră")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Dinte 11" }).className).toContain("tooth-diagram__tooth--work-colored");
     expect(screen.getByRole("button", { name: "Conexiune între dinții 12 și 11" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "Conexiune între dinții 11 și 21" }).getAttribute("aria-pressed")).toBe("true");
   });

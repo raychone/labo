@@ -24,6 +24,7 @@ import { createHash } from "node:crypto";
 
 import { hashPassword } from "../../src/modules/auth/password.hashing.js";
 import { REAL_PRICING_CATALOG, REAL_PRICING_SOURCE_SUMMARY, type RealPricingCatalogEntry } from "../catalog/real-pricing-catalog.js";
+import { CREATIVE_PROBE_TYPES, CREATIVE_WORK_CATALOG } from "../catalog/creative-work-catalog.js";
 import { DEMO_INVOICE_SERIES, DEMO_PASSWORD, DEMO_PROFORMA_SERIES } from "./demo.constants.js";
 import { assertDemoDatasetConsistency, buildDemoDataset, getDocumentSeries, type DemoBillingDocumentSeed, type DemoDataset, type DemoWorkSeed } from "./demo-data.js";
 import { resetDemoData } from "./demo-reset.js";
@@ -42,6 +43,7 @@ export async function seedDemoData(prisma: PrismaClient, now = new Date()): Prom
   await seedDemoDoctors(prisma, dataset);
   await seedDemoWorkTypes(prisma, dataset);
   await seedDemoPricing(prisma);
+  await seedCreativeWorkCatalog(prisma);
   await seedDemoWorkFormTemplates(prisma);
   await seedDemoWorkflowTemplates(prisma);
   await seedDemoPatients(prisma, dataset);
@@ -60,8 +62,74 @@ export async function seedDemoData(prisma: PrismaClient, now = new Date()): Prom
 async function seedDemoProbeTypes(prisma: PrismaClient, dataset: DemoDataset): Promise<void> {
   const manager = dataset.users.find((user) => user.roleKey === "MANAGER");
   if (!manager) return;
-  for (const [sortOrder, name] of (["Lingură", "Biscuit", "Ocluzie", "Probă estetică"] as const).entries()) {
-    await prisma.probeType.create({ data: { createdByUserId: manager.id, id: `demo_probe_type_${sortOrder + 1}`, name, sortOrder } });
+  for (const [sortOrder, probe] of CREATIVE_PROBE_TYPES.entries()) {
+    const family = probe.code.split("_")[0];
+    await prisma.probeType.upsert({
+      create: { code: probe.code, createdByUserId: manager.id, id: `demo_probe_type_${probe.code.toLowerCase()}`, name: `${family} · ${probe.name}`, sortOrder, symbol: probe.symbol },
+      update: { code: probe.code, name: `${family} · ${probe.name}`, sortOrder, symbol: probe.symbol, updatedByUserId: manager.id },
+      where: { id: `demo_probe_type_${probe.code.toLowerCase()}` },
+    });
+  }
+}
+
+async function seedCreativeWorkCatalog(prisma: PrismaClient): Promise<void> {
+  const manager = await prisma.user.findUniqueOrThrow({ select: { id: true }, where: { id: "demo_user_manager" } });
+  for (const [sortOrder, item] of CREATIVE_WORK_CATALOG.entries()) {
+    const code = `CD-${item.key.toUpperCase().replace(/[^A-Z0-9]+/g, "-").slice(0, 14)}-${String(sortOrder + 1).padStart(2, "0")}`;
+    await prisma.workType.create({
+      data: {
+        allowedAddOns: item.allowedAddOns.map((addOn) => ({ code: addOn, label: addOn === "GINGIE" ? "Gingie" : "Plăcată", amountMinor: addOn === "GINGIE" ? 20000 : 5000 })),
+        basePriceMinor: item.priceMinor,
+        code,
+        createdByUserId: manager.id,
+        exclusiveGroup: item.exclusiveGroup ?? null,
+        id: `demo_creative_wt_${item.key}`,
+        isActive: true,
+        name: item.displayName,
+        probeFamily: item.probeFamily,
+        probeTypeCodes: item.probeFamily === "MC"
+          ? ["MC_METAL", "MC_CERAMICA", "MC_GLAZE"]
+          : item.probeFamily === "ZR"
+            ? ["ZR_ZR", "ZR_MIYO"]
+            : item.probeFamily === "ZRP"
+              ? ["ZRP_METAL", "ZRP_CERAMICA", "ZRP_MIYO", "ZRP_GLAZE"]
+              : item.probeFamily === "PRO"
+                ? ["PRO_LG", "PRO_SO", "PRO_MACHETA", "PRO_GLAZE"]
+                : [],
+        symbol: item.symbol,
+        unit: item.unit,
+        updatedByUserId: manager.id,
+      },
+    });
+  }
+
+  // The reception selector uses the active creative work types above. Keep
+  // their standard prices in the legal-entity catalog as well; the execution
+  // pricing resolver does not use WorkType.basePriceMinor directly.
+  const legalEntities = await prisma.legalEntity.findMany({
+    select: { code: true, id: true },
+    where: { code: { in: ["CDT", "NG"] } },
+  });
+  for (const legalEntity of legalEntities) {
+    for (const [sortOrder, item] of CREATIVE_WORK_CATALOG.entries()) {
+      if (item.priceMinor <= 0) continue;
+      await prisma.priceCatalogItem.create({
+        data: {
+          category: item.probeFamily,
+          createdByUserId: manager.id,
+          displayName: item.displayName,
+          id: `demo_price_catalog_${legalEntity.code.toLowerCase()}_creative_${item.key}`,
+          isActive: true,
+          legalEntityId: legalEntity.id,
+          notes: "Preț standard din catalogul operațional al lucrărilor.",
+          sortOrder,
+          standardPriceMinor: item.priceMinor,
+          unit: item.unit,
+          updatedByUserId: manager.id,
+          workTypeId: `demo_creative_wt_${item.key}`,
+        },
+      });
+    }
   }
 }
 
@@ -764,12 +832,12 @@ async function seedDemoPricing(prisma: PrismaClient): Promise<void> {
   for (const item of REAL_PRICING_CATALOG) {
     await prisma.workType.create({
       data: {
-        archivedAt: null,
+        archivedAt: new Date(),
         basePriceMinor: item.priceMinor,
         code: item.workTypeCode,
         description: toDemoPricingDescription(item),
         id: toDemoPricingWorkTypeId(item.key),
-        isActive: true,
+        isActive: false,
         name: item.displayName,
         symbol: item.symbol,
         unit: item.unit,
@@ -1247,51 +1315,34 @@ async function seedDemoOptionalIntakeWorks(prisma: PrismaClient, now: Date): Pro
 }
 
 async function seedDemoTechnicianOperations(prisma: PrismaClient, now: Date): Promise<void> {
-  const operations = [
-    { code: "TF", id: "demo_operation_tf", name: "TF", sortOrder: 1, pricingUnit: "PER_CASE" },
-    { code: "SF", id: "demo_operation_sf", name: "SF", sortOrder: 2, pricingUnit: "PER_CASE" },
-    { code: "PLACARE_CERAMICA", id: "demo_operation_placare", name: "Placare ceramica", sortOrder: 3, pricingUnit: "PER_ELEMENT" },
-    { code: "GLAZURA", id: "demo_operation_glazura", name: "Glazura", sortOrder: 4, pricingUnit: "PER_ELEMENT" },
-    { code: "MIYO", id: "demo_operation_miyo", name: "Miyo", sortOrder: 5, pricingUnit: "PER_ELEMENT" },
-    { code: "RCR", id: "demo_operation_rcr", name: "RCR", sortOrder: 6, pricingUnit: "PER_UNIT" },
-    { code: "LINGURA_IMPLANT", id: "demo_operation_lingura_implant", name: "Lingura implant", sortOrder: 7, pricingUnit: "PER_UNIT" },
-    { code: "GLAZURARE", id: "demo_operation_glazurare", name: "Glazurare", sortOrder: 8, pricingUnit: "PER_ELEMENT" },
-    { code: "SCANARE", id: "demo_operation_scanare", name: "Scanare", sortOrder: 9, pricingUnit: "PER_ARCH" },
-    { code: "DESIGN", id: "demo_operation_design", name: "Design", sortOrder: 10, pricingUnit: "PER_CASE" },
-    { code: "PRELUCRARE_ZR", id: "demo_operation_prelucrare_zr", name: "Prelucrare zr", sortOrder: 11, pricingUnit: "PER_UNIT" },
-    { code: "FREZARE_ZR", id: "demo_operation_frezare_zr", name: "Frezare zr", sortOrder: 12, pricingUnit: "PER_UNIT" },
-    { code: "PROTEZA_SCHELETATA", id: "demo_operation_scheletata", name: "Proteza scheletata", sortOrder: 13, pricingUnit: "PER_CASE" },
-    { code: "IBAR", id: "demo_operation_ibar", name: "IBar", sortOrder: 14, pricingUnit: "PER_UNIT" },
-    { code: "PF_TCS_VERTEX", id: "demo_operation_pf_tcs", name: "PF TCS/Vertex", sortOrder: 15, pricingUnit: "PER_CASE" },
-    { code: "PTA", id: "demo_operation_pta", name: "PTA", sortOrder: 16, pricingUnit: "PER_CASE" },
-    { code: "PPA", id: "demo_operation_ppa", name: "PPA", sortOrder: 17, pricingUnit: "PER_CASE" },
-    { code: "REPARATIE_PROTEZA", id: "demo_operation_reparatie", name: "Reparatie proteza", sortOrder: 18, pricingUnit: "PER_UNIT" },
-    { code: "BARA_PLASA_PROTEZA", id: "demo_operation_bara_plasa", name: "BAra/plasa proteza", sortOrder: 19, pricingUnit: "PER_UNIT" },
-    { code: "KEMENY", id: "demo_operation_kemeny", name: "Kemeny", sortOrder: 20, pricingUnit: "PER_CASE" },
-    { code: "GUTIERA", id: "demo_operation_gutiera", name: "Gutiera", sortOrder: 21, pricingUnit: "PER_ARCH" },
+  const operationSpecs = [
+    ["Coroană zirconiu", "SCANARE", "demo_operation_scanare", "Scanare"], ["Coroană zirconiu", "DESIGN", "demo_operation_design", "Design"], ["Coroană zirconiu", "FREZARE", "demo_operation_frezare_zr", "Frezare"], ["Coroană zirconiu", "PRELUCRARE", "demo_operation_prelucrare_zr", "Prelucrare"], ["Coroană zirconiu", "MIYO", "demo_operation_miyo", "Miyo"], ["Coroană zirconiu", "PLACARE_CERAMICA_ZR", "demo_operation_placare", "Placare ceramică"],
+    ["Coroană ceramică", "METAL_TF", "demo_operation_tf", "Metal TF"], ["Coroană ceramică", "METAL_SF", "demo_operation_sf", "Metal SF"], ["Coroană ceramică", "MODELARE", "demo_operation_modelare", "Modelare"], ["Coroană ceramică", "PRESARE", "demo_operation_presare", "Presare"], ["Coroană ceramică", "GLAZURA", "demo_operation_glazura", "Glazură"], ["Coroană ceramică", "PLACARE_CERAMICA_CERAMICA", "demo_operation_placare_ceramica", "Placare ceramică"],
+    ["Altele", "PLACARE_CERAMICA_ALTELE", "demo_operation_placare_altele", "Placare ceramică"], ["Altele", "COROANA_COMPOZIT_INLAY", "demo_operation_compozit_inlay", "Coroană compozit / Inlay"], ["Altele", "PROTEZA", "demo_operation_proteza", "Proteză"], ["Altele", "COROANE_ADIACENTE", "demo_operation_coroane_adiacente", "Coroane adiacente"], ["Altele", "GINGIE", "demo_operation_gingie", "Gingie"],
   ] as const;
+  const operations = operationSpecs.map(([category, code, id, name], index) => ({ category, code, id, name, sortOrder: index + 1 }));
   await prisma.technicianOperation.updateMany({
     data: { isActive: false, sortOrder: 999 },
-    where: { id: { in: ["demo_operation_model", "demo_operation_cad", "demo_operation_ceramica"] } },
+    where: { id: { startsWith: "demo_operation_" } },
   });
   for (const operation of operations) {
     await prisma.technicianOperation.upsert({
       create: {
+        category: operation.category,
         code: operation.code,
         createdByUserId: "demo_user_manager",
         description: "Manoperă demonstrativă pentru câștiguri.",
         id: operation.id,
         name: operation.name,
-        pricingUnit: operation.pricingUnit,
         sortOrder: "sortOrder" in operation ? operation.sortOrder : 0,
         updatedByUserId: "demo_user_manager",
       },
       update: {
+        category: operation.category,
         code: operation.code,
         description: "Manoperă demonstrativă pentru câștiguri.",
         isActive: true,
         name: operation.name,
-        pricingUnit: operation.pricingUnit,
         sortOrder: operation.sortOrder,
         updatedByUserId: "demo_user_manager",
       },
@@ -1540,6 +1591,9 @@ async function createDemoExecutionSnapshot(prisma: PrismaClient, scenario: DemoC
     },
   });
   const unitPriceMinor = catalogItem?.standardPriceMinor ?? work.baseUnitPriceMinor;
+  if (unitPriceMinor === null) {
+    throw new Error(`Demo work ${work.code} has no configured price.`);
+  }
   const totalMinor = unitPriceMinor * work.quantity;
   const pricingSourceType = catalogItem ? "STANDARD_CATALOG" : "LEGACY_WORK_TYPE";
   const pricingSourceLabel = catalogItem ? "Catalog standard firmă" : "Preț legacy demo";
@@ -1596,12 +1650,12 @@ async function createDemoExecutionSnapshot(prisma: PrismaClient, scenario: DemoC
       executionLegalEntityId: legalEntity.id,
       pricingAgreementId: null,
       pricingCatalogItemId: catalogItem?.id ?? null,
-      pricingCurrency: work.currency,
+      pricingCurrency: work.currency ?? "RON",
       pricingQuantity: work.quantity.toString(),
       pricingRuleVersion: 1,
       pricingSnapshotJson: {
         catalogItemPublicId: catalogItem?.id ?? null,
-        currency: work.currency,
+        currency: work.currency ?? "RON",
         explanation: catalogItem ? "Se folosește prețul standard al firmei active." : "Demo fallback la prețul legacy al lucrării.",
         legalEntityCode: legalEntity.code,
         priceSource: { agreementPublicId: null, ruleScope: null, sourceLabel: pricingSourceLabel, sourceType: pricingSourceType },

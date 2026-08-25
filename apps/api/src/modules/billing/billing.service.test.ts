@@ -143,11 +143,11 @@ describe("BillingService invoice series", () => {
     ]);
 
     expect(pricing.subtotalMinor).toBe(30000);
-    expect(pricing.discountMinor).toBe(6000);
-    expect(pricing.totalMinor).toBe(24000);
+    expect(pricing.discountMinor).toBe(5700);
+    expect(pricing.totalMinor).toBe(24300);
     expect(pricing.lines).toEqual([
       expect.objectContaining({ lineTotalMinor: 9000, workOrderId: "work_1" }),
-      expect.objectContaining({ lineTotalMinor: 15000, workOrderId: "work_2" }),
+      expect.objectContaining({ lineTotalMinor: 15300, workOrderId: "work_2" }),
     ]);
     expect((works[0] as { activeCycle: { executionSnapshot: { pricingTotalMinor: number } } }).activeCycle.executionSnapshot.pricingTotalMinor).toBe(10000);
     expect((works[1] as { activeCycle: { executionSnapshot: { pricingTotalMinor: number } } }).activeCycle.executionSnapshot.pricingTotalMinor).toBe(20000);
@@ -162,5 +162,16 @@ describe("BillingService invoice series", () => {
         { amountMinor: 1000, mode: "FIXED", patientName: "Alt pacient", scope: "PATIENT" },
       ])
     ).toThrow(BadRequestException);
+  });
+
+  it("applies work discounts before urgency and invoice discounts after urgency", () => {
+    const service = createService() as unknown as BillingService;
+    const work = createBillableWork({ urgency: "URGENCY_1" }) as never;
+    const pricing = (service as never as { createDraftPricing: (items: readonly unknown[], adjustments: readonly unknown[]) => { readonly totalMinor: number } }).createDraftPricing([work], [
+      { amountMinor: 1000, mode: "FIXED", scope: "WORK", workOrderId: "work_1" },
+      { percentage: 10, mode: "PERCENTAGE", scope: "DOCUMENT" },
+    ]);
+
+    expect(pricing.totalMinor).toBe(10935);
   });
 });

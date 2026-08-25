@@ -16,6 +16,7 @@ export interface LegalEntitySettingsView {
   readonly iban: string | null;
   readonly laboratoryName: string;
   readonly legalName: string | null;
+  readonly largeOutstandingThresholdMinor: number | null;
   readonly locale: string;
   readonly logoFileKey: string | null;
   readonly phone: string | null;
@@ -64,6 +65,7 @@ export function toContextualSettingsView(settings: LegalEntitySettingsRecord): C
     legalEntityCode: code,
     legalEntityDisplayName: settings.legalEntity.displayName,
     legalName: settings.legalName,
+    largeOutstandingThresholdMinor: settings.largeOutstandingThresholdMinor,
     locale: settings.locale,
     logoFileKey: settings.logoFileKey,
     phone: settings.phone,

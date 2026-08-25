@@ -7,6 +7,7 @@ import { HealthModule } from "./health/health.module.js";
 import { DeliveryModule } from "./delivery/delivery.module.js";
 import { LogisticsModule } from "./logistics/logistics.module.js";
 import { OrganizationContextModule } from "./organization-context/organization-context.module.js";
+import { NotificationsModule } from "./notifications/notifications.module.js";
 import { PatientsModule } from "./patients/patients.module.js";
 import { PricingModule } from "./pricing/pricing.module.js";
 import { QrModule } from "./qr/qr.module.js";
@@ -23,6 +24,6 @@ import { WorkflowTemplatesModule } from "./workflow-templates/workflow-templates
 import { WorksModule } from "./works/works.module.js";
 
 @Module({
-  imports: [AuthModule, BillingModule, ClinicsModule, DeliveryModule, HealthModule, LogisticsModule, OrganizationContextModule, PatientsModule, PricingModule, QrModule, RbacModule, ScanModule, SettingsModule, StatusModule, TechnicianAssignmentsModule, TechnicianOperationsModule, UsersModule, WorkTypesModule, WorkFormsModule, WorkflowTemplatesModule, WorksModule],
+  imports: [AuthModule, BillingModule, ClinicsModule, DeliveryModule, HealthModule, LogisticsModule, NotificationsModule, OrganizationContextModule, PatientsModule, PricingModule, QrModule, RbacModule, ScanModule, SettingsModule, StatusModule, TechnicianAssignmentsModule, TechnicianOperationsModule, UsersModule, WorkTypesModule, WorkFormsModule, WorkflowTemplatesModule, WorksModule],
 })
 export class AppModule {}

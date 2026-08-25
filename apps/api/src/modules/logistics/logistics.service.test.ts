@@ -97,7 +97,9 @@ function createService({ allowUpload = true } = {}) {
     version: 2,
   }));
   const courierRouteEventCreate = vi.fn(() => Promise.resolve({ id: "route_event_1" }));
+  const courierRouteStopFindFirst = vi.fn(() => Promise.resolve(null));
   const courierRouteStopUpdate = vi.fn(() => Promise.resolve({ id: "stop_1" }));
+  const workOrderUpdate = vi.fn(() => Promise.resolve({ id: "work_1" }));
   const workAttachmentCreate = vi.fn(({ data }: { readonly data: { readonly fileName: string; readonly mimeType: string; readonly sizeBytes: number } }) => Promise.resolve({
     id: `att_${data.fileName}`,
     fileName: data.fileName,
@@ -110,13 +112,15 @@ function createService({ allowUpload = true } = {}) {
       auditLog: { create: auditLogCreate },
       courierRoute: { count: courierRouteCount, create: courierRouteCreate, findUnique: courierRouteFindUnique, update: courierRouteUpdate },
       courierRouteEvent: { create: courierRouteEventCreate },
-      courierRouteStop: { update: courierRouteStopUpdate },
+      courierRouteStop: { findFirst: courierRouteStopFindFirst, update: courierRouteStopUpdate },
       pickupRequest: { create: pickupRequestCreate, findUnique: pickupRequestFindUnique, update: pickupRequestUpdate },
       workAttachment: { create: workAttachmentCreate },
+      workOrder: { update: workOrderUpdate },
     })),
     clinic: { findFirst: vi.fn(() => Promise.resolve({ id: "clinic_1" })) },
     doctor: { findFirst: vi.fn(() => Promise.resolve({ id: "doctor_1" })) },
     pickupRequest: { findMany: pickupRequestFindMany },
+    courierRouteStop: { findFirst: courierRouteStopFindFirst },
   };
 
   return {
@@ -287,8 +291,8 @@ describe("LogisticsService routes", () => {
         routeNumber: "TR-260821-01",
         status: "ASSIGNED",
         stops: { create: [
-          { stopOrder: 1, type: "DELIVERY", workOrder: { connect: { id: "work_1" } } },
-          { pickupRequest: { connect: { id: "pickup_1" } }, stopOrder: 2, type: "PICKUP" },
+          { addressOverride: null, phoneOverride: null, stopNotes: null, stopOrder: 1, type: "DELIVERY", workOrder: { connect: { id: "work_1" } } },
+          { addressOverride: null, phoneOverride: null, pickupRequest: { connect: { id: "pickup_1" } }, stopNotes: null, stopOrder: 2, type: "PICKUP" },
         ] },
       }),
     }));

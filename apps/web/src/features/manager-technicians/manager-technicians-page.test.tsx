@@ -113,8 +113,11 @@ describe("ManagerTechniciansPage", () => {
     await waitFor(() => expect(screen.getByText("WO-26-0001")).toBeDefined());
     expect(screen.getByText("Câștiguri realizate, rate pe manoperă și achitări către tehnicieni.")).toBeDefined();
 
-    fireEvent.change(screen.getByLabelText("Tehnician"), { target: { value: "tech_1" } });
-    fireEvent.change(screen.getByLabelText("Manoperă"), { target: { value: "operation_1" } });
+    fireEvent.focus(screen.getByLabelText("Tehnician"));
+    fireEvent.change(screen.getByLabelText("Tehnician"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("option", { name: "Tehnician Ana" }));
+    fireEvent.focus(screen.getByLabelText("Manoperă"));
+    fireEvent.click(screen.getByRole("option", { name: "CER · Ceramică" }));
     fireEvent.change(screen.getByLabelText("Câștig RON"), { target: { value: "40.00" } });
     fireEvent.change(screen.getByLabelText("Valabil de la"), { target: { value: "2026-08-21" } });
     fireEvent.click(screen.getByRole("button", { name: "Salvează rata" }));

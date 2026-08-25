@@ -92,42 +92,26 @@ export const PROBE_LIFECYCLE_TRANSITIONS: readonly ProbeLifecycleTransition[] = 
   },
 ] as const;
 
-export const TECHNICIAN_MANEUVER_UNITS = ["PER_ELEMENT", "PER_UNIT", "PER_ARCH", "PER_CASE"] as const;
-export type TechnicianManeuverUnit = (typeof TECHNICIAN_MANEUVER_UNITS)[number];
+export const TECHNICIAN_MANEUVER_PRICING_SEMANTIC = "PER_ELEMENT" as const;
+export const TECHNICIAN_MANEUVER_PRICING_LABEL_RO = "Per element" as const;
+export const TECHNICIAN_MANEUVER_SELECTION_ORDER = ["TEETH_FIRST", "MANEUVER_SECOND"] as const;
+export const TECHNICIAN_PERFORMED_MANEUVER_UNIQUENESS_SCOPE = ["workOrderId", "operationId", "fdiTooth"] as const;
 
-export const TECHNICIAN_MANEUVER_UNIT_LABELS_RO: Readonly<Record<TechnicianManeuverUnit, string>> = {
-  PER_ELEMENT: "Per element",
-  PER_UNIT: "Per unitate",
-  PER_ARCH: "Per arcadă",
-  PER_CASE: "Per lucrare",
-};
-
-export const TECHNICIAN_MANEUVER_UNIT_HELP_RO: Readonly<Record<TechnicianManeuverUnit, string>> = {
-  PER_ELEMENT: "Se calculează după numărul de dinți selectați.",
-  PER_UNIT: "Se calculează după numărul de componente selectate.",
-  PER_ARCH: "1 pentru o arcadă, 2 pentru ambele arcade.",
-  PER_CASE: "Întotdeauna 1 pentru lucrarea curentă.",
-};
-
-export function calculateManeuverQuantity(input: {
-  readonly unit: TechnicianManeuverUnit;
-  readonly selectedToothCount?: number;
-  readonly selectedItemCount?: number;
-  readonly selectedArchCount?: number;
-}): number {
-  const count = input.unit === "PER_ELEMENT"
-    ? input.selectedToothCount
-    : input.unit === "PER_UNIT"
-      ? input.selectedItemCount
-      : input.unit === "PER_ARCH"
-        ? input.selectedArchCount
-        : 1;
-  if (input.unit === "PER_CASE") return 1;
-  if (!Number.isSafeInteger(count) || (count as number) < 0) throw new RangeError("Cantitatea manoperei trebuie să fie un număr întreg nenegativ.");
-  return count as number;
+export function calculateTechnicianManeuverElementQuantity(selectedTeeth: readonly number[]): number {
+  if (selectedTeeth.length === 0) {
+    throw new RangeError("Selectează cel puțin un dinte adult FDI pentru manoperă.");
+  }
+  const uniqueTeeth = new Set<number>();
+  for (const tooth of selectedTeeth) {
+    if (!isAdultFdiTooth(tooth)) {
+      throw new RangeError("Manopera poate fi calculată doar pentru dinți adulți FDI valizi.");
+    }
+    uniqueTeeth.add(tooth);
+  }
+  return uniqueTeeth.size;
 }
 
-export function calculateManeuverTotalMinor(quantity: number, rateMinor: number): number {
+export function calculateTechnicianManeuverTotalMinor(quantity: number, rateMinor: number): number {
   if (!Number.isSafeInteger(quantity) || quantity < 0 || !Number.isSafeInteger(rateMinor) || rateMinor < 0) {
     throw new RangeError("Cantitatea și tariful trebuie să fie numere întregi nenegative.");
   }
@@ -136,29 +120,12 @@ export function calculateManeuverTotalMinor(quantity: number, rateMinor: number)
   return total;
 }
 
-export type ManeuverQuantityFixture =
-  | { readonly unit: "PER_ELEMENT"; readonly selectedToothCount: number; readonly selectedItemCount?: never; readonly selectedArchCount?: never; readonly expectedQuantity: number }
-  | { readonly unit: "PER_UNIT"; readonly selectedItemCount: number; readonly selectedToothCount?: number; readonly selectedArchCount?: never; readonly expectedQuantity: number }
-  | { readonly unit: "PER_ARCH"; readonly selectedArchCount: number; readonly selectedToothCount?: number; readonly selectedItemCount?: number; readonly expectedQuantity: number }
-  | { readonly unit: "PER_CASE"; readonly selectedToothCount?: number; readonly selectedItemCount?: number; readonly selectedArchCount?: number; readonly expectedQuantity: 1 };
-
-export const MANEUVER_QUANTITY_FIXTURES = [
-  { unit: "PER_ELEMENT", selectedToothCount: 1, expectedQuantity: 1 },
-  { unit: "PER_ELEMENT", selectedToothCount: 2, expectedQuantity: 2 },
-  { unit: "PER_ELEMENT", selectedToothCount: 3, expectedQuantity: 3 },
-  { unit: "PER_UNIT", selectedItemCount: 1, expectedQuantity: 1 },
-  { unit: "PER_UNIT", selectedItemCount: 2, expectedQuantity: 2 },
-  { unit: "PER_ARCH", selectedArchCount: 1, expectedQuantity: 1 },
-  { unit: "PER_ARCH", selectedArchCount: 2, expectedQuantity: 2 },
-  { unit: "PER_CASE", expectedQuantity: 1 },
-] as const satisfies readonly ManeuverQuantityFixture[];
-
 export const URGENCY_LEVELS = ["NORMAL", "URGENCY_1", "URGENCY_2", "URGENCY_3", "URGENCY_4"] as const;
 export type UrgencyLevel = (typeof URGENCY_LEVELS)[number];
 
-export const URGENCY_SURCHARGE_PERCENT: Readonly<Record<UrgencyLevel, 0 | 25 | 50 | 75 | 100>> = {
+export const URGENCY_SURCHARGE_PERCENT: Readonly<Record<UrgencyLevel, 0 | 35 | 50 | 75 | 100>> = {
   NORMAL: 0,
-  URGENCY_1: 25,
+  URGENCY_1: 35,
   URGENCY_2: 50,
   URGENCY_3: 75,
   URGENCY_4: 100,
@@ -219,6 +186,70 @@ export const POSTMODEL_UI_TERMINOLOGY_RO = {
   noUrgency: "Fără urgență",
   saveToCatalog: "Salvează în catalog",
 } as const;
+
+/** B16 integration contract consumed by the later durable notification bundle. */
+export const B16_NOTIFICATION_EVENTS = {
+  newUnpricedWorkTypeRequiresManagerPricing: "NEW_UNPRICED_WORK_TYPE_REQUIRES_MANAGER_PRICING",
+} as const;
+
+export function getB16WorkTypePricingNotificationKey(workTypeId: string): string {
+  return `work_type:${workTypeId}:pricing_required`;
+}
+
+/** B17 Logistics events are consumed by the B18 notification runtime. */
+export const B17_LOGISTICS_NOTIFICATION_EVENTS = {
+  newWork: "NEW_WORK",
+  probeReady: "PROBE_READY",
+  finalWorkReady: "FINAL_WORK_READY",
+  deliveryCompleted: "DELIVERY_COMPLETED",
+  deliveryFailed: "DELIVERY_FAILED",
+} as const;
+
+export type B17LogisticsNotificationEvent = (typeof B17_LOGISTICS_NOTIFICATION_EVENTS)[keyof typeof B17_LOGISTICS_NOTIFICATION_EVENTS];
+
+export function getB17LogisticsNotificationKey(event: B17LogisticsNotificationEvent, input: { readonly workOrderId: string; readonly probeCycleId?: string | null; readonly movementId?: string | null }): string {
+  if (event === B17_LOGISTICS_NOTIFICATION_EVENTS.newWork) return `new-work:${input.workOrderId}`;
+  if (event === B17_LOGISTICS_NOTIFICATION_EVENTS.probeReady) {
+    if (!input.probeCycleId) throw new RangeError("Evenimentul PROBE_READY necesită identificatorul ProbeCycle.");
+    return `probe-ready:${input.workOrderId}:${input.probeCycleId}`;
+  }
+  if (event === B17_LOGISTICS_NOTIFICATION_EVENTS.finalWorkReady) return `final-ready:${input.workOrderId}`;
+  if (!input.movementId) throw new RangeError("Evenimentul de livrare necesită identificatorul mișcării.");
+  return `${event === B17_LOGISTICS_NOTIFICATION_EVENTS.deliveryCompleted ? "delivery-completed" : "delivery-failed"}:${input.movementId}`;
+}
+
+export const B18_NOTIFICATION_TYPES = [
+  "NEW_UNPRICED_WORK_TYPE_REQUIRES_MANAGER_PRICING",
+  "PAYMENT_NOTE_REQUIRED",
+  "INVOICE_REQUIRED",
+  "LARGE_OUTSTANDING_BALANCE",
+  "NEW_WORK",
+  "PROBE_READY",
+  "FINAL_WORK_READY",
+  "DELIVERY_COMPLETED",
+  "DELIVERY_FAILED",
+  "DEADLINE_APPROACHING",
+  "OVERDUE_WORK",
+  "NEW_WORK_AVAILABLE",
+  "NEW_PROBE_AVAILABLE",
+] as const;
+export type B18NotificationType = (typeof B18_NOTIFICATION_TYPES)[number];
+
+export const B18_NOTIFICATION_LABELS_RO: Readonly<Record<B18NotificationType, string>> = {
+  NEW_UNPRICED_WORK_TYPE_REQUIRES_MANAGER_PRICING: "Tip de lucrare nou fără preț",
+  PAYMENT_NOTE_REQUIRED: "Notă de plată de generat",
+  INVOICE_REQUIRED: "Factură de emis",
+  LARGE_OUTSTANDING_BALANCE: "Restanțe mari",
+  NEW_WORK: "Lucrare nouă",
+  PROBE_READY: "Probă gata",
+  FINAL_WORK_READY: "Lucrare finalizată",
+  DELIVERY_COMPLETED: "Livrare efectuată",
+  DELIVERY_FAILED: "Livrare eșuată",
+  DEADLINE_APPROACHING: "Termen apropiat",
+  OVERDUE_WORK: "Lucrare întârziată",
+  NEW_WORK_AVAILABLE: "Lucrare nouă disponibilă",
+  NEW_PROBE_AVAILABLE: "Probă nouă disponibilă",
+};
 
 export function isAdultFdiTooth(value: number): value is AdultFdiTooth {
   return (ADULT_FDI_TEETH as readonly number[]).includes(value);

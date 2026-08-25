@@ -165,6 +165,10 @@ export async function updateLogisticsWorkActions(workOrderId: string, input: { r
   return sendJson<WorkLogisticsView>(`/works/${workOrderId}/logistics-actions`, "PATCH", input);
 }
 
+export async function fastDelegateLogisticsWork(workOrderId: string, input: { readonly direction: "DELIVERY" | "PICKUP"; readonly courierUserId?: string | null; readonly version: number }): Promise<{ readonly direction: "DELIVERY" | "PICKUP"; readonly id: string; readonly status: string; readonly workOrderId: string }> {
+  return sendJson(`/logistics/works/${encodeURIComponent(workOrderId)}/fast-delegate`, "POST", input);
+}
+
 export async function createPickupRequest(input: CreatePickupRequestInput): Promise<PickupRequestView> {
   return sendJson<PickupRequestView>("/pickup-requests", "POST", input);
 }
@@ -270,6 +274,20 @@ export function useUpdateLogisticsWorkActions() {
   });
 }
 
+export function useFastDelegateLogisticsWork() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ input, workOrderId }: { readonly input: Parameters<typeof fastDelegateLogisticsWork>[1]; readonly workOrderId: string }) => fastDelegateLogisticsWork(workOrderId, input),
+    onSuccess: async (_result, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: logisticsQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: logisticsQueryKeys.work(variables.workOrderId) }),
+      ]);
+    },
+  });
+}
+
 export function useCreateDeliveryPreparationGroup() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -324,7 +342,7 @@ export function useUpdateCourierRoute() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ input, routeId }: { readonly input: CreateCourierRouteInput & { readonly version: number }; readonly routeId: string }) => updateCourierRoute(routeId, input),
-    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["logistics", "routes"] }); },
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: logisticsQueryKeys.all }); },
   });
 }
 
@@ -332,6 +350,7 @@ export function useDeleteCourierRoute() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: deleteCourierRoute,
+    onError: async () => { await queryClient.invalidateQueries({ queryKey: logisticsQueryKeys.all }); },
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: logisticsQueryKeys.all }); },
   });
 }

@@ -10,29 +10,27 @@ import {
   LoadingState,
   Modal,
   PriorityBadge,
-  RadioGroup,
   Select,
   StatusBadge,
   TextInput,
-  Textarea,
   useToast,
 } from "@dental-lab/ui";
 import {
-  LEGAL_ENTITY_CODES,
-  getLegalEntityDisplayName,
+  formatMoneyMinor,
+  getCanonicalWorkOrderCompositionTeeth,
+  isAdultFdiTooth,
   type ClaimWorksListParams,
-  type LegalEntityCode,
-  type WorkDetail,
+  type AdultFdiTooth,
   type WorkSummary,
 } from "@dental-lab/shared";
+import { ToothDiagram } from "../../components/dental/tooth-diagram.js";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchPermissions } from "../auth/auth-api.js";
-import { fetchOrganizationContext } from "../organization-context/organization-context-api.js";
 import { usePerformedTechnicianOperations, usePerformTechnicianOperation, useRemovePerformedTechnicianOperation, useTechnicianOperationOptions } from "./technician-workbench-api.js";
-import { useAvailableWorksForClaim, useClaimWork, useFinalizeTechnicalWork, useMarkProbeReady, useMyClaimedWorks, useUpdateTechnicianWorkDetails, useWork } from "../works/works-api.js";
+import { useAvailableWorksForClaim, useClaimWork, useFinalizeTechnicalWork, useMarkProbeReady, useMyClaimedWorks, useWork } from "../works/works-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
 import { useMediaQuery } from "../../lib/use-media-query.js";
 import { hasPermission } from "../users/users-api.js";
@@ -62,13 +60,11 @@ export function TechnicianWorkbenchPage(): ReactNode {
   const [tab, setTab] = useState<WorkbenchTab>("AVAILABLE");
   const [claimFilters, setClaimFilters] = useState<ClaimWorksListParams>(defaultClaimFilters);
   const [claimTarget, setClaimTarget] = useState<WorkSummary | null>(null);
-  const [detailsTarget, setDetailsTarget] = useState<WorkSummary | null>(null);
   const [operationsTarget, setOperationsTarget] = useState<WorkSummary | null>(null);
   const [finalizeTarget, setFinalizeTarget] = useState<WorkSummary | null>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const isCompactMobile = useMediaQuery("(max-width: 719px)");
   const permissionsResult = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
-  const organizationQuery = useQuery({ queryFn: fetchOrganizationContext, queryKey: ["organization-context"], retry: false });
   const canReadWorkbench = hasPermission(permissionsResult.data, "technician.workbench.read");
   const canReadAvailable = hasPermission(permissionsResult.data, "works.claim.available.read");
   const canReadOwnClaims = hasPermission(permissionsResult.data, "works.claim.own.read");
@@ -76,11 +72,9 @@ export function TechnicianWorkbenchPage(): ReactNode {
   const canManageOwnOperations = hasPermission(permissionsResult.data, "technician.operations.manage_own");
   const availableQuery = useAvailableWorksForClaim(claimFilters, canReadAvailable);
   const myClaimedQuery = useMyClaimedWorks(claimFilters, canReadOwnClaims);
-  const detailsQuery = useWork(detailsTarget?.id ?? null, detailsTarget !== null);
   const claimMutation = useClaimWork();
   const probeReadyMutation = useMarkProbeReady();
   const finalizeMutation = useFinalizeTechnicalWork();
-  const technicianDetailsMutation = useUpdateTechnicianWorkDetails();
   const visibleAvailableWorks = useMemo(
     () => pickSingleWorkbenchMatch(availableQuery.data?.items ?? [], claimFilters.search),
     [availableQuery.data?.items, claimFilters.search],
@@ -108,7 +102,7 @@ export function TechnicianWorkbenchPage(): ReactNode {
   function markProbeReady(work: WorkSummary): void {
     probeReadyMutation.mutate({ workOrderId: work.id }, {
       onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Proba nu a fost marcată gata", variant: "error" }),
-      onSuccess: () => toast.showToast({ message: `Proba activă pentru ${work.code} a fost marcată gata.`, variant: "success" }),
+      onSuccess: () => undefined,
     });
   }
 
@@ -117,7 +111,7 @@ export function TechnicianWorkbenchPage(): ReactNode {
     const work = finalizeTarget;
     finalizeMutation.mutate({ workOrderId: work.id }, {
       onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost finalizată", variant: "error" }),
-      onSuccess: () => { setFinalizeTarget(null); toast.showToast({ message: `${work.code} a fost finalizată.`, variant: "success" }); },
+      onSuccess: () => { setFinalizeTarget(null); },
     });
   }
 
@@ -206,7 +200,7 @@ export function TechnicianWorkbenchPage(): ReactNode {
                   onProbeReady={markProbeReady}
                   probeReadyWorkId={probeReadyMutation.isPending ? probeReadyMutation.variables?.workOrderId : null}
                   mode="mine"
-                  onDetails={setDetailsTarget}
+                  onDetails={(work) => navigate(`/works?workId=${work.id}`)}
                   onFinalize={finalizeWork}
                   onOperations={setOperationsTarget}
                 />
@@ -217,19 +211,17 @@ export function TechnicianWorkbenchPage(): ReactNode {
         <ClaimWorkModal
           isLoading={claimMutation.isPending}
           isOpen={claimTarget !== null}
-          legalEntityCodes={(organizationQuery.data?.available.map((entity) => entity.code) ?? [...LEGAL_ENTITY_CODES])}
           onOpenChange={(isOpen) => {
             if (!isOpen) {
               setClaimTarget(null);
             }
           }}
-          onSubmit={(executionLegalEntityCode) => {
+          onSubmit={() => {
             if (!claimTarget) {
               return;
             }
             claimMutation.mutate({
               input: {
-                executionLegalEntityCode,
                 expectedClaimRevision: claimTarget.claim.revision,
               },
               workOrderId: claimTarget.id,
@@ -243,35 +235,6 @@ export function TechnicianWorkbenchPage(): ReactNode {
             });
           }}
           work={claimTarget}
-        />
-        <TechnicianDetailsModal
-          error={detailsQuery.error}
-          isLoading={detailsQuery.isLoading}
-          isOpen={detailsTarget !== null}
-          isSaving={technicianDetailsMutation.isPending}
-          onOpenChange={(isOpen) => {
-            if (!isOpen) {
-              setDetailsTarget(null);
-            }
-          }}
-          onSubmit={(input) => {
-            if (!detailsTarget) {
-              return;
-            }
-            technicianDetailsMutation.mutate({
-              input,
-              workOrderId: detailsTarget.id,
-            }, {
-              onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Detaliile nu au fost salvate", variant: "error" }),
-              onSuccess: (work) => {
-                setDetailsTarget(null);
-                toast.showToast({ message: `${work.code} a fost actualizată.`, variant: "success" });
-              },
-            });
-          }}
-          onOpenFullDetails={(workId) => navigate(`/works?workId=${workId}`)}
-          work={detailsQuery.data ?? null}
-          workSummary={detailsTarget}
         />
         <OperationsModal
           isOpen={operationsTarget !== null}
@@ -417,7 +380,7 @@ function ClaimList({
             <span>Responsabil: {work.claim.technician?.displayName ?? "Nerevendicată"}</span>
             {!compact ? <span>Companie execuție: {work.claim.executionLegalEntity?.code ?? "Neselectată"}</span> : null}
             {!compact ? <span>Context execuție: {work.executionSnapshot.summary.exists ? "Fixat" : "Nefixat"}</span> : null}
-            <span>Revizie responsabilitate: {work.claim.revision}</span>
+            <span>{work.cycleNumber !== null && work.cycleNumber !== undefined && work.cycleNumber > 1 ? "Probă" : "Revenire 0"}</span>
           </div>
           <div className="technician-workbench__actions">
             {mode === "available" ? (
@@ -429,7 +392,7 @@ function ClaimList({
               <>
                 <Button onClick={() => onDetails(work)} variant="outline">Detalii</Button>
                 <Button onClick={() => onOperations?.(work)} variant="outline">Manopere</Button>
-                <Button disabled={work.status === "FINALIZATA" || work.technicalReadiness === "PROBE_READY" || work.technicalReadiness === "FINAL_READY"} isLoading={probeReadyWorkId === work.id} onClick={() => onProbeReady?.(work)}>Probă gata</Button>
+                {(work.workType.probeTypeCodes?.length ?? 0) > 0 ? <Button disabled={work.status === "FINALIZATA" || work.technicalReadiness === "PROBE_READY" || work.technicalReadiness === "FINAL_READY"} isLoading={probeReadyWorkId === work.id} onClick={() => onProbeReady?.(work)}>Probă gata</Button> : null}
                 <Button aria-label="Finalizata" disabled={work.status === "FINALIZATA" || work.technicalReadiness === "PROBE_READY" || work.technicalReadiness === "FINAL_READY"} isLoading={finalizeWorkId === work.id} onClick={() => onFinalize?.(work)}>Finalizată</Button>
               </>
             )}
@@ -443,136 +406,25 @@ function ClaimList({
 function ClaimWorkModal({
   isLoading,
   isOpen,
-  legalEntityCodes,
   onOpenChange,
   onSubmit,
   work,
 }: {
   readonly isLoading: boolean;
   readonly isOpen: boolean;
-  readonly legalEntityCodes: readonly LegalEntityCode[];
   readonly onOpenChange: (isOpen: boolean) => void;
-  readonly onSubmit: (executionLegalEntityCode: LegalEntityCode) => void;
+  readonly onSubmit: () => void;
   readonly work: WorkSummary | null;
 }): ReactNode {
-  const [selectedCode, setSelectedCode] = useState<LegalEntityCode>("CDT");
-  const fixedCode = work?.executionSnapshot.summary.legalEntity?.code ?? null;
-
-  useEffect(() => {
-    if (isOpen) {
-      setSelectedCode(fixedCode ?? legalEntityCodes[0] ?? "CDT");
-    }
-  }, [fixedCode, isOpen, legalEntityCodes]);
-
   return (
     <Modal
-      description={work ? `${work.code} · ${work.patientName}` : "Alege compania de execuție."}
-      footer={<Button isLoading={isLoading} onClick={() => onSubmit(selectedCode)}>Revendică lucrarea</Button>}
+      description={work ? `${work.code} · ${work.patientName}` : "Colaborarea clinicii stabilește automat entitatea de execuție."}
+      footer={<Button isLoading={isLoading} onClick={onSubmit}>Revendică lucrarea</Button>}
       isOpen={isOpen}
       onOpenChange={onOpenChange}
       title="Revendică lucrare"
     >
-      <p className="technician-workbench__modal-note">
-        {fixedCode
-          ? "Firma a fost deja stabilită la prima preluare."
-          : "Prin preluare, firma și termenul de execuție vor fi fixate pentru această lucrare."}
-      </p>
-      <RadioGroup
-        label="Companie de execuție"
-        name="executionLegalEntityCode"
-        onValueChange={(value) => {
-          if (value === "CDT" || value === "NG") {
-            setSelectedCode(value);
-          }
-        }}
-        options={legalEntityCodes.map((code) => ({
-          description: getLegalEntityDisplayName(code),
-          label: code,
-          value: code,
-        }))}
-        required
-        disabled={fixedCode !== null}
-        value={selectedCode}
-      />
-    </Modal>
-  );
-}
-
-function TechnicianDetailsModal({
-  error,
-  isLoading,
-  isOpen,
-  isSaving,
-  onOpenChange,
-  onOpenFullDetails,
-  onSubmit,
-  work,
-  workSummary,
-}: {
-  readonly error: unknown;
-  readonly isLoading: boolean;
-  readonly isOpen: boolean;
-  readonly isSaving: boolean;
-  readonly onOpenChange: (isOpen: boolean) => void;
-  readonly onOpenFullDetails: (workId: string) => void;
-  readonly onSubmit: (input: { readonly clinicalNotes?: string | null; readonly internalNotes?: string | null; readonly technicalCodeNotes?: string | null }) => void;
-  readonly work: WorkDetail | null;
-  readonly workSummary: WorkSummary | null;
-}): ReactNode {
-  const [clinicalNotes, setClinicalNotes] = useState("");
-  const [internalNotes, setInternalNotes] = useState("");
-  const [technicalCodeNotes, setTechnicalCodeNotes] = useState("");
-
-  useEffect(() => {
-    if (work) {
-      setClinicalNotes(work.clinicalNotes ?? "");
-      setInternalNotes(work.internalNotes ?? "");
-      setTechnicalCodeNotes(work.technicalCodeNotes ?? "");
-    }
-  }, [work]);
-
-  return (
-    <Modal
-      description={workSummary ? `${workSummary.code} · ${workSummary.patientName}` : "Detalii lucrare"}
-      footer={work ? (
-        <>
-          <Button onClick={() => onOpenFullDetails(work.id)} variant="outline">Deschide dosar</Button>
-          <Button
-            isLoading={isSaving}
-            onClick={() => onSubmit({
-              clinicalNotes: clinicalNotes.trim() || null,
-              internalNotes: internalNotes.trim() || null,
-              technicalCodeNotes: technicalCodeNotes.trim() || null,
-            })}
-          >
-            Salvează
-          </Button>
-        </>
-      ) : null}
-      isOpen={isOpen}
-      onOpenChange={onOpenChange}
-      size="xl"
-      title="Detalii"
-    >
-      {isLoading ? <LoadingState text="Se încarcă detaliile" /> : null}
-      {error ? <ErrorState title="Detaliile nu au fost încărcate" description={getErrorMessage(error)} /> : null}
-      {work ? (
-        <div className="technician-workbench__details">
-          <div className="technician-workbench__details-grid">
-            <span>Pacient: {work.patientName}</span>
-            <span>Clinică: {work.clinic?.name ?? "-"}</span>
-            <span>Medic: {work.doctor?.displayName ?? "-"}</span>
-            <span>Tip lucrare: {work.workType.name}</span>
-            <span>Culoare: {work.shade ?? "-"}</span>
-            <span>Elemente: {work.quantity}</span>
-            <span>Termen: {formatDate(work.deadline.effectiveDueAt ?? work.requestedDeliveryDate)}</span>
-            <span>Stare: {work.status}</span>
-          </div>
-          <Textarea label="Note clinice" onChange={(event) => setClinicalNotes(event.target.value)} rows={4} value={clinicalNotes} />
-          <Textarea label="Note interne" onChange={(event) => setInternalNotes(event.target.value)} rows={4} value={internalNotes} />
-          <Textarea label="Cod" onChange={(event) => setTechnicalCodeNotes(event.target.value)} rows={8} value={technicalCodeNotes} />
-        </div>
-      ) : null}
+      <p className="technician-workbench__modal-note">La revendicare, entitatea de execuție este preluată automat din colaborarea clinicii.</p>
     </Modal>
   );
 }
@@ -591,40 +443,65 @@ function OperationsModal({
   readonly work: WorkSummary | null;
 }): ReactNode {
   const toast = useToast();
+  const detailQuery = useWork(work?.id ?? null, isOpen && work !== null);
   const operationsQuery = useTechnicianOperationOptions(isOpen && canReadOperations);
   const performedQuery = usePerformedTechnicianOperations(work?.id ?? null, isOpen && canReadOperations && work !== null);
   const performMutation = usePerformTechnicianOperation();
   const removeMutation = useRemovePerformedTechnicianOperation();
-  const activeByOperationId = useMemo(() => {
-    const map = new Map<string, NonNullable<typeof performedQuery.data>[number]>();
-    for (const performedOperation of performedQuery.data ?? []) {
-      map.set(performedOperation.operation.id, performedOperation);
+  const [selectedTeeth, setSelectedTeeth] = useState<readonly AdultFdiTooth[]>([]);
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedTeeth([]);
     }
-    return map;
-  }, [performedQuery.data]);
+  }, [isOpen, work?.id]);
+  const allowedTeeth = useMemo(() => getCanonicalWorkOrderCompositionTeeth((detailQuery.data?.items ?? []).map((item) => ({
+    archivedAt: item.archivedAt,
+    scope: item.scope,
+    teeth: item.teeth.map((tooth) => tooth.fdiTooth),
+  }))), [detailQuery.data?.items]);
+  const isCaseLevel = allowedTeeth.length === 0 && (detailQuery.data?.items ?? []).some((item) => item.scope === "CASE");
   const isMutating = performMutation.isPending || removeMutation.isPending;
+  const workTypeVisualization = useMemo(() => {
+    const palette = ["#2563eb", "#eab308", "#dc2626", "#7c3aed", "#f97316", "#0891b2", "#db2777", "#65a30d"] as const;
+    const colorByWorkType = new Map<string, string>();
+    const legend: { readonly color: string; readonly label: string; readonly code: string }[] = [];
+    const toothColors = new Map<number, string[]>();
+    for (const item of detailQuery.data?.items ?? []) {
+      if (item.scope === "CASE" || !item.workType) continue;
+      const key = item.workType.id;
+      let color = colorByWorkType.get(key);
+      if (!color) {
+        color = palette[colorByWorkType.size % palette.length]!;
+        colorByWorkType.set(key, color);
+        legend.push({ color, label: item.workType.name, code: item.workType.symbol });
+      }
+      const teeth = item.workType.unit === "UNIT" ? item.teeth.slice(0, 1) : item.teeth;
+      for (const tooth of teeth.map((value) => value.fdiTooth)) {
+        const current = toothColors.get(tooth) ?? [];
+        if (!current.includes(color)) current.push(color);
+        toothColors.set(tooth, current);
+      }
+    }
+    const resolvedToothColors: Record<number, string> = {};
+    for (const [tooth, colors] of toothColors.entries()) resolvedToothColors[tooth] = colors.length === 1 ? colors[0]! : `linear-gradient(90deg, ${colors.join(", ")})`;
+    return { legend, toothColors: resolvedToothColors };
+  }, [detailQuery.data?.items]);
 
-  function toggleOperation(operationId: string, isChecked: boolean): void {
-    if (!work) {
+  function toggleTooth(tooth: AdultFdiTooth): void {
+    setSelectedTeeth((current) => current.includes(tooth) ? current.filter((value) => value !== tooth) : [...current, tooth]);
+  }
+
+  function toggleOperation(operationId: string): void {
+    if (!work || !canManageOperations || (!isCaseLevel && selectedTeeth.length === 0) || isMutating) return;
+    const activePerformed = (performedQuery.data ?? []).filter((performed) => performed.removedAt === null && performed.operation.id === operationId && (isCaseLevel || (performed.selectedTeeth ?? []).some((tooth) => selectedTeeth.includes(tooth as AdultFdiTooth))));
+    if (activePerformed.length > 0) {
+      for (const performed of activePerformed) removeMutation.mutate({ input: { reason: "Corecție tehnică" }, performedOperationId: performed.id });
+      toast.showToast({ message: "Manopera a fost dezactivată.", variant: "success" });
       return;
     }
-
-    if (isChecked) {
-      performMutation.mutate({ operationId, workOrderId: work.id }, {
-        onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Manopera nu a fost adăugată", variant: "error" }),
-      });
-      return;
-    }
-
-    const performedOperation = activeByOperationId.get(operationId);
-    if (!performedOperation) {
-      return;
-    }
-    removeMutation.mutate({
-      input: { reason: "Debifată de tehnician din modalul Manopere." },
-      performedOperationId: performedOperation.id,
-    }, {
-      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Manopera nu a fost eliminată", variant: "error" }),
+    performMutation.mutate({ operationId, selectedTeeth, workOrderId: work.id }, {
+      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Manopera nu a fost adăugată", variant: "error" }),
+      onSuccess: () => toast.showToast({ message: "Manopera a fost activată.", variant: "success" }),
     });
   }
 
@@ -638,7 +515,7 @@ function OperationsModal({
       title="Manopere"
     >
       {!canReadOperations ? <ErrorState title="Acces refuzat" description="Contul curent nu poate citi catalogul de manopere." /> : null}
-      {canReadOperations && (operationsQuery.isLoading || performedQuery.isLoading) ? <LoadingState text="Se încarcă manoperele" /> : null}
+      {canReadOperations && (operationsQuery.isLoading || performedQuery.isLoading || detailQuery.isLoading) ? <LoadingState text="Se încarcă manoperele" /> : null}
       {canReadOperations && operationsQuery.error ? <ErrorState title="Catalogul nu a fost încărcat" description={getErrorMessage(operationsQuery.error)} /> : null}
       {canReadOperations && performedQuery.error ? <ErrorState title="Manoperele lucrării nu au fost încărcate" description={getErrorMessage(performedQuery.error)} /> : null}
       {canReadOperations && !operationsQuery.isLoading && !operationsQuery.error && (operationsQuery.data?.length ?? 0) === 0 ? (
@@ -647,25 +524,62 @@ function OperationsModal({
           <p>Nu există manopere configurate.</p>
         </div>
       ) : null}
-      {canReadOperations && operationsQuery.data && operationsQuery.data.length > 0 ? (
-        <div className="technician-workbench__operations-list">
-          {operationsQuery.data.map((operation) => {
-            const performedOperation = activeByOperationId.get(operation.id);
-            const isChecked = performedOperation !== undefined;
-            return (
-              <label className="technician-workbench__operation-row" key={operation.id}>
-                <input
-                  checked={isChecked}
-                  disabled={!canManageOperations || isMutating}
-                  onChange={(event) => toggleOperation(operation.id, event.target.checked)}
-                  type="checkbox"
-                />
-                <span className="technician-workbench__operation-copy">
-                  <strong>{operation.name}</strong>
-                </span>
-              </label>
-            );
-          })}
+      {canReadOperations && detailQuery.data && allowedTeeth.length === 0 && !isCaseLevel ? <p className="technician-workbench__modal-note">Nu există dinți anatomici disponibili pentru această lucrare; lucrările de tip caz nu generează dinți implicit.</p> : null}
+      {canReadOperations && detailQuery.data && (allowedTeeth.length > 0 || isCaseLevel) ? (
+        <div className="technician-workbench__operations-editor">
+          {allowedTeeth.length > 0 ? <>
+            <h3>Selectează dinții</h3>
+            <ToothDiagram
+              availableTeeth={allowedTeeth}
+              configuredTeeth={allowedTeeth}
+              connections={detailQuery.data.toothConnections}
+              mode="technician-operation-selection"
+              selectedTeeth={selectedTeeth as never}
+              toothColors={workTypeVisualization.toothColors}
+              onToothToggle={toggleTooth}
+              showShortcuts={false}
+            />
+            {workTypeVisualization.legend.length > 0 ? <div className="technician-workbench__operation-legend" aria-label="Legendă tipuri de lucrări">
+              {workTypeVisualization.legend.map((entry) => <span key={`${entry.code}-${entry.label}`}><i aria-hidden="true" style={{ background: entry.color }} />{entry.code} · {entry.label}</span>)}
+            </div> : null}
+          </> : <p className="technician-workbench__modal-note">Lucrare de tip caz: manopera se înregistrează pentru o lucrare.</p>}
+          <div className="technician-workbench__operation-categories" aria-label="Catalog manopere">
+            {Object.entries((operationsQuery.data ?? []).reduce<Record<string, typeof operationsQuery.data>>((groups, operation) => {
+              const category = operation.category || "Altele";
+              groups[category] = [...(groups[category] ?? []), operation];
+              return groups;
+            }, {})).map(([category, operations]) => (
+              <section key={category} className="technician-workbench__operation-category" aria-labelledby={`operation-category-${category}`}>
+                <h3 id={`operation-category-${category}`}>{category}</h3>
+                <div className="technician-workbench__operation-grid">
+                  {(operations ?? []).map((operation) => {
+                    const active = (isCaseLevel || selectedTeeth.length > 0) && (performedQuery.data ?? []).some((performed) => performed.removedAt === null && performed.operation.id === operation.id && (isCaseLevel || (performed.selectedTeeth ?? []).some((tooth) => selectedTeeth.includes(tooth as AdultFdiTooth))));
+                    return <button
+                      aria-pressed={active}
+                      className={`technician-workbench__operation-card${active ? " technician-workbench__operation-card--active" : ""}`}
+                      disabled={!canManageOperations || (!isCaseLevel && selectedTeeth.length === 0) || isMutating}
+                      key={operation.id}
+                      onClick={() => toggleOperation(operation.id)}
+                      type="button"
+                    >{operation.name}</button>;
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+          <p className="technician-workbench__modal-note">Click pe o manoperă pentru activare. Click din nou pe cardul verde o dezactivează pentru dinții selectați.</p>
+        </div>
+      ) : null}
+      {canReadOperations && (performedQuery.data?.length ?? 0) > 0 ? (
+        <div className="technician-workbench__performed-list">
+          <h3>Manopere înregistrate</h3>
+          {(performedQuery.data ?? []).map((performed) => (
+            <article className={`technician-workbench__performed-row${performed.removedAt === null ? " technician-workbench__performed-row--active" : ""}`} key={performed.id}>
+              <strong>{performed.operationNameSnapshot ?? performed.operation.name}</strong>
+              <span>{(performed.selectedTeeth ?? []).length > 0 ? `Dinți: ${(performed.selectedTeeth ?? []).join(", ")}` : "Manoperă de caz"} · {performed.quantity ?? "-"} × {performed.rateMinorSnapshot === null || performed.rateMinorSnapshot === undefined ? "-" : formatMoneyMinor(performed.rateMinorSnapshot, performed.currency, "ro-RO")} = {formatMoneyMinor(performed.earningMinor, performed.currency, "ro-RO")}</span>
+              {performed.removedAt ? <span>Eliminată · {performed.removalReason ?? "fără motiv"}</span> : null}
+            </article>
+          ))}
         </div>
       ) : null}
     </Modal>

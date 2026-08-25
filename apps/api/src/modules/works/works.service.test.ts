@@ -92,6 +92,10 @@ function workType(overrides: Partial<WorkType> = {}): WorkType {
     description: null,
     id: "work_type_1",
     isActive: true,
+    probeFamily: null,
+    probeTypeCodes: null,
+    allowedAddOns: null,
+    exclusiveGroup: null,
     name: "Coroana zirconiu",
     symbol: "Zr",
     unit: "UNIT",
@@ -139,7 +143,7 @@ function workOrder(overrides: Record<string, unknown> = {}) {
     claimRevision: 0,
     claimSource: null,
     claimStatus: "UNCLAIMED",
-    clinic: clinic(),
+    clinic: { ...clinic(), legalEntity: { code: "CDT", displayName: "Nicolaie Cristina", id: "legal_cdt" } },
     clinicId: "clinic_1",
     code: "WO-2026-000001",
     createdAt: new Date("2026-07-22T12:00:00.000Z"),
@@ -325,6 +329,8 @@ describe("WorksService", () => {
             upsert: vi.fn().mockResolvedValue({ currency: "RON" }),
           },
           workCycle: { create: vi.fn().mockResolvedValue({ id: "cycle_1" }) },
+          workLogisticsState: { create: vi.fn().mockResolvedValue({ id: "logistics_1" }) },
+          logisticsEvent: { create: vi.fn().mockResolvedValue({}) },
           workOrder: { create, findUniqueOrThrow: vi.fn().mockResolvedValue(createdWorkOrder), update: vi.fn().mockResolvedValue(createdWorkOrder) },
           workType: { findUnique: vi.fn().mockResolvedValue({ basePriceMinor: 35000, isActive: true }) },
         }),
@@ -365,7 +371,7 @@ describe("WorksService", () => {
       }),
     });
     expect(result.status).toBe("RECEPTIE");
-    expect(result.totalPriceMinor).toBe(70000);
+    expect(result.totalPriceMinor).toBeNull();
   });
 
   it("persists aggregate items and canonical case-level tooth connections and reads them back", async () => {
@@ -378,6 +384,7 @@ describe("WorksService", () => {
     });
     const itemCreate = vi.fn().mockResolvedValue({});
     const connectionCreate = vi.fn().mockResolvedValue({});
+    const probeCycleCreate = vi.fn();
     const findUniqueOrThrow = vi.fn().mockResolvedValue(createdWorkOrder);
     const service = createService({
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
@@ -386,10 +393,13 @@ describe("WorksService", () => {
         doctor: { findUnique: vi.fn().mockResolvedValue({ clinicId: "clinic_1", isActive: true }) },
         laboratorySettings: { upsert: vi.fn().mockResolvedValue({ currency: "RON" }) },
         workCycle: { create: vi.fn().mockResolvedValue({ id: "cycle_1" }) },
+        workLogisticsState: { create: vi.fn().mockResolvedValue({ id: "logistics_1" }) },
+        logisticsEvent: { create: vi.fn().mockResolvedValue({}) },
+        probeCycle: { create: probeCycleCreate },
         workOrder: { create: vi.fn().mockResolvedValue(createdWorkOrder), findUniqueOrThrow, update: vi.fn().mockResolvedValue(createdWorkOrder) },
         workOrderItem: { create: itemCreate },
         workOrderToothConnection: { create: connectionCreate },
-        workType: { findUnique: vi.fn().mockResolvedValue({ basePriceMinor: 35000, isActive: true }) },
+        workType: { findUnique: vi.fn().mockResolvedValue({ allowedAddOns: [{ amountMinor: 5000, code: "PLACATA" }, { amountMinor: 2000, code: "GINGIE" }], basePriceMinor: 35000, exclusiveGroup: null, id: "work_type_1", isActive: true, unit: "ELEMENT" }) },
       })),
     });
 
@@ -399,17 +409,18 @@ describe("WorksService", () => {
       {
         ...createDto,
         items: [
-          { scope: "TOOTH", teeth: [11], workTypeId: "work_type_1" },
-          { scope: "TOOTH", teeth: [12], workTypeId: "work_type_1" },
+          { scope: "TOOTH", teeth: [11], workTypeId: "work_type_1", selectedAddOns: [{ code: "PLACATA", amountMinor: 5000 }] },
+          { scope: "TOOTH", teeth: [12], workTypeId: "work_type_1", selectedAddOns: [{ code: "GINGIE", amountMinor: 2000 }] },
         ],
-        probeTypeId: "probe_type_1",
-        probeDeadlineAt: "2026-08-25T10:00:00.000Z",
         toothConnections: [{ toothA: 11, toothB: 12 }],
       },
       false,
     );
 
     expect(itemCreate).toHaveBeenCalledTimes(2);
+    expect(itemCreate.mock.calls[0]?.[0].data.selectedAddOns).toEqual([{ code: "PLACATA", amountMinor: 5000 }]);
+    expect(itemCreate.mock.calls[1]?.[0].data.selectedAddOns).toEqual([{ code: "GINGIE", amountMinor: 2000 }]);
+    expect(probeCycleCreate).not.toHaveBeenCalled();
     expect(connectionCreate).toHaveBeenCalledWith({ data: { toothA: 12, toothB: 11, workOrderId: "work_order_1" } });
     expect(findUniqueOrThrow).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "work_order_1" } }));
     expect(result.items).toHaveLength(2);
@@ -465,6 +476,8 @@ describe("WorksService", () => {
             upsert: vi.fn().mockResolvedValue({ currency: "RON" }),
           },
           workCycle: { create: cycleCreate },
+          workLogisticsState: { create: vi.fn().mockResolvedValue({ id: "logistics_1" }) },
+          logisticsEvent: { create: vi.fn().mockResolvedValue({}) },
           workOrder: { create, findUniqueOrThrow: vi.fn().mockResolvedValue(createdWorkOrder), update: vi.fn().mockResolvedValue(createdWorkOrder) },
           workType: { findUnique: vi.fn().mockResolvedValue({ basePriceMinor: 35000, isActive: true }) },
         }),
@@ -484,12 +497,7 @@ describe("WorksService", () => {
         doctorId,
       }),
     }));
-    expect(cycleCreate).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        clinicId,
-        doctorId,
-      }),
-    });
+    expect(cycleCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ cycleNumber: 1, reason: "INITIAL", status: "ACTIVE" }) });
     expect(deadlineService.resolveForWork).toHaveBeenCalledWith(expect.objectContaining({
       clinicId,
       doctorId,
@@ -571,6 +579,8 @@ describe("WorksService", () => {
             upsert: vi.fn().mockResolvedValue({ currency: "RON" }),
           },
           workCycle: { create: vi.fn().mockResolvedValue({ id: "cycle_1" }) },
+          workLogisticsState: { create: vi.fn().mockResolvedValue({ id: "logistics_1" }) },
+          logisticsEvent: { create: vi.fn().mockResolvedValue({}) },
           workOrder: { create, findUniqueOrThrow: vi.fn().mockResolvedValue(createdWorkOrder), update: vi.fn().mockResolvedValue(createdWorkOrder) },
           workType: { findUnique: vi.fn().mockResolvedValue({ basePriceMinor: 35000, isActive: true }) },
         }),
@@ -1406,7 +1416,7 @@ describe("WorksService", () => {
     })).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it("keeps existing pricing snapshot when catalog price changes later", async () => {
+  it("rejects quantity changes above one for a unit-based work", async () => {
     const before = workOrder({ baseUnitPriceMinor: 35000, quantity: 2, totalPriceMinor: 70000 });
     const after = workOrder({ baseUnitPriceMinor: 35000, quantity: 3, totalPriceMinor: 105000, version: 2 });
     const update = vi.fn().mockResolvedValue(after);
@@ -1420,14 +1430,8 @@ describe("WorksService", () => {
       workOrder: { findUnique: vi.fn().mockResolvedValue(before) },
     });
 
-    await service.updateWork({ actorUserId: "actor_1", requestMetadata: {} }, legalEntity, "work_order_1", { expectedDeadlineRevision: 1, quantity: 3 });
-
-    expect(update).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        quantity: 3,
-        totalPriceMinor: 105000,
-      }),
-    }));
+    await expect(service.updateWork({ actorUserId: "actor_1", requestMetadata: {} }, legalEntity, "work_order_1", { expectedDeadlineRevision: 1, quantity: 3 })).rejects.toThrow("cantitatea 1");
+    expect(update).not.toHaveBeenCalled();
   });
 
   it("creates the next cycle without duplicating the work order", async () => {

@@ -12,7 +12,7 @@ describe("createLogisticsSummary", () => {
       item({
         billing: { documentId: null, documentNumber: null, documentStatus: null, label: "Nefacturat", paymentStatus: null },
         dueState: "OVERDUE",
-        logistics: { status: "READY_FOR_DELIVERY" } as LogisticsCenterItem["logistics"],
+        logistics: { status: "RECEIVED" } as LogisticsCenterItem["logistics"],
         priority: "NORMAL",
         workflow: { assignedUserName: "Tech", completedAt: null, currentStageName: null, progressCompleted: 0, progressTotal: 0, status: "ACTIVE" },
       }),
@@ -28,19 +28,19 @@ describe("createLogisticsSummary", () => {
     expect(summary.all).toBe(2);
     expect(summary.overdue).toBe(1);
     expect(summary.waiting).toBe(1);
-    expect(summary.toDeliver).toBe(1);
+    expect(summary.toDeliver).toBe(0);
     expect(summary.toPickup).toBe(3);
   });
 });
 
 describe("resolveEffectiveLogisticsStatus", () => {
-  it("moves a finalized work to packing when the legacy logistics state is still early", () => {
-    expect(resolveEffectiveLogisticsStatus("FINALIZATA", "IN_PRODUCTION", "ACTIVE")).toBe("READY_FOR_PACKING");
-    expect(resolveEffectiveLogisticsStatus("FINALIZATA", null, "ACTIVE")).toBe("READY_FOR_PACKING");
+  it("does not derive a packing state for finalized work", () => {
+    expect(resolveEffectiveLogisticsStatus("FINALIZATA", "IN_PRODUCTION", "ACTIVE")).toBe("IN_PRODUCTION");
+    expect(resolveEffectiveLogisticsStatus("FINALIZATA", null, "ACTIVE")).toBe("IN_PRODUCTION");
   });
 
   it("preserves downstream logistics states", () => {
-    expect(resolveEffectiveLogisticsStatus("FINALIZATA", "READY_FOR_DELIVERY", "ACTIVE")).toBe("READY_FOR_DELIVERY");
+    expect(resolveEffectiveLogisticsStatus("FINALIZATA", "READY_FOR_DELIVERY", "ACTIVE")).toBe("RECEIVED");
     expect(resolveEffectiveLogisticsStatus("FINALIZATA", "BLOCKED", "ACTIVE")).toBe("BLOCKED");
   });
 });

@@ -92,6 +92,7 @@ describe("WorkTypesController", () => {
             listWorkTypeOptions: vi.fn().mockResolvedValue([responseBody]),
             listWorkTypes: vi.fn().mockResolvedValue({ items: [responseBody], page: 1, pageCount: 1, pageSize: 20, total: 1 }),
             restoreWorkType: vi.fn().mockResolvedValue(responseBody),
+            saveOperationalNameToCatalog: vi.fn().mockResolvedValue({ code: "CU-ABC", id: "custom_1", name: "Gutieră", symbol: "custom-ABC", unit: "UNIT" }),
             updateWorkType: vi.fn().mockResolvedValue(responseBody),
           },
         },
@@ -139,5 +140,15 @@ describe("WorkTypesController", () => {
       .expect(201)
       .expect(responseBody);
     expect(requirePermission).toHaveBeenCalledWith(expect.objectContaining({ permission: "pricing.create" }));
+  });
+
+  it("allows an explicit operational catalog-name save without pricing permission", async () => {
+    await request(app.getHttpServer() as App)
+      .post("/work-types/operational-name")
+      .set("Cookie", ["dl_session=session-token", "dl_csrf=csrf-token"])
+      .set("x-csrf-token", "csrf-token")
+      .send({ name: "Gutieră" })
+      .expect(201);
+    expect(requirePermission).toHaveBeenCalledWith(expect.objectContaining({ permission: "works.custom_type.save_to_catalog", requiredScope: "ALL" }));
   });
 });

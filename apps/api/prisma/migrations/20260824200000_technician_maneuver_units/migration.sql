@@ -1,6 +1,3 @@
--- B13: canonical maneuver counting semantics. Existing maneuvers remain
--- nullable until a Manager explicitly classifies legacy catalog entries.
-CREATE TYPE "TechnicianManeuverUnit" AS ENUM ('PER_ELEMENT', 'PER_UNIT', 'PER_ARCH', 'PER_CASE');
-
-ALTER TABLE "technician_operations"
-  ADD COLUMN "pricing_unit" "TechnicianManeuverUnit";
+-- B13 was realigned before deployment. Technician maneuver rates are globally
+-- interpreted as currency per explicitly selected adult FDI element, so this
+-- migration intentionally makes no schema change.

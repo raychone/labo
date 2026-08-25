@@ -1,6 +1,7 @@
 import type { Prisma, WorkStageExecutionStatus, WorkStatus, WorkWorkflowExecutionStatus } from "@prisma/client";
+import type { LogisticsActionReason } from "@dental-lab/shared";
 
-type LogisticsStatus = "RECEIVED" | "IN_PRODUCTION" | "BLOCKED" | "READY_FOR_PACKING" | "PACKING" | "READY_FOR_DELIVERY" | "HANDED_TO_DELIVERY" | "DELIVERED";
+type LogisticsStatus = "RECEIVED" | "IN_PRODUCTION" | "BLOCKED" | "HANDED_TO_DELIVERY" | "DELIVERED";
 type LogisticsLocationCode = "RECEPTIE" | "PRODUCTIE" | "RAFT_FINISARE" | "ZONA_AMBALARE" | "GATA_LIVRARE";
 type LogisticsBlockReasonCode = "MISSING_INFO" | "DOCTOR_CONFIRMATION" | "MISSING_COMPONENTS" | "TECHNICAL_ISSUE" | "DEADLINE_CLARIFICATION" | "OTHER";
 type LogisticsDueState = "ON_TRACK" | "DUE_SOON" | "OVERDUE";
@@ -8,10 +9,7 @@ type LogisticsMarker = "MARKER_1" | "MARKER_2" | "MARKER_3" | "MARKER_4" | "MARK
 
 export interface LogisticsActionAvailability {
   readonly block: boolean;
-  readonly completePacking: boolean;
   readonly manageGroups: boolean;
-  readonly readyForPacking: boolean;
-  readonly startPacking: boolean;
   readonly unblock: boolean;
   readonly updateLocation: boolean;
 }
@@ -23,9 +21,6 @@ export interface LogisticsStateView {
   readonly blockedReasonNotes: string | null;
   readonly locationCode: LogisticsLocationCode | null;
   readonly locationLabel: string | null;
-  readonly packingStartedAt: string | null;
-  readonly readyForDeliveryAt: string | null;
-  readonly readyForPackingAt: string | null;
   readonly status: LogisticsStatus;
   readonly statusLabel: string;
   readonly version: number;
@@ -59,6 +54,8 @@ export interface LogisticsCenterItem {
   readonly workTypeName: string;
   readonly requiresDelivery: boolean;
   readonly requiresPickup: boolean;
+  readonly requiresLogisticsAction: boolean;
+  readonly logisticsActionReasons: readonly LogisticsActionReason[];
 }
 
 export interface WorkLogisticsView extends LogisticsCenterItem {
@@ -87,11 +84,7 @@ export interface LogisticsCenterSummary {
   readonly all: number;
   readonly blocked: number;
   readonly inProduction: number;
-  readonly inPacking: number;
   readonly overdue: number;
-  readonly readyForDelivery: number;
-  readonly readyForDeliveryUnbilled: number;
-  readonly readyForPacking: number;
   readonly receivedToday: number;
   readonly toDeliver: number;
   readonly toPickup: number;
@@ -119,9 +112,6 @@ const LOGISTICS_STATUS_LABELS = {
   DELIVERED: "Livrată",
   HANDED_TO_DELIVERY: "Predată spre livrare",
   IN_PRODUCTION: "În producție",
-  PACKING: "În ambalare",
-  READY_FOR_DELIVERY: "Gata de livrare",
-  READY_FOR_PACKING: "De ambalat",
   RECEIVED: "Recepționată",
 } as const satisfies Record<LogisticsStatus, string>;
 
@@ -310,7 +300,6 @@ export type DeliveryPreparationGroupRecord = Prisma.DeliveryPreparationGroupGetP
 export interface ActionContext {
   readonly canBlock: boolean;
   readonly canManageGroups: boolean;
-  readonly canPrepare: boolean;
   readonly canUnblock: boolean;
   readonly canUpdateLocation: boolean;
 }
@@ -318,6 +307,13 @@ export interface ActionContext {
 export function toLogisticsCenterItem(work: LogisticsWorkRecord, actionContext: ActionContext, now: Date): LogisticsCenterItem {
   const logistics = toLogisticsStateView(work);
   const activeGroup = work.deliveryPreparationItems[0]?.group ?? null;
+  const activeDelivery = activeGroup?.deliveries[0] ?? null;
+  const logisticsActionReasons: LogisticsActionReason[] = [];
+  if (work.status === "REGISTERED" && work.technicalReadiness === null && !activeDelivery) logisticsActionReasons.push("NEW_WORK");
+  if (work.technicalReadiness === "PROBE_READY" && !activeDelivery) logisticsActionReasons.push("READY_FOR_PROBE_DELIVERY");
+  if (work.technicalReadiness === "FINAL_READY" && !activeDelivery) logisticsActionReasons.push("READY_FOR_FINAL_DELIVERY");
+  if (work.requiresDelivery) logisticsActionReasons.push("FAILED_DELIVERY");
+  if (work.requiresPickup) logisticsActionReasons.push("PICKUP_REQUIRED");
 
   return {
     actions: toActions(logistics.status, actionContext, activeGroup !== null),
@@ -354,6 +350,8 @@ export function toLogisticsCenterItem(work: LogisticsWorkRecord, actionContext: 
     workTypeName: work.workType.name,
     requiresDelivery: work.requiresDelivery,
     requiresPickup: work.requiresPickup,
+    requiresLogisticsAction: logisticsActionReasons.length > 0,
+    logisticsActionReasons,
   };
 }
 
@@ -429,14 +427,10 @@ export function createLogisticsSummary(items: readonly LogisticsCenterItem[], to
   return {
     all: items.length,
     blocked: items.filter((item) => item.logistics.status === "BLOCKED").length,
-    inPacking: items.filter((item) => item.logistics.status === "PACKING").length,
     inProduction: items.filter((item) => item.logistics.status === "IN_PRODUCTION").length,
     overdue: items.filter((item) => item.dueState === "OVERDUE").length,
-    readyForDelivery: items.filter((item) => item.logistics.status === "READY_FOR_DELIVERY").length,
-    readyForDeliveryUnbilled: items.filter((item) => item.logistics.status === "READY_FOR_DELIVERY" && item.billing.documentId === null).length,
-    readyForPacking: items.filter((item) => item.logistics.status === "READY_FOR_PACKING").length,
     receivedToday: items.filter((item) => isSameUtcDay(new Date(item.createdAt), new Date())).length,
-    toDeliver: items.filter((item) => item.logistics.status === "READY_FOR_DELIVERY").length,
+    toDeliver: items.filter((item) => item.technicalReadiness === "PROBE_READY" || item.technicalReadiness === "FINAL_READY").length,
     toPickup,
     unassigned: items.filter((item) => item.workflow.status === "ACTIVE" && item.workflow.assignedUserName === null).length,
     urgent: items.filter((item) => item.priority === "URGENT").length,
@@ -457,42 +451,33 @@ function toLogisticsStateView(work: LogisticsWorkRecord): LogisticsStateView {
     blockedReasonNotes: state?.blockedReasonNotes ?? null,
     locationCode,
     locationLabel: locationCode ? LOGISTICS_LOCATION_LABELS[locationCode] : null,
-    packingStartedAt: state?.packingStartedAt?.toISOString() ?? null,
-    readyForDeliveryAt: state?.readyForDeliveryAt?.toISOString() ?? null,
-    readyForPackingAt: state?.readyForPackingAt?.toISOString() ?? null,
     status,
     statusLabel: LOGISTICS_STATUS_LABELS[status],
     version: state?.version ?? 1,
   };
 }
 
-function deriveInitialStatus(workStatus: WorkStatus, workflowStatus: WorkWorkflowExecutionStatus | null): LogisticsStateView["status"] {
-  if (workStatus === "FINALIZATA") {
-    return "READY_FOR_PACKING";
-  }
+function deriveInitialStatus(workflowStatus: WorkWorkflowExecutionStatus | null): LogisticsStateView["status"] {
   return workflowStatus === "ACTIVE" ? "IN_PRODUCTION" : "RECEIVED";
 }
 
 export function resolveEffectiveLogisticsStatus(
   workStatus: WorkStatus,
-  persistedStatus: LogisticsStateView["status"] | null,
+  persistedStatus: (LogisticsStateView["status"] | "READY_FOR_PACKING" | "PACKING" | "READY_FOR_DELIVERY") | null,
   workflowStatus: WorkWorkflowExecutionStatus | null,
 ): LogisticsStateView["status"] {
-  if (workStatus === "FINALIZATA" && (persistedStatus === null || persistedStatus === "RECEIVED" || persistedStatus === "IN_PRODUCTION")) {
-    return "READY_FOR_PACKING";
+  if (persistedStatus === "READY_FOR_PACKING" || persistedStatus === "PACKING" || persistedStatus === "READY_FOR_DELIVERY") {
+    return workStatus === "FINALIZATA" ? "RECEIVED" : "IN_PRODUCTION";
   }
-  return persistedStatus ?? deriveInitialStatus(workStatus, workflowStatus);
+  return persistedStatus ?? deriveInitialStatus(workflowStatus);
 }
 
 function toActions(status: LogisticsStateView["status"], context: ActionContext, hasActiveGroup: boolean): LogisticsActionAvailability {
   const actions = createDefaultLogisticsActions();
   return {
     ...actions,
-    block: context.canBlock && status !== "BLOCKED" && status !== "READY_FOR_DELIVERY",
-    completePacking: context.canPrepare && status === "PACKING",
-    manageGroups: context.canManageGroups && status === "READY_FOR_DELIVERY" && !hasActiveGroup,
-    readyForPacking: context.canPrepare && (status === "IN_PRODUCTION" || status === "RECEIVED"),
-    startPacking: context.canPrepare && status === "READY_FOR_PACKING",
+    block: context.canBlock && status !== "BLOCKED" && status !== "HANDED_TO_DELIVERY" && status !== "DELIVERED",
+    manageGroups: context.canManageGroups && !hasActiveGroup,
     unblock: context.canUnblock && status === "BLOCKED",
     updateLocation: context.canUpdateLocation,
   };
@@ -501,10 +486,7 @@ function toActions(status: LogisticsStateView["status"], context: ActionContext,
 function createDefaultLogisticsActions(): LogisticsActionAvailability {
   return {
     block: false,
-    completePacking: false,
     manageGroups: false,
-    readyForPacking: false,
-    startPacking: false,
     unblock: false,
     updateLocation: false,
   };

@@ -53,6 +53,7 @@ import {
   useLogisticsCenter,
   useLogisticsSummary,
   useUpdateLogisticsWorkActions,
+  useUpdateCourierRoute,
   usePickupRequests,
   type PickupRequestsQuery,
   useUpdatePickupRequest,
@@ -150,7 +151,6 @@ export function LogisticsPage(): ReactNode {
   const [isPickupModalOpen, setPickupModalOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [editingPickup, setEditingPickup] = useState<PickupRequestView | null>(null);
-  const [selectedRouteItems, setSelectedRouteItems] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   const canRead = hasPermission(permissionsQuery.data, "logistics.center.read");
@@ -193,6 +193,7 @@ export function LogisticsPage(): ReactNode {
   const pickupsQuery = usePickupRequests(canReadPickups && showPickups, pickupQuery);
   const updateWorkActions = useUpdateLogisticsWorkActions();
   const createRouteList = useCreateCourierRoute();
+  const updateRouteList = useUpdateCourierRoute();
   const routesQuery = useCourierRoutes({ page: 1, pageSize: 100 }, canReadRoutes);
   const updateWorkStatus = useMutation({
     mutationFn: ({ status, workOrderId }: { readonly status: (typeof FINAL_WORK_STATUSES)[number]; readonly workOrderId: string }) => setWorkStatus(workOrderId, { status }),
@@ -218,22 +219,22 @@ export function LogisticsPage(): ReactNode {
   }
 
   const assignedStopKeys = useMemo(() => new Set((routesQuery.data?.items ?? []).flatMap((route) => route.stops.map((stop) => `${stop.type}:${stop.workOrderId ?? stop.pickupRequestId ?? stop.id}`))), [routesQuery.data?.items]);
-  const visibleRouteItems = useMemo(() => (centerQuery.data?.items ?? []).filter((item) => (item.requiresDelivery || item.requiresPickup) && selectedRouteItems.has(`work:${item.id}`) && !assignedStopKeys.has(`${item.requiresPickup ? "PICKUP" : "DELIVERY"}:${item.id}`)), [assignedStopKeys, centerQuery.data?.items, selectedRouteItems]);
-  const selectedPickupRequests = useMemo(() => (pickupsQuery.data ?? []).filter((pickup) => selectedRouteItems.has(`pickup:${pickup.id}`) && !assignedStopKeys.has(`PICKUP:${pickup.id}`)), [assignedStopKeys, pickupsQuery.data, selectedRouteItems]);
-  useEffect(() => {
-    const items = centerQuery.data?.items ?? [];
-    if (items.length === 0) return;
-    setSelectedRouteItems((current) => {
-      const next = new Set(current);
-      items.forEach((item) => {
-        const key = `work:${item.id}`;
-        if ((item.requiresDelivery || item.requiresPickup) && !assignedStopKeys.has(`${item.requiresPickup ? "PICKUP" : "DELIVERY"}:${item.id}`)) next.add(key);
-        else next.delete(key);
-      });
-      return next;
-    });
-  }, [assignedStopKeys, centerQuery.data?.items]);
 
+  function queueRouteStop(stop: { readonly pickupRequestId?: string | null; readonly type: "DELIVERY" | "PICKUP"; readonly workOrderId?: string | null }, successMessage: string): void {
+    const draft = routesQuery.data?.items.find((route) => route.status === "DRAFT" && route.courier === null && route.name === "Lista pentru viitoarele trasee");
+    const stops = draft
+      ? [...draft.stops.map((current) => ({ addressOverride: current.addressOverride, phoneOverride: current.phoneOverride, pickupRequestId: current.pickupRequestId, stopNotes: current.stopNotes, type: current.type, workOrderId: current.workOrderId })), stop]
+      : [stop];
+    const callbacks = {
+      onError: (error: unknown) => toast.showToast({ message: getErrorMessage(error), title: "Elementul nu a fost adăugat în lista de trasee", variant: "error" }),
+      onSuccess: () => toast.showToast({ message: successMessage, variant: "success" }),
+    };
+    if (draft) {
+      updateRouteList.mutate({ routeId: draft.id, input: { courierUserId: null, name: draft.name, notes: draft.notes, routeDate: draft.routeDate, stops, version: draft.version } }, callbacks);
+      return;
+    }
+    createRouteList.mutate({ courierUserId: null, name: "Lista pentru viitoarele trasee", routeDate: new Date().toISOString().slice(0, 10), stops }, callbacks);
+  }
   if (permissionsQuery.isLoading) {
     return <PageFrame><LoadingState text="Se încarcă permisiunile" /></PageFrame>;
   }
@@ -430,14 +431,16 @@ export function LogisticsPage(): ReactNode {
                 <span>Alerte</span>
                 <span>Livrare/Ridicare</span>
               </div>
-              {(centerQuery.data?.items ?? []).map((item) => (
-                <WorkRow category={query.category ?? "ALL"} item={item} key={item.id} onOpen={() => navigate(`/works?workId=${encodeURIComponent(item.id)}`)} onStatus={(status) => updateWorkStatus.mutate({ status, workOrderId: item.id })} onRouteSelection={(selected) => setSelectedRouteItems((current) => { const next = new Set(current); const key = `work:${item.id}`; if (selected) next.add(key); else next.delete(key); return next; })} onUpdateActions={(input) => {
+              {(centerQuery.data?.items ?? []).filter((item) => !assignedStopKeys.has(`DELIVERY:${item.id}`) && !assignedStopKeys.has(`PICKUP:${item.id}`)).map((item) => (
+                <WorkRow category={query.category ?? "ALL"} item={item} key={item.id} onFastAction={(direction) => {
+                  queueRouteStop({ type: direction, workOrderId: item.id }, `${item.workCode} a fost adăugată în lista pentru viitoarele trasee.`);
+                }} onOpen={() => navigate(`/works?workId=${encodeURIComponent(item.id)}`)} onStatus={(status) => updateWorkStatus.mutate({ status, workOrderId: item.id })} onUpdateActions={(input) => {
                   const nextDelivery = input.requiresDelivery ?? item.requiresDelivery;
                   const nextPickup = input.requiresPickup ?? item.requiresPickup;
                   updateWorkActions.mutate({ input: { ...input, ...(nextDelivery ? { requiresPickup: false } : {}), ...(nextPickup ? { requiresDelivery: false } : {}) }, workOrderId: item.id });
                 }} />
               ))}
-              {showPickups ? (pickupsQuery.data ?? []).map((pickup) => (
+              {showPickups ? (pickupsQuery.data ?? []).filter((pickup) => !assignedStopKeys.has(`PICKUP:${pickup.id}`)).map((pickup) => (
                 <PickupRouteRow
                   canCancel={canCancelPickup}
                   canUpdate={canUpdatePickup}
@@ -450,39 +453,13 @@ export function LogisticsPage(): ReactNode {
                   }}
                   onEdit={() => { setEditingPickup(pickup); setPickupModalOpen(true); }}
                   pickup={pickup}
-                  selected={selectedRouteItems.has(`pickup:${pickup.id}`)}
-                  onSelected={(selected) => setSelectedRouteItems((current) => { const next = new Set(current); const key = `pickup:${pickup.id}`; if (selected) next.add(key); else next.delete(key); return next; })}
+                  selected={false}
+                  onSelected={(selected) => {
+                    if (!selected) return;
+                    queueRouteStop({ type: "PICKUP", pickupRequestId: pickup.id, workOrderId: null }, "Ridicarea a fost adăugată în lista pentru viitoarele trasee.");
+                  }}
                 />
               )) : null}
-            </div>
-            <div className="logistics-page__bulk-actions">
-              <span>{visibleRouteItems.length + selectedPickupRequests.length} elemente selectate pentru traseu</span>
-              <Button
-                disabled={(visibleRouteItems.length + selectedPickupRequests.length) === 0 || createRouteList.isPending}
-                onClick={() => {
-                  const stops = [
-                    ...visibleRouteItems.map((item) => item.requiresPickup
-                      ? { type: "PICKUP" as const, workOrderId: item.id, pickupRequestId: null }
-                      : { type: "DELIVERY" as const, workOrderId: item.id }),
-                    ...selectedPickupRequests.map((pickup) => ({ type: "PICKUP" as const, pickupRequestId: pickup.id, workOrderId: null })),
-                  ];
-                  createRouteList.mutate({
-                    courierUserId: null,
-                    name: "Lista livrări și ridicări",
-                    routeDate: new Date().toISOString().slice(0, 10),
-                    stops,
-                  }, {
-                    onError: () => {
-                      toast.showToast({ message: "Unul dintre elemente este deja într-o listă de traseu. Reîncarcă centrul și selectează doar elementele disponibile.", title: "Element deja în traseu", variant: "error" });
-                      queryClient.invalidateQueries({ queryKey: ["logistics", "routes"] });
-                      queryClient.invalidateQueries({ queryKey: ["logistics", "center"] });
-                    },
-                    onSuccess: (route) => navigate(`/routes?listId=${route.id}`),
-                  });
-                }}
-              >
-                Adaugă lista
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -524,10 +501,7 @@ function PickupRouteRow({
       <div className="logistics-page__row-state"><StatusBadge label={PICKUP_REQUEST_STATUS_LABELS[pickup.status]} variant="planned" /></div>
       <div className="logistics-page__row-alerts">{pickup.notes ?? pickup.address ?? "-"}</div>
       <div aria-label={`Selectează ridicarea de la ${pickup.clinic.name}`} className="logistics-page__row-requirements">
-        <label className="logistics-page__requirement">
-          <input checked={selected} onChange={(event) => onSelected(event.target.checked)} type="checkbox" />
-          <span>Ridicat</span>
-        </label>
+        <Button disabled={selected} onClick={() => onSelected(true)} size="small" type="button" variant="outline">Ridicat</Button>
         <div className="logistics-page__row-actions">
           {canUpdate && pickup.status === "SCHEDULED" ? <Button onClick={onEdit} size="small" type="button" variant="outline">Editează</Button> : null}
           {canCancel && pickup.status === "SCHEDULED" ? <Button onClick={onCancel} size="small" type="button" variant="ghost">Anulează</Button> : null}
@@ -985,15 +959,15 @@ function WorkRow({
   category,
   item,
   onOpen,
+  onFastAction,
   onStatus,
-  onRouteSelection,
   onUpdateActions,
 }: {
   readonly category: LogisticsCenterCategory;
   readonly item: LogisticsCenterItem;
   readonly onOpen: () => void;
+  readonly onFastAction: (direction: "DELIVERY" | "PICKUP") => void;
   readonly onStatus: (status: (typeof FINAL_WORK_STATUSES)[number]) => void;
-  readonly onRouteSelection: (selected: boolean) => void;
   readonly onUpdateActions: (input: { readonly logisticsNote?: string | null; readonly marker?: LogisticsMarker | null; readonly requiresDelivery?: boolean; readonly requiresPickup?: boolean }) => void;
 }): ReactNode {
   const [markerOpen, setMarkerOpen] = useState(false);
@@ -1030,17 +1004,7 @@ function WorkRow({
         {markerOpen ? <div className="logistics-page__marker-menu">{LOGISTICS_MARKERS.map((value) => <button aria-label={`Alege marcajul ${value.slice(-1)}`} className={`logistics-page__marker logistics-page__marker--${value}`} key={value} onClick={() => { onUpdateActions({ marker: value }); setMarkerOpen(false); }} title={`Marcaj ${value.slice(-1)}`} type="button" />)}</div> : null}
       </div>
       <div aria-label={isPickupOperation ? "Ridicare" : "Livrare"} className="logistics-page__row-requirements">
-        {isPickupOperation ? (
-          <label className="logistics-page__requirement">
-            <input checked={item.requiresPickup} onChange={() => { const selected = !item.requiresPickup; onUpdateActions({ requiresPickup: selected, requiresDelivery: false }); onRouteSelection(selected); }} type="checkbox" />
-            <span>Ridicat</span>
-          </label>
-        ) : (
-          <label className="logistics-page__requirement">
-            <input checked={item.requiresDelivery} onChange={() => { const selected = !item.requiresDelivery; onUpdateActions({ requiresDelivery: selected, requiresPickup: false }); onRouteSelection(selected); }} type="checkbox" />
-            <span>Livrat</span>
-          </label>
-        )}
+        {item.requiresLogisticsAction ? <Button onClick={() => onFastAction(isPickupOperation ? "PICKUP" : "DELIVERY")} size="small" variant="outline">{isPickupOperation ? "Ridicat" : "Livrat"}</Button> : null}
       </div>
     </article>
   );
