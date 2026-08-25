@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     region: frankfurt
-    buildCommand: pnpm install --frozen-lockfile && PLAYWRIGHT_BROWSERS_PATH=0 pnpm exec playwright install chromium && pnpm --filter @dental-lab/api prisma:generate:deploy && pnpm --filter @dental-lab/api prisma:migrate:deploy && pnpm --filter @dental-lab/api build
+    buildCommand: pnpm install --frozen-lockfile && PLAYWRIGHT_BROWSERS_PATH=0 pnpm exec playwright install chromium && pnpm --filter @dental-lab/api prisma:generate:deploy && pnpm --filter @dental-lab/api prisma:migrate:deploy:retry && pnpm --filter @dental-lab/api build
     startCommand: pnpm --filter @dental-lab/api start
     healthCheckPath: /health
     envVars:
