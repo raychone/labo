@@ -52,7 +52,7 @@ export interface WorkOrderItemView {
   readonly sortOrder: number;
   readonly scope: WorkOrderItemScope;
   readonly teeth: readonly WorkOrderItemToothView[];
-  readonly workType: { readonly code: string; readonly id: string; readonly name: string; readonly symbol: string; readonly unit?: string; readonly probeFamily?: string | null; readonly probeTypeCodes?: readonly string[]; } | null;
+  readonly workType: { readonly code: string; readonly colorHex?: string | null; readonly id: string; readonly name: string; readonly symbol: string; readonly unit?: string; readonly probeFamily?: string | null; readonly probeTypeCodes?: readonly string[]; } | null;
   readonly workTypeId: string | null;
   readonly customWorkTypeSnapshot: Readonly<Record<string, unknown>> | null;
   readonly shade: string | null;

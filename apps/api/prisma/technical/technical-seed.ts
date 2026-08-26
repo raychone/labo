@@ -60,7 +60,7 @@ export async function seedTechnicalCatalog(prisma: PrismaClient): Promise<{ read
 
   for (const [sortOrder, item] of CREATIVE_WORK_CATALOG.entries()) {
     const id = `technical_work_type_${item.key}`;
-    const code = `TECH-${item.key.toUpperCase().replace(/[^A-Z0-9]+/g, "-").slice(0, 12)}-${String(sortOrder + 1).padStart(2, "0")}`;
+    const code = `TECH-CR-${String(sortOrder + 1).padStart(3, "0")}`;
     await prisma.workType.upsert({
       create: {
         allowedAddOns: item.allowedAddOns.map((addOn) => ({ code: addOn, label: addOn === "GINGIE" ? "Gingie" : "Plăcată", amountMinor: addOn === "GINGIE" ? 20_000 : 5_000 })),
@@ -98,10 +98,44 @@ export async function seedTechnicalCatalog(prisma: PrismaClient): Promise<{ read
   });
 
   const legalEntities = await prisma.legalEntity.findMany({ select: { code: true, id: true }, where: { code: { in: ["CDT", "NG"] } } });
+  const canonicalPricingSymbols = REAL_PRICING_CATALOG.map((item) => `PRICE-${item.symbol}`.slice(0, 40));
+  const legacyPricingWorkTypes = await prisma.workType.findMany({
+    select: { id: true },
+    where: { symbol: { startsWith: "PRICE-", notIn: canonicalPricingSymbols } },
+  });
+  if (legacyPricingWorkTypes.length > 0) {
+    const legacyWorkTypeIds = legacyPricingWorkTypes.map((workType) => workType.id);
+    await prisma.workType.updateMany({
+      data: { archivedAt: new Date(), isActive: false, updatedByUserId: manager.id },
+      where: { id: { in: legacyWorkTypeIds } },
+    });
+    await prisma.priceCatalogItem.updateMany({
+      data: { isActive: false, updatedByUserId: manager.id },
+      where: { legalEntityId: { in: legalEntities.map((legalEntity) => legalEntity.id) }, workTypeId: { in: legacyWorkTypeIds } },
+    });
+  }
+  // These two Excel rows are add-ons, not selectable work types. Archive any
+  // rows created by older technical/demo seeds so they disappear everywhere
+  // after the technical catalog is refreshed, while preserving historical work
+  // orders that reference them.
+  const removedAddOnWorkTypeIds = [
+    "technical_work_type_placata-4-plus",
+    "technical_work_type_gingie-ceramica-compozit",
+  ];
+  await prisma.workType.updateMany({
+    data: { archivedAt: new Date(), isActive: false, updatedByUserId: manager.id },
+    where: { id: { in: removedAddOnWorkTypeIds } },
+  });
+  await prisma.priceCatalogItem.updateMany({
+    data: { isActive: false, updatedByUserId: manager.id },
+    where: { workTypeId: { in: removedAddOnWorkTypeIds } },
+  });
   for (const legalEntity of legalEntities) {
     for (const [sortOrder, item] of REAL_PRICING_CATALOG.entries()) {
       const technicalWorkTypeId = `technical_pricing_work_type_${item.key}`;
-      const workTypeCode = `TECH-${item.workTypeCode}`.slice(0, 20);
+      // WorkType.code is VARCHAR(20). Use the canonical Excel symbol, which
+      // is short and unique (including for Reparație 1–4).
+      const workTypeCode = `TECH-${item.symbol}`;
       const workTypeSymbol = `PRICE-${item.symbol}`.slice(0, 40);
       const existingWorkType = await prisma.workType.findUnique({ where: { code: workTypeCode } })
         ?? await prisma.workType.findUnique({ where: { id: technicalWorkTypeId } })

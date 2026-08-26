@@ -31,7 +31,7 @@ function createDescribedBy(hintId: string, errorId: string, hasHint: boolean, ha
 export interface TextInputProps
   extends FieldControlProps,
     Omit<InputHTMLAttributes<HTMLInputElement>, "type"> {
-  readonly type?: "email" | "password" | "search" | "tel" | "text" | "url";
+  readonly type?: "date" | "datetime-local" | "email" | "password" | "search" | "tel" | "text" | "time" | "url";
 }
 
 export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function TextInput(
@@ -271,6 +271,14 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
             const nextSearch = event.target.value;
             setSearchValue(nextSearch);
             setOpen(true);
+            if (nextSearch === "") {
+              setSelectedValue("");
+              const nativeSelect = nativeRef.current;
+              if (nativeSelect) {
+                nativeSelect.value = "";
+                nativeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+              }
+            }
           }}
           onFocus={() => {
             setSearchValue(selectedOption?.label ?? "");

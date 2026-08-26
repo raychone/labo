@@ -74,10 +74,6 @@ export function toggleDraftConnection(
     : [...connections, normalized];
 }
 
-function formatWorkTypeUnit(unit: WorkTypeFormOption["unit"]): string {
-  return unit === "ELEMENT" ? "Element" : unit === "UNIT" ? "Bucată" : unit === "ARCH" ? "Arcadă" : unit === "CASE" ? "Lucrare" : unit;
-}
-
 function displayWorkTypeName(name: string): string {
   return name.replace(/\s*-\s*(bucată|bucata|element|arcadă|arcada|lucrare)\s*$/iu, "").trim();
 }
@@ -135,24 +131,22 @@ export function MultiItemWorkEditor({
     () => getDraftCompositionTeeth([...items, { scope, teeth: selectedTeeth }]),
     [items, scope, selectedTeeth],
   );
-  const workTypeCategories = useMemo(() => [...new Set(workTypeOptions.map((option) => option.probeFamily).filter((family): family is string => Boolean(family)))], [workTypeOptions]);
   const workTypeSearchOptions = useMemo(() => {
-    if (workTypeCategory === CUSTOM_WORK_TYPE_CATEGORY) {
-      return [{ label: "Alt tip de lucrare", secondary: "Valoare personalizată", value: CUSTOM_WORK_TYPE_CATEGORY }];
-    }
-    const categoryOptions = workTypeCategory === "" ? workTypeOptions : workTypeOptions.filter((option) => option.probeFamily === workTypeCategory);
-    return categoryOptions.map((option) => ({
-      label: displayWorkTypeName(option.name),
-      secondary: `${option.probeFamily ? `${formatWorkTypeCategory(option.probeFamily)} · ` : ""}${option.symbol} · ${formatWorkTypeUnit(option.unit)}`,
-      value: option.id,
-    }));
-  }, [workTypeCategory, workTypeOptions]);
+    return [
+      ...workTypeOptions.map((option) => ({
+        label: displayWorkTypeName(option.name),
+        secondary: undefined,
+        value: option.id,
+      })),
+      { label: "Alt tip de lucrare", secondary: "Valoare personalizată", value: CUSTOM_WORK_TYPE_CATEGORY },
+    ];
+  }, [workTypeOptions]);
   const selectedWorkType = useMemo(() => workTypeOptions.find((option) => option.id === workTypeId) ?? null, [workTypeId, workTypeOptions]);
   const isImplantWorkType = selectedWorkType?.name.toLocaleLowerCase("ro-RO").includes("implant") ?? false;
   const visibleWorkTypeOptions = useMemo(() => {
     const normalized = workTypeSearch.trim().normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
     const matched = normalized === "" ? workTypeSearchOptions : workTypeSearchOptions.filter((option) => `${option.label} ${option.secondary}`.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().includes(normalized));
-    return normalized === "" && workTypeCategory === "" ? matched.slice(0, 3) : matched;
+    return matched;
   }, [workTypeSearch, workTypeSearchOptions]);
   const shadeOptions = useMemo(() => filterEditorOptions(WORK_SHADE_OPTIONS.map((value) => ({ label: value, secondary: undefined, value })), shadeSearch), [shadeSearch]);
   const platformOptions = useMemo(() => filterEditorOptions(IMPLANT_PLATFORM_OPTIONS.map((value) => ({ label: value, secondary: undefined, value })), platformSearch), [platformSearch]);
@@ -346,22 +340,17 @@ export function MultiItemWorkEditor({
         </div> : null}
       </div>
       <div className="multi-item-work-editor__fields">
-        <FormGrid>
-          {workTypeCategories.length > 0 ? <div className="multi-item-work-editor__categories" aria-label="Categorii tipuri de lucrări">
-            <span className="multi-item-work-editor__field-label">Categorie tip lucrare</span>
-            <div className="multi-item-work-editor__category-list">
-              <button aria-pressed={workTypeCategory === ""} className={workTypeCategory === "" ? "multi-item-work-editor__category multi-item-work-editor__category--active" : "multi-item-work-editor__category"} onClick={() => { setWorkTypeCategory(""); setWorkTypeId(""); setWorkTypeSearch(""); }} type="button">Toate</button>
-              {workTypeCategories.map((category) => <button aria-pressed={workTypeCategory === category} className={workTypeCategory === category ? "multi-item-work-editor__category multi-item-work-editor__category--active" : "multi-item-work-editor__category"} key={category} onClick={() => { setWorkTypeCategory(category); setWorkTypeId(""); setWorkTypeSearch(""); }} type="button">{formatWorkTypeCategory(category)}</button>)}
-              <button aria-pressed={workTypeCategory === CUSTOM_WORK_TYPE_CATEGORY} className={workTypeCategory === CUSTOM_WORK_TYPE_CATEGORY ? "multi-item-work-editor__category multi-item-work-editor__category--active" : "multi-item-work-editor__category"} onClick={() => { setWorkTypeCategory(CUSTOM_WORK_TYPE_CATEGORY); setWorkTypeId(""); setWorkTypeSearch("Alt tip de lucrare"); }} type="button">Alt tip</button>
-            </div>
-          </div> : null}
+        <FormGrid className="multi-item-work-editor__selection-grid">
           <SearchablePickerField
             disabled={disabled}
             emptyMessage="Nu există tipuri de lucrări potrivite."
             error={workTypeId === "" && error ? "Tipul lucrării este obligatoriu." : undefined}
             id="draft-work-type"
             label="Tip lucrare"
-            onSearchChange={setWorkTypeSearch}
+            onSearchChange={(value) => {
+              setWorkTypeSearch(value);
+              if (value === "") setWorkTypeCategory("");
+            }}
             onSelect={(value) => {
               if (value === CUSTOM_WORK_TYPE_CATEGORY) {
                 setWorkTypeCategory(CUSTOM_WORK_TYPE_CATEGORY);
@@ -369,6 +358,7 @@ export function MultiItemWorkEditor({
                 setCustomWorkTypeName("");
                 return;
               }
+              setWorkTypeCategory("");
               setWorkTypeId(value);
               setCustomWorkTypeName("");
             }}

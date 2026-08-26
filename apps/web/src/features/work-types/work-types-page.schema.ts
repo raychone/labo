@@ -9,6 +9,7 @@ export const workTypeFormSchema = z.object({
     message: "Introdu un pret nenegativ cu maximum doua zecimale.",
   }),
   description: nullableTrimmedString(1000),
+  colorHex: z.string().regex(/^#[0-9A-F]{6}$/i, "Alege o culoare validă.").or(z.literal("")),
   name: z.string().trim().min(2, "Denumirea este obligatorie.").max(160),
   symbol: z.string().trim().min(1, "Simbolul este obligatoriu.").max(40),
   unit: z.enum(WORK_TYPE_UNITS),

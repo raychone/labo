@@ -71,7 +71,7 @@ export function LogisticsRouteBuilderPage(): ReactNode {
   const deliveryCandidates = deliveryCandidatesQuery.data?.items ?? [];
   const pickupCandidates = (pickupsQuery.data ?? []).filter((pickup) => pickup.status === "SCHEDULED");
   const assignedStopKeys = useMemo(() => new Set((allRoutesQuery.data?.items ?? [])
-    .filter((route) => route.id !== editingRouteId)
+    .filter((route) => route.id !== editingRouteId && !(route.status === "DRAFT" && route.courier === null && route.name === "Lista pentru viitoarele trasee"))
     .flatMap((route) => route.stops
     .filter((stop) => stop.outcomeStatus === "PENDING" || stop.outcomeStatus === "DELIVERED" || stop.outcomeStatus === "PICKED_UP")
     .map((stop) => `${stop.type}:${stop.workOrderId ?? stop.pickupRequestId ?? stop.id}`))), [allRoutesQuery.data?.items, editingRouteId]);
@@ -274,7 +274,7 @@ export function LogisticsRouteBuilderPage(): ReactNode {
 
             <div className="logistics-page__route-grid">
                 <CandidatePanel title="De livrat" loading={deliveryCandidatesQuery.isLoading}>
-                {deliveryCandidates.filter((work) => work.requiresDelivery !== false && !work.requiresPickup && !assignedStopKeys.has(`DELIVERY:${work.id}`)).map((work) => (
+                {deliveryCandidates.filter((work) => work.requiresLogisticsAction && (work.requiresDelivery || work.logisticsActionReasons.includes("READY_FOR_PROBE_DELIVERY") || work.logisticsActionReasons.includes("READY_FOR_FINAL_DELIVERY")) && !assignedStopKeys.has(`DELIVERY:${work.id}`)).map((work) => (
                   <CandidateButton disabled={selectedKeys.has(`DELIVERY:${work.id}`)} key={work.id} label={`${work.workCode} · ${work.patientName}`} onClick={() => addDelivery(work)} />
                 ))}
               </CandidatePanel>

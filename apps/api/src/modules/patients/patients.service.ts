@@ -68,8 +68,22 @@ export class PatientsService {
 
   public async listPatientOptions(query: PatientOptionsQueryDto): Promise<readonly PatientOptionView[]> {
     const search = query.search?.trim();
+    const clinicId = query.clinicId ?? null;
+    const doctorId = query.doctorId ?? null;
     const where: Prisma.PatientWhereInput = {
       isArchived: false,
+      ...(clinicId && doctorId ? {
+        OR: [
+          { clinicId, doctorId },
+          { workOrders: { some: { clinicId, doctorId } } },
+          { clinicId, workOrders: { some: { doctorId } } },
+          { doctorId, workOrders: { some: { clinicId } } },
+        ],
+      } : clinicId ? {
+        OR: [{ clinicId }, { workOrders: { some: { clinicId } } }],
+      } : doctorId ? {
+        OR: [{ doctorId }, { workOrders: { some: { doctorId } } }],
+      } : {}),
       ...(search ? this.toPatientSearchWhere(search) : {}),
     };
 

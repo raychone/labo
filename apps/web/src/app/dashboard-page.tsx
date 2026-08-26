@@ -9,6 +9,7 @@ import {
   LoadingState,
   PriorityBadge,
   Modal,
+  Select,
   StatusBadge,
   TextInput,
   useToast,
@@ -20,12 +21,12 @@ import {
   type WorkSummary,
 } from "@dental-lab/shared";
 import { useQuery } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 
 import { useAuthState } from "./auth-state.js";
 import { fetchOrganizationContext } from "../features/organization-context/organization-context-api.js";
-import { useAvailableWorksForClaim, useCreateNextWorkCycle, useMyClaimedWorks, useWorks } from "../features/works/works-api.js";
+import { useAvailableWorksForClaim, useMyClaimedWorks, useProbeTypes, useReceiveProbe, useWork, useWorks } from "../features/works/works-api.js";
 import { useSettings } from "../features/settings/settings-api.js";
 import { useBillingOverview } from "../features/billing/billing-api.js";
 import { useOperationalStatus } from "../features/status/status-api.js";
@@ -281,11 +282,11 @@ function SummaryMetricCard({ label, to, value }: { readonly label: string; reado
   );
 }
 
-function DashboardAction({ label, to, variant = "outline" }: { readonly label: string; readonly to: string; readonly variant?: "outline" | "primary" }): ReactNode {
+function DashboardAction({ label, onClick, to, variant = "outline" }: { readonly label: string; readonly onClick?: () => void; readonly to?: string; readonly variant?: "outline" | "primary" }): ReactNode {
   const className = variant === "primary"
     ? "dashboard-page__action-link dashboard-page__action-link--primary"
     : "dashboard-page__action-link dashboard-page__action-link--outline";
-  return <Link className={className} to={to}>{label}</Link>;
+  return to ? <Link className={className} to={to}>{label}</Link> : <button className={className} onClick={onClick} type="button">{label}</button>;
 }
 
 function DashboardEmptyState({ action, description, title }: { readonly action?: { readonly label: string; readonly to: string }; readonly description: string; readonly title: string }): ReactNode {
@@ -432,7 +433,11 @@ function ReceptionDashboard({
   const toast = useToast();
   const [returnSearch, setReturnSearch] = useState("");
   const [selectedReturnedWorkId, setSelectedReturnedWorkId] = useState<string | null>(null);
+  const [probeTypeId, setProbeTypeId] = useState("");
+  const [probeDate, setProbeDate] = useState("");
+  const [probeTime, setProbeTime] = useState("");
   const [isReturnModalOpen, setReturnModalOpen] = useState(false);
+  const [isProbeFormOpen, setProbeFormOpen] = useState(false);
   const incompleteRows = todayRows.filter((row) => isIncompleteSheet(row.realLabSheet.status)).slice(0, shortListSize);
   const returnQuery = useOperationalStatus({
     page: 1,
@@ -442,8 +447,22 @@ function ReceptionDashboard({
     sortDirection: "desc",
     tab: "COMPLETED",
   }, isReturnModalOpen && canCreateNextCycle);
-  const returnMutation = useCreateNextWorkCycle();
-  const selectedReturnedWork = returnQuery.data?.items.find((row) => row.id === selectedReturnedWorkId) ?? null;
+  const returnMutation = useReceiveProbe();
+  const selectedReturnedWorkDetailQuery = useWork(selectedReturnedWorkId, (isReturnModalOpen || isProbeFormOpen) && selectedReturnedWorkId !== null);
+  const probeTypesQuery = useProbeTypes((isReturnModalOpen || isProbeFormOpen) && canCreateNextCycle);
+  const returnedProbeRows = (returnQuery.data?.items ?? []).filter((row) => row.technicalReadiness === "PROBE_READY");
+  const selectedReturnedWork = returnedProbeRows.find((row) => row.id === selectedReturnedWorkId) ?? null;
+  const selectedReturnedWorkDetail = selectedReturnedWorkDetailQuery.data;
+  const configuredProbeCodes = selectedReturnedWorkDetail?.items?.flatMap((item) => item.workType?.probeTypeCodes ?? []) ?? [];
+  const selectableProbeTypes = configuredProbeCodes.length > 0
+    ? (probeTypesQuery.data ?? []).filter((type) => typeof type.code === "string" && configuredProbeCodes.includes(type.code))
+    : (probeTypesQuery.data ?? []);
+
+  useEffect(() => {
+    setProbeTypeId(selectableProbeTypes[0]?.id ?? "");
+    setProbeDate("");
+    setProbeTime("");
+  }, [probeTypesQuery.data, selectedReturnedWorkDetail, selectedReturnedWorkId]);
   return (
     <div className="dashboard-page__workspace" aria-labelledby="reception-dashboard-title">
       <div className="dashboard-page__workspace-header">
@@ -453,6 +472,7 @@ function ReceptionDashboard({
         </div>
         <div className="dashboard-page__actions">
           {canCreateWork ? <DashboardAction label="Lucrare nouă" to="/works?create=1" variant="primary" /> : null}
+          {canCreateNextCycle ? <DashboardAction label="Probe" onClick={() => setReturnModalOpen(true)} /> : null}
           {canScanWork ? <DashboardAction label="Scanează lucrare" to="/scan" /> : null}
         </div>
       </div>
@@ -482,33 +502,6 @@ function ReceptionDashboard({
       </DashboardSection>
       <Modal
         description="Caută o lucrare finalizată și înregistreaz-o ca revenire."
-        footer={selectedReturnedWork ? (
-          <Button
-            isLoading={returnMutation.isPending}
-            onClick={() => {
-              returnMutation.mutate({
-                input: {
-                  clinicId: selectedReturnedWork.clinic?.id ?? null,
-                  doctorId: selectedReturnedWork.doctor?.id ?? null,
-                  ...(selectedReturnedWork.currentCycle?.id ? { expectedActiveCycleId: selectedReturnedWork.currentCycle.id } : {}),
-                  notes: null,
-                  reason: "PROBA",
-                },
-                workOrderId: selectedReturnedWork.id,
-              }, {
-                onError: (error) => {
-                  toast.showToast({ message: getErrorMessage(error), title: "Revenirea nu a fost înregistrată", variant: "error" });
-                },
-                onSuccess: () => {
-                  setReturnModalOpen(false);
-                  setSelectedReturnedWorkId(null);
-                },
-              });
-            }}
-          >
-            Marchează revenită
-          </Button>
-        ) : null}
         isOpen={isReturnModalOpen}
         onOpenChange={(isOpen) => {
           setReturnModalOpen(isOpen);
@@ -524,21 +517,71 @@ function ReceptionDashboard({
           {returnQuery.isLoading ? <LoadingState text="Se încarcă lucrările finalizate" /> : null}
           {returnQuery.isError ? <ErrorState title="Lista nu a putut fi încărcată" description="Nu am putut încărca lucrările finalizate." /> : null}
           <div className="dashboard-page__return-list">
-            {(returnQuery.data?.items ?? []).map((row) => (
+            {returnedProbeRows.map((row) => (
               <button
                 aria-pressed={selectedReturnedWorkId === row.id}
                 className="dashboard-page__return-item"
                 key={row.id}
-                onClick={() => setSelectedReturnedWorkId(row.id)}
+                onClick={() => {
+                  setSelectedReturnedWorkId(row.id);
+                  setReturnModalOpen(false);
+                  setProbeFormOpen(true);
+                }}
                 type="button"
               >
-                <strong>{row.workCode}</strong>
-                <span>{row.patient.name}</span>
-                <span>{row.clinic?.name ?? "-"} · {row.doctor?.name ?? "-"}</span>
-                <span>{row.workType.name}</span>
+                <strong className="dashboard-page__return-patient">{row.patient.name}</strong>
               </button>
             ))}
-            {!returnQuery.isLoading && (returnQuery.data?.items ?? []).length === 0 ? <p className="dashboard-page__empty-note">Nu există lucrări finalizate pentru căutarea curentă.</p> : null}
+            {!returnQuery.isLoading && returnedProbeRows.length === 0 ? <p className="dashboard-page__empty-note">Nu există lucrări marcate „Probă gata” pentru căutarea curentă.</p> : null}
+          </div>
+        </div>
+      </Modal>
+      <Modal
+        footer={selectedReturnedWork ? (
+          <Button
+            disabled={!probeTypeId || !probeDate}
+            isLoading={returnMutation.isPending}
+            onClick={() => {
+              if (!probeTypeId || !probeDate || !selectedReturnedWork) return;
+              const deadlineAt = new Date(`${probeDate}T${probeTime || "23:59"}:00`).toISOString();
+              returnMutation.mutate({ input: { deadlineAt, probeTypeId }, workOrderId: selectedReturnedWork.id }, {
+                onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Proba nu a fost înregistrată", variant: "error" }),
+                onSuccess: () => {
+                  setProbeFormOpen(false);
+                  setSelectedReturnedWorkId(null);
+                },
+              });
+            }}
+          >
+            Înregistrează proba
+          </Button>
+        ) : null}
+        isOpen={isProbeFormOpen}
+        onOpenChange={(isOpen) => {
+          setProbeFormOpen(isOpen);
+          if (!isOpen) setSelectedReturnedWorkId(null);
+        }}
+        title="Probă nouă"
+      >
+        <div className="dashboard-page__probe-form">
+          <strong>{selectedReturnedWork?.patient.name ?? "Pacient selectat"}</strong>
+          {selectedReturnedWorkDetailQuery.isLoading ? <LoadingState text="Se încarcă tipurile compatibile" /> : null}
+          <Select
+            label="Tip probă"
+            onChange={(event) => setProbeTypeId(event.target.value)}
+            options={selectableProbeTypes.map((type) => ({ label: type.name, value: type.id }))}
+            required
+            value={probeTypeId}
+          />
+          <div className="dashboard-page__probe-schedule">
+            <label>
+              Data termenului probei *
+              <input className="dl-control dashboard-page__probe-date" onChange={(event) => setProbeDate(event.target.value)} type="date" value={probeDate} required />
+            </label>
+            <label>
+              Ora termenului
+              <input className="dl-control dashboard-page__probe-time" onChange={(event) => setProbeTime(event.target.value)} type="time" value={probeTime} />
+            </label>
           </div>
         </div>
       </Modal>

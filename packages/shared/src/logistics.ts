@@ -200,7 +200,7 @@ export interface PickupRequestView {
   readonly doctor: {
     readonly id: string;
     readonly name: string;
-  };
+  } | null;
   readonly exactTime: string | null;
   readonly id: string;
   readonly notes: string | null;
@@ -308,7 +308,7 @@ export interface RemoveWorkFromDeliveryPreparationGroupInput {
 export interface CreatePickupRequestInput {
   readonly address?: string | null;
   readonly clinicId: string;
-  readonly doctorId: string;
+  readonly doctorId?: string | null;
   readonly exactTime?: string | null;
   readonly notes?: string | null;
   readonly scheduledDate: string;

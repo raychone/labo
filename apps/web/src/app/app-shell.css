@@ -602,7 +602,7 @@
 
 .dashboard-page__metric span {
   color: var(--dl-color-text-muted);
-  font-size: var(--dl-font-size-sm);
+  font-size: var(--dl-font-size-small);
 }
 
 .dashboard-page__metric strong {
@@ -838,6 +838,70 @@
   gap: var(--dl-space-1);
   padding: var(--dl-space-3);
   text-align: left;
+}
+
+.dashboard-page__return-item > span,
+.dashboard-page__return-item > strong {
+  display: block;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-page__return-patient {
+  font-size: 1.2rem;
+  line-height: 1.25 !important;
+}
+
+.dashboard-page__probe-form {
+  display: grid;
+  gap: var(--dl-space-3);
+}
+
+.dashboard-page__probe-form label {
+  display: grid;
+  gap: var(--dl-space-1);
+  font-weight: 700;
+}
+
+.dashboard-page__probe-schedule {
+  display: grid;
+  gap: var(--dl-space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-page__probe-date,
+.dashboard-page__probe-time {
+  min-width: 0;
+  padding-left: 2.25rem;
+  position: relative;
+}
+
+.dashboard-page__probe-date::-webkit-calendar-picker-indicator,
+.dashboard-page__probe-time::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  height: 1.1rem;
+  left: 0.75rem;
+  margin: 0;
+  position: absolute;
+  width: 1.1rem;
+}
+
+.dashboard-page__probe-date:not(:focus):placeholder-shown::-webkit-datetime-edit,
+.dashboard-page__probe-time:not(:focus):placeholder-shown::-webkit-datetime-edit {
+  color: transparent;
+}
+
+.dashboard-page__probe-date:focus::-webkit-datetime-edit,
+.dashboard-page__probe-time:focus::-webkit-datetime-edit,
+.dashboard-page__probe-date:not(:placeholder-shown)::-webkit-datetime-edit,
+.dashboard-page__probe-time:not(:placeholder-shown)::-webkit-datetime-edit {
+  color: inherit;
+}
+
+@media (max-width: 38rem) {
+  .dashboard-page__probe-schedule {
+    grid-template-columns: 1fr;
+  }
 }
 
 .dashboard-page__return-item[aria-pressed="true"] {

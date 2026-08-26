@@ -17,7 +17,7 @@ export const patientsQueryKeys = {
   all: ["patients"] as const,
   detail: (patientId: string | null) => ["patients", "detail", patientId] as const,
   list: (params: PatientsListParams) => ["patients", "list", params] as const,
-  options: (search: string) => ["patients", "options", search] as const,
+  options: (search: string, clinicId?: string, doctorId?: string) => ["patients", "options", search, clinicId, doctorId] as const,
   works: (patientId: string | null, params: PatientWorksListParams) => ["patients", "works", patientId, params] as const,
 };
 
@@ -85,9 +85,11 @@ export async function fetchPatients(params: PatientsListParams): Promise<Paginat
   return parseApiResponse<PaginatedPatientsResponse>(response);
 }
 
-export async function fetchPatientOptions(search = ""): Promise<readonly PatientOption[]> {
+export async function fetchPatientOptions(search = "", clinicId?: string, doctorId?: string): Promise<readonly PatientOption[]> {
   const query = new URLSearchParams({ limit: "50" });
   appendOptional(query, "search", search);
+  appendOptional(query, "clinicId", clinicId);
+  appendOptional(query, "doctorId", doctorId);
   const response = await apiFetch(`/patients/options?${query.toString()}`);
   return parseApiResponse<readonly PatientOption[]>(response);
 }
@@ -118,11 +120,11 @@ export async function restorePatient(patientId: string): Promise<PatientDetail> 
   return sendJson<PatientDetail>(`/patients/${patientId}/restore`, "POST");
 }
 
-export function usePatientOptions(search: string, enabled: boolean) {
+export function usePatientOptions(search: string, enabled: boolean, clinicId?: string, doctorId?: string) {
   return useQuery({
     enabled,
-    queryFn: () => fetchPatientOptions(search),
-    queryKey: patientsQueryKeys.options(search),
+    queryFn: () => fetchPatientOptions(search, clinicId, doctorId),
+    queryKey: patientsQueryKeys.options(search, clinicId, doctorId),
     retry: false,
   });
 }

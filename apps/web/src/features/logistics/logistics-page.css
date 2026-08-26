@@ -471,10 +471,87 @@
   gap: var(--space-4);
 }
 
+@media (min-width: 48rem) {
+  .logistics-page__pickup-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .logistics-page__pickup-form > :nth-child(5),
+  .logistics-page__pickup-form > :nth-child(6) {
+    align-self: end;
+  }
+
+  .logistics-page__pickup-form > :nth-child(7) {
+    grid-column: 1 / -1;
+  }
+
+  .logistics-page__pickup-form > .logistics-page__pickup-range {
+    max-width: none;
+  }
+}
+
+.logistics-page__pickup-form > .logistics-page__choice-field,
+.logistics-page__pickup-form > .dl-field,
+.logistics-page__pickup-form > .logistics-page__pickup-range {
+  max-width: 100%;
+}
+
+.logistics-page__pickup-form > .logistics-page__choice-field {
+  max-width: 24rem;
+}
+
+.logistics-page__pickup-contact {
+  max-width: 24rem;
+}
+
 .logistics-page__pickup-range {
   display: grid;
   gap: var(--space-3);
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 390px;
+}
+
+/* Keep the empty native date control clean while preserving its calendar button. */
+.logistics-page__pickup-date-picker:invalid::-webkit-datetime-edit {
+  color: transparent;
+}
+
+.logistics-page__pickup-date-picker:focus::-webkit-datetime-edit,
+.logistics-page__pickup-date-picker:not(:invalid)::-webkit-datetime-edit {
+  color: inherit;
+}
+
+.logistics-page__pickup-date-picker,
+.logistics-page__pickup-time-picker {
+  min-width: 0;
+  padding-left: 2.25rem;
+  position: relative;
+}
+
+.logistics-page__pickup-date-picker {
+  max-width: 190px;
+}
+
+.logistics-page__pickup-date-picker::-webkit-calendar-picker-indicator,
+.logistics-page__pickup-time-picker::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  height: 1.1rem;
+  left: 0.75rem;
+  margin: 0;
+  position: absolute;
+  width: 1.1rem;
+}
+
+.logistics-page__pickup-time-picker:invalid::-webkit-datetime-edit {
+  color: transparent;
+}
+
+.logistics-page__pickup-time-picker:focus::-webkit-datetime-edit {
+  color: inherit;
+}
+
+.logistics-page__pickup-time-picker:not(:invalid)::-webkit-datetime-edit {
+  color: inherit;
 }
 
 .logistics-page__tabs {
@@ -619,6 +696,8 @@
 }
 
 .logistics-page__choice-control {
+  display: grid;
+  gap: var(--space-2);
   position: relative;
 }
 
@@ -627,19 +706,18 @@
 }
 
 .logistics-page__choice-menu {
-  background: var(--color-surface);
+  background: #fff;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg, 0 12px 30px rgb(15 23 42 / 16%));
   display: grid;
-  left: 0;
-  max-height: 240px;
+  gap: 2px;
+  -webkit-overflow-scrolling: touch;
+  max-height: 280px;
   overflow: auto;
   padding: var(--space-1);
-  position: absolute;
-  right: 0;
-  top: calc(100% + var(--space-1));
-  z-index: 20;
+  position: relative;
+  width: 100%;
 }
 
 .logistics-page__choice-option {
@@ -650,8 +728,17 @@
   cursor: pointer;
   display: grid;
   gap: 2px;
+  line-height: 1.25;
+  min-height: 48px;
   padding: var(--space-2) var(--space-3);
   text-align: left;
+  width: 100%;
+}
+
+.logistics-page__choice-option strong,
+.logistics-page__choice-option span {
+  display: block;
+  overflow-wrap: anywhere;
 }
 
 .logistics-page__choice-option:hover,

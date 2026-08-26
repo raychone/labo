@@ -32,7 +32,6 @@ import {
   formatMoneyMinor,
   formatWorkTypeUnit,
   minorToDecimalString,
-  WORK_TYPE_UNITS,
   type ExecutionTimeRuleInput,
   type PriceCatalogItemInput,
   type PriceCatalogItemSummary,
@@ -127,6 +126,34 @@ const adjustmentTypeOptions = [
   { label: "Preț final", value: "OVERRIDE_PRICE" },
 ] as const;
 
+const workTypeUnitOptions = [
+  { label: "Element", value: "ELEMENT" },
+  { label: "Bucată", value: "UNIT" },
+] as const;
+
+const workTypeColorPalette = ["#FACC15", "#F97316", "#DC2626", "#7C3AED", "#2563EB", "#0891B2", "#16A34A", "#DB2777", "#92400E", "#64748B", "#111827", "#FFFFFF"] as const;
+
+function WorkTypeColorPicker({ disabled, onChange, value }: { readonly disabled?: boolean; readonly onChange: (value: string) => void; readonly value: string }): ReactNode {
+  const [isOpen, setIsOpen] = useState(false);
+  return <>
+    <Button disabled={disabled} onClick={() => setIsOpen(true)} type="button" variant="outline">
+      <span className="pricing-page__color-preview" style={{ backgroundColor: value || "transparent" }} />
+      Culoare
+    </Button>
+    <Modal isOpen={isOpen} onOpenChange={setIsOpen} size="sm" title="Alege culoarea">
+      <div className="pricing-page__color-picker">
+        <div className="pricing-page__color-grid" aria-label="Paletă culori tip lucrare" role="group">
+          {workTypeColorPalette.map((color) => <button aria-label={`Alege ${color}`} className={value.toUpperCase() === color ? "is-selected" : undefined} key={color} onClick={() => { onChange(color); setIsOpen(false); }} style={{ backgroundColor: color }} type="button" />)}
+        </div>
+        <div className="pricing-page__color-custom">
+          <input aria-label="Culoare personalizată" type="color" value={value || "#F97316"} onChange={(event) => onChange(event.target.value.toUpperCase())} />
+          <TextInput label="Cod culoare" placeholder="#F97316" value={value} onChange={(event) => onChange(event.target.value.toUpperCase())} />
+        </div>
+      </div>
+    </Modal>
+  </>;
+}
+
 function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -142,6 +169,7 @@ function fromApiActive(value: boolean | undefined): string {
 function getCatalogDefaults(item?: PriceCatalogItemSummary | null): CatalogFormValues {
   return {
     category: item?.category ?? "Ceramică",
+    colorHex: "",
     displayName: item?.displayName ?? "",
     executionDays: String(item?.executionTimeRules.find((rule) => rule.isActive && rule.minQuantity === 1)?.executionDays ?? 1) as "1" | "2" | "3" | "4" | "5" | "6",
     isActive: item?.isActive ?? true,
@@ -611,6 +639,7 @@ export function PricingPage(): ReactNode {
           }
           createWorkTypeMutation.mutate({
             basePriceMinor: price.value,
+            colorHex: values.colorHex || null,
             description: values.workTypeDescription || null,
             name: values.workTypeName ?? "",
             symbol: values.workTypeSymbol ?? "",
@@ -1252,9 +1281,9 @@ function CatalogModal({
           ) : <Select label="Tip lucrare" options={workTypes.map((workType) => ({ label: `${workType.code} · ${workType.name}`, value: workType.id }))} placeholder="Alege tipul" {...form.register("workTypeId")} />}
           <TextInput label="Denumire comercială" {...form.register("displayName")} />
           <Select label="Categorie" options={pricingCategoryOptions} {...form.register("category")} />
-          <Select label="Unitate" options={WORK_TYPE_UNITS.map((unit) => ({ label: formatWorkTypeUnit(unit), value: unit }))} {...form.register("unit")} />
+          <Select label="Unitate" options={workTypeUnitOptions} {...form.register("unit")} />
+          <WorkTypeColorPicker value={form.watch("colorHex")} onChange={(value) => form.setValue("colorHex", value, { shouldDirty: true, shouldValidate: true })} />
           <NumberInput label="Preț standard" {...form.register("standardPriceDecimal")} />
-          {mode === "create" ? <Select label="Termen implicit" options={[1, 2, 3, 4, 5, 6].map((days) => ({ label: `${days} zile`, value: String(days) }))} {...form.register("executionDays")} /> : null}
           <NumberInput label="Ordine" {...form.register("sortOrder", { valueAsNumber: true })} />
           <FormGridFull>
             <Textarea label="Note" rows={3} {...form.register("notes")} />
@@ -1308,7 +1337,8 @@ function CatalogInlineForm({
           <Select label="Tip lucrare" options={workTypes.map((workType) => ({ label: `${workType.code} · ${workType.name}`, value: workType.id }))} placeholder="Alege tipul" {...form.register("workTypeId")} />
           <TextInput label="Denumire comercială" {...form.register("displayName")} />
           <Select label="Categorie" options={pricingCategoryOptions} {...form.register("category")} />
-          <Select label="Unitate" options={WORK_TYPE_UNITS.map((unit) => ({ label: formatWorkTypeUnit(unit), value: unit }))} {...form.register("unit")} />
+          <Select label="Unitate" options={workTypeUnitOptions} {...form.register("unit")} />
+          <WorkTypeColorPicker value={form.watch("colorHex")} onChange={(value) => form.setValue("colorHex", value, { shouldDirty: true, shouldValidate: true })} />
           <NumberInput label={`Preț standard ${currency}`} {...form.register("standardPriceDecimal")} />
           <NumberInput label="Ordine" {...form.register("sortOrder", { valueAsNumber: true })} />
           <FormGridFull>
@@ -1347,6 +1377,7 @@ function CatalogDrawer(props: {
   const [workTypeName, setWorkTypeName] = useState("");
   const [workTypeSymbol, setWorkTypeSymbol] = useState("");
   const [workTypeDescription, setWorkTypeDescription] = useState("");
+  const [workTypeColor, setWorkTypeColor] = useState("");
   useEffect(() => {
     if (props.item) {
       const rule = props.item.executionTimeRules.find((candidate) => candidate.isActive && candidate.minQuantity === 1);
@@ -1358,6 +1389,7 @@ function CatalogDrawer(props: {
       setWorkTypeName(workTypeQuery.data.name);
       setWorkTypeSymbol(workTypeQuery.data.symbol);
       setWorkTypeDescription(workTypeQuery.data.description ?? "");
+      setWorkTypeColor(workTypeQuery.data.colorHex ?? "");
     }
   }, [workTypeQuery.data]);
 
@@ -1376,8 +1408,9 @@ function CatalogDrawer(props: {
               <TextInput label="Denumire" onChange={(event) => setWorkTypeName(event.target.value)} value={workTypeName} />
               <TextInput label="Simbol" onChange={(event) => setWorkTypeSymbol(event.target.value)} value={workTypeSymbol} />
               <FormGridFull><Textarea label="Descriere" onChange={(event) => setWorkTypeDescription(event.target.value)} rows={3} value={workTypeDescription} /></FormGridFull>
+              <WorkTypeColorPicker disabled={!props.canUpdate || updateWorkTypeMutation.isPending} value={workTypeColor} onChange={setWorkTypeColor} />
             </FormGrid>
-            <Button disabled={!props.canUpdate || updateWorkTypeMutation.isPending || workTypeQuery.isLoading} onClick={() => updateWorkTypeMutation.mutate({ workTypeId: props.item?.workType.id ?? "", input: { description: workTypeDescription || null, name: workTypeName, symbol: workTypeSymbol } })} variant="outline">Salvează datele tipului</Button>
+            <Button disabled={!props.canUpdate || updateWorkTypeMutation.isPending || workTypeQuery.isLoading} onClick={() => updateWorkTypeMutation.mutate({ workTypeId: props.item?.workType.id ?? "", input: { colorHex: workTypeColor || null, description: workTypeDescription || null, name: workTypeName, symbol: workTypeSymbol } })} variant="outline">Salvează datele tipului</Button>
           </section>
           <div className="pricing-page__summary-grid">
             <Metric label="Preț standard" value={formatMoneyMinor(props.item.standardPriceMinor, props.currency, props.locale)} />

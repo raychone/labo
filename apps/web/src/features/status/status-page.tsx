@@ -232,6 +232,7 @@ function toStatusVariant(row: OperationalStatusRow): "awaiting" | "closed" | "de
   if (row.deadline.state === "LATE") {
     return "rejected";
   }
+  if (row.currentCycle !== null && row.currentCycle.number > 1) return "awaiting";
   if (row.operationalStatus === "FINALIZATA") return "closed";
   if (row.operationalStatus === "IN_LUCRU") return "production";
   if (row.operationalStatus === "IN_ASTEPTARE") return "awaiting";
@@ -239,6 +240,7 @@ function toStatusVariant(row: OperationalStatusRow): "awaiting" | "closed" | "de
 }
 
 function toOperationalLabel(row: OperationalStatusRow): string {
+  if (row.currentCycle !== null && row.currentCycle.number > 1) return "Probă";
   return row.operationalStatus === "RECEPTIE" ? "Recepție"
     : row.operationalStatus === "IN_LUCRU" ? "În lucru"
       : row.operationalStatus === "IN_ASTEPTARE" ? "În așteptare"

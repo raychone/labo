@@ -994,7 +994,7 @@ describe("WorksPage", () => {
     expect(await screen.findByRole("heading", { name: "Cicluri" })).toBeDefined();
     expect((await screen.findAllByText("Ciclul 2")).length).toBeGreaterThan(0);
     expect(await screen.findByText("Probă")).toBeDefined();
-    expect(screen.queryByRole("button", { name: "Înregistrează revenirea" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Înregistrează proba" })).toBeNull();
   });
 
   it("renders canonical completed probes from immutable snapshots and only the active probe is editable", async () => {
@@ -1035,7 +1035,7 @@ describe("WorksPage", () => {
 
     renderWithProviders(<WorksPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
-    expect(await screen.findByText("Proba 1 — Lingură istorică")).toBeDefined();
+    expect(await screen.findByText("Probă trecută 1 — Lingură istorică")).toBeDefined();
     expect(screen.getByLabelText("Tip probă")).toBeDefined();
     expect(screen.getByText("Tip probă istoric: Lingură istorică")).toBeDefined();
   });
@@ -1111,12 +1111,12 @@ describe("WorksPage", () => {
     renderWithProviders(<WorksPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Înregistrează revenirea" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Înregistrează proba" }));
 
-    const dialog = await screen.findByRole("dialog", { name: "Înregistrează revenirea" });
-    fireEvent.change(within(dialog).getByLabelText("Motiv revenire"), { target: { value: "CLARIFICATION" } });
+    const dialog = await screen.findByRole("dialog", { name: "Înregistrează proba" });
+    fireEvent.change(within(dialog).getByLabelText("Motiv probă"), { target: { value: "CLARIFICATION" } });
     fireEvent.change(within(dialog).getByLabelText("Note"), { target: { value: "Necesită clarificare ocluzie" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Înregistrează revenirea" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Înregistrează proba" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/works/work_order_1/cycles/next"), expect.objectContaining({ method: "POST" })));
   });

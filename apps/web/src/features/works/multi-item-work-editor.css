@@ -13,6 +13,13 @@
   min-width: 0;
 }
 
+/* The work type needs room for its full name; shade values are short (A2/A3). */
+@media (min-width: 48rem) {
+  .multi-item-work-editor__fields .multi-item-work-editor__selection-grid {
+    grid-template-columns: minmax(0, 2fr) minmax(6rem, 0.7fr);
+  }
+}
+
 .multi-item-work-editor__categories {
   display: grid;
   gap: var(--dl-space-2);

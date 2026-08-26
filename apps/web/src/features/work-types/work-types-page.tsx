@@ -87,6 +87,7 @@ function toMutationInput(values: WorkTypeFormValues): CreateWorkTypeInput {
   return {
     basePriceMinor: conversion.value,
     description: values.description,
+    colorHex: values.colorHex || null,
     name: values.name,
     symbol: values.symbol,
     unit: values.unit,

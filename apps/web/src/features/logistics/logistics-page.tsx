@@ -36,7 +36,7 @@ import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
-import { fetchClinicOptions, fetchDoctorOptions } from "../clinics/clinics-api.js";
+import { fetchClinic, fetchClinicOptions, fetchDoctorOptions } from "../clinics/clinics-api.js";
 import { usePatientOptions } from "../patients/patients-api.js";
 import { fetchUsers, hasPermission } from "../users/users-api.js";
 import { useTechnicianOptions } from "../technician-workbench/technician-workbench-api.js";
@@ -46,14 +46,12 @@ import { setWorkStatus, useWorkDeadlinePreview, useWorkFormWorkTypeOptions } fro
 import { workFormSchema, type WorkFormValues } from "../works/works-page.schema.js";
 import {
   useCreateLogisticsWork,
-  useCreateCourierRoute,
   useCourierRoutes,
   useCancelPickupRequest,
   useCreatePickupRequest,
   useLogisticsCenter,
   useLogisticsSummary,
   useUpdateLogisticsWorkActions,
-  useUpdateCourierRoute,
   usePickupRequests,
   type PickupRequestsQuery,
   useUpdatePickupRequest,
@@ -79,7 +77,7 @@ const attachmentLimits = {
 const pickupFormSchema = z.object({
   address: z.string().trim().max(300, "Adresa poate avea maximum 300 de caractere."),
   clinicId: z.string().min(1, "Alege clinica."),
-  doctorId: z.string().min(1, "Alege medicul."),
+  doctorId: z.string(),
   exactTime: z.string(),
   notes: z.string().trim().max(1000, "Notele pot avea maximum 1000 de caractere."),
   scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Alege data."),
@@ -120,7 +118,7 @@ const defaultPickupFormValues: PickupFormValues = {
   exactTime: "",
   notes: "",
   scheduledDate: "",
-  scheduleType: "EXACT",
+  scheduleType: "RANGE",
   windowEndTime: "",
   windowStartTime: "",
   phone: "",
@@ -143,6 +141,15 @@ function isTimeValue(value: string): boolean {
   return Number.isInteger(hour) && Number.isInteger(minute) && hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
 }
 
+function isWithinDays(value: string, days: 1 | 2 | 3): boolean {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  const difference = Math.ceil((date.getTime() - today.getTime()) / 86_400_000);
+  return difference >= 0 && difference <= days;
+}
+
 export function LogisticsPage(): ReactNode {
   const navigate = useNavigate();
   const toast = useToast();
@@ -150,6 +157,7 @@ export function LogisticsPage(): ReactNode {
   const [isCreateWorkOpen, setCreateWorkOpen] = useState(false);
   const [isPickupModalOpen, setPickupModalOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [routeQueueOnly, setRouteQueueOnly] = useState(false);
   const [editingPickup, setEditingPickup] = useState<PickupRequestView | null>(null);
   const queryClient = useQueryClient();
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
@@ -161,7 +169,14 @@ export function LogisticsPage(): ReactNode {
   const canUpdatePickup = hasPermission(permissionsQuery.data, "pickup.update");
   const canCancelPickup = hasPermission(permissionsQuery.data, "pickup.cancel");
   const canReadRoutes = hasPermission(permissionsQuery.data, "routes.read");
-  const centerQuery = useLogisticsCenter(query, canRead);
+  // The delivery and pickup KPI cards open the same operational queue. The
+  // row itself determines whether its next action is delivery or pickup.
+  const centerQuery = useLogisticsCenter(
+    routeQueueOnly
+      ? { ...query, pageSize: 100 }
+      : query.category === "DE_LIVRAT" || query.category === "DE_RIDICAT" ? { ...query, category: "ALL" } : query,
+    canRead,
+  );
   const summaryQuery = useLogisticsSummary(query, canRead);
   const clinicOptionsQuery = useQuery({ enabled: canRead, queryFn: fetchClinicOptions, queryKey: ["clinics", "options", "logistics-filters"], retry: false });
   const doctorOptionsQuery = useQuery({
@@ -178,7 +193,10 @@ export function LogisticsPage(): ReactNode {
     queryKey: ["users", "reception-options", "logistics"],
     retry: false,
   });
-  const showPickups = query.category === "DE_RIDICAT";
+  // The operational centre is one combined queue. Delivery and pickup remain
+  // distinct only by the action displayed on each row and by the route stop
+  // type created when that action is clicked.
+  const showPickups = canReadPickups && (query.category === "ALL" || query.category === "DE_LIVRAT" || query.category === "DE_RIDICAT");
   const pickupQuery = useMemo<PickupRequestsQuery>(() => {
     const next = {} as { -readonly [Key in keyof PickupRequestsQuery]?: PickupRequestsQuery[Key] };
     if (query.clinicId) next.clinicId = query.clinicId;
@@ -190,10 +208,8 @@ export function LogisticsPage(): ReactNode {
     if (query.pickupHorizonDays) next.pickupHorizonDays = query.pickupHorizonDays;
     return next;
   }, [query.clinicId, query.dateFrom, query.dateTo, query.doctorId, query.exactDate, query.pickupHorizonDays, query.receptionUserId]);
-  const pickupsQuery = usePickupRequests(canReadPickups && showPickups, pickupQuery);
+  const pickupsQuery = usePickupRequests(showPickups, pickupQuery);
   const updateWorkActions = useUpdateLogisticsWorkActions();
-  const createRouteList = useCreateCourierRoute();
-  const updateRouteList = useUpdateCourierRoute();
   const routesQuery = useCourierRoutes({ page: 1, pageSize: 100 }, canReadRoutes);
   const updateWorkStatus = useMutation({
     mutationFn: ({ status, workOrderId }: { readonly status: (typeof FINAL_WORK_STATUSES)[number]; readonly workOrderId: string }) => setWorkStatus(workOrderId, { status }),
@@ -203,39 +219,29 @@ export function LogisticsPage(): ReactNode {
   const cancelPickup = useCancelPickupRequest();
 
   function setCategory(category: LogisticsCenterCategory): void {
+    setRouteQueueOnly(false);
     setQuery((current) => {
       const { deliveryHorizonDays: _deliveryHorizonDays, pickupHorizonDays: _pickupHorizonDays, ...rest } = current;
       return { ...rest, category, page: 1 };
     });
   }
 
-  function setDayWindow(category: Extract<LogisticsCenterCategory, "DE_LIVRAT" | "DE_RIDICAT">, days: 1 | 2 | 3): void {
+  function setRouteQueueWindow(days?: 1 | 2 | 3): void {
+    setRouteQueueOnly(true);
     setQuery((current) => {
-      const { deliveryHorizonDays: _delivery, pickupHorizonDays: _pickup, ...rest } = current;
-      const currentWindow = category === "DE_LIVRAT" ? current.deliveryHorizonDays : current.pickupHorizonDays;
-      if (currentWindow === days) return { ...rest, page: 1 };
-      return category === "DE_LIVRAT" ? { ...rest, category, deliveryHorizonDays: days, page: 1 } : { ...rest, category, pickupHorizonDays: days, page: 1 };
+      const { deliveryHorizonDays: _deliveryHorizonDays, pickupHorizonDays: _pickupHorizonDays, ...rest } = current;
+      return days === undefined
+        ? { ...rest, category: "ALL", page: 1 }
+        : { ...rest, category: "ALL", deliveryHorizonDays: days, pickupHorizonDays: days, page: 1 };
     });
   }
 
   const assignedStopKeys = useMemo(() => new Set((routesQuery.data?.items ?? [])
-    .filter((route) => route.status !== "CANCELLED")
+    .filter((route) => route.status !== "CANCELLED" && !(route.status === "DRAFT" && route.courier === null && route.name === "Lista pentru viitoarele trasee"))
     .flatMap((route) => route.stops.filter((stop) => stop.outcomeStatus === "PENDING").map((stop) => `${stop.type}:${stop.workOrderId ?? stop.pickupRequestId ?? stop.id}`))), [routesQuery.data?.items]);
 
-  function queueRouteStop(stop: { readonly pickupRequestId?: string | null; readonly type: "DELIVERY" | "PICKUP"; readonly workOrderId?: string | null }, successMessage: string): void {
-    const draft = routesQuery.data?.items.find((route) => route.status === "DRAFT" && route.courier === null && route.name === "Lista pentru viitoarele trasee");
-    const stops = draft
-      ? [...draft.stops.map((current) => ({ addressOverride: current.addressOverride, phoneOverride: current.phoneOverride, pickupRequestId: current.pickupRequestId, stopNotes: current.stopNotes, type: current.type, workOrderId: current.workOrderId })), stop]
-      : [stop];
-    const callbacks = {
-      onError: (error: unknown) => toast.showToast({ message: getErrorMessage(error), title: "Elementul nu a fost adăugat în lista de trasee", variant: "error" }),
-      onSuccess: () => toast.showToast({ message: successMessage, variant: "success" }),
-    };
-    if (draft) {
-      updateRouteList.mutate({ routeId: draft.id, input: { courierUserId: null, name: draft.name, notes: draft.notes, routeDate: draft.routeDate, stops, version: draft.version } }, callbacks);
-      return;
-    }
-    createRouteList.mutate({ courierUserId: null, name: "Lista pentru viitoarele trasee", routeDate: new Date().toISOString().slice(0, 10), stops }, callbacks);
+  function openRouteLists(operation: "DELIVERY" | "PICKUP"): void {
+    toast.showToast({ message: operation === "DELIVERY" ? "Lucrarea este disponibilă în lista De livrat." : "Lucrarea este disponibilă în lista De ridicat.", variant: "success" });
   }
   if (permissionsQuery.isLoading) {
     return <PageFrame><LoadingState text="Se încarcă permisiunile" /></PageFrame>;
@@ -260,11 +266,17 @@ export function LogisticsPage(): ReactNode {
         </header>
 
         <div className="logistics-page__summary">
-          <SummaryCard active={query.category === "ALL"} label="Toate" onClick={() => setCategory("ALL")} value={summaryQuery.data?.all ?? 0} />
+          <SummaryCard active={query.category === "ALL" && !routeQueueOnly} label="Toate" onClick={() => setCategory("ALL")} value={summaryQuery.data?.all ?? 0} />
           <SummaryCard active={query.category === "INTARZIATE"} label="Întârziate" onClick={() => setCategory("INTARZIATE")} value={summaryQuery.data?.overdue ?? 0} />
           <SummaryCard active={query.category === "IN_ASTEPTARE"} label="În așteptare" onClick={() => setCategory("IN_ASTEPTARE")} value={summaryQuery.data?.waiting ?? 0} />
-          <SummaryCard active={query.category === "DE_LIVRAT"} {...(query.deliveryHorizonDays === undefined ? {} : { dayWindow: query.deliveryHorizonDays })} label="De livrat" onClick={() => setCategory("DE_LIVRAT")} onDayWindowChange={(days) => setDayWindow("DE_LIVRAT", days)} value={summaryQuery.data?.toDeliver ?? 0} />
-          <SummaryCard active={query.category === "DE_RIDICAT"} {...(query.pickupHorizonDays === undefined ? {} : { dayWindow: query.pickupHorizonDays })} label="De ridicat" onClick={() => setCategory("DE_RIDICAT")} onDayWindowChange={(days) => setDayWindow("DE_RIDICAT", days)} value={summaryQuery.data?.toPickup ?? 0} />
+          <SummaryCard
+            active={routeQueueOnly}
+            label="De livrat / de ridicat"
+            onClick={() => setRouteQueueWindow()}
+            {...(query.deliveryHorizonDays ? { dayWindow: query.deliveryHorizonDays } : {})}
+            onDayWindowChange={(days) => setRouteQueueWindow(days)}
+            value={(summaryQuery.data?.toDeliver ?? 0) + (summaryQuery.data?.toPickup ?? 0)}
+          />
         </div>
 
         <Card>
@@ -433,16 +445,21 @@ export function LogisticsPage(): ReactNode {
                 <span>Alerte</span>
                 <span>Livrare/Ridicare</span>
               </div>
-              {(centerQuery.data?.items ?? []).filter((item) => !assignedStopKeys.has(`DELIVERY:${item.id}`) && !assignedStopKeys.has(`PICKUP:${item.id}`)).map((item) => (
-                <WorkRow category={query.category ?? "ALL"} item={item} key={item.id} onFastAction={(direction) => {
-                  queueRouteStop({ type: direction, workOrderId: item.id }, `${item.workCode} a fost adăugată în lista pentru viitoarele trasee.`);
+              {(centerQuery.data?.items ?? []).filter((item) => {
+                if (!routeQueueOnly) return true;
+                if (!item.requiresDelivery && !item.requiresPickup) return false;
+                const horizon = query.deliveryHorizonDays;
+                return !horizon || isWithinDays(item.requestedDeliveryDate, horizon);
+              }).filter((item) => !assignedStopKeys.has(`DELIVERY:${item.id}`) && !assignedStopKeys.has(`PICKUP:${item.id}`)).map((item) => (
+                <WorkRow item={item} key={item.id} onFastAction={(direction) => {
+                  openRouteLists(direction);
                 }} onOpen={() => navigate(`/works?workId=${encodeURIComponent(item.id)}`)} onStatus={(status) => updateWorkStatus.mutate({ status, workOrderId: item.id })} onUpdateActions={(input) => {
                   const nextDelivery = input.requiresDelivery ?? item.requiresDelivery;
                   const nextPickup = input.requiresPickup ?? item.requiresPickup;
                   updateWorkActions.mutate({ input: { ...input, ...(nextDelivery ? { requiresPickup: false } : {}), ...(nextPickup ? { requiresDelivery: false } : {}) }, workOrderId: item.id });
                 }} />
               ))}
-              {showPickups ? (pickupsQuery.data ?? []).filter((pickup) => !assignedStopKeys.has(`PICKUP:${pickup.id}`)).map((pickup) => (
+              {showPickups ? (pickupsQuery.data ?? []).filter((pickup) => !routeQueueOnly || !query.pickupHorizonDays || isWithinDays(pickup.scheduledDate, query.pickupHorizonDays)).filter((pickup) => !assignedStopKeys.has(`PICKUP:${pickup.id}`)).map((pickup) => (
                 <PickupRouteRow
                   canCancel={canCancelPickup}
                   canUpdate={canUpdatePickup}
@@ -458,7 +475,7 @@ export function LogisticsPage(): ReactNode {
                   selected={false}
                   onSelected={(selected) => {
                     if (!selected) return;
-                    queueRouteStop({ type: "PICKUP", pickupRequestId: pickup.id, workOrderId: null }, "Ridicarea a fost adăugată în lista pentru viitoarele trasee.");
+                    openRouteLists("PICKUP");
                   }}
                 />
               )) : null}
@@ -493,7 +510,7 @@ function PickupRouteRow({
 }): ReactNode {
   return (
     <article className="logistics-page__row logistics-page__row--pickup">
-      <div className="logistics-page__row-place"><strong>{pickup.clinic.name}</strong><span>{pickup.doctor.name}</span></div>
+      <div className="logistics-page__row-place"><strong>{pickup.clinic.name}</strong><span>{pickup.doctor?.name ?? "Fără medic"}</span></div>
       <div className="logistics-page__row-main logistics-page__row-main--static"><span className="logistics-page__code">Ridicare</span><strong>-</strong></div>
       <div className="logistics-page__row-type">Cerere ridicare</div>
       <div className="logistics-page__row-value">-</div>
@@ -530,12 +547,17 @@ function PickupRequestModal({
   const createPickup = useCreatePickupRequest();
   const updatePickup = useUpdatePickupRequest();
   const selectedClinicId = form.watch("clinicId");
-  const scheduleType = form.watch("scheduleType");
   const clinicOptionsQuery = useQuery({ enabled: isOpen, queryFn: fetchClinicOptions, queryKey: ["clinics", "options"], retry: false });
   const doctorOptionsQuery = useQuery({
     enabled: isOpen,
     queryFn: () => fetchDoctorOptions(selectedClinicId || undefined),
     queryKey: ["doctors", "options", "pickup", selectedClinicId],
+    retry: false,
+  });
+  const selectedClinicQuery = useQuery({
+    enabled: isOpen && Boolean(selectedClinicId),
+    queryFn: () => fetchClinic(selectedClinicId),
+    queryKey: ["clinics", "detail", "pickup", selectedClinicId],
     retry: false,
   });
   const isSaving = createPickup.isPending || updatePickup.isPending;
@@ -551,11 +573,11 @@ function PickupRequestModal({
       form.reset({
         address: editingPickup.address ?? "",
         clinicId: editingPickup.clinic.id,
-        doctorId: editingPickup.doctor.id,
+        doctorId: editingPickup.doctor?.id ?? "",
         exactTime: editingPickup.exactTime ?? "",
         notes: editingPickup.notes ?? "",
         scheduledDate: editingPickup.scheduledDate,
-        scheduleType: editingPickup.scheduleType,
+        scheduleType: "RANGE",
         windowEndTime: editingPickup.windowEndTime ?? "",
         windowStartTime: editingPickup.windowStartTime ?? "",
         phone: editingPickup.phone ?? "",
@@ -565,34 +587,29 @@ function PickupRequestModal({
     }
   }, [editingPickup, form, isOpen]);
 
+  useEffect(() => {
+    if (!isOpen || editingPickup || !selectedClinicQuery.data || selectedClinicQuery.data.id !== selectedClinicId) return;
+    const clinic = selectedClinicQuery.data;
+    const address = [clinic.addressLine1, clinic.addressLine2, clinic.postalCode, clinic.city].filter(Boolean).join(", ");
+    form.setValue("address", address, { shouldDirty: false, shouldValidate: true });
+    form.setValue("phone", clinic.phone ?? clinic.contactPersonPhone ?? "", { shouldDirty: false, shouldValidate: true });
+  }, [editingPickup, form, isOpen, selectedClinicId, selectedClinicQuery.data]);
+
   useBeforeUnloadPrompt(isOpen && form.formState.isDirty && !isSaving);
 
   function toInput(values: PickupFormValues): CreatePickupRequestInput {
-    return values.scheduleType === "EXACT"
-      ? {
-          address: values.address.trim().length === 0 ? null : values.address.trim(),
-          clinicId: values.clinicId,
-          doctorId: values.doctorId,
-          exactTime: values.exactTime,
-          notes: values.notes.trim().length === 0 ? null : values.notes.trim(),
-          scheduledDate: values.scheduledDate,
-          scheduleType: "EXACT",
-          windowEndTime: null,
-          windowStartTime: null,
-          phone: values.phone.trim().length === 0 ? null : values.phone.trim(),
-        }
-      : {
-          address: values.address.trim().length === 0 ? null : values.address.trim(),
-          clinicId: values.clinicId,
-          doctorId: values.doctorId,
-          exactTime: null,
-          notes: values.notes.trim().length === 0 ? null : values.notes.trim(),
-          scheduledDate: values.scheduledDate,
-          scheduleType: "RANGE",
-          windowEndTime: values.windowEndTime,
-          windowStartTime: values.windowStartTime,
-          phone: values.phone.trim().length === 0 ? null : values.phone.trim(),
-        };
+    return {
+      address: values.address.trim().length === 0 ? null : values.address.trim(),
+      clinicId: values.clinicId,
+      doctorId: values.doctorId || null,
+      exactTime: null,
+      notes: values.notes.trim().length === 0 ? null : values.notes.trim(),
+      scheduledDate: values.scheduledDate,
+      scheduleType: "RANGE",
+      windowEndTime: values.windowEndTime,
+      windowStartTime: values.windowStartTime,
+      phone: values.phone.trim().length === 0 ? null : values.phone.trim(),
+    };
   }
 
   function submit(values: PickupFormValues): void {
@@ -623,32 +640,32 @@ function PickupRequestModal({
         footer={<FormActions canReset={form.formState.isDirty} formId="pickup-request-form" isSubmitting={isSaving} onReset={() => form.reset(editingPickup ? {
           address: editingPickup.address ?? "",
           clinicId: editingPickup.clinic.id,
-          doctorId: editingPickup.doctor.id,
+          doctorId: editingPickup.doctor?.id ?? "",
           exactTime: editingPickup.exactTime ?? "",
           notes: editingPickup.notes ?? "",
           scheduledDate: editingPickup.scheduledDate,
-          scheduleType: editingPickup.scheduleType,
+          scheduleType: "RANGE",
           windowEndTime: editingPickup.windowEndTime ?? "",
           windowStartTime: editingPickup.windowStartTime ?? "",
           phone: editingPickup.phone ?? "",
         } : defaultPickupFormValues)} submitLabel={editingPickup ? "Salvează ridicarea" : "Creează ridicare"} />}
         isOpen={isOpen}
         onOpenChange={closeGuard.handleOpenChange}
+        size="md"
         title={title}
       >
         <form className="logistics-page__pickup-form" id="pickup-request-form" onSubmit={(event) => void form.handleSubmit(submit)(event)}>
-          <TextInput error={form.formState.errors.address?.message} label="Adresă ridicare (opțional)" {...form.register("address")} />
           <SearchableChoiceField
             disabled={clinicOptionsQuery.isLoading || clinicOptionsQuery.isError}
             emptyMessage="Nu există clinici disponibile."
             error={form.formState.errors.clinicId?.message}
-            hint={clinicOptionsQuery.isError ? getErrorMessage(clinicOptionsQuery.error) : clinicOptionsQuery.isLoading ? "Se încarcă clinicile…" : "Caută după cod sau nume."}
+            hint={clinicOptionsQuery.isError ? getErrorMessage(clinicOptionsQuery.error) : clinicOptionsQuery.isLoading ? "Se încarcă clinicile…" : "Caută după numele clinicii."}
             label="Clinica"
             onChange={(value) => {
               form.setValue("clinicId", value, { shouldDirty: true, shouldValidate: true });
               form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true });
             }}
-            options={(clinicOptionsQuery.data ?? []).map((clinic) => ({ label: clinic.name, secondary: clinic.code, value: clinic.id }))}
+            options={(clinicOptionsQuery.data ?? []).map((clinic) => ({ label: clinic.name, value: clinic.id }))}
             required
             value={selectedClinicId}
           />
@@ -659,30 +676,17 @@ function PickupRequestModal({
             hint={doctorOptionsQuery.isError ? getErrorMessage(doctorOptionsQuery.error) : doctorOptionsQuery.isLoading ? "Se încarcă medicii…" : "Alege medicul din listă."}
             label="Medic"
             onChange={(value) => form.setValue("doctorId", value, { shouldDirty: true, shouldValidate: true })}
-            options={(doctorOptionsQuery.data ?? []).map((doctor) => ({ label: doctor.displayName, secondary: "Medic colaborator", value: doctor.id }))}
-            required
+            options={(doctorOptionsQuery.data ?? []).map((doctor) => ({ label: doctor.displayName, value: doctor.id }))}
             value={form.watch("doctorId")}
           />
-          <DateInput error={form.formState.errors.scheduledDate?.message} label="Data" required {...form.register("scheduledDate")} />
-          <SearchableChoiceField
-            error={form.formState.errors.scheduleType?.message}
-            hint="Alege cum este programată ridicarea."
-            label="Programare"
-            onChange={(value) => form.setValue("scheduleType", value as PickupFormValues["scheduleType"], { shouldDirty: true, shouldValidate: true })}
-            options={[{ label: "Ora exactă", secondary: "Un moment precis", value: "EXACT" }, { label: "Interval orar", secondary: "De la – până la", value: "RANGE" }]}
-            required
-            value={scheduleType}
-          />
-          {scheduleType === "EXACT" ? (
-            <TextInput error={form.formState.errors.exactTime?.message} label="Ora exactă" placeholder="HH:mm" required {...form.register("exactTime")} />
-          ) : (
-            <div className="logistics-page__pickup-range">
-              <TextInput error={form.formState.errors.windowStartTime?.message} label="De la" placeholder="HH:mm" required {...form.register("windowStartTime")} />
-              <TextInput error={form.formState.errors.windowEndTime?.message} label="Până la" placeholder="HH:mm" required {...form.register("windowEndTime")} />
-            </div>
-          )}
+          <TextInput className="logistics-page__pickup-contact" error={form.formState.errors.address?.message} label="Adresă ridicare" {...form.register("address")} />
+          <TextInput className="logistics-page__pickup-contact" error={form.formState.errors.phone?.message} label="Telefon ridicare" type="tel" {...form.register("phone")} />
+          <DateInput className="logistics-page__pickup-date-picker" error={form.formState.errors.scheduledDate?.message} label="Data programării" required {...form.register("scheduledDate")} />
+          <div className="logistics-page__pickup-range" aria-label="Interval orar ridicare">
+            <TextInput className="logistics-page__pickup-time-picker" error={form.formState.errors.windowStartTime?.message} label="De la" required type="time" {...form.register("windowStartTime")} />
+            <TextInput className="logistics-page__pickup-time-picker" error={form.formState.errors.windowEndTime?.message} label="Până la" required type="time" {...form.register("windowEndTime")} />
+          </div>
           <Textarea error={form.formState.errors.notes?.message} label="Note" rows={3} {...form.register("notes")} />
-          <TextInput error={form.formState.errors.phone?.message} label="Telefon ridicare (opțional)" {...form.register("phone")} />
         </form>
       </Modal>
       {closeGuard.confirmModal}
@@ -783,7 +787,7 @@ function LogisticsCreateWorkModal({ isOpen, onOpenChange }: { readonly isOpen: b
     queryKey: ["doctors", "options", "logistics-create-work", selectedClinicId],
     retry: false,
   });
-  const patientOptionsQuery = usePatientOptions("", isOpen);
+  const patientOptionsQuery = usePatientOptions("", isOpen, selectedClinicId || undefined, selectedDoctorId || undefined);
   const workTypeOptionsQuery = useWorkFormWorkTypeOptions(isOpen);
   const deadlinePreviewInput = useMemo(() => toWorkDeadlinePreviewInput({
     clinicId: selectedClinicId,
@@ -958,14 +962,12 @@ function SummaryCard({ active, dayWindow, label, onClick, onDayWindowChange, val
 }
 
 function WorkRow({
-  category,
   item,
   onOpen,
   onFastAction,
   onStatus,
   onUpdateActions,
 }: {
-  readonly category: LogisticsCenterCategory;
   readonly item: LogisticsCenterItem;
   readonly onOpen: () => void;
   readonly onFastAction: (direction: "DELIVERY" | "PICKUP") => void;
@@ -974,7 +976,7 @@ function WorkRow({
 }): ReactNode {
   const [markerOpen, setMarkerOpen] = useState(false);
   const marker = item.logisticsMarker;
-  const isPickupOperation = category === "DE_RIDICAT" || (category === "ALL" && item.requiresPickup && !item.requiresDelivery);
+  const isPickupOperation = item.requiresPickup && !item.requiresDelivery;
   return (
     <article className="logistics-page__row">
       <div className="logistics-page__row-place"><strong>{item.clinic.name}</strong><span>{item.doctor.name}</span></div>
@@ -1006,7 +1008,7 @@ function WorkRow({
         {markerOpen ? <div className="logistics-page__marker-menu">{LOGISTICS_MARKERS.map((value) => <button aria-label={`Alege marcajul ${value.slice(-1)}`} className={`logistics-page__marker logistics-page__marker--${value}`} key={value} onClick={() => { onUpdateActions({ marker: value }); setMarkerOpen(false); }} title={`Marcaj ${value.slice(-1)}`} type="button" />)}</div> : null}
       </div>
       <div aria-label={isPickupOperation ? "Ridicare" : "Livrare"} className="logistics-page__row-requirements">
-        {item.requiresLogisticsAction ? <Button onClick={() => onFastAction(isPickupOperation ? "PICKUP" : "DELIVERY")} size="small" variant="outline">{isPickupOperation ? "Ridicat" : "Livrat"}</Button> : null}
+        {item.requiresLogisticsAction ? <Button onClick={() => onFastAction(isPickupOperation ? "PICKUP" : "DELIVERY")} size="small" variant="outline">{isPickupOperation ? "Ridicare" : "Livrare"}</Button> : null}
       </div>
     </article>
   );

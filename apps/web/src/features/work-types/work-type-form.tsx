@@ -21,6 +21,7 @@ export const workTypeUnitOptions = [{ label: "Unitate", value: "UNIT" }] as cons
 
 export const defaultWorkTypeFormValues: WorkTypeFormValues = {
   basePriceDecimal: "0.00",
+  colorHex: "",
   description: null,
   name: "",
   symbol: "",
@@ -30,6 +31,7 @@ export const defaultWorkTypeFormValues: WorkTypeFormValues = {
 const workTypeFieldLabels: Record<keyof WorkTypeFormValues, string> = {
   basePriceDecimal: "Preț de bază",
   description: "Descriere",
+  colorHex: "Culoare în odontogramă",
   name: "Denumire",
   symbol: "Simbol",
   unit: "Unitate tarifare",
@@ -43,6 +45,7 @@ export function toWorkTypeFormValues(workType: WorkTypeDetail | undefined): Work
   return {
     basePriceDecimal: workType.basePriceMinor === null ? "" : minorToDecimalString(workType.basePriceMinor),
     description: workType.description,
+    colorHex: workType.colorHex ?? "",
     name: workType.name,
     symbol: workType.symbol,
     unit: workType.unit,
@@ -93,6 +96,27 @@ export function WorkTypeForm({
             <Textarea disabled={isDisabled} error={form.formState.errors.description?.message} id="description" label="Descriere" rows={4} {...form.register("description")} />
           </FormGridFull>
         </FormGrid>
+      </FormSection>
+      <FormSection title="Culoare în odontogramă" description="Culoarea este folosită pentru identificarea tipului de lucrare pe dinți.">
+        <div className="work-types-page__color-picker">
+          <div className="work-types-page__color-grid" role="group" aria-label="Paletă de culori">
+            {["#FACC15", "#F97316", "#DC2626", "#7C3AED", "#2563EB", "#0891B2", "#16A34A", "#DB2777", "#92400E", "#64748B", "#111827", "#FFFFFF"].map((color) => (
+              <button
+                aria-label={`Alege ${color}`}
+                className={form.watch("colorHex")?.toUpperCase() === color ? "is-selected" : undefined}
+                disabled={isDisabled}
+                key={color}
+                onClick={() => form.setValue("colorHex", color, { shouldDirty: true, shouldValidate: true })}
+                style={{ backgroundColor: color }}
+                type="button"
+              />
+            ))}
+          </div>
+          <div className="work-types-page__color-custom">
+            <input aria-label="Alege culoare personalizată" disabled={isDisabled} type="color" value={form.watch("colorHex") || "#F97316"} onChange={(event) => form.setValue("colorHex", event.target.value.toUpperCase(), { shouldDirty: true, shouldValidate: true })} />
+            <TextInput disabled={isDisabled} error={form.formState.errors.colorHex?.message} id="colorHex" label="Cod culoare" placeholder="#F97316" {...form.register("colorHex")} />
+          </div>
+        </div>
       </FormSection>
     </FormLayout>
   );

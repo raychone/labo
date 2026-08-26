@@ -2,6 +2,15 @@
   padding-block: var(--dl-space-5);
 }
 
+.pricing-page__field-label { display: block; font-weight: 700; margin-bottom: var(--dl-space-2); }
+.pricing-page__color-picker { display: grid; gap: var(--dl-space-3); max-width: 34rem; }
+.pricing-page__color-preview { background: transparent; border: 1px solid var(--dl-color-border); border-radius: 50%; display: inline-block; height: 1rem; margin-right: var(--dl-space-2); vertical-align: -0.15rem; width: 1rem; }
+.pricing-page__color-grid { display: grid; gap: 2px; grid-template-columns: repeat(6, 2.25rem); width: max-content; }
+.pricing-page__color-grid button { border: 1px solid var(--dl-color-border); border-radius: 2px; cursor: pointer; height: 2.25rem; padding: 0; width: 2.25rem; }
+.pricing-page__color-grid button.is-selected { box-shadow: 0 0 0 3px var(--dl-color-primary), inset 0 0 0 2px #fff; }
+.pricing-page__color-custom { align-items: end; display: flex; gap: var(--dl-space-3); }
+.pricing-page__color-custom input[type="color"] { border: 1px solid var(--dl-color-border); border-radius: var(--dl-radius-sm); height: 3rem; padding: 3px; width: 3rem; }
+
 .pricing-page__layout,
 .pricing-page__stack,
 .pricing-page__form {

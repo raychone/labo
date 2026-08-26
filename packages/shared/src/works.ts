@@ -73,6 +73,7 @@ export interface WorkDoctorSummary {
 
 export interface WorkTypeSnapshot {
   readonly code: string;
+  readonly colorHex?: string | null;
   readonly id: string;
   readonly name: string;
   readonly probeTypeCodes?: readonly string[];

@@ -29,7 +29,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { fetchPermissions } from "../auth/auth-api.js";
 import { usePerformedTechnicianOperations, usePerformTechnicianOperation, useRemovePerformedTechnicianOperation, useTechnicianOperationOptions } from "./technician-workbench-api.js";
-import { useAvailableWorksForClaim, useClaimWork, useFinalizeTechnicalWork, useMarkProbeReady, useMyClaimedWorks, useWork } from "../works/works-api.js";
+import { useAvailableWorksForClaim, useClaimWork, useFinalizeTechnicalWork, useMarkProbeReady, useMyClaimedWorks, useReleaseWork, useWork } from "../works/works-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
 import { useMediaQuery } from "../../lib/use-media-query.js";
 import { hasPermission } from "../users/users-api.js";
@@ -74,6 +74,7 @@ export function TechnicianWorkbenchPage(): ReactNode {
   const claimMutation = useClaimWork();
   const probeReadyMutation = useMarkProbeReady();
   const finalizeMutation = useFinalizeTechnicalWork();
+  const releaseMutation = useReleaseWork();
   const visibleAvailableWorks = useMemo(
     () => pickSingleWorkbenchMatch(availableQuery.data?.items ?? [], claimFilters.search),
     [availableQuery.data?.items, claimFilters.search],
@@ -111,6 +112,14 @@ export function TechnicianWorkbenchPage(): ReactNode {
     finalizeMutation.mutate({ workOrderId: work.id }, {
       onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost finalizată", variant: "error" }),
       onSuccess: () => { setFinalizeTarget(null); },
+    });
+  }
+
+  function releaseTechnicianWork(work: WorkSummary): void {
+    if (!window.confirm(`Eliberezi lucrarea ${work.code} pentru un alt tehnician?`)) return;
+    releaseMutation.mutate({ input: { expectedClaimRevision: work.claim.revision, reason: "Eliberată de tehnician." }, workOrderId: work.id }, {
+      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost eliberată", variant: "error" }),
+      onSuccess: () => toast.showToast({ message: "Lucrarea a fost eliberată și poate fi preluată de alt tehnician.", variant: "success" }),
     });
   }
 
@@ -201,6 +210,7 @@ export function TechnicianWorkbenchPage(): ReactNode {
                   mode="mine"
                   onDetails={(work) => navigate(`/works?workId=${work.id}`)}
                   onFinalize={finalizeWork}
+                  onRelease={releaseTechnicianWork}
                   onOperations={setOperationsTarget}
                 />
               )}
@@ -335,6 +345,7 @@ function ClaimList({
   onFinalize,
   onProbeReady,
   onOperations,
+  onRelease,
   probeReadyWorkId,
 }: {
   readonly compact?: boolean;
@@ -349,6 +360,7 @@ function ClaimList({
   readonly onFinalize?: (work: WorkSummary) => void;
   readonly onProbeReady?: (work: WorkSummary) => void;
   readonly onOperations?: (work: WorkSummary) => void;
+  readonly onRelease?: (work: WorkSummary) => void;
   readonly probeReadyWorkId?: string | null;
 }): ReactNode {
   if (isLoading) {
@@ -379,7 +391,7 @@ function ClaimList({
             <span>Responsabil: {work.claim.technician?.displayName ?? "Nerevendicată"}</span>
             {!compact ? <span>Companie execuție: {work.claim.executionLegalEntity?.code ?? "Neselectată"}</span> : null}
             {!compact ? <span>Context execuție: {work.executionSnapshot.summary.exists ? "Fixat" : "Nefixat"}</span> : null}
-            <span>{work.cycleNumber !== null && work.cycleNumber !== undefined && work.cycleNumber > 1 ? "Probă" : "Revenire 0"}</span>
+            <span>{work.cycleNumber !== null && work.cycleNumber !== undefined && work.cycleNumber > 1 ? "Probă trecută" : "Probă inițială"}</span>
           </div>
           <div className="technician-workbench__actions">
             {mode === "available" ? (
@@ -391,6 +403,7 @@ function ClaimList({
               <>
                 <Button onClick={() => onDetails(work)} variant="outline">Detalii</Button>
                 <Button onClick={() => onOperations?.(work)} variant="outline">Manopere</Button>
+                <Button onClick={() => onRelease?.(work)} variant="outline">Eliberează</Button>
                 {(work.workType.probeTypeCodes?.length ?? 0) > 0 ? <Button disabled={work.status === "FINALIZATA" || work.technicalReadiness === "PROBE_READY" || work.technicalReadiness === "FINAL_READY"} isLoading={probeReadyWorkId === work.id} onClick={() => onProbeReady?.(work)}>Probă gata</Button> : null}
                 <Button aria-label="Finalizata" disabled={work.status === "FINALIZATA" || work.technicalReadiness === "PROBE_READY" || work.technicalReadiness === "FINAL_READY"} isLoading={finalizeWorkId === work.id} onClick={() => onFinalize?.(work)}>Finalizată</Button>
               </>
@@ -470,7 +483,7 @@ function OperationsModal({
       const key = item.workType.id;
       let color = colorByWorkType.get(key);
       if (!color) {
-        color = palette[colorByWorkType.size % palette.length]!;
+        color = item.workType.colorHex ?? palette[colorByWorkType.size % palette.length]!;
         colorByWorkType.set(key, color);
         legend.push({ color, label: item.workType.name, code: item.workType.symbol });
       }

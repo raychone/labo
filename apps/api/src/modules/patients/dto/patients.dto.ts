@@ -110,6 +110,16 @@ export class PatientOptionsQueryDto {
   @Min(1)
   @Max(50)
   public readonly limit: number = 10;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  public readonly clinicId?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  public readonly doctorId?: string | null;
 }
 
 export class PatientWorksQueryDto {

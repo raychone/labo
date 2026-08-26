@@ -8,12 +8,11 @@ import {
   FormLayout,
   FormSection,
   NumberInput,
-  RadioGroup,
   Select,
   TextInput,
   Textarea,
 } from "@dental-lab/ui";
-import { formatWorkTypeCategory, URGENCY_LABELS_RO, URGENCY_LEVELS } from "@dental-lab/shared";
+import { URGENCY_LABELS_RO, URGENCY_LEVELS } from "@dental-lab/shared";
 import type { ClinicOption, CreateWorkInput, DoctorOption, PatientOption, UpdateWorkInput, WorkDeadlinePreview, WorkDeadlinePreviewInput, WorkDetail, WorkFormTemplateDetail, WorkTypeFormOption } from "@dental-lab/shared";
 import type { ReactNode } from "react";
 import type { UseFormReturn } from "react-hook-form";
@@ -21,6 +20,7 @@ import { useEffect, useId, useMemo, useState } from "react";
 
 import { IMPLANT_PLATFORM_OPTIONS, RESTORATION_TYPE_OPTIONS, WORK_SHADE_OPTIONS, type WorkFormValues } from "./works-page.schema.js";
 import { getFormErrorSummaryItems, useErrorSummaryFocus } from "../../lib/form-utils.js";
+import "./works-page.css";
 
 export const defaultWorkFormValues: WorkFormValues = {
   clinicId: "",
@@ -309,7 +309,7 @@ export function WorkForm({
   })), patientSearch), [patientOptions, patientSearch]);
   const visibleWorkTypeOptions = useMemo(() => filterSearchableOptions(workTypeOptions.map((workType) => ({
     label: displayWorkTypeName(workType.name),
-    secondary: `${workType.probeFamily ? `${formatWorkTypeCategory(workType.probeFamily)} · ` : ""}${workType.symbol} · ${formatWorkTypeUnit(workType.unit)}`,
+    secondary: undefined,
     value: workType.id,
   })), workTypeSearch), [workTypeOptions, workTypeSearch]);
 
@@ -327,8 +327,10 @@ export function WorkForm({
             onSelect={(value) => {
               form.setValue("clinicId", value, { shouldDirty: true, shouldValidate: true });
               form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true });
+              form.setValue("patientId", "", { shouldDirty: true, shouldValidate: true });
               onClinicChange(value);
               setDoctorSearch("");
+              setPatientSearch("");
             }}
             onSearchChange={(value) => {
               setClinicSearch(value);
@@ -349,7 +351,11 @@ export function WorkForm({
             error={form.formState.errors.doctorId?.message}
             id="doctorId"
             label="Medic"
-            onSelect={(value) => form.setValue("doctorId", value, { shouldDirty: true, shouldValidate: true })}
+            onSelect={(value) => {
+              form.setValue("doctorId", value, { shouldDirty: true, shouldValidate: true });
+              form.setValue("patientId", "", { shouldDirty: true, shouldValidate: true });
+              setPatientSearch("");
+            }}
             onSearchChange={(value) => {
               setDoctorSearch(value);
               if (value === "") {
@@ -390,7 +396,7 @@ export function WorkForm({
       </FormSection>
 
       <FormSection title="Lucrare">
-        {multiItem ? <FormGrid className="works-page__multi-item-details-grid">{workDetailsSlot}</FormGrid> : <FormGrid>
+        {multiItem ? <FormGrid className="works-page__multi-item-details-grid">{workDetailsSlot}</FormGrid> : <FormGrid className="works-page__work-selection-grid">
           <SearchablePickerField
             disabled={isDisabled}
             error={form.formState.errors.workTypeId?.message}
@@ -451,28 +457,25 @@ export function WorkForm({
             emptyMessage="Nu există platforme potrivite."
           /> : null}
           {isImplantWorkType && implantPlatform === "Alt tip" ? <TextInput disabled={isDisabled} error={form.formState.errors.implantPlatformCustom?.message} id="implantPlatformCustom" label="Alt tip platformă" placeholder="Introdu tipul platformei" {...form.register("implantPlatformCustom")} /> : null}
-          {isImplantWorkType ? <RadioGroup
-            disabled={isDisabled}
-            label="Tip restaurare"
-            name="restorationType"
-            onValueChange={(value) => {
-              if (value === "cimentata" || value === "insurubata") {
-                form.setValue("restorationType", form.watch("restorationType") === value ? null : value, { shouldDirty: true, shouldValidate: true });
-              }
-            }}
-            options={RESTORATION_TYPE_OPTIONS}
-            value={form.watch("restorationType") ?? ""}
-          /> : null}
-          {isImplantWorkType && form.watch("restorationType") ? (
-            <Button
-              disabled={isDisabled}
-              onClick={() => form.setValue("restorationType", null, { shouldDirty: true, shouldValidate: true })}
-              type="button"
-              variant="outline"
-            >
-              Fără tip restaurare
-            </Button>
-          ) : null}
+          {isImplantWorkType ? <div className="works-page__restoration-toggle" aria-label="Tip restaurare">
+            <span className="works-page__restoration-label">Tip restaurare</span>
+            <div className="works-page__restoration-options">
+              {RESTORATION_TYPE_OPTIONS.map((option) => {
+                const selected = form.watch("restorationType") === option.value;
+                return <button
+                  aria-pressed={selected}
+                  className={`works-page__restoration-option${selected ? " is-selected" : ""}`}
+                  disabled={isDisabled}
+                  key={option.value}
+                  onClick={() => form.setValue("restorationType", selected ? null : option.value, { shouldDirty: true, shouldValidate: true })}
+                  type="button"
+                >
+                  <span aria-hidden="true" className="works-page__restoration-dot" />
+                  {option.label}
+                </button>;
+              })}
+            </div>
+          </div> : null}
           {workDetailsSlot}
         </FormGrid>}
       </FormSection>
@@ -480,6 +483,7 @@ export function WorkForm({
       <FormSection title="Termen și urgență">
         <FormGrid>
           <DateInput
+            className="works-page__deadline-date-picker"
             disabled={isDisabled}
             error={form.formState.errors.requestedDeliveryDate?.message}
             id="requestedDeliveryDate"
@@ -488,11 +492,13 @@ export function WorkForm({
             {...form.register("requestedDeliveryDate")}
           />
           <TextInput
+            className="works-page__deadline-time-picker"
             disabled={isDisabled}
             error={form.formState.errors.requestedDeliveryTime?.message}
             id="requestedDeliveryTime"
             label="Ora termenului"
             placeholder="HH:mm"
+            type="time"
             {...form.register("requestedDeliveryTime")}
           />
           <Select disabled={isDisabled} error={form.formState.errors.urgency?.message} id="urgency" label="Urgență" options={URGENCY_LEVELS.map((value) => ({ label: URGENCY_LABELS_RO[value], value }))} {...form.register("urgency")} />
@@ -508,20 +514,6 @@ export function WorkForm({
       </FormSection>
     </FormLayout>
   );
-}
-
-function formatWorkTypeUnit(unit: WorkTypeFormOption["unit"]): string {
-  return unit === "ELEMENT"
-    ? "Element"
-    : unit === "UNIT"
-      ? "Bucată"
-      : unit === "ARCH"
-        ? "Arcadă"
-        : unit === "CASE"
-          ? "Lucrare"
-          : unit === "REPAIR"
-            ? "Reparație"
-            : "Altă unitate";
 }
 
 function displayWorkTypeName(name: string): string {
@@ -542,7 +534,7 @@ function filterSearchableOptions(options: readonly SearchableOption[], searchVal
     ? options
     : options.filter((option) => normalizeSearchText(`${option.label} ${option.secondary ?? ""}`).includes(normalizedSearch));
 
-  return normalizedSearch === "" ? matched.slice(0, 3) : matched;
+  return matched;
 }
 
 export interface SearchableOption {

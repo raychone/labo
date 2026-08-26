@@ -9,6 +9,7 @@ const moneyDecimal = z
 
 export const catalogFormSchema = z.object({
   category: z.string().trim().min(1, "Categoria este obligatorie."),
+  colorHex: z.string().regex(/^#[0-9A-F]{6}$/i, "Alege o culoare validă.").or(z.literal("")),
   displayName: z.string().trim().max(160).optional(),
   executionDays: z.enum(["1", "2", "3", "4", "5", "6"]),
   isActive: z.boolean(),

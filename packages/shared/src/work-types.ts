@@ -33,6 +33,7 @@ export interface WorkTypeAddOnOption {
 export interface WorkTypeOption {
   readonly basePriceMinor: number | null;
   readonly code: string;
+  readonly colorHex?: string | null;
   readonly id: string;
   readonly name: string;
   readonly symbol: string;
@@ -60,6 +61,7 @@ export interface WorkTypeDetail extends WorkTypeSummary {
 
 export interface CreateWorkTypeInput {
   readonly basePriceMinor: number | null;
+  readonly colorHex?: string | null;
   readonly description?: string | null;
   readonly name: string;
   readonly symbol: string;

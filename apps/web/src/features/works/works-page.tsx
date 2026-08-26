@@ -53,7 +53,7 @@ import {
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
 import { createClinic, createDoctor, fetchClinicOptions, fetchDoctorOptions } from "../clinics/clinics-api.js";
@@ -272,6 +272,8 @@ export function WorksPage(): ReactNode {
   const [params, setParams] = useState<WorksListParams>(defaultListParams);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
+  const [returnToPreviousPage, setReturnToPreviousPage] = useState(false);
+  const navigate = useNavigate();
   const initialPatientId = searchParams.get("patientId");
   const initialClinicId = searchParams.get("clinicId");
   const initialDoctorId = searchParams.get("doctorId");
@@ -328,6 +330,7 @@ export function WorksPage(): ReactNode {
     const workId = searchParams.get("workId");
     if (workId) {
       setSelectedWorkId(workId);
+      setReturnToPreviousPage(true);
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
         next.delete("workId");
@@ -387,6 +390,7 @@ export function WorksPage(): ReactNode {
       onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost creată", variant: "error" }),
       onSuccess: (work) => {
         setIsCreateOpen(false);
+        setReturnToPreviousPage(false);
         setSelectedWorkId(work.id);
         toast.showToast({ durationMs: 3500, message: `Lucrare ${work.code} creată.`, variant: "success" });
       },
@@ -581,6 +585,10 @@ export function WorksPage(): ReactNode {
         onOpenChange={(isOpen) => {
           if (!isOpen) {
             setSelectedWorkId(null);
+            if (returnToPreviousPage) {
+              setReturnToPreviousPage(false);
+              navigate(-1);
+            }
           }
         }}
         onSubmit={handleUpdate}
@@ -652,7 +660,6 @@ function CreateWorkModal({
     defaultValues: defaultWorkFormValues,
     resolver: zodResolver(workFormSchema),
   });
-  const patientOptionsQuery = usePatientOptions("", isOpen);
   const createPatientMutation = useCreatePatient();
   const queryClient = useQueryClient();
   const createClinicMutation = useMutation({
@@ -677,6 +684,7 @@ function CreateWorkModal({
   const selectedClinicId = form.watch("clinicId");
   const selectedDoctorId = form.watch("doctorId");
   const selectedWorkTypeId = form.watch("workTypeId");
+  const patientOptionsQuery = usePatientOptions("", isOpen, selectedClinicId || undefined, selectedDoctorId || undefined);
   const quantity = form.watch("quantity");
   const requestedDeliveryDate = form.watch("requestedDeliveryDate");
   const requestedDeliveryTime = form.watch("requestedDeliveryTime");
@@ -1174,7 +1182,7 @@ function WorkDetailsDrawer({
               />
             ) : null}
             <div className="works-page__meta">
-              <StatusBadge label={work.status === "FINALIZATA" ? "Finalizată" : work.technicalReadiness === "PROBE_READY" ? "Probă gata" : work.status === "RECEPTIE" && work.probeReceivedAt ? "Recepționată" : "Înregistrată"} variant={work.status === "FINALIZATA" ? "closed" : work.technicalReadiness === "PROBE_READY" ? "production" : "registered"} />
+              <StatusBadge label={work.status === "FINALIZATA" ? "Finalizată" : work.technicalReadiness === "PROBE_READY" ? "Probă gata" : work.status === "RECEPTIE" && work.probeReceivedAt ? "Probă" : "Înregistrată"} variant={work.status === "FINALIZATA" ? "closed" : work.technicalReadiness === "PROBE_READY" ? "production" : "registered"} />
               {work.urgency ? <BadgePill label={urgencyLabel(work.urgency)} tone={work.urgency !== "NORMAL" ? "warning" : "neutral"} /> : <PriorityBadge label={work.priority === "URGENT" ? "Urgent" : "Normal"} variant={work.priority === "URGENT" ? "urgent" : "normal"} />}
               <span>Termen promis: {formatDate(work.requestedDeliveryDate)}</span>
               <span>Termen efectiv: {work.deadline.effectiveDueAt ? formatDateTime(work.deadline.effectiveDueAt) : "Nerezolvat"}</span>
@@ -1284,7 +1292,7 @@ function WorkDetailsDrawer({
             return;
           }
           createNextCycleMutation.mutate({ input, workOrderId: work.id }, {
-            onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Revenirea nu a fost înregistrată", variant: "error" }),
+            onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Proba nu a fost înregistrată", variant: "error" }),
             onSuccess: (history) => {
               setReturnOpen(false);
               const activeCycle = history.cycles.find((cycle) => cycle.id === history.activeCycleId);
@@ -1315,7 +1323,7 @@ function ProbeCycleSummary({ canSelect, isSaving, onSelect, probeTypes, work }: 
             : probeTypes;
           return (
           <div className="works-page__cycle-item" key={cycle.id}>
-            <div><strong>{cycle.status === "ACTIVE" ? "Probă activă" : `Proba ${cycle.sequence} — ${cycle.probeTypeNameSnapshot}`}</strong><span> · termen {formatDateTime(cycle.deadlineAt)}</span></div>
+            <div><strong>{cycle.status === "ACTIVE" ? "Probă activă" : `Probă trecută ${cycle.sequence} — ${cycle.probeTypeNameSnapshot}`}</strong><span> · termen {formatDateTime(cycle.deadlineAt)}</span></div>
             {cycle.status === "ACTIVE" ? <Select disabled={!canSelect || isSaving} label="Tip probă" options={options.map((type) => ({ label: type.name, value: type.id }))} value={cycle.probeType.id} onChange={(event) => onSelect(cycle.id, event.target.value)} /> : <span className="works-page__muted">Tip probă istoric: {cycle.probeTypeNameSnapshot}</span>}
           </div>
           );
@@ -1365,7 +1373,7 @@ function WorkCyclesSection({
             <span className="works-page__muted">Ciclu curent</span>
             <strong>{activeCycle ? `Ciclul ${activeCycle.cycleNumber}` : "Nedisponibil"}</strong>
           </div>
-          {canCreateNextCycle ? <Button onClick={onRegisterReturn}>{isCanonical ? "Recepționată" : "Înregistrează revenirea"}</Button> : null}
+          {canCreateNextCycle ? <Button onClick={onRegisterReturn}>{isCanonical ? "Începe proba" : "Înregistrează proba"}</Button> : null}
         </div>
         {isLoading ? <LoadingState text="Se încarcă ciclurile" /> : null}
         {error ? <ErrorState title="Ciclurile nu au fost încărcate" description={getErrorMessage(error)} /> : null}
@@ -1786,7 +1794,7 @@ function RegisterReturnModal({
 
   return (
     <Modal
-      description={work ? `${work.code} · se păstrează aceeași lucrare și același cod.` : "Înregistrează revenirea lucrării."}
+      description={work ? `${work.code} · se păstrează aceeași lucrare și același cod.` : "Înregistrează o probă nouă pentru aceeași lucrare."}
       footer={(
         <Button
           disabled={!canSubmit}
@@ -1805,15 +1813,15 @@ function RegisterReturnModal({
             });
           }}
         >
-          Înregistrează revenirea
+          Înregistrează proba
         </Button>
       )}
       isOpen={isOpen}
       onOpenChange={onOpenChange}
-      title="Înregistrează revenirea"
+      title="Înregistrează proba"
     >
       <FormLayout>
-        {submitError ? <ErrorState title="Revenirea nu a fost înregistrată" description={getErrorMessage(submitError)} /> : null}
+        {submitError ? <ErrorState title="Proba nu a fost înregistrată" description={getErrorMessage(submitError)} /> : null}
         <div className="works-page__return-summary">
           <MetricCell label="Cod lucrare" value={work?.code ?? "-"} />
           <MetricCell label="Pacient" value={work?.patientName ?? "-"} />
@@ -1839,7 +1847,7 @@ function RegisterReturnModal({
             value={doctorId}
           />
           <Select
-            label="Motiv revenire"
+            label="Motiv probă"
             onChange={(event) => {
               if (returnReasonOptions.some((option) => option.value === event.target.value)) {
                 setReason(event.target.value as Exclude<WorkCycleReason, "INITIAL">);

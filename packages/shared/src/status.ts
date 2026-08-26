@@ -115,6 +115,7 @@ export interface OperationalStatusRow {
     readonly status: RealLabSheetOperationalStatus;
   };
   readonly shade: string | null;
+  readonly technicalReadiness?: "PROBE_READY" | "FINAL_READY" | null;
   readonly updatedAt: string;
   readonly workCode: string;
   readonly workOwner: OperationalStatusPerson | null;

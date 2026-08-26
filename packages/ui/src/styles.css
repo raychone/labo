@@ -1137,18 +1137,14 @@ th {
 }
 
 .dl-modal {
-  border-radius: 0;
-  height: 100dvh;
-  max-height: 100dvh;
-  width: 100vw;
+  border-radius: var(--dl-radius-lg);
+  height: auto;
+  max-height: calc(100dvh - 2rem);
+  width: min(calc(100vw - 2rem), var(--dl-modal-width, 48rem));
 }
 
 .dl-modal--sm {
   --dl-modal-width: 28rem;
-  border-radius: var(--dl-radius-lg);
-  height: auto;
-  max-height: min(calc(100dvh - 2rem), 24rem);
-  width: min(calc(100vw - 2rem), var(--dl-modal-width));
 }
 
 .logout-confirm-modal {
@@ -1174,15 +1170,15 @@ th {
 }
 
 .dl-modal--md {
-  --dl-modal-width: 36rem;
-}
-
-.dl-modal--lg {
   --dl-modal-width: 48rem;
 }
 
-.dl-modal--xl {
+.dl-modal--lg {
   --dl-modal-width: 64rem;
+}
+
+.dl-modal--xl {
+  --dl-modal-width: 80rem;
 }
 
 .dl-modal--full {
