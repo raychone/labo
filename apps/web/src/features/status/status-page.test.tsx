@@ -67,6 +67,7 @@ const operationalStatusResponse: OperationalStatusResponse = {
       doctor: { id: "doctor_1", name: "Dr. Ana Popescu" },
       executionCompany: { code: "NC", displayName: "Nicolaie Cristina" },
       id: "work_1",
+      components: [],
       logistics: { status: "IN_PRODUCTION" },
       operationalStatus: "IN_LUCRU",
       patient: { id: "patient_1", name: "Maria Ionescu", reference: "MI-1" },

@@ -256,6 +256,33 @@
   margin: 0 0 var(--dl-space-3);
 }
 
+.technician-workbench__probe-context {
+  align-items: center;
+  background: var(--dl-color-accent-subtle);
+  border: 1px solid var(--dl-color-accent);
+  border-radius: var(--dl-radius-md);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-2) var(--dl-space-4);
+  justify-content: space-between;
+  margin-bottom: var(--dl-space-4);
+  padding: var(--dl-space-3);
+}
+
+.technician-workbench__probe-context div {
+  display: grid;
+  gap: var(--dl-space-1);
+}
+
+.technician-workbench__probe-context span {
+  color: var(--dl-color-text-muted);
+  font-size: var(--dl-font-size-small);
+}
+
+.technician-workbench__probe-context strong {
+  color: var(--dl-color-accent-active);
+}
+
 .technician-workbench__operations-empty {
   align-content: center;
   border: 1px dashed var(--dl-color-border);

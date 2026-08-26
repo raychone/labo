@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, type Prisma as PrismaTypes } from "@prisma/client";
 import {
   ANATOMICAL_SCOPE_LABELS_RO,
@@ -21,6 +21,7 @@ import { AuthorizationService } from "../rbac/authorization.service.js";
 import type { CreateWorkOrderItemDto, UpdateWorkOrderItemDto } from "./dto/work-order-items.dto.js";
 import { getVisibleWorkWhere } from "./work-readability.js";
 import { ToothConnectionsService } from "./tooth-connections.service.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
 
 export const WORK_ORDER_ITEM_INCLUDE = {
   teeth: { orderBy: [{ sortOrder: "asc" as const }, { fdiTooth: "asc" as const }] },
@@ -36,6 +37,7 @@ export class WorkItemsService {
     @Inject(AuditService) private readonly auditService: AuditService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(ToothConnectionsService) private readonly toothConnectionsService: ToothConnectionsService,
+    @Inject(NotificationsService) private readonly notificationsService?: NotificationsService,
   ) {}
 
   public async list(actorUserId: string, workOrderId: string, legalEntity?: LegalEntityContext): Promise<readonly WorkOrderItemView[]> {
@@ -52,8 +54,8 @@ export class WorkItemsService {
     readonly legalEntity?: LegalEntityContext;
     readonly requestMetadata?: RequestMetadata;
   }): Promise<WorkOrderItemView> {
-    await this.authorizationService.requirePermission({ permission: "works.item.create", requiredScope: "ALL", userId: input.actorUserId });
     const workOrder = await this.requireWorkOrder(input.workOrderId, input.legalEntity);
+    await this.ensureOwnWorkPermission(input.actorUserId, input.workOrderId, "works.item.create");
     const normalized = this.validateInput(input.dto);
     await this.requireCustomValuePermissions(input.actorUserId, normalized);
     const config = await this.validateWorkType(normalized.workTypeId);
@@ -63,6 +65,8 @@ export class WorkItemsService {
       data: this.toCreateData(input.workOrderId, normalized, nextSortOrder),
       include: WORK_ORDER_ITEM_INCLUDE,
     });
+    const platform = snapshotValue(normalized.customImplantPlatformSnapshot);
+    if (platform) await this.notificationsService?.publishNewImplantPlatform(platform);
     await this.auditService.record({
       action: POSTMEETING_AUDIT_ACTIONS.workOrderItemAdded,
       actorUserId: input.actorUserId,
@@ -83,8 +87,8 @@ export class WorkItemsService {
     readonly legalEntity?: LegalEntityContext;
     readonly requestMetadata?: RequestMetadata;
   }): Promise<WorkOrderItemView> {
-    await this.authorizationService.requirePermission({ permission: "works.item.update", requiredScope: "ALL", userId: input.actorUserId });
     const workOrder = await this.requireWorkOrder(input.workOrderId, input.legalEntity);
+    await this.ensureOwnWorkPermission(input.actorUserId, input.workOrderId, "works.item.update");
     const existing = await this.requireItem(input.workOrderId, input.itemId);
     if (existing.archivedAt) throw new ConflictException("Componenta tehnică este arhivată și nu mai poate fi modificată.");
     const scopeChanged = input.dto.scope !== undefined && input.dto.scope !== existing.scope;
@@ -96,7 +100,7 @@ export class WorkItemsService {
     const validation = validateWorkOrderItemScope({ scope: nextScope, teeth: nextTeeth });
     if (!validation.valid) throw new BadRequestException(validation.message);
     if (scopeChanged) {
-      await this.authorizationService.requirePermission({ permission: "works.scope.update", requiredScope: "ALL", userId: input.actorUserId });
+      await this.ensureOwnWorkPermission(input.actorUserId, input.workOrderId, "works.scope.update");
     }
     const effectiveWorkTypeId = input.dto.workTypeId === undefined ? existing.workTypeId : input.dto.workTypeId;
     const effectiveCustomWorkTypeSnapshot = input.dto.customWorkTypeSnapshot === undefined
@@ -159,8 +163,8 @@ export class WorkItemsService {
     readonly legalEntity?: LegalEntityContext;
     readonly requestMetadata?: RequestMetadata;
   }): Promise<{ readonly archived: true }> {
-    await this.authorizationService.requirePermission({ permission: "works.item.remove", requiredScope: "ALL", userId: input.actorUserId });
     const workOrder = await this.requireWorkOrder(input.workOrderId, input.legalEntity);
+    await this.ensureOwnWorkPermission(input.actorUserId, input.workOrderId, "works.item.remove");
     const existing = await this.requireItem(input.workOrderId, input.itemId);
     if (existing.archivedAt) throw new ConflictException("Componenta tehnică este deja arhivată.");
     await this.prisma.$transaction(async (tx) => {
@@ -190,8 +194,13 @@ export class WorkItemsService {
     readonly legalEntity?: LegalEntityContext;
     readonly requestMetadata?: RequestMetadata;
   }): Promise<{ readonly items: readonly WorkOrderItemView[]; readonly toothConnections: readonly ToothConnectionView[] }> {
-    await this.authorizationService.requirePermission({ permission: "works.update", requiredScope: "ALL", userId: input.actorUserId });
-    const workOrder = await this.requireWorkOrder(input.workOrderId, input.legalEntity);
+    // Assigned technicians must be able to edit the work even when the UI is
+    // currently switched to the other legal-entity context. The clinic is the
+    // source of truth for CDT/NG; filtering this mutation by the UI context
+    // incorrectly returned 404 for an otherwise visible assigned work.
+    const workOrder = await this.prisma.workOrder.findUnique({ select: { code: true, id: true }, where: { id: input.workOrderId } });
+    if (!workOrder) throw new NotFoundException("Lucrarea nu a fost găsită.");
+    await this.ensureOwnWorkPermission(input.actorUserId, input.workOrderId, "works.update");
     const activeItems = await this.prisma.workOrderItem.findMany({ include: WORK_ORDER_ITEM_INCLUDE, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], where: { archivedAt: null, workOrderId: input.workOrderId } });
     if (input.dto.items.length === 0) throw new BadRequestException("Lucrarea trebuie să conțină cel puțin o componentă.");
     const existingById = new Map(activeItems.map((item) => [item.id, item]));
@@ -237,14 +246,14 @@ export class WorkItemsService {
     const removedConnections = currentConnections.filter((connection) => !desiredConnections.has(`${connection.toothA}-${connection.toothB}`));
     const addedConnections = [...desiredConnections.entries()].filter(([key]) => !currentConnectionByKey.has(key));
 
-    if (normalizedItems.some((item) => !item.id)) await this.authorizationService.requirePermission({ permission: "works.item.create", requiredScope: "ALL", userId: input.actorUserId });
-    if (changedItems.some((item) => item.id)) await this.authorizationService.requirePermission({ permission: "works.item.update", requiredScope: "ALL", userId: input.actorUserId });
+    if (normalizedItems.some((item) => !item.id)) await this.ensureOwnWorkPermission(input.actorUserId, input.workOrderId, "works.item.create");
+    if (changedItems.some((item) => item.id)) await this.ensureOwnWorkPermission(input.actorUserId, input.workOrderId, "works.item.update");
     if (changedItems.some((item) => item.id && existingById.get(item.id)?.technicalCodeNotes !== (item.technicalCodeNotes ?? null))) {
-      await this.authorizationService.requirePermission({ permission: "works.technical_code.edit", requiredScope: "ALL", userId: input.actorUserId });
+      await this.ensureOwnWorkPermission(input.actorUserId, input.workOrderId, "works.technical_code.edit");
     }
-    if (removedItems.length > 0) await this.authorizationService.requirePermission({ permission: "works.item.remove", requiredScope: "ALL", userId: input.actorUserId });
-    if (scopeChanged) await this.authorizationService.requirePermission({ permission: "works.scope.update", requiredScope: "ALL", userId: input.actorUserId });
-    if (removedConnections.length > 0 || addedConnections.length > 0) await this.authorizationService.requirePermission({ permission: "works.connections.manage", requiredScope: "ALL", userId: input.actorUserId });
+    if (removedItems.length > 0) await this.ensureOwnWorkPermission(input.actorUserId, input.workOrderId, "works.item.remove");
+    if (scopeChanged) await this.ensureOwnWorkPermission(input.actorUserId, input.workOrderId, "works.scope.update");
+    if (removedConnections.length > 0 || addedConnections.length > 0) await this.ensureOwnWorkPermission(input.actorUserId, input.workOrderId, "works.connections.manage");
 
     const result = await this.prisma.$transaction(async (tx) => {
       const nextSortOrder = Math.max(-1, ...activeItems.map((item) => item.sortOrder)) + 1;
@@ -321,6 +330,19 @@ export class WorkItemsService {
     });
     if (!workOrder) throw new NotFoundException("Lucrarea nu a fost găsită.");
     return workOrder;
+  }
+
+  private async ensureOwnWorkPermission(
+    actorUserId: string,
+    workOrderId: string,
+    permission: "works.connections.manage" | "works.item.create" | "works.item.remove" | "works.item.update" | "works.scope.update" | "works.technical_code.edit" | "works.update",
+  ): Promise<void> {
+    const grant = await this.authorizationService.hasPermission({ permission, userId: actorUserId });
+    if (!grant.allowed) throw new ForbiddenException("Nu ai permisiunea necesară pentru această lucrare.");
+    if (!grant.effectiveScopes || grant.effectiveScopes.includes("ALL")) return;
+    const workOrder = await this.prisma.workOrder.findUnique({ select: { assignedTechnicianId: true, claimedByUserId: true }, where: { id: workOrderId } });
+    if (workOrder?.assignedTechnicianId === actorUserId || workOrder?.claimedByUserId === actorUserId) return;
+    throw new ForbiddenException("Poți modifica doar lucrările proprii.");
   }
 
   private async requireItem(workOrderId: string, itemId: string): Promise<WorkOrderItemRecord> {
@@ -452,6 +474,12 @@ export function toWorkOrderItemView(item: WorkOrderItemRecord, includePricing = 
 
 function asRecord(value: PrismaTypes.JsonValue | null): Readonly<Record<string, unknown>> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Readonly<Record<string, unknown>> : null;
+}
+
+function snapshotValue(value: Readonly<Record<string, unknown>> | null | undefined): string | null {
+  if (!value) return null;
+  const candidate = value.value ?? value.name;
+  return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null;
 }
 
 function auditMetadata(code: string, item: { readonly scope: WorkOrderItemRecord["scope"]; readonly workType: { readonly name: string } | null; readonly teeth: readonly { readonly fdiTooth: number }[] }, state: string): PrismaTypes.InputJsonObject {

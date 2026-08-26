@@ -9,7 +9,6 @@ import {
   LoadingState,
   PriorityBadge,
   Modal,
-  Select,
   StatusBadge,
   TextInput,
   useToast,
@@ -26,6 +25,8 @@ import { Link } from "react-router";
 
 import { useAuthState } from "./auth-state.js";
 import { fetchOrganizationContext } from "../features/organization-context/organization-context-api.js";
+import { fetchClinicOptions, fetchDoctorOptions } from "../features/clinics/clinics-api.js";
+import { usePatientOptions } from "../features/patients/patients-api.js";
 import { useAvailableWorksForClaim, useMyClaimedWorks, useProbeTypes, useReceiveProbe, useWork, useWorks } from "../features/works/works-api.js";
 import { useSettings } from "../features/settings/settings-api.js";
 import { useBillingOverview } from "../features/billing/billing-api.js";
@@ -57,6 +58,16 @@ function formatKpiMoneyMinor(value: number, currency: string, locale = "ro-RO"):
 
 function formatDate(value: string | null | undefined): string {
   return value ? new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium" }).format(new Date(value)) : "Fără termen";
+}
+
+function probeLabel(row: OperationalStatusRow | null): string {
+  return `Proba ${Math.max(1, row?.currentCycle?.number ?? 1)}`;
+}
+
+function workCompositionLabel(row: OperationalStatusRow): string {
+  return row.components.length > 0
+    ? row.components.map((component) => `${component.name}${component.teeth.length > 0 ? ` · ${component.teeth.join(", ")}` : ""}`).join(" | ")
+    : row.workType.name;
 }
 
 function isIncompleteSheet(status: string | null | undefined): boolean {
@@ -431,9 +442,12 @@ function ReceptionDashboard({
   readonly todayRows: readonly OperationalStatusRow[];
 }): ReactNode {
   const toast = useToast();
-  const [returnSearch, setReturnSearch] = useState("");
+  const [selectedClinicId, setSelectedClinicId] = useState("");
+  const [selectedDoctorId, setSelectedDoctorId] = useState("");
+  const [patientSearch, setPatientSearch] = useState("");
+  const [selectedPatientId, setSelectedPatientId] = useState("");
   const [selectedReturnedWorkId, setSelectedReturnedWorkId] = useState<string | null>(null);
-  const [probeTypeId, setProbeTypeId] = useState("");
+  const [probeTypeIds, setProbeTypeIds] = useState<readonly string[]>([]);
   const [probeDate, setProbeDate] = useState("");
   const [probeTime, setProbeTime] = useState("");
   const [isReturnModalOpen, setReturnModalOpen] = useState(false);
@@ -441,25 +455,53 @@ function ReceptionDashboard({
   const incompleteRows = todayRows.filter((row) => isIncompleteSheet(row.realLabSheet.status)).slice(0, shortListSize);
   const returnQuery = useOperationalStatus({
     page: 1,
-    pageSize: 8,
-    search: returnSearch || null,
+    pageSize: 100,
+    search: null,
+    sortBy: "updatedAt",
+    sortDirection: "desc",
+    // A probe-ready work can already have a completed courier delivery. It
+    // must still remain visible to reception so the returned item can be
+    // opened and registered as the next probe.
+    tab: "RETURNED",
+  }, isReturnModalOpen && canCreateNextCycle);
+  const availableProbeQuery = useOperationalStatus({
+    page: 1,
+    pageSize: 100,
+    search: null,
     sortBy: "updatedAt",
     sortDirection: "desc",
     tab: "COMPLETED",
   }, isReturnModalOpen && canCreateNextCycle);
+  const clinicsQuery = useQuery({ enabled: isReturnModalOpen && canCreateNextCycle, queryFn: fetchClinicOptions, queryKey: ["clinics", "options", "reception-probe"], retry: false });
+  const doctorsQuery = useQuery({ enabled: isReturnModalOpen && canCreateNextCycle && Boolean(selectedClinicId), queryFn: () => fetchDoctorOptions(selectedClinicId), queryKey: ["doctors", "options", "reception-probe", selectedClinicId], retry: false });
+  const patientsQuery = usePatientOptions(patientSearch, isReturnModalOpen && canCreateNextCycle && Boolean(selectedClinicId), selectedClinicId || undefined, selectedDoctorId || undefined);
   const returnMutation = useReceiveProbe();
   const selectedReturnedWorkDetailQuery = useWork(selectedReturnedWorkId, (isReturnModalOpen || isProbeFormOpen) && selectedReturnedWorkId !== null);
   const probeTypesQuery = useProbeTypes((isReturnModalOpen || isProbeFormOpen) && canCreateNextCycle);
-  const returnedProbeRows = (returnQuery.data?.items ?? []).filter((row) => row.technicalReadiness === "PROBE_READY");
-  const selectedReturnedWork = returnedProbeRows.find((row) => row.id === selectedReturnedWorkId) ?? null;
+  const returnedProbeRows = returnQuery.data?.items ?? [];
+  const availableProbeRows = (availableProbeQuery.data?.items ?? []).filter((row) => row.technicalReadiness === "PROBE_READY");
+  const visibleAvailableProbeRows = availableProbeRows.filter((row) =>
+    (!selectedClinicId || row.clinic?.id === selectedClinicId) &&
+    (!selectedDoctorId || row.doctor?.id === selectedDoctorId) &&
+    (!selectedPatientId || row.patient.id === selectedPatientId),
+  );
+  // The probe form is opened from the courier-available queue. Keep that row
+  // available here as well; the returned-only query intentionally excludes it
+  // until reception registers the next cycle.
+  const selectedReturnedWork = [...availableProbeRows, ...returnedProbeRows].find((row) => row.id === selectedReturnedWorkId) ?? null;
   const selectedReturnedWorkDetail = selectedReturnedWorkDetailQuery.data;
   const configuredProbeCodes = selectedReturnedWorkDetail?.items?.flatMap((item) => item.workType?.probeTypeCodes ?? []) ?? [];
-  const selectableProbeTypes = configuredProbeCodes.length > 0
-    ? (probeTypesQuery.data ?? []).filter((type) => typeof type.code === "string" && configuredProbeCodes.includes(type.code))
-    : (probeTypesQuery.data ?? []);
-
+  const allProbeTypes = probeTypesQuery.data ?? [];
+  const configuredSelectableProbeTypes = configuredProbeCodes.length > 0
+    ? allProbeTypes.filter((type) => typeof type.code === "string" && configuredProbeCodes.includes(type.code))
+    : allProbeTypes;
+  // Old work types may contain probe codes that were renamed in the technical
+  // catalog. Do not leave reception with an empty selector in that case; the
+  // returned work can still be registered with any active probe type.
+  const selectableProbeTypes = configuredSelectableProbeTypes.length > 0 ? configuredSelectableProbeTypes : allProbeTypes;
+  const completedProbeHistory = selectedReturnedWorkDetail?.completedProbeCycles ?? [];
   useEffect(() => {
-    setProbeTypeId(selectableProbeTypes[0]?.id ?? "");
+    setProbeTypeIds(selectableProbeTypes[0]?.id ? [selectableProbeTypes[0].id] : []);
     setProbeDate("");
     setProbeTime("");
   }, [probeTypesQuery.data, selectedReturnedWorkDetail, selectedReturnedWorkId]);
@@ -501,50 +543,86 @@ function ReceptionDashboard({
         {returnedRows.slice(0, shortListSize).map((row) => <OperationalPreviewCard key={row.id} actionLabel="Deschide lucrarea" row={row} />)}
       </DashboardSection>
       <Modal
-        description="Caută o lucrare finalizată și înregistreaz-o ca revenire."
+        description="Selectează clinica, medicul și pacientul pentru a identifica automat lucrarea revenită."
         isOpen={isReturnModalOpen}
         onOpenChange={(isOpen) => {
           setReturnModalOpen(isOpen);
           if (!isOpen) {
             setSelectedReturnedWorkId(null);
-            setReturnSearch("");
+            setSelectedClinicId("");
+            setSelectedDoctorId("");
+            setPatientSearch("");
+            setSelectedPatientId("");
           }
         }}
         title="Înregistrează revenirea"
       >
         <div className="dashboard-page__return-modal">
-          <TextInput label="Caută lucrare finalizată" placeholder="Cod, pacient, clinică, medic" value={returnSearch} onChange={(event) => setReturnSearch(event.target.value)} />
-          {returnQuery.isLoading ? <LoadingState text="Se încarcă lucrările finalizate" /> : null}
-          {returnQuery.isError ? <ErrorState title="Lista nu a putut fi încărcată" description="Nu am putut încărca lucrările finalizate." /> : null}
-          <div className="dashboard-page__return-list">
-            {returnedProbeRows.map((row) => (
+          <div className="dashboard-page__return-fields">
+            <label>
+              Clinică *
+              <select className="dl-control" value={selectedClinicId} onChange={(event) => { setSelectedClinicId(event.target.value); setSelectedDoctorId(""); setSelectedPatientId(""); setSelectedReturnedWorkId(null); setPatientSearch(""); }}>
+                <option value="">Selectează clinica</option>
+                {(clinicsQuery.data ?? []).map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}
+              </select>
+            </label>
+            <label>
+              Medic
+              <select className="dl-control" disabled={!selectedClinicId} value={selectedDoctorId} onChange={(event) => { setSelectedDoctorId(event.target.value); setSelectedPatientId(""); setSelectedReturnedWorkId(null); setPatientSearch(""); }}>
+                <option value="">Toți medicii</option>
+                {(doctorsQuery.data ?? []).map((doctor) => <option key={doctor.id} value={doctor.id}>{doctor.displayName}</option>)}
+              </select>
+            </label>
+          </div>
+          {selectedClinicId ? <TextInput label="Caută pacient" placeholder="Nume și prenume" value={patientSearch} onChange={(event) => setPatientSearch(event.target.value)} /> : null}
+          {!selectedClinicId ? <p className="dashboard-page__empty-note">Selectează mai întâi clinica pentru a vedea pacienții asociați.</p> : null}
+          {patientsQuery.isLoading ? <LoadingState text="Se încarcă pacienții" /> : null}
+          <div className="dashboard-page__return-list dashboard-page__patient-list">
+            {(patientsQuery.data ?? []).map((patient) => (
               <button
-                aria-pressed={selectedReturnedWorkId === row.id}
+                aria-pressed={selectedPatientId === patient.id}
                 className="dashboard-page__return-item"
-                key={row.id}
+                key={patient.id}
                 onClick={() => {
-                  setSelectedReturnedWorkId(row.id);
-                  setReturnModalOpen(false);
-                  setProbeFormOpen(true);
+                  const matches = availableProbeRows.filter((row) => row.patient.id === patient.id && (!selectedClinicId || row.clinic?.id === selectedClinicId) && (!selectedDoctorId || row.doctor?.id === selectedDoctorId));
+                  setSelectedPatientId(patient.id);
+                  setSelectedReturnedWorkId(matches.length === 1 ? matches[0]!.id : null);
                 }}
                 type="button"
               >
-                <strong className="dashboard-page__return-patient">{row.patient.name}</strong>
+                <strong className="dashboard-page__return-patient">{patient.fullName}</strong>
               </button>
             ))}
-            {!returnQuery.isLoading && returnedProbeRows.length === 0 ? <p className="dashboard-page__empty-note">Nu există lucrări marcate „Probă gata” pentru căutarea curentă.</p> : null}
           </div>
+          {selectedClinicId ? (
+            <div className="dashboard-page__return-matches">
+              <strong>Probe disponibile de la curier</strong>
+              <p className="dashboard-page__empty-note">Selectează proba revenită pentru a introduce etapa și termenul următor.</p>
+              <div className="dashboard-page__return-list">
+                {visibleAvailableProbeRows.map((row) => (
+                  <button className="dashboard-page__return-item" key={row.id} onClick={() => { setSelectedReturnedWorkId(row.id); setReturnModalOpen(false); setProbeFormOpen(true); }} type="button">
+                    <strong>{row.patient.name} · {row.workCode}</strong>
+                    <span>{probeLabel(row)} · {workCompositionLabel(row)}</span>
+                    <span>{row.components.flatMap((component) => component.teeth).length > 0 ? `Dinți: ${row.components.flatMap((component) => component.teeth).join(", ")}` : "Fără dinți"}</span>
+                  </button>
+                ))}
+                {!availableProbeQuery.isLoading && visibleAvailableProbeRows.length === 0 ? <p className="dashboard-page__empty-note">Nu există probe disponibile pentru selecția curentă.</p> : null}
+              </div>
+            </div>
+          ) : null}
+          {returnQuery.isLoading || availableProbeQuery.isLoading ? <LoadingState text="Se verifică lucrările revenite" /> : null}
+          {returnQuery.isError ? <ErrorState title="Lista nu a putut fi încărcată" description="Nu am putut încărca lucrările finalizate." /> : null}
         </div>
       </Modal>
       <Modal
         footer={selectedReturnedWork ? (
           <Button
-            disabled={!probeTypeId || !probeDate}
+            disabled={probeTypeIds.length === 0 || !probeDate}
             isLoading={returnMutation.isPending}
             onClick={() => {
-              if (!probeTypeId || !probeDate || !selectedReturnedWork) return;
+              if (probeTypeIds.length === 0 || !probeDate || !selectedReturnedWork) return;
               const deadlineAt = new Date(`${probeDate}T${probeTime || "23:59"}:00`).toISOString();
-              returnMutation.mutate({ input: { deadlineAt, probeTypeId }, workOrderId: selectedReturnedWork.id }, {
+              returnMutation.mutate({ input: { deadlineAt, probeTypeIds }, workOrderId: selectedReturnedWork.id }, {
                 onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Proba nu a fost înregistrată", variant: "error" }),
                 onSuccess: () => {
                   setProbeFormOpen(false);
@@ -561,18 +639,39 @@ function ReceptionDashboard({
           setProbeFormOpen(isOpen);
           if (!isOpen) setSelectedReturnedWorkId(null);
         }}
-        title="Probă nouă"
+        title="Înregistrează revenirea"
       >
         <div className="dashboard-page__probe-form">
-          <strong>{selectedReturnedWork?.patient.name ?? "Pacient selectat"}</strong>
+          <div className="dashboard-page__probe-heading">
+            <strong>{probeLabel(selectedReturnedWork)} · {selectedReturnedWork?.workCode ?? "Lucrare selectată"}</strong>
+            <span>{selectedReturnedWork?.patient.name ?? "Pacient selectat"}</span>
+          </div>
+          {selectedReturnedWork ? (
+            <div className="dashboard-page__probe-summary">
+              {selectedReturnedWork.components.map((component) => (
+                <div key={`${component.symbol}-${component.name}`}>
+                  <span aria-hidden="true" className="dashboard-page__probe-color" style={{ backgroundColor: component.colorHex ?? "#0f766e" }} />
+                  <strong>{component.name}</strong>
+                  <span>{component.teeth.length > 0 ? `Dinți: ${component.teeth.join(", ")}` : "Lucrare pe arcadă / caz"}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {selectedReturnedWork ? (
+            <div className="dashboard-page__probe-history">
+              <strong>Probe efectuate anterior</strong>
+              {completedProbeHistory.length > 0 ? completedProbeHistory.map((cycle) => (
+                <div key={cycle.id}>
+                  <span>{cycle.sequence === 0 ? "Proba inițială" : `Proba ${cycle.sequence}`}</span>
+                  <strong>{cycle.probeTypeNameSnapshot}</strong>
+                </div>
+              )) : <span>Nu există probe efectuate anterior.</span>}
+            </div>
+          ) : null}
           {selectedReturnedWorkDetailQuery.isLoading ? <LoadingState text="Se încarcă tipurile compatibile" /> : null}
-          <Select
-            label="Tip probă"
-            onChange={(event) => setProbeTypeId(event.target.value)}
-            options={selectableProbeTypes.map((type) => ({ label: type.name, value: type.id }))}
-            required
-            value={probeTypeId}
-          />
+          {probeTypesQuery.isError ? <ErrorState title="Tipurile de probă nu au putut fi încărcate" description="Verifică accesul la catalogul tehnic și reîncarcă pagina." /> : null}
+          {!probeTypesQuery.isLoading && !probeTypesQuery.isError && selectableProbeTypes.length === 0 ? <p className="dashboard-page__empty-note">Nu există tipuri de probă active în catalogul tehnic.</p> : null}
+          {selectableProbeTypes.length > 0 ? <fieldset className="dashboard-page__probe-types"><legend>Tipuri probă</legend>{selectableProbeTypes.map((type) => <label key={type.id}><input checked={probeTypeIds.includes(type.id)} onChange={() => setProbeTypeIds((current) => current.includes(type.id) ? current.filter((id) => id !== type.id) : [...current, type.id])} type="checkbox" />{type.name}</label>)}</fieldset> : null}
           <div className="dashboard-page__probe-schedule">
             <label>
               Data termenului probei *

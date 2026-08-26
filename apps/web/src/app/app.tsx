@@ -191,7 +191,7 @@ const router = createBrowserRouter([
         path: "technicians",
       },
       {
-        element: <PermissionRoute requiredPermissions={["logistics.center.read"]}><LazyRoute><LogisticsPage /></LazyRoute></PermissionRoute>,
+        element: <NonTechnicianRoute><PermissionRoute requiredPermissions={["logistics.center.read"]}><LazyRoute><LogisticsPage /></LazyRoute></PermissionRoute></NonTechnicianRoute>,
         path: "logistics",
       },
       {
@@ -261,6 +261,11 @@ function isCourier(permissionKeys: readonly string[]): boolean {
 function NonCourierRoute({ children }: { readonly children: ReactNode }): ReactNode {
   const auth = useAuthState();
   return isCourier(auth.permissionKeys) ? <Navigate replace to="/my-route" /> : children;
+}
+
+function NonTechnicianRoute({ children }: { readonly children: ReactNode }): ReactNode {
+  const auth = useAuthState();
+  return auth.permissionKeys.includes("technician.workbench.read") ? <Navigate replace to="/workbench" /> : children;
 }
 
 function RoleLandingRedirect(): ReactNode {

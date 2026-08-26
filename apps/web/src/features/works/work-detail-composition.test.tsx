@@ -47,7 +47,7 @@ describe("WorkDetailComposition", () => {
   it("loads existing components into the reused edit flow only after intent", () => {
     renderSubject(true);
     expect(screen.queryByRole("button", { name: "Salvează componenta" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Editează componentele" }));
+    fireEvent.click(screen.getByRole("button", { name: "Editează lucrarea" }));
     fireEvent.click(screen.getAllByRole("button", { name: "Editează" })[0]!);
     expect(screen.getByRole("button", { name: "Salvează componenta" })).toBeDefined();
     expect(screen.getByLabelText("Componentele lucrării")).toBeDefined();
@@ -55,15 +55,15 @@ describe("WorkDetailComposition", () => {
 
   it("does not expose component edit controls without permission", () => {
     renderSubject(false);
-    expect(screen.queryByRole("button", { name: "Editează componentele" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Editează lucrarea" })).toBeNull();
   });
 
   it("sends one aggregate composition request for one save click", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ compatibilityLabelRo: "Date canonice", csrfToken: "csrf", items: work.items, toothConnections: work.toothConnections }) });
     vi.stubGlobal("fetch", fetchMock);
     render(<QueryClientProvider client={new QueryClient()}><WorkDetailComposition canEdit work={work} isOpen workTypeOptions={[]} /></QueryClientProvider>);
-    fireEvent.click(screen.getByRole("button", { name: "Editează componentele" }));
-    fireEvent.click(screen.getByRole("button", { name: "Salvează componentele" }));
+    fireEvent.click(screen.getByRole("button", { name: "Editează lucrarea" }));
+    fireEvent.click(screen.getByRole("button", { name: "Salvează editarea" }));
     await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/composition")).length).toBe(1));
   });
 
@@ -79,6 +79,6 @@ describe("WorkDetailComposition", () => {
     const legacyWork = { ...work, items: [], toothConnections: [] } as unknown as WorkDetail;
     render(<QueryClientProvider client={new QueryClient()}><WorkDetailComposition canEdit={true} work={legacyWork} isOpen workTypeOptions={[]} /></QueryClientProvider>);
     expect(screen.getByText(/conversia explicită a lucrărilor legacy nu este disponibilă/)).toBeDefined();
-    expect(screen.queryByRole("button", { name: "Editează componentele" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Editează lucrarea" })).toBeNull();
   });
 });

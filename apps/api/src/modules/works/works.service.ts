@@ -6,7 +6,7 @@ import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import type { LegalEntityContext } from "../organization-context/organization-context.view.js";
-import { PatientsService } from "../patients/patients.service.js";
+import { normalizePatientName, PatientsService } from "../patients/patients.service.js";
 import { AuthorizationService } from "../rbac/authorization.service.js";
 import type { PermissionKey } from "../rbac/permission-registry.js";
 import { DEFAULT_LABORATORY_SETTINGS, SETTINGS_SINGLETON_KEY } from "../settings/settings.constants.js";
@@ -229,6 +229,20 @@ const WORK_ORDER_INCLUDE = {
       },
     },
   },
+  activeProbeCycle: {
+    include: {
+      probeType: true,
+      probeTypes: { include: { probeType: true }, orderBy: { sortOrder: "asc" } },
+    },
+  },
+  probeCycles: {
+    include: {
+      probeType: true,
+      probeTypes: { include: { probeType: true }, orderBy: { sortOrder: "asc" } },
+    },
+    orderBy: { sequence: "asc" },
+    where: { status: "COMPLETED" },
+  },
   patient: true,
   workFormSubmissions: {
     orderBy: {
@@ -287,6 +301,7 @@ const WORK_ORDER_MUTATION_FIELDS = [
   "clinicId",
   "doctorId",
   "workTypeId",
+  "patientName",
   "patientReference",
   "shade",
   "quantity",
@@ -1613,7 +1628,10 @@ export class WorksService {
   public async createWork(context: ActorContext, legalEntity: LegalEntityContext, dto: CreateWorkDto, canSetManualDeadline: boolean): Promise<WorkDetailView> {
     const requestedDeliveryDate = parseDateOnly(dto.requestedDeliveryDate, true);
     const operationNow = new Date();
-    const manualDueAt = dto.manualDueAt ? new Date(dto.manualDueAt) : null;
+    // The requested date is the only deadline source for a newly registered work.
+    // When the form omits the time, keep the date at midnight instead of falling
+    // back to the calculated/template deadline.
+    const manualDueAt = dto.manualDueAt ? new Date(dto.manualDueAt) : requestedDeliveryDate;
     if (manualDueAt && !canSetManualDeadline) {
       throw new BadRequestException("Nu ai permisiunea necesară pentru termen manual.");
     }
@@ -1780,7 +1798,7 @@ export class WorksService {
         if (probeCodes.length > 0) {
           const initialProbeType = await tx.probeType.findFirst({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true }, where: { code: { in: probeCodes }, isArchived: false } });
           if (initialProbeType) {
-            const initialProbeCycle = await tx.probeCycle.create({ data: { createdByUserId: context.actorUserId, deadlineAt: deadline.effectiveDueAt ?? requestedDeliveryDate ?? operationNow, openedAt: operationNow, probeTypeId: initialProbeType.id, probeTypeNameSnapshot: initialProbeType.name, sequence: 1, status: "ACTIVE", workOrderId: createdWorkOrder.id } });
+            const initialProbeCycle = await tx.probeCycle.create({ data: { createdByUserId: context.actorUserId, deadlineAt: deadline.effectiveDueAt ?? requestedDeliveryDate ?? operationNow, openedAt: operationNow, probeTypeId: initialProbeType.id, probeTypeNameSnapshot: initialProbeType.name, sequence: 0, status: "ACTIVE", workOrderId: createdWorkOrder.id, probeTypes: { create: [{ probeTypeId: initialProbeType.id, probeTypeNameSnapshot: initialProbeType.name, sortOrder: 0 }] } } });
             await tx.workOrder.update({ data: { activeProbeCycleId: initialProbeCycle.id }, where: { id: createdWorkOrder.id } });
           }
         }
@@ -1882,6 +1900,7 @@ export class WorksService {
     const beforeGenericSubmission = getGenericWorkFormSubmission(before);
     this.rejectConflictingPatientPayload(dto.patientId, dto.patientName);
     const data = await this.toUpdateData(before, dto, context.actorUserId);
+    await this.ensureCanUpdateWork(context.actorUserId, before);
     const isWorkTypeChanging = dto.workTypeId !== undefined && dto.workTypeId !== before.workTypeId;
 
     if (isWorkTypeChanging && dto.confirmWorkTypeChange !== true) {
@@ -1897,7 +1916,11 @@ export class WorksService {
     }
 
     const candidateChangedFields = WORK_ORDER_MUTATION_FIELDS.filter((field) => Object.prototype.hasOwnProperty.call(dto, field) && isDtoFieldChanged(before, dto, field));
-    const shouldRecalculateDeadline = this.workDeadlineService.shouldRecalculate(candidateChangedFields, before.deadlineLockedAt !== null);
+    const hasManualDeadline = dto.manualDueAt !== undefined && dto.manualDueAt !== null;
+    if (hasManualDeadline) {
+      await this.authorizationService.requirePermission({ permission: "works.deadline.set_manual", requiredScope: "ALL", userId: context.actorUserId });
+    }
+    const shouldRecalculateDeadline = !hasManualDeadline && this.workDeadlineService.shouldRecalculate(candidateChangedFields, before.deadlineLockedAt !== null);
     if (shouldRecalculateDeadline) {
       if (dto.expectedDeadlineRevision === undefined) {
         throw new BadRequestException("expectedDeadlineRevision este obligatoriu pentru modificări care pot recalcula termenul.");
@@ -1920,6 +1943,20 @@ export class WorksService {
       : null;
     if (deadline) {
       Object.assign(data, deadlineDataToPrisma(deadline, before.deadlineRevision + 1));
+    }
+    if (hasManualDeadline) {
+      const manualDeadline = await this.workDeadlineService.resolveForWork({
+        clinicId: dto.clinicId ?? before.clinicId,
+        doctorId: dto.doctorId ?? before.doctorId,
+        legalEntity,
+        manualDueAt: new Date(dto.manualDueAt!),
+        now: new Date(),
+        quantity: dto.quantity ?? before.quantity,
+        source: "MANUAL_OVERRIDE",
+        startAt: before.deadlineStartAt ?? before.createdAt,
+        workTypeId: dto.workTypeId ?? before.workTypeId,
+      });
+      Object.assign(data, deadlineDataToPrisma(manualDeadline, before.deadlineRevision + 1));
     }
 
     const after = await this.prisma.$transaction(async (tx) => {
@@ -1984,6 +2021,22 @@ export class WorksService {
             resourceId: workOrderId,
           });
         }
+      }
+
+      if (dto.patientName !== undefined && before.patientId) {
+        const patientName = dto.patientName.trim().replace(/\s+/g, " ");
+        const nameParts = patientName.split(" ");
+        const firstName = nameParts.shift() ?? patientName;
+        const lastName = nameParts.join(" ") || firstName;
+        const normalized = normalizePatientName(firstName, lastName);
+        await tx.patient.update({
+          data: { firstName, lastName, normalizedFirstName: normalized.firstName, normalizedLastName: normalized.lastName, updatedByUserId: context.actorUserId, version: { increment: 1 } },
+          where: { id: before.patientId },
+        });
+        await tx.workOrder.updateMany({
+          data: { patientName, updatedByUserId: context.actorUserId, version: { increment: 1 } },
+          where: { patientId: before.patientId },
+        });
       }
 
       const updatedWorkOrder = await tx.workOrder.update({
@@ -2372,8 +2425,8 @@ export class WorksService {
       data.totalPriceMinor = before.baseUnitPriceMinor === null ? null : calculateTotalPriceMinor(before.baseUnitPriceMinor, dto.quantity);
     }
 
-    if (dto.patientId !== undefined || dto.patientName !== undefined) {
-      throw new BadRequestException("Pacientul se modifică din modulul Pacienți.");
+    if (dto.patientId !== undefined) {
+      throw new BadRequestException("Pacientul se modifică prin selectarea unui pacient existent.");
     }
 
     for (const field of WORK_ORDER_MUTATION_FIELDS) {
@@ -2423,6 +2476,9 @@ export class WorksService {
         if (typeof value === "number") {
           data.quantity = value;
         }
+        return;
+      case "patientName":
+        if (typeof value === "string") data.patientName = value;
         return;
       case "requestedDeliveryDate":
         if (typeof value === "string") {
@@ -2961,13 +3017,21 @@ export class WorksService {
     if (!permission.allowed) {
       throw new ForbiddenException("Nu ai permisiunea necesară pentru schimbarea stării lucrării.");
     }
-    if (permission.effectiveScopes.includes("ALL")) {
+    if (!permission.effectiveScopes || permission.effectiveScopes.includes("ALL")) {
       return;
     }
     if (workOrder.assignedTechnicianId === userId || workOrder.claimedByUserId === userId) {
       return;
     }
     throw new ForbiddenException("Poți schimba starea doar pentru lucrările proprii.");
+  }
+
+  private async ensureCanUpdateWork(userId: string, workOrder: WorkOrderRecord): Promise<void> {
+    const permission = await this.authorizationService.hasPermission({ permission: "works.update", userId });
+    if (!permission.allowed) throw new ForbiddenException("Nu ai permisiunea necesară pentru modificarea lucrării.");
+    if (!permission.effectiveScopes || permission.effectiveScopes.includes("ALL")) return;
+    if (workOrder.assignedTechnicianId === userId || workOrder.claimedByUserId === userId) return;
+    throw new ForbiddenException("Poți modifica doar lucrările proprii.");
   }
 
   private async ensureCanUpdateTechnicalDetails(userId: string, workOrder: WorkOrderRecord): Promise<void> {
@@ -3019,7 +3083,11 @@ export class WorksService {
     if (workOrder.technicalReadiness === "PROBE_READY" || workOrder.technicalReadiness === "FINAL_READY") {
       throw new ConflictException("Lucrarea nu mai este disponibilă pentru preluare tehnică.");
     }
-    const logisticsStatus = workOrder.activeCycle?.logisticsState?.status;
+    // A returned probe opens a new active probe cycle, while the legacy work
+    // cycle can still retain the previous delivery's logistics status. That
+    // historical status must not prevent the technician from claiming the new
+    // probe.
+    const logisticsStatus = workOrder.activeProbeCycleId ? null : workOrder.activeCycle?.logisticsState?.status;
     if (logisticsStatus === "BLOCKED") {
       throw new BadRequestException("Lucrarea blocată nu poate fi revendicată.");
     }

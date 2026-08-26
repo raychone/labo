@@ -72,6 +72,12 @@ export class LogisticsController {
     return this.logisticsService.listRoutes(actor, query);
   }
 
+  @Get("routes/couriers/options")
+  @RequirePermission("routes.assign", "ALL")
+  public listRouteCourierOptions() {
+    return this.logisticsService.listCourierOptions();
+  }
+
   @Post("routes")
   @UseGuards(CsrfGuard)
   @RequirePermission("logistics.center.read", "ASSIGNED")

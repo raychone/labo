@@ -124,6 +124,7 @@ export class WorkTypesService {
       return createdWorkType;
     });
 
+    await this.notificationsService?.publishNewWorkType(workType);
     return toWorkTypeDetailView(workType);
   }
 

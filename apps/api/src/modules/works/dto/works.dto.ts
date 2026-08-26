@@ -439,6 +439,11 @@ export class UpdateWorkDto extends WorkMutationDto {
   public readonly confirmWorkTypeChange?: boolean;
 
   @IsOptional()
+  @IsISO8601({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}T.+(?:Z|[+-]\d{2}:\d{2})$/)
+  public readonly manualDueAt?: string | null;
+
+  @IsOptional()
   @ValidateNested()
   @Type(() => WorkFormSubmissionDto)
   public readonly workFormSubmission?: WorkFormSubmissionDto;

@@ -9,7 +9,7 @@ import { OrganizationContextSwitch } from "../features/organization-context/orga
 import { useSettings } from "../features/settings/settings-api.js";
 import { addUnauthorizedListener, isUnauthorizedError } from "../lib/api-client.js";
 import { useAuthState } from "./auth-state.js";
-import { useDismissNotification, useMarkAllNotificationsRead, useMarkNotificationRead, useNotifications, type NotificationView } from "../features/notifications/notifications-api.js";
+import { useDismissAllNotifications, useDismissNotification, useMarkAllNotificationsRead, useMarkNotificationRead, useNotifications, type NotificationView } from "../features/notifications/notifications-api.js";
 import { ShellErrorBoundary } from "./error-boundary.js";
 import { getNavigationRoutes, getRouteByPath } from "./route-registry.js";
 import { usePageTitle } from "./use-page-title.js";
@@ -58,6 +58,7 @@ export function AuthenticatedAppShell(): ReactNode {
   const markReadMutation = useMarkNotificationRead();
   const markAllReadMutation = useMarkAllNotificationsRead();
   const dismissMutation = useDismissNotification();
+  const dismissAllMutation = useDismissAllNotifications();
   const notificationItems = notificationsQuery.data?.items ?? [];
   const courierOnly = routes.length === 1 && routes[0]?.path === "/my-route";
   usePageTitle(pageTitle, laboratoryName);
@@ -198,7 +199,7 @@ export function AuthenticatedAppShell(): ReactNode {
       />
       <Drawer isOpen={isNotificationsOpen} onOpenChange={setIsNotificationsOpen} position="right" title="Notificări">
         <div className="app-shell__notifications">
-          <div className="app-shell__notifications-actions"><span>{notificationsQuery.data?.unreadCount ?? 0} necitite</span><Button isLoading={markAllReadMutation.isPending} onClick={() => markAllReadMutation.mutate()} variant="secondary">Marchează citite</Button></div>
+          <div className="app-shell__notifications-actions"><span>{notificationsQuery.data?.unreadCount ?? 0} necitite</span><Button isLoading={markAllReadMutation.isPending} onClick={() => markAllReadMutation.mutate()} variant="secondary">Marchează citite</Button><Button disabled={(notificationsQuery.data?.items.length ?? 0) === 0} isLoading={dismissAllMutation.isPending} onClick={() => dismissAllMutation.mutate()} variant="secondary">Șterge toate</Button></div>
           {notificationsQuery.isLoading ? <LoadingState text="Se încarcă notificările" /> : null}
           {notificationsQuery.error ? <ErrorState title="Notificările nu au putut fi încărcate" description="Încearcă din nou." /> : null}
           {!notificationsQuery.isLoading && !notificationsQuery.error && (notificationsQuery.data?.items.length ?? 0) === 0 ? <p className="app-shell__notifications-empty">Nu ai notificări.</p> : null}

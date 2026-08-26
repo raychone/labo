@@ -61,7 +61,7 @@ export class WorksController {
   ) {}
 
   @Get("probe-types")
-  @RequirePermission("probe_types.read", "ALL")
+  @RequirePermission("probe_types.read", "ASSIGNED")
   public listProbeTypes(@CurrentUser() actor: AuthenticatedUser, @Query("includeArchived") includeArchived?: string) {
     return this.probeTypesService.list(actor.id, includeArchived === "true");
   }
@@ -117,7 +117,7 @@ export class WorksController {
     // A work may belong to either CDT or NG, determined by its clinic. The
     // reception user's currently selected legal-entity context must not hide
     // an otherwise visible work from the return/probe flow.
-    return this.probeCyclesService.createNextActiveAfterReception({ actorUserId: actor.id, deadlineAt: dto.deadlineAt, probeTypeId: dto.probeTypeId, requestMetadata: getRequestMetadata(request), returnedAfterCompletedCycle: true, workOrderId });
+    return this.probeCyclesService.createNextActiveAfterReception({ actorUserId: actor.id, deadlineAt: dto.deadlineAt, probeTypeId: dto.probeTypeId ?? dto.probeTypeIds?.[0] ?? "", ...(dto.probeTypeIds ? { probeTypeIds: dto.probeTypeIds } : {}), requestMetadata: getRequestMetadata(request), returnedAfterCompletedCycle: true, workOrderId });
   }
 
   @Get()
@@ -139,7 +139,9 @@ export class WorksController {
   }
 
   @Get("work-type-options")
-  @RequirePermission("works.create", "ALL")
+  // This catalog is also needed when a technician edits an assigned work.
+  // It is read-only; requiring works.create incorrectly returned 403 for technicians.
+  @RequirePermission("works.update", "ASSIGNED")
   public listWorkTypeFormOptions(@CurrentUser() actor: AuthenticatedUser) {
     return this.worksService.listWorkTypeFormOptions(actor.id);
   }
@@ -151,7 +153,7 @@ export class WorksController {
 
   @Patch(":id/composition")
   @UseGuards(CsrfGuard)
-  @RequirePermission("works.update", "ALL")
+  @RequirePermission("works.update", "ASSIGNED")
   public updateWorkOrderComposition(
     @Param("id") workOrderId: string,
     @Body() dto: UpdateWorkOrderCompositionDto,
@@ -178,7 +180,7 @@ export class WorksController {
 
   @Post(":id/tooth-connections")
   @UseGuards(CsrfGuard)
-  @RequirePermission("works.connections.manage", "ALL")
+  @RequirePermission("works.connections.manage", "ASSIGNED")
   public createToothConnection(
     @Param("id") workOrderId: string,
     @Body() dto: CreateToothConnectionDto,
@@ -191,7 +193,7 @@ export class WorksController {
 
   @Delete(":id/tooth-connections/:connectionId")
   @UseGuards(CsrfGuard)
-  @RequirePermission("works.connections.manage", "ALL")
+  @RequirePermission("works.connections.manage", "ASSIGNED")
   public removeToothConnection(
     @Param("id") workOrderId: string,
     @Param("connectionId") connectionId: string,
@@ -204,7 +206,7 @@ export class WorksController {
 
   @Post(":id/items")
   @UseGuards(CsrfGuard)
-  @RequirePermission("works.item.create", "ALL")
+  @RequirePermission("works.item.create", "ASSIGNED")
   public createWorkOrderItem(
     @Param("id") workOrderId: string,
     @Body() dto: CreateWorkOrderItemDto,
@@ -217,7 +219,7 @@ export class WorksController {
 
   @Patch(":id/items/:itemId")
   @UseGuards(CsrfGuard)
-  @RequirePermission("works.item.update", "ALL")
+  @RequirePermission("works.item.update", "ASSIGNED")
   public updateWorkOrderItem(
     @Param("id") workOrderId: string,
     @Param("itemId") itemId: string,
@@ -231,7 +233,7 @@ export class WorksController {
 
   @Delete(":id/items/:itemId")
   @UseGuards(CsrfGuard)
-  @RequirePermission("works.item.remove", "ALL")
+  @RequirePermission("works.item.remove", "ASSIGNED")
   public archiveWorkOrderItem(
     @Param("id") workOrderId: string,
     @Param("itemId") itemId: string,
@@ -389,7 +391,7 @@ export class WorksController {
 
   @Patch(":id")
   @UseGuards(CsrfGuard)
-  @RequirePermission("works.update", "ALL")
+  @RequirePermission("works.update", "ASSIGNED")
   public updateWork(
     @Param("id") workOrderId: string,
     @Body() dto: UpdateWorkDto,

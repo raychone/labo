@@ -190,6 +190,10 @@ export async function updateActiveProbeDeadline(workOrderId: string, cycleId: st
   return sendJson(`/works/${workOrderId}/probe-cycles/${cycleId}/deadline`, "PATCH", { deadlineAt });
 }
 
+export async function setManualWorkDeadline(workOrderId: string, dueAt: string, expectedRevision: number): Promise<WorkDetail> {
+  return sendJson<WorkDetail>(`/works/${workOrderId}/deadline/manual`, "POST", { dueAt, expectedRevision });
+}
+
 export async function markProbeReady(workOrderId: string): Promise<{ readonly probeReady: true }> {
   return sendJson(`/works/${workOrderId}/probe-ready`, "POST");
 }
@@ -198,8 +202,8 @@ export async function finalizeTechnicalWork(workOrderId: string): Promise<{ read
   return sendJson(`/works/${workOrderId}/finalize`, "POST");
 }
 
-export async function receiveProbe(workOrderId: string, input: { readonly probeTypeId: string; readonly deadlineAt: string }): Promise<import("@dental-lab/shared").ProbeCycleView> {
-  return sendJson(`/works/${workOrderId}/probe-cycles/receive`, "POST", input);
+export async function receiveProbe(workOrderId: string, input: { readonly probeTypeId?: string; readonly probeTypeIds?: readonly string[]; readonly deadlineAt: string }): Promise<import("@dental-lab/shared").ProbeCycleView> {
+  return sendJson(`/works/${workOrderId}/probe-cycles/receive`, "POST", { ...input, probeTypeIds: input.probeTypeIds ?? (input.probeTypeId ? [input.probeTypeId] : []) });
 }
 
 export async function createWorkOrderItem(workOrderId: string, input: WorkOrderItemInput): Promise<WorkOrderItemView> {
@@ -301,6 +305,10 @@ export async function selectProbeType(workOrderId: string, cycleId: string, prob
   return sendJson<import("@dental-lab/shared").ProbeCycleView>(`/works/${workOrderId}/probe-cycles/${cycleId}/probe-type`, "PATCH", { probeTypeId });
 }
 
+export async function updateProbeTypes(workOrderId: string, cycleId: string, probeTypeIds: readonly string[]): Promise<import("@dental-lab/shared").ProbeCycleView> {
+  return sendJson<import("@dental-lab/shared").ProbeCycleView>(`/works/${workOrderId}/probe-cycles/${cycleId}/probe-type`, "PATCH", { probeTypeId: probeTypeIds[0], probeTypeIds });
+}
+
 export async function fetchRealLabSheet(workOrderId: string, cycleId: string): Promise<RealLabSheetView> {
   const response = await apiFetch(`/works/${workOrderId}/cycles/${cycleId}/real-lab-sheet`);
 
@@ -348,6 +356,8 @@ export function useAvailableWorksForClaim(params: ClaimWorksListParams, enabled:
     queryFn: () => fetchAvailableWorksForClaim(params),
     queryKey: worksQueryKeys.availableForClaim(params),
     placeholderData: keepPreviousData,
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
     retry: false,
   });
 }
@@ -485,6 +495,20 @@ export function useUpdateActiveProbeDeadline() {
   });
 }
 
+export function useSetManualWorkDeadline() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ workOrderId, dueAt, expectedRevision }: { readonly workOrderId: string; readonly dueAt: string; readonly expectedRevision: number }) => setManualWorkDeadline(workOrderId, dueAt, expectedRevision),
+    onSuccess: async (_work, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.detail(variables.workOrderId) }),
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ["logistics"] }),
+      ]);
+    },
+  });
+}
+
 export function useMarkProbeReady() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -504,7 +528,7 @@ export function useFinalizeTechnicalWork() {
 export function useReceiveProbe() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ workOrderId, input }: { readonly workOrderId: string; readonly input: { readonly probeTypeId: string; readonly deadlineAt: string } }) => receiveProbe(workOrderId, input),
+    mutationFn: ({ workOrderId, input }: { readonly workOrderId: string; readonly input: { readonly probeTypeId?: string; readonly probeTypeIds?: readonly string[]; readonly deadlineAt: string } }) => receiveProbe(workOrderId, input),
     onSuccess: async (_cycle, variables) => {
       await Promise.all([queryClient.invalidateQueries({ queryKey: worksQueryKeys.all }), queryClient.invalidateQueries({ queryKey: worksQueryKeys.detail(variables.workOrderId) }), queryClient.invalidateQueries({ queryKey: worksQueryKeys.cycles(variables.workOrderId) }), queryClient.invalidateQueries({ queryKey: statusQueryKeys.all }), queryClient.invalidateQueries({ queryKey: ["technician-workbench"] }), queryClient.invalidateQueries({ queryKey: ["logistics"] })]);
     },
@@ -568,6 +592,20 @@ export function useSelectProbeType() {
     onSuccess: async (_cycle, variables) => {
       await queryClient.invalidateQueries({ queryKey: worksQueryKeys.detail(variables.workOrderId) });
       await queryClient.invalidateQueries({ queryKey: worksQueryKeys.all });
+    },
+  });
+}
+
+export function useUpdateProbeTypes() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ cycleId, probeTypeIds, workOrderId }: { readonly cycleId: string; readonly probeTypeIds: readonly string[]; readonly workOrderId: string }) => updateProbeTypes(workOrderId, cycleId, probeTypeIds),
+    onSuccess: async (_cycle, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.detail(variables.workOrderId) }),
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.cycles(variables.workOrderId) }),
+      ]);
     },
   });
 }

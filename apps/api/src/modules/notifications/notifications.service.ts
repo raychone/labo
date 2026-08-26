@@ -13,6 +13,7 @@ export interface PublishInput {
   readonly message: string;
   readonly metadata?: Prisma.InputJsonValue;
   readonly recipientPermission: "manager" | "logistics" | "technician";
+  readonly recipientUserId?: string;
   readonly resourceId: string | null;
   readonly resourceType: string;
   readonly severity: NotificationSeverity;
@@ -73,6 +74,16 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     return { updated: result.count };
   }
 
+  public async dismissAll(userId: string): Promise<{ readonly updated: number }> {
+    await this.authorizationService.requirePermission({ permission: "notifications.dismiss_own", userId });
+    const now = new Date();
+    const result = await this.prisma.notification.updateMany({
+      data: { readAt: now, resolvedAt: now },
+      where: { recipientUserId: userId, resolvedAt: null },
+    });
+    return { updated: result.count };
+  }
+
   public async dismiss(userId: string, notificationId: string): Promise<NotificationView> {
     await this.authorizationService.requirePermission({ permission: "notifications.dismiss_own", userId });
     const existing = await this.prisma.notification.findFirst({ where: { id: notificationId, recipientUserId: userId } });
@@ -93,7 +104,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async publishWithClient(client: NotificationDb, input: PublishInput): Promise<void> {
-    const recipients = await this.resolveRecipients(input.recipientPermission, client);
+    const recipients = input.recipientUserId ? [input.recipientUserId] : await this.resolveRecipients(input.recipientPermission, client);
     if (recipients.length === 0) return;
     const data = recipients.map((recipientUserId) => ({
       dedupeKey: input.dedupeKey,
@@ -139,6 +150,27 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  public async publishNewWorkType(workType: { readonly id: string; readonly name: string }): Promise<void> {
+    await this.publish({
+      dedupeKey: `new-work-type:${workType.id}`,
+      deepLink: `/work-settings?workTypeId=${encodeURIComponent(workType.id)}`,
+      message: workType.name,
+      recipientPermission: "manager",
+      resourceId: workType.id,
+      resourceType: "work_type",
+      severity: "INFO",
+      title: B18_NOTIFICATION_LABELS_RO.NEW_WORK_TYPE,
+      type: "NEW_WORK_TYPE",
+    });
+  }
+
+  public async publishNewImplantPlatform(platform: string): Promise<void> {
+    const normalized = platform.trim();
+    if (!normalized) return;
+    const key = encodeURIComponent(normalized).slice(0, 180);
+    await this.publish({ dedupeKey: `new-implant-platform:${key}`, deepLink: "/work-settings", message: normalized, recipientPermission: "manager", resourceId: null, resourceType: "implant_platform", severity: "INFO", title: B18_NOTIFICATION_LABELS_RO.NEW_IMPLANT_PLATFORM, type: "NEW_IMPLANT_PLATFORM" });
+  }
+
   public async resolveUnpricedWorkType(workTypeId: string): Promise<void> {
     await this.resolve(B16_NOTIFICATION_EVENTS.newUnpricedWorkTypeRequiresManagerPricing, `work_type:${workTypeId}:pricing_required`);
   }
@@ -168,6 +200,14 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
 
   public async publishProbeAvailable(input: { readonly workOrderId: string; readonly probeCycleId: string; readonly code: string; readonly patientName: string; readonly sequence: number; readonly probeTypeName: string; readonly deadlineAt: string }): Promise<void> {
       await this.publish({ dedupeKey: `technician-probe:${input.workOrderId}:${input.probeCycleId}`, deepLink: `/works?workId=${encodeURIComponent(input.workOrderId)}`, message: `${input.code} · ${input.patientName} · Proba ${input.sequence} · ${input.probeTypeName} · termen ${input.deadlineAt}`, recipientPermission: "technician", resourceId: input.workOrderId, resourceType: "probe_cycle", severity: "ACTION", title: B18_NOTIFICATION_LABELS_RO.NEW_PROBE_AVAILABLE, type: "NEW_PROBE_AVAILABLE" });
+  }
+
+  public async publishNewProbe(input: { readonly workOrderId: string; readonly probeCycleId: string; readonly code: string; readonly patientName: string; readonly sequence: number; readonly probeTypeName: string }): Promise<void> {
+    await this.publish({ dedupeKey: `logistics-new-probe:${input.workOrderId}:${input.probeCycleId}`, deepLink: `/logistics?workId=${encodeURIComponent(input.workOrderId)}`, message: `${input.code} · ${input.patientName} · Proba ${input.sequence} · ${input.probeTypeName}`, recipientPermission: "logistics", resourceId: input.workOrderId, resourceType: "probe_cycle", severity: "ACTION", title: B18_NOTIFICATION_LABELS_RO.NEW_PROBE, type: "NEW_PROBE" });
+  }
+
+  public async publishRouteReceived(input: { readonly routeId: string; readonly routeNumber: string; readonly routeDate: string; readonly stopCount: number; readonly courierUserId: string }): Promise<void> {
+    await this.publish({ dedupeKey: `route-received:${input.routeId}:${input.routeDate}`, deepLink: `/routes?routeId=${encodeURIComponent(input.routeId)}`, message: `${input.routeNumber} · ${input.routeDate} · ${input.stopCount} opriri`, recipientPermission: "logistics", recipientUserId: input.courierUserId, resourceId: input.routeId, resourceType: "courier_route", severity: "ACTION", title: B18_NOTIFICATION_LABELS_RO.ROUTE_RECEIVED, type: "ROUTE_RECEIVED" });
   }
 
   public async resolveAvailability(workOrderId: string): Promise<void> {

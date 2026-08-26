@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import type {
   BlockWorkInput,
   CancelPickupRequestInput,
+  CourierOption,
   CourierRouteListQuery,
   CourierRouteView,
   CreateCourierRouteInput,
@@ -186,6 +187,18 @@ export async function fetchCourierRoutes(params: CourierRouteListQuery): Promise
   return parseApiResponse<PaginatedCourierRoutesResponse>(response);
 }
 
+export async function fetchRouteCourierOptions(): Promise<readonly CourierOption[]> {
+  // Prefer the legacy endpoint so older API deployments keep working. If the
+  // current role is allowed to manage routes but not deliveries, use the
+  // route-scoped endpoint below.
+  const response = await apiFetch("/couriers/options");
+  if (response.ok) {
+    return parseApiResponse<readonly CourierOption[]>(response);
+  }
+  const fallback = await apiFetch("/routes/couriers/options");
+  return parseApiResponse<readonly CourierOption[]>(fallback);
+}
+
 export async function createCourierRoute(input: CreateCourierRouteInput): Promise<CourierRouteView> {
   return sendJson<CourierRouteView>("/routes", "POST", input);
 }
@@ -224,7 +237,7 @@ export async function createLogisticsWork(input: CreateWorkInput, attachments: r
 }
 
 export function useLogisticsCenter(params: LogisticsCenterQuery, enabled: boolean) {
-  return useQuery({ enabled, placeholderData: keepPreviousData, queryFn: () => fetchLogisticsCenter(params), queryKey: logisticsQueryKeys.center(params), refetchInterval: 10_000, refetchIntervalInBackground: false, retry: false });
+  return useQuery({ enabled, queryFn: () => fetchLogisticsCenter(params), queryKey: logisticsQueryKeys.center(params), refetchInterval: 10_000, refetchIntervalInBackground: false, retry: false });
 }
 
 export function useLogisticsSummary(params: LogisticsCenterQuery, enabled: boolean) {
@@ -245,6 +258,10 @@ export function usePickupRequests(enabled: boolean, params: PickupRequestsQuery 
 
 export function useCourierRoutes(params: CourierRouteListQuery, enabled: boolean) {
   return useQuery({ enabled, placeholderData: keepPreviousData, queryFn: () => fetchCourierRoutes(params), queryKey: logisticsQueryKeys.routes(params), retry: false });
+}
+
+export function useRouteCourierOptions(enabled: boolean) {
+  return useQuery({ enabled, queryFn: fetchRouteCourierOptions, queryKey: ["logistics", "route-couriers"], retry: false });
 }
 
 export function useLogisticsTransition() {

@@ -1,3 +1,4 @@
+import { DeliveryStatus } from "@prisma/client";
 import type { Prisma, WorkStageExecutionStatus, WorkStatus, WorkWorkflowExecutionStatus } from "@prisma/client";
 import type { LogisticsActionReason } from "@dental-lab/shared";
 
@@ -184,6 +185,7 @@ export const logisticsWorkInclude = {
             },
             where: {
               isActive: true,
+              status: { in: [DeliveryStatus.PLANNED, DeliveryStatus.ASSIGNED, DeliveryStatus.PICKED_UP, DeliveryStatus.IN_TRANSIT] },
             },
           },
         },
@@ -192,6 +194,14 @@ export const logisticsWorkInclude = {
     where: {
       isActive: true,
     },
+  },
+  courierRouteStops: {
+    orderBy: { outcomeAt: "desc" },
+    where: {
+      outcomeStatus: "DELIVERED",
+      type: "DELIVERY",
+    },
+    take: 1,
   },
   doctor: {
     select: {
@@ -277,6 +287,7 @@ export const deliveryPreparationGroupInclude = {
     },
     where: {
       isActive: true,
+      status: { in: [DeliveryStatus.PLANNED, DeliveryStatus.ASSIGNED, DeliveryStatus.PICKED_UP, DeliveryStatus.IN_TRANSIT] },
     },
   },
   items: {
@@ -310,8 +321,16 @@ export function toLogisticsCenterItem(work: LogisticsWorkRecord, actionContext: 
   const activeDelivery = activeGroup?.deliveries[0] ?? null;
   const logisticsActionReasons: LogisticsActionReason[] = [];
   if (work.status === "REGISTERED" && work.technicalReadiness === null && !activeDelivery) logisticsActionReasons.push("NEW_WORK");
-  if (work.technicalReadiness === "PROBE_READY" && !activeDelivery) logisticsActionReasons.push("READY_FOR_PROBE_DELIVERY");
-  if (work.technicalReadiness === "FINAL_READY" && !activeDelivery) logisticsActionReasons.push("READY_FOR_FINAL_DELIVERY");
+  const latestDeliveredStop = work.courierRouteStops[0] ?? null;
+  const readinessAt = work.technicalReadiness === "FINAL_READY" ? work.finalizedAt : work.probeReadyAt;
+  // The logistics state belongs to the whole work order, while readiness is
+  // updated for every probe/finalization cycle. A stale DELIVERED state from a
+  // previous route must not hide a newly ready probe. Only a delivered stop
+  // after the current readiness event closes the current delivery action.
+  const isAlreadyDelivered = Boolean(latestDeliveredStop?.outcomeAt && readinessAt && latestDeliveredStop.outcomeAt >= readinessAt)
+    || (!readinessAt && work.activeCycle?.logisticsState?.status === "DELIVERED");
+  if (work.technicalReadiness === "PROBE_READY" && !activeDelivery && !isAlreadyDelivered) logisticsActionReasons.push("READY_FOR_PROBE_DELIVERY");
+  if (work.technicalReadiness === "FINAL_READY" && !activeDelivery && !isAlreadyDelivered) logisticsActionReasons.push("READY_FOR_FINAL_DELIVERY");
   if (work.requiresDelivery) logisticsActionReasons.push("FAILED_DELIVERY");
   if (work.requiresPickup) logisticsActionReasons.push("PICKUP_REQUIRED");
 

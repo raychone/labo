@@ -34,6 +34,7 @@ export const workFormSchema = z.object({
   implantPlatform: nullableTrimmedString(80),
   implantPlatformCustom: nullableTrimmedString(80),
   patientId: z.string().min(1, "Alege pacientul."),
+  patientName: z.string().trim(),
   patientReference: nullableTrimmedString(80),
   priority: z.enum(WORK_PRIORITIES),
   urgency: z.enum(URGENCY_LEVELS).catch("NORMAL"),

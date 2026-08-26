@@ -8,7 +8,7 @@ import {
   type AnatomicalScopeType,
   type WorkTypeFormOption,
 } from "@dental-lab/shared";
-import { Button, Checkbox, FormGrid, FormGridFull, RadioGroup, TextInput, Textarea } from "@dental-lab/ui";
+import { Button, Checkbox, FormGrid, FormGridFull, TextInput, Textarea } from "@dental-lab/ui";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { SearchablePickerField } from "./work-form.js";
@@ -88,6 +88,10 @@ function inferAnatomicalScope(teeth: readonly AdultFdiTooth[]): AnatomicalScopeT
   return teeth.length > 1 ? "TEETH" : "TOOTH";
 }
 
+function isWholeMouthWorkType(option: WorkTypeFormOption | null | undefined): boolean {
+  return option?.name.toLocaleLowerCase("ro-RO").includes("gutieră albire (x2)") ?? false;
+}
+
 export function MultiItemWorkEditor({
   canSaveCustomWorkType = false,
   canEditTechnicalCode = false,
@@ -155,10 +159,10 @@ export function MultiItemWorkEditor({
     const colorByWorkType = new Map<string, string>();
     const legend: { readonly color: string; readonly label: string; readonly symbol: string }[] = [];
     const toothColors = new Map<number, string[]>();
-    const addWorkType = (key: string, label: string, symbol: string, teeth: readonly AdultFdiTooth[]) => {
+    const addWorkType = (key: string, label: string, symbol: string, teeth: readonly AdultFdiTooth[], configuredColor?: string | null) => {
       let color = colorByWorkType.get(key);
       if (!color) {
-        color = colors[colorByWorkType.size % colors.length]!;
+        color = configuredColor?.trim() || colors[colorByWorkType.size % colors.length]!;
         colorByWorkType.set(key, color);
         legend.push({ color, label, symbol });
       }
@@ -170,11 +174,11 @@ export function MultiItemWorkEditor({
     };
     for (const item of items) {
       const option = workTypeOptions.find((candidate) => candidate.id === item.workTypeId);
-      addWorkType(item.workTypeId || `custom-${item.id}`, displayWorkTypeName(option?.name ?? (snapshotValue(item.customWorkTypeSnapshot) || "Alt tip de lucrare")), option?.symbol ?? "ALT", option?.unit === "UNIT" ? item.teeth.slice(0, 1) : item.teeth);
+      addWorkType(item.workTypeId || `custom-${item.id}`, displayWorkTypeName(option?.name ?? (snapshotValue(item.customWorkTypeSnapshot) || "Alt tip de lucrare")), option?.symbol ?? "ALT", item.teeth, option?.colorHex);
     }
     const activeOption = workTypeOptions.find((option) => option.id === workTypeId);
     if (selectedTeeth.length > 0 && (activeOption || customWorkTypeName.trim() !== "")) {
-      addWorkType(workTypeId || "__CUSTOM_DRAFT__", displayWorkTypeName(activeOption?.name ?? (customWorkTypeName.trim() || "Alt tip de lucrare")), activeOption?.symbol ?? "ALT", activeOption?.unit === "UNIT" ? selectedTeeth.slice(0, 1) : selectedTeeth);
+      addWorkType(workTypeId || "__CUSTOM_DRAFT__", displayWorkTypeName(activeOption?.name ?? (customWorkTypeName.trim() || "Alt tip de lucrare")), activeOption?.symbol ?? "ALT", selectedTeeth, activeOption?.colorHex);
     }
     const resolvedToothColors: Record<number, string> = {};
     for (const [tooth, current] of toothColors.entries()) resolvedToothColors[tooth] = current.length === 1 ? current[0]! : `linear-gradient(90deg, ${current.join(", ")})`;
@@ -237,10 +241,14 @@ export function MultiItemWorkEditor({
       return;
     }
     const isUnit = selectedWorkType?.unit === "UNIT";
-    const effectiveScope = isUnit ? "TOOTH" : scope;
-    const effectiveTeeth = isUnit ? selectedTeeth.slice(0, 1) : selectedTeeth;
-    if (selectedWorkType?.unit === "UNIT" && items.some((item) => item.id !== editingId && item.workTypeId === workTypeId)) {
-      setError("O lucrare de tip bucată poate fi adăugată o singură dată.");
+    const wholeMouth = isWholeMouthWorkType(selectedWorkType);
+    const effectiveScope = wholeMouth ? "BOTH_ARCHES" : isUnit && scope === "TOOTH" ? "TOOTH" : scope;
+    const effectiveTeeth = wholeMouth
+      ? [...ADULT_FDI_TEETH]
+      : selectedTeeth;
+    const duplicatePiece = isUnit && items.some((item) => item.id !== editingId && item.workTypeId === workTypeId && item.scope === effectiveScope);
+    if (duplicatePiece) {
+      setError(wholeMouth ? "Gutiera de albire (x2) poate fi adăugată o singură dată." : "Această lucrare pe arcadă există deja pentru selecția curentă.");
       return;
     }
     const item: DraftWorkOrderItem = {
@@ -387,7 +395,24 @@ export function MultiItemWorkEditor({
           <SearchablePickerField disabled={disabled} emptyMessage="Nu există culori potrivite." error={undefined} id="draft-shade" label="Culoare" onSearchChange={(value) => { setShadeSearch(value); if (value === "") setShade(null); }} onSelect={(value) => setShade(value || null)} options={shadeOptions} placeholder="Alege culoarea" required={false} searchValue={shadeSearch} selectedValue={shade ?? ""} />
           {isImplantWorkType ? <SearchablePickerField disabled={disabled} emptyMessage="Nu există platforme potrivite." error={undefined} id="draft-implant-platform" label="Platformă implant" onSearchChange={(value) => { setPlatformSearch(value); if (value === "") setImplantPlatform(null); }} onSelect={(value) => setImplantPlatform(value || null)} options={platformOptions} placeholder="Alege platforma" required={false} searchValue={platformSearch} selectedValue={implantPlatform ?? ""} /> : null}
           {isImplantWorkType && implantPlatform === "Alt tip" ? <TextInput label="Alt tip platformă" value={implantPlatformCustom ?? ""} onChange={(event) => setImplantPlatformCustom(event.target.value || null)} /> : null}
-          {isImplantWorkType ? <RadioGroup className="multi-item-work-editor__restoration" label="Tip restaurare" name="draft-restoration-type" options={RESTORATION_TYPE_OPTIONS} value={restorationType ?? ""} onValueChange={(value) => setRestorationType((current) => current === value ? null : value)} /> : null}
+          {isImplantWorkType ? <fieldset className="multi-item-work-editor__restoration" aria-label="Tip restaurare">
+            <legend className="multi-item-work-editor__field-label">Tip restaurare</legend>
+            <div className="multi-item-work-editor__restoration-options">
+              {RESTORATION_TYPE_OPTIONS.map((option) => {
+                const selected = restorationType === option.value;
+                return <button
+                  aria-pressed={selected}
+                  className={`multi-item-work-editor__restoration-option${selected ? " is-selected" : ""}`}
+                  key={option.value}
+                  onClick={() => setRestorationType((current) => current === option.value ? null : option.value)}
+                  type="button"
+                >
+                  <span aria-hidden="true" className="multi-item-work-editor__restoration-dot" />
+                  {option.label}
+                </button>;
+              })}
+            </div>
+          </fieldset> : null}
           {canEditTechnicalCode ? <TextInput label="Cod tehnic" value={technicalCodeNotes ?? ""} onChange={(event) => setTechnicalCodeNotes(event.target.value || null)} /> : null}
           <FormGridFull><Textarea label="Note componentă" rows={2} value={notes ?? ""} onChange={(event) => setNotes(event.target.value || null)} /></FormGridFull>
         </FormGrid>

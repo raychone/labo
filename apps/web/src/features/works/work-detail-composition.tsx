@@ -10,7 +10,7 @@ import {
   type WorkOrderItemView,
   type WorkTypeFormOption,
 } from "@dental-lab/shared";
-import { Button, ErrorState, StatusBadge } from "@dental-lab/ui";
+import { Button, ErrorState, Modal, StatusBadge } from "@dental-lab/ui";
 import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -113,9 +113,10 @@ export function WorkDetailComposition({
       if (item.scope === "CASE" || !item.workType) continue;
       const workType = item.workType;
       const key = workType.id;
+      const configuredOption = effectiveWorkTypeOptions.find((option) => option.id === key);
       let color = colorByWorkType.get(key);
       if (!color) {
-        color = WORK_TYPE_COLORS[colorByWorkType.size % WORK_TYPE_COLORS.length]!;
+        color = workType.colorHex?.trim() || configuredOption?.colorHex?.trim() || WORK_TYPE_COLORS[colorByWorkType.size % WORK_TYPE_COLORS.length]!;
         colorByWorkType.set(key, color);
         legend.push({ color, label: displayWorkTypeName(workType.name), symbol: workType.symbol });
       }
@@ -174,14 +175,20 @@ export function WorkDetailComposition({
       <section className="works-page__detail-section" aria-labelledby="work-composition-title">
         <div className="works-page__detail-section-header works-page__composition-header">
           <div><h2 id="work-composition-title">Compoziția dentară</h2><p className="works-page__muted">O singură lucrare · {work.code} · {items.length} componente active</p></div>
-          {canEdit && items.length > 0 && !editing ? <Button onClick={beginEditing} type="button" variant="outline">Editează componentele</Button> : null}
+          {canEdit && !editing ? <Button onClick={beginEditing} type="button" variant="outline">Editează lucrarea</Button> : null}
         </div>
         {editing ? (
-          <>
+          <Modal
+            description="Editează dinții, tipurile de lucrări, culorile, adaosurile și opțiunile implantului."
+            isOpen
+            onOpenChange={(open) => { if (!open && !savePending) setEditing(false); }}
+            size="full"
+            title="Editează lucrarea"
+          >
             <MultiItemWorkEditor canEditTechnicalCode={canEditTechnicalCode} canSaveCustomWorkType onSaveCustomWorkType={saveOperationalWorkTypeName} disabled={savePending} items={draftItems} connections={draftConnections} workTypeOptions={effectiveWorkTypeOptions} onChange={(items, connections) => { setDraftItems(items); setDraftConnections(connections); }} />
             {saveError ? <ErrorState title="Componentele nu au fost salvate" description={getErrorMessage(saveError)} /> : null}
-            <div className="works-page__actions"><Button disabled={savePending} isLoading={savePending} onClick={() => void saveComposition()} type="button">Salvează componentele</Button><Button disabled={savePending} onClick={() => setEditing(false)} type="button" variant="outline">Anulează</Button></div>
-          </>
+            <div className="works-page__actions"><Button disabled={savePending} isLoading={savePending} onClick={() => void saveComposition()} type="button">Salvează editarea</Button><Button disabled={savePending} onClick={() => setEditing(false)} type="button" variant="outline">Anulează</Button></div>
+          </Modal>
         ) : (
           <>
             <ToothDiagram availableTeeth={ADULT_FDI_TEETH} configuredTeeth={compositionTeeth} connectionTeeth={compositionTeeth} connections={work.toothConnections ?? []} mode="readOnly" showShortcuts={false} toothColors={workTypeVisualization.toothColors} />
@@ -207,7 +214,10 @@ function DetailValue({ label, value }: { readonly label: string; readonly value:
 }
 
 function CompatibilitySection({ work, isOpen }: { readonly work: WorkDetail; readonly isOpen: boolean }): ReactNode {
-  const query = useQuery({ enabled: isOpen, queryFn: () => fetchWorkCompatibility(work.id), queryKey: ["works", "compatibility", work.id], retry: false });
   const items = work.items ?? [];
+  // Canonical compositions already contain the authoritative data. The legacy
+  // compatibility endpoint is only relevant for old works without components;
+  // skipping it prevents a noisy 404 for normal work details.
+  const query = useQuery({ enabled: isOpen && items.length === 0, queryFn: () => fetchWorkCompatibility(work.id), queryKey: ["works", "compatibility", work.id], retry: false });
   return <div className="works-page__compatibility-note"><strong>{query.data?.compatibilityLabelRo ?? "Identitate păstrată"}</strong><span>{work.code} · același WorkOrder și aceeași identitate QR după editare.</span>{items.length === 0 ? <span>Datele istorice nu sunt transformate automat în componente canonice.</span> : null}{query.isError ? <span>Compatibilitatea istorică nu a putut fi încărcată.</span> : null}</div>;
 }

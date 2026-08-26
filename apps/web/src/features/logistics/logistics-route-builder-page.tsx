@@ -5,10 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
-import { useCourierOptions } from "../deliveries/deliveries-api.js";
 import { hasPermission } from "../users/users-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
-import { useCourierRoutes, useCreateCourierRoute, useDeleteCourierRoute, useLogisticsCenter, usePickupRequests, useUpdateCourierRoute } from "./logistics-api.js";
+import { useCourierRoutes, useCreateCourierRoute, useDeleteCourierRoute, useLogisticsCenter, usePickupRequests, useRouteCourierOptions, useUpdateCourierRoute } from "./logistics-api.js";
 import "./logistics-page.css";
 
 type SelectedStop =
@@ -54,6 +53,9 @@ export function LogisticsRouteBuilderPage(): ReactNode {
   const canAssign = hasPermission(permissionsQuery.data, "routes.assign");
   const canCancel = hasPermission(permissionsQuery.data, "routes.cancel");
   const deliveryCandidatesQuery = useLogisticsCenter({
+    // Load the complete operational set and apply the same readiness rule as
+    // the centre. This also keeps probe-ready works visible when the API's
+    // category projection is stale or does not yet include the new reason.
     category: "ALL",
     page: 1,
     pageSize: 100,
@@ -61,7 +63,7 @@ export function LogisticsRouteBuilderPage(): ReactNode {
     sortDirection: "asc",
   }, canReadCenter);
   const pickupsQuery = usePickupRequests(canReadPickups);
-  const couriersQuery = useCourierOptions(canAssign);
+  const couriersQuery = useRouteCourierOptions(canAssign);
   const routesQuery = useCourierRoutes({ exactDate: listDate, page: 1, pageSize: 20 }, canReadRoutes);
   const allRoutesQuery = useCourierRoutes({ page: 1, pageSize: 100 }, canReadRoutes);
   const createRoute = useCreateCourierRoute();
@@ -69,9 +71,17 @@ export function LogisticsRouteBuilderPage(): ReactNode {
   const deleteRoute = useDeleteCourierRoute();
   const selectedKeys = useMemo(() => new Set(selectedStops.map((stop) => stop.id)), [selectedStops]);
   const deliveryCandidates = deliveryCandidatesQuery.data?.items ?? [];
+  const deliveryRouteCandidates = deliveryCandidates.filter((work) =>
+    work.requiresLogisticsAction
+      && (work.requiresDelivery
+        || work.logisticsActionReasons.includes("READY_FOR_PROBE_DELIVERY")
+        || work.logisticsActionReasons.includes("READY_FOR_FINAL_DELIVERY")),
+  );
   const pickupCandidates = (pickupsQuery.data ?? []).filter((pickup) => pickup.status === "SCHEDULED");
   const assignedStopKeys = useMemo(() => new Set((allRoutesQuery.data?.items ?? [])
-    .filter((route) => route.id !== editingRouteId && !(route.status === "DRAFT" && route.courier === null && route.name === "Lista pentru viitoarele trasee"))
+    // Draft/list entries remain available to be arranged into a real route.
+    // Only stops already assigned to an active courier route are unavailable.
+    .filter((route) => route.id !== editingRouteId && (route.status === "ASSIGNED" || route.status === "IN_PROGRESS"))
     .flatMap((route) => route.stops
     .filter((stop) => stop.outcomeStatus === "PENDING" || stop.outcomeStatus === "DELIVERED" || stop.outcomeStatus === "PICKED_UP")
     .map((stop) => `${stop.type}:${stop.workOrderId ?? stop.pickupRequestId ?? stop.id}`))), [allRoutesQuery.data?.items, editingRouteId]);
@@ -274,7 +284,7 @@ export function LogisticsRouteBuilderPage(): ReactNode {
 
             <div className="logistics-page__route-grid">
                 <CandidatePanel title="De livrat" loading={deliveryCandidatesQuery.isLoading}>
-                {deliveryCandidates.filter((work) => work.requiresLogisticsAction && (work.requiresDelivery || work.logisticsActionReasons.includes("READY_FOR_PROBE_DELIVERY") || work.logisticsActionReasons.includes("READY_FOR_FINAL_DELIVERY")) && !assignedStopKeys.has(`DELIVERY:${work.id}`)).map((work) => (
+                {deliveryRouteCandidates.filter((work) => !assignedStopKeys.has(`DELIVERY:${work.id}`)).map((work) => (
                   <CandidateButton disabled={selectedKeys.has(`DELIVERY:${work.id}`)} key={work.id} label={`${work.workCode} · ${work.patientName}`} onClick={() => addDelivery(work)} />
                 ))}
               </CandidatePanel>

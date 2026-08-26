@@ -20,8 +20,13 @@ export class AuthGuard implements CanActivate {
     }
 
     Object.defineProperty(request, "auth", {
-      configurable: false,
+      // AuthGuard is used both at controller and handler level on some
+      // endpoints (for example notifications). The same request can
+      // therefore pass through the guard twice. Keep the property
+      // re-definable so the second pass does not throw.
+      configurable: true,
       enumerable: false,
+      writable: true,
       value: {
         session: {
           expiresAt: resolvedSession.session.expiresAt,

@@ -31,16 +31,26 @@ export class ProbeCyclesService {
   }): Promise<ProbeCycleView> {
     await this.authorizationService.requirePermission({ permission: "cycles.probe_type.select", requiredScope: "ASSIGNED", userId: input.actorUserId });
     const work = await this.findVisibleWork(input.actorUserId, input.workOrderId, input.legalEntity);
-    const nextType = await this.probeTypesService.requireSelectable(input.dto.probeTypeId, this.prisma);
-    const cycle = await this.prisma.probeCycle.findFirst({ include: { probeType: true }, where: { id: input.cycleId, workOrderId: input.workOrderId } });
+    const requestedTypeIds = [...new Set([...(input.dto.probeTypeIds ?? []), input.dto.probeTypeId])];
+    const nextTypes = await Promise.all(requestedTypeIds.map((id) => this.probeTypesService.requireSelectable(id, this.prisma)));
+    const nextType = nextTypes[0]!;
+    const cycle = await this.prisma.probeCycle.findFirst({ include: PROBE_CYCLE_INCLUDE, where: { id: input.cycleId, workOrderId: input.workOrderId } });
     if (!cycle) throw new NotFoundException("Proba nu a fost găsită în această lucrare.");
     if (cycle.status !== "ACTIVE") throw new ConflictException("Tipul unei probe finalizate nu mai poate fi modificat.");
-    if (cycle.probeTypeId === nextType.id) return toProbeCycleView(cycle);
-    const updated = await this.prisma.probeCycle.update({ data: { probeTypeId: nextType.id, probeTypeNameSnapshot: nextType.name, version: { increment: 1 } }, include: { probeType: true }, where: { id: cycle.id } });
+    const updated = await this.prisma.probeCycle.update({
+      data: {
+        probeTypeId: nextType.id,
+        probeTypeNameSnapshot: nextTypes.map((type) => type.name).join(" + "),
+        version: { increment: 1 },
+        probeTypes: { deleteMany: {}, create: nextTypes.map((type, sortOrder) => ({ probeTypeId: type.id, probeTypeNameSnapshot: type.name, sortOrder })) },
+      },
+      include: PROBE_CYCLE_INCLUDE,
+      where: { id: cycle.id },
+    });
     await this.auditService.record({
       action: POSTMEETING_AUDIT_ACTIONS.probeTypeCorrected,
       actorUserId: input.actorUserId,
-      metadata: { nextProbeTypeName: nextType.name, previousProbeTypeName: cycle.probeTypeNameSnapshot, probeNumber: cycle.sequence, workOrderLabel: work.code },
+      metadata: { nextProbeTypeName: nextTypes.map((type) => type.name).join(" + "), previousProbeTypeName: cycle.probeTypeNameSnapshot, probeNumber: cycle.sequence, workOrderLabel: work.code },
       ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}),
       resourceId: cycle.id,
       resourceType: "probe_cycle",
@@ -77,6 +87,7 @@ export class ProbeCyclesService {
     readonly actorUserId: string;
     readonly workOrderId: string;
     readonly probeTypeId: string;
+    readonly probeTypeIds?: readonly string[];
     readonly deadlineAt: string;
     readonly returnedAfterCompletedCycle: true;
     readonly legalEntity?: LegalEntityContext;
@@ -87,9 +98,15 @@ export class ProbeCyclesService {
     const work = await this.findVisibleWork(input.actorUserId, input.workOrderId, input.legalEntity);
     const deadlineAt = new Date(input.deadlineAt);
     if (!Number.isFinite(deadlineAt.getTime())) throw new BadRequestException("Termenul probei nu este valid.");
-    const nextType = await this.probeTypesService.requireSelectable(input.probeTypeId, this.prisma);
-    const configuredProbeCodes = intersectConfiguredProbeCodes((work.items ?? []).map((item) => jsonStringArray(item.workType?.probeTypeCodes)));
-    if (configuredProbeCodes.length > 0 && (!nextType.code || !configuredProbeCodes.includes(nextType.code))) {
+    const requestedTypeIds = [...new Set([...(input.probeTypeIds ?? []), ...(input.probeTypeId ? [input.probeTypeId] : [])])];
+    if (requestedTypeIds.length === 0) throw new BadRequestException("Selectează cel puțin un tip de probă.");
+    const nextTypes = await Promise.all(requestedTypeIds.map((id) => this.probeTypesService.requireSelectable(id, this.prisma)));
+    const nextType = nextTypes[0]!;
+    // A work may contain several components with different compatible probe
+    // stages. A return is valid when the selected stage belongs to at least
+    // one component; requiring the intersection rejects valid multi-item work.
+    const configuredProbeCodes = unionConfiguredProbeCodes((work.items ?? []).map((item) => jsonStringArray(item.workType?.probeTypeCodes)));
+    if (configuredProbeCodes.length > 0 && nextTypes.some((type) => !type.code || !configuredProbeCodes.includes(type.code))) {
       throw new BadRequestException("Tipul probei nu este compatibil cu tipurile de lucrări ale acestei reveniri.");
     }
     const created = await this.prisma.$transaction(async (tx) => {
@@ -97,16 +114,24 @@ export class ProbeCyclesService {
       if (!current) throw new NotFoundException("Lucrarea nu a fost găsită.");
       if (current.status === "FINALIZATA" || current.technicalReadiness === "FINAL_READY") throw new ConflictException("O lucrare finalizată nu poate fi recepționată pentru o probă nouă.");
       if (current.activeProbeCycleId) throw new ConflictException("Lucrarea are deja o probă activă.");
-      const last = await tx.probeCycle.findFirst({ orderBy: { sequence: "desc" }, select: { completionOutcome: true, sequence: true, status: true }, where: { workOrderId: work.id } });
+      const cycles = await tx.probeCycle.findMany({ orderBy: { sequence: "desc" }, select: { completionOutcome: true, id: true, sequence: true, status: true }, where: { workOrderId: work.id } });
+      const last = cycles[0];
       if (!last || last.status !== "COMPLETED" || last.completionOutcome !== "PROBE_READY") throw new ConflictException("Următoarea probă poate fi creată doar după marcarea probei ca Probă gata.");
-      const cycle = await tx.probeCycle.create({ data: { createdByUserId: input.actorUserId, deadlineAt, openedAt: new Date(), probeTypeId: nextType.id, probeTypeNameSnapshot: nextType.name, sequence: last.sequence + 1, status: "ACTIVE", workOrderId: work.id }, include: { probeType: true } });
-      const updated = await tx.workOrder.updateMany({ data: { activeProbeCycleId: cycle.id, deadlineMode: "MANUAL", effectiveDueAt: deadlineAt, manualDueAt: deadlineAt, deadlineSource: "CREATION", deadlineRevision: { increment: 1 }, probeReceivedAt: new Date(), status: "RECEPTIE", statusChangedAt: new Date(), statusChangedByUserId: input.actorUserId, technicalReadiness: null, version: { increment: 1 }, updatedByUserId: input.actorUserId }, where: { id: work.id, activeProbeCycleId: null, technicalReadiness: "PROBE_READY" } });
+      // Legacy initial cycles used sequence 1. Normalize that marker to 0 on the first return.
+      let nextSequence = last.sequence + 1;
+      if (last.sequence === 1 && !cycles.some((cycle) => cycle.sequence === 0)) {
+        await tx.probeCycle.update({ data: { sequence: 0 }, where: { id: last.id } });
+        nextSequence = 1;
+      }
+      const cycle = await tx.probeCycle.create({ data: { createdByUserId: input.actorUserId, deadlineAt, openedAt: new Date(), probeTypeId: nextType.id, probeTypeNameSnapshot: nextTypes.map((type) => type.name).join(" + "), sequence: nextSequence, status: "ACTIVE", workOrderId: work.id, probeTypes: { create: nextTypes.map((type, sortOrder) => ({ probeTypeId: type.id, probeTypeNameSnapshot: type.name, sortOrder })) } }, include: PROBE_CYCLE_INCLUDE });
+      const updated = await tx.workOrder.updateMany({ data: { activeProbeCycleId: cycle.id, claimStatus: "UNCLAIMED", claimedAt: null, claimedByUserId: null, assignedTechnicianId: null, deadlineMode: "MANUAL", effectiveDueAt: deadlineAt, manualDueAt: deadlineAt, deadlineSource: "CREATION", deadlineRevision: { increment: 1 }, probeReceivedAt: new Date(), status: "RECEPTIE", statusChangedAt: new Date(), statusChangedByUserId: input.actorUserId, technicalReadiness: null, waitingStartedAt: null, version: { increment: 1 }, updatedByUserId: input.actorUserId }, where: { id: work.id, activeProbeCycleId: null, status: { not: "FINALIZATA" } } });
       if (updated.count !== 1) throw new ConflictException("Lucrarea a fost modificată simultan. Reîncarcă lucrarea.");
       return cycle;
     });
     await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.caseReceived, actorUserId: input.actorUserId, metadata: { nextProbeTypeName: created.probeTypeNameSnapshot, probeNumber: created.sequence, workOrderLabel: work.code, deadlineAt: deadlineAt.toISOString() }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: work.id, resourceType: "work_order" });
     await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.activeProbeCycleStarted, actorUserId: input.actorUserId, metadata: { probeTypeName: created.probeTypeNameSnapshot, probeNumber: created.sequence, workOrderLabel: work.code }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: created.id, resourceType: "probe_cycle" });
     await this.notificationsService?.publishProbeAvailable({ workOrderId: work.id, probeCycleId: created.id, code: work.code, patientName: work.patientName, sequence: created.sequence, probeTypeName: created.probeTypeNameSnapshot, deadlineAt: created.deadlineAt.toISOString() });
+    await this.notificationsService?.publishNewProbe({ workOrderId: work.id, probeCycleId: created.id, code: work.code, patientName: work.patientName, sequence: created.sequence, probeTypeName: created.probeTypeNameSnapshot });
     return toProbeCycleView(created);
   }
 
@@ -123,11 +148,14 @@ export class ProbeCyclesService {
       let activeCycleId = work.activeProbeCycleId;
       if (!activeCycleId) {
         const probeCodes = jsonStringArray(work.workType.probeTypeCodes);
-        if (probeCodes.length === 0) throw new ConflictException("Lucrarea nu are un tip de probă configurat.");
-        const probeType = await tx.probeType.findFirst({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true }, where: { code: { in: [...probeCodes] }, isArchived: false } });
+        const probeType = await tx.probeType.findFirst({
+          orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+          select: { id: true, name: true },
+          where: probeCodes.length > 0 ? { code: { in: [...probeCodes] }, isArchived: false } : { isArchived: false },
+        });
         if (!probeType) throw new ConflictException("Tipul probei nu a fost găsit în catalogul tehnic.");
         const previous = await tx.probeCycle.findFirst({ orderBy: { sequence: "desc" }, select: { sequence: true }, where: { workOrderId: input.workOrderId } });
-        const created = await tx.probeCycle.create({ data: { createdByUserId: input.actorUserId, deadlineAt: work.effectiveDueAt ?? work.requestedDeliveryDate ?? now, openedAt: now, probeTypeId: probeType.id, probeTypeNameSnapshot: probeType.name, sequence: (previous?.sequence ?? 0) + 1, status: "ACTIVE", workOrderId: input.workOrderId } });
+        const created = await tx.probeCycle.create({ data: { createdByUserId: input.actorUserId, deadlineAt: work.effectiveDueAt ?? work.requestedDeliveryDate ?? now, openedAt: now, probeTypeId: probeType.id, probeTypeNameSnapshot: probeType.name, sequence: previous ? previous.sequence + 1 : 0, status: "ACTIVE", workOrderId: input.workOrderId, probeTypes: { create: [{ probeTypeId: probeType.id, probeTypeNameSnapshot: probeType.name, sortOrder: 0 }] } } });
         activeCycleId = created.id;
         await tx.workOrder.updateMany({ data: { activeProbeCycleId: created.id }, where: { id: input.workOrderId, activeProbeCycleId: null } });
       }
@@ -223,12 +251,13 @@ function jsonStringArray(value: unknown): readonly string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
 }
 
-function intersectConfiguredProbeCodes(codeSets: readonly (readonly string[])[]): readonly string[] {
-  const configured = codeSets.filter((codes) => codes.length > 0);
-  if (configured.length === 0) return [];
-  return configured.slice(1).reduce((common, codes) => common.filter((code) => codes.includes(code)), [...configured[0]!]);
+function unionConfiguredProbeCodes(codeSets: readonly (readonly string[])[]): readonly string[] {
+  return [...new Set(codeSets.flat())];
 }
 
-function toProbeCycleView(cycle: { id: string; sequence: number; status: "ACTIVE" | "COMPLETED"; probeType: { id: string; name: string; sortOrder: number; isArchived: boolean }; probeTypeNameSnapshot: string; openedAt: Date; completedAt: Date | null; deadlineAt: Date }): ProbeCycleView {
-  return { id: cycle.id, sequence: cycle.sequence, status: cycle.status, probeType: { id: cycle.probeType.id, name: cycle.probeType.name, sortOrder: cycle.probeType.sortOrder, isArchived: cycle.probeType.isArchived }, probeTypeNameSnapshot: cycle.probeTypeNameSnapshot, openedAt: cycle.openedAt.toISOString(), completedAt: cycle.completedAt?.toISOString() ?? null, deadlineAt: cycle.deadlineAt.toISOString() };
+const PROBE_CYCLE_INCLUDE = { probeType: true, probeTypes: { include: { probeType: true }, orderBy: { sortOrder: "asc" as const } } } as const;
+
+function toProbeCycleView(cycle: { id: string; sequence: number; status: "ACTIVE" | "COMPLETED"; probeType: { id: string; name: string; sortOrder: number; isArchived: boolean }; probeTypes?: readonly { probeType: { id: string; name: string; sortOrder: number; isArchived: boolean } }[]; probeTypeNameSnapshot: string; openedAt: Date; completedAt: Date | null; deadlineAt: Date }): ProbeCycleView {
+  const probeTypes = cycle.probeTypes?.length ? cycle.probeTypes.map(({ probeType }) => probeType) : [cycle.probeType];
+  return { id: cycle.id, sequence: cycle.sequence, status: cycle.status, probeType: { id: cycle.probeType.id, name: cycle.probeType.name, sortOrder: cycle.probeType.sortOrder, isArchived: cycle.probeType.isArchived }, probeTypes: probeTypes.map((type) => ({ id: type.id, name: type.name, sortOrder: type.sortOrder, isArchived: type.isArchived })), probeTypeNameSnapshot: cycle.probeTypeNameSnapshot, openedAt: cycle.openedAt.toISOString(), completedAt: cycle.completedAt?.toISOString() ?? null, deadlineAt: cycle.deadlineAt.toISOString() };
 }

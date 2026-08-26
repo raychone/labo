@@ -4,9 +4,9 @@ import { REAL_PRICING_CATALOG } from "./real-pricing-catalog.js";
 
 describe("canonical work-type pricing catalog", () => {
   it("contains the 43 selectable Excel work types with unique symbols and names", () => {
-    expect(REAL_PRICING_CATALOG).toHaveLength(43);
-    expect(new Set(REAL_PRICING_CATALOG.map((entry) => entry.symbol)).size).toBe(43);
-    expect(new Set(REAL_PRICING_CATALOG.map((entry) => entry.workTypeCode)).size).toBe(43);
+    expect(REAL_PRICING_CATALOG).toHaveLength(47);
+    expect(new Set(REAL_PRICING_CATALOG.map((entry) => entry.symbol)).size).toBe(47);
+    expect(new Set(REAL_PRICING_CATALOG.map((entry) => entry.workTypeCode)).size).toBe(47);
     expect(REAL_PRICING_CATALOG.some((entry) => entry.displayName.includes("Coroane adiacente"))).toBe(false);
     expect(REAL_PRICING_CATALOG.some((entry) => entry.displayName.includes("Reproducere țesut gingival"))).toBe(false);
     expect(REAL_PRICING_CATALOG.find((entry) => entry.symbol === "EX-01")).toMatchObject({ displayName: "Coroană/fațetă integral ceramică" });

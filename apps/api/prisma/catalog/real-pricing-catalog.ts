@@ -59,6 +59,10 @@ export const REAL_PRICING_CATALOG: readonly RealPricingCatalogEntry[] = [
   entry("gutiera-albire", "Modele și ghiduri", "Gutieră albire (x2)", "EX-43", 14000, "ELEMENT"),
   entry("model-studiu-printat", "Modele și ghiduri", "Model de studiu/printat (arcadă)", "EX-44", 6000, "ELEMENT"),
   entry("rebazare", "Reparații", "Rebazare", "EX-45", 10000, "UNIT"),
+  entry("all-on-x-12-crco", "Implanturi", "All on X 12 structura CrCo", "EX-46", 0, "UNIT"),
+  entry("all-on-x-14-crco", "Implanturi", "All on X 14 structura CrCo", "EX-47", 0, "UNIT"),
+  entry("all-on-x-12-titan", "Implanturi", "All on X 12 structura titan", "EX-48", 0, "UNIT"),
+  entry("all-on-x-14-titan", "Implanturi", "All on X 14 structura titan", "EX-49", 0, "UNIT"),
 ];
 
 function entry(

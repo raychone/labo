@@ -37,6 +37,7 @@ import {
   type CreateNextWorkCycleInput,
   type PatientOption,
   type PatientDetail,
+  type ProbeCycleView,
   type RealLabSheetOperationalStatus,
   type RealLabSheetView,
   type UpdateWorkInput,
@@ -50,14 +51,14 @@ import {
   URGENCY_LABELS_RO,
   URGENCY_LEVELS,
 } from "@dental-lab/shared";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
 import { createClinic, createDoctor, fetchClinicOptions, fetchDoctorOptions } from "../clinics/clinics-api.js";
-import { fetchPatient, useCreatePatient, usePatientOptions } from "../patients/patients-api.js";
+import { fetchPatient, patientsQueryKeys, useCreatePatient, usePatientOptions } from "../patients/patients-api.js";
 import { patientFormSchema, type PatientFormValues } from "../patients/patients-page.schema.js";
 import { useSettings } from "../settings/settings-api.js";
 import { hasPermission } from "../users/users-api.js";
@@ -66,7 +67,7 @@ import { useActiveWorkFormTemplate } from "../work-forms/work-form-templates-api
 import { WorkForm, WorkFormActions, defaultWorkFormValues, toPersistedWorkFormValues, toWorkDeadlinePreviewInput, toWorkFormValues, toWorkMutationInput } from "./work-form.js";
 import { WorkFormFieldRenderer } from "./work-dynamic-form.js";
 import { WorkWorkflowSection } from "./work-workflow-section.js";
-import { downloadWorkAttachment, saveOperationalWorkTypeName, useCreateNextWorkCycle, useCreateWork, useFinalizeRealLabSheet, useProbeTypes, useRealLabSheet, useReceiveProbe, useSelectProbeType, useUpdateActiveProbeDeadline, useUpdateWork, useUpdateTechnicianWorkDetails, useUploadWorkAttachments, useUpsertRealLabSheet, useWork, useWorkCycles, useWorkDeadlinePreview, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
+import { downloadWorkAttachment, saveOperationalWorkTypeName, useCreateNextWorkCycle, useCreateWork, useFinalizeRealLabSheet, useProbeTypes, useRealLabSheet, useReceiveProbe, useUpdateProbeTypes, useSetManualWorkDeadline, useUpdateActiveProbeDeadline, useUpdateWork, useUpdateTechnicianWorkDetails, useUploadWorkAttachments, useUpsertRealLabSheet, useWork, useWorkCycles, useWorkDeadlinePreview, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
 import { workFormSchema, type WorkFormValues } from "./works-page.schema.js";
 import { WorkQrModal } from "./work-qr-modal.js";
 import { filterDraftConnections, getDraftCompositionTeeth, MultiItemWorkEditor, type DraftToothConnection, type DraftWorkOrderItem } from "./multi-item-work-editor.js";
@@ -223,7 +224,10 @@ function DeadlineBadge({ deadline, showTooltip = true }: { readonly deadline: Wo
   );
 }
 
-function DeadlineDetailCard({ work }: { readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
+function DeadlineDetailCard({ canEdit, work }: { readonly canEdit: boolean; readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
+  const mutation = useSetManualWorkDeadline();
+  const [value, setValue] = useState(work.deadline.effectiveDueAt ? work.deadline.effectiveDueAt.slice(0, 16) : `${work.requestedDeliveryDate}T00:00`);
+  useEffect(() => setValue(work.deadline.effectiveDueAt ? work.deadline.effectiveDueAt.slice(0, 16) : `${work.requestedDeliveryDate}T00:00`), [work.deadline.effectiveDueAt, work.requestedDeliveryDate]);
   return (
     <Card>
       <CardHeader>
@@ -249,6 +253,7 @@ function DeadlineDetailCard({ work }: { readonly work: import("@dental-lab/share
             <strong>{work.deadline.countdown}</strong>
           </div>
         </div>
+        {canEdit && work.status !== "FINALIZATA" ? <div className="works-page__actions"><label>Modifică termenul<input aria-label="Termen lucrare" className="dl-control" onChange={(event) => setValue(event.target.value)} type="datetime-local" value={value} /></label><Button disabled={!value || mutation.isPending} isLoading={mutation.isPending} onClick={() => mutation.mutate({ dueAt: new Date(value).toISOString(), expectedRevision: work.deadline.revision, workOrderId: work.id })} type="button">Salvează termenul</Button></div> : null}
       </CardContent>
     </Card>
   );
@@ -287,6 +292,7 @@ export function WorksPage(): ReactNode {
     || hasPermission(permissionsQuery.data, "works.claim.own.read");
   const canCreate = hasPermission(permissionsQuery.data, "works.create");
   const canUpdate = hasPermission(permissionsQuery.data, "works.update");
+  const canEditDeadline = hasPermission(permissionsQuery.data, "works.deadline.set_manual") || hasPermission(permissionsQuery.data, "works.deadline.current.update");
   const canReadCycles = hasPermission(permissionsQuery.data, "cycles.read") || hasPermission(permissionsQuery.data, "cycles.history.read");
   const canShowLegacyExecution = hasPermission(permissionsQuery.data, "works.read_all")
     && !hasPermission(permissionsQuery.data, "works.create")
@@ -575,6 +581,7 @@ export function WorksPage(): ReactNode {
         canShowLegacyExecution={canShowLegacyExecution}
         canReadPricing={canReadPricing}
           canUpdate={canUpdate}
+          canEditDeadline={canEditDeadline}
           canUpdateTechnicianDetails={canUpdateTechnicianDetails}
         clinicOptions={clinicOptionsQuery.data ?? []}
         currency={currency}
@@ -698,7 +705,9 @@ function CreateWorkModal({
   }), [quantity, requestedDeliveryDate, requestedDeliveryTime, selectedClinicId, selectedDoctorId, selectedWorkTypeId]);
   const deadlinePreviewQuery = useWorkDeadlinePreview(deadlinePreviewInput, isOpen);
   const activeTemplateQuery = useActiveWorkFormTemplate(selectedWorkTypeId || undefined, isOpen && selectedWorkTypeId !== "");
-  const submitDisabled = activeTemplateQuery.isLoading || activeTemplateQuery.isError;
+  // A dynamic form is optional for a work type. A missing template must not
+  // prevent reception from creating a work with the selected components.
+  const submitDisabled = activeTemplateQuery.isLoading;
   const selectedPriceOption = pricingWorkTypeOptions.find((option) => option.id === selectedWorkTypeId);
   const totalPreview = selectedPriceOption && Number.isFinite(quantity)
     ? formatMoneyMinor(selectedPriceOption.basePriceMinor * quantity, currency, locale)
@@ -816,11 +825,14 @@ function CreateWorkModal({
         />
       </Modal>
       <QuickPatientModal
+        clinicId={selectedClinicId}
+        doctorId={selectedDoctorId}
         isOpen={isPatientCreateOpen}
         isSaving={createPatientMutation.isPending}
         onOpenChange={setPatientCreateOpen}
         onSubmit={(values) => createPatientMutation.mutate(values, {
-          onSuccess: (patient) => {
+          onSuccess: async (patient) => {
+            await queryClient.invalidateQueries({ queryKey: patientsQueryKeys.options("", selectedClinicId || undefined, selectedDoctorId || undefined) });
             form.setValue("patientId", patient.overview.id, { shouldDirty: true, shouldValidate: true });
             setPatientCreateOpen(false);
           },
@@ -1043,6 +1055,7 @@ function WorkDetailsDrawer({
   canShowLegacyExecution,
   canReadPricing,
   canUpdate,
+  canEditDeadline,
   canUpdateTechnicianDetails,
   clinicOptions,
   currency,
@@ -1068,6 +1081,7 @@ function WorkDetailsDrawer({
   readonly canShowLegacyExecution: boolean;
   readonly canReadPricing: boolean;
   readonly canUpdate: boolean;
+  readonly canEditDeadline: boolean;
   readonly canUpdateTechnicianDetails: boolean;
   readonly clinicOptions: readonly { readonly code: string; readonly id: string; readonly name: string }[];
   readonly currency: string;
@@ -1119,12 +1133,13 @@ function WorkDetailsDrawer({
   const closeGuard = useCloseGuard(form.formState.isDirty, isSaving, onOpenChange);
   const [pendingWorkTypeChange, setPendingWorkTypeChange] = useState<UpdateWorkInput | null>(null);
   const [editingCaseFields, setEditingCaseFields] = useState(false);
+  const editFormRef = useRef<HTMLDivElement | null>(null);
   const isWorkTypeChanging = Boolean(work && selectedWorkTypeId !== "" && selectedWorkTypeId !== work.workType.id);
   const submitDisabled = false;
   const [isReturnOpen, setReturnOpen] = useState(false);
   const createNextCycleMutation = useCreateNextWorkCycle();
   const receiveProbeMutation = useReceiveProbe();
-  const selectProbeTypeMutation = useSelectProbeType();
+  const updateProbeTypesMutation = useUpdateProbeTypes();
   const cyclesQuery = useWorkCycles(work?.id ?? null, isOpen && canReadCycles && work !== undefined);
   const activeCycleNumber = cyclesQuery.data?.cycles.find((cycle) => cycle.id === cyclesQuery.data?.activeCycleId)?.cycleNumber ?? null;
 
@@ -1144,7 +1159,7 @@ function WorkDetailsDrawer({
   function buildUpdateInput(values: WorkFormValues): UpdateWorkInput | null {
     const template = activeTemplateQuery.data ?? (work?.workForm ? { fields: work.workForm.fields } : null);
     const dynamicValues = toPersistedWorkFormValues(values, template);
-    const baseInput = toWorkMutationInput(values, null, false, false);
+    const baseInput = toWorkMutationInput(values, null, canEditDeadline, false);
     return {
       ...baseInput,
       expectedDeadlineRevision: work?.deadline.revision ?? 0,
@@ -1189,12 +1204,12 @@ function WorkDetailsDrawer({
               <span>Deadline: {work.deadline.status} · rev. {work.deadline.revision}</span>
               {canReadPricing ? <span>Total: {formatPrice(work.totalPriceMinor, work.currency ?? currency, locale)}</span> : null}
             </div>
-            {work.activeProbeCycle || (work.completedProbeCycles ?? []).length > 0 ? <ProbeCycleSummary canSelect={canSelectProbeType} isSaving={selectProbeTypeMutation.isPending} onSelect={(cycleId, probeTypeId) => selectProbeTypeMutation.mutate({ cycleId, probeTypeId, workOrderId: work.id })} probeTypes={probeTypeOptions} work={work} /> : null}
+            {work.activeProbeCycle || (work.completedProbeCycles ?? []).length > 0 ? <ProbeCycleSummary canSelect={canSelectProbeType} isSaving={updateProbeTypesMutation.isPending} onSelect={(cycleId, probeTypeIds) => updateProbeTypesMutation.mutate({ cycleId, probeTypeIds, workOrderId: work.id })} probeTypes={probeTypeOptions} work={work} /> : null}
             <div className="works-page__actions">
               <Button onClick={() => onShowQr(work.id)} variant="outline">Vezi QR</Button>
-              {canUpdate ? <Button onClick={() => setEditingCaseFields(true)} type="button" variant="outline">Editează datele lucrării</Button> : null}
+              {canUpdate ? <Button onClick={() => { setEditingCaseFields(true); window.setTimeout(() => editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }} type="button" variant="outline">Editează datele lucrării</Button> : null}
             </div>
-            {work.activeProbeCycle ? <ActiveProbeDeadlineCard canEdit={canUpdate} work={work} /> : <DeadlineDetailCard work={work} />}
+            {work.activeProbeCycle ? <ActiveProbeDeadlineCard canEdit={canEditDeadline} work={work} /> : <DeadlineDetailCard canEdit={canEditDeadline} work={work} />}
             <WorkDetailComposition canEdit={canUpdate} canEditTechnicalCode={canEditTechnicalCode} isOpen={isOpen} work={work} workTypeOptions={formWorkTypeOptions} />
             <TechnicianTechnicalDetailsEditor canEdit={canUpdateTechnicianDetails} work={work} />
             {canReadCycles && !work.activeProbeCycle && ((work.completedProbeCycles ?? []).length === 0 || work.technicalReadiness === "PROBE_READY") ? (
@@ -1209,7 +1224,28 @@ function WorkDetailsDrawer({
               />
             ) : null}
             {workTypeOptionsError ? <ErrorState title="Opțiunile nu au fost încărcate" description={getErrorMessage(workTypeOptionsError)} /> : null}
-            {editingCaseFields ? <WorkForm
+            <Modal
+              description="Editează clinica, medicul, pacientul, termenul, urgența și observațiile lucrării. Tipul, dinții și culoarea se editează din «Editează lucrarea»."
+              footer={editingCaseFields ? <WorkFormActions
+                canReset={form.formState.isDirty}
+                formId="update-work-form"
+                isSaving={isSaving}
+                onReset={() => form.reset(toWorkFormValues(work))}
+                submitDisabled={submitDisabled}
+                submitLabel="Salvează datele"
+              /> : null}
+              isOpen={editingCaseFields}
+              onOpenChange={(open) => {
+                if (!open) {
+                  form.reset(toWorkFormValues(work));
+                  setEditingCaseFields(false);
+                }
+              }}
+              size="xl"
+              title="Editează lucrarea"
+            >
+              <div ref={editFormRef} className="works-page__work-edit-form">
+                <WorkForm
               clinicOptions={clinicOptions}
               doctorOptions={doctorsQuery.data ?? []}
               form={form}
@@ -1217,6 +1253,8 @@ function WorkDetailsDrawer({
                 isDisabled={!canUpdate || isSaving || work.status === "FINALIZATA"}
               onClinicChange={() => form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true })}
               allowPatientEdit={false}
+                allowPatientNameEdit={false}
+                hideWorkSelection
               onCreatePatient={() => undefined}
               onSubmit={(values) => {
                 form.clearErrors("root");
@@ -1239,16 +1277,9 @@ function WorkDetailsDrawer({
               workTypeOptions={formWorkTypeOptions}
               patientOptions={work.patient ? [{ birthDate: work.patient.birthDate ?? null, firstName: work.patient.firstName, fullName: work.patient.fullName, id: work.patient.id, lastName: work.patient.lastName, workCount: 0 }] : []}
               workDetailsSlot={<WorkCodeAndFilesFields canEditCode={canEditTechnicalCode} canUploadFiles={canUploadFiles} work={work} />}
-            /> : null}
-            {editingCaseFields ? <WorkFormActions
-              canReset={form.formState.isDirty}
-              formId="update-work-form"
-              isSaving={isSaving}
-              onReset={() => form.reset(toWorkFormValues(work))}
-              submitDisabled={submitDisabled}
-              submitLabel="Salvează lucrarea"
-            /> : null}
-            {editingCaseFields ? <Button onClick={() => { form.reset(toWorkFormValues(work)); setEditingCaseFields(false); }} type="button" variant="ghost">Renunță la editarea datelor</Button> : null}
+                />
+              </div>
+            </Modal>
             {!canUpdate ? <p className="works-page__muted">Ai acces de citire, dar nu poți modifica lucrarea.</p> : null}
           </div>
         ) : !workError ? <LoadingState text="Se încarcă detaliile" /> : null}
@@ -1308,29 +1339,56 @@ function WorkDetailsDrawer({
   );
 }
 
-function ProbeCycleSummary({ canSelect, isSaving, onSelect, probeTypes, work }: { readonly canSelect: boolean; readonly isSaving: boolean; readonly onSelect: (cycleId: string, probeTypeId: string) => void; readonly probeTypes: readonly import("@dental-lab/shared").ProbeTypeView[]; readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
+function ProbeCycleSummary({ canSelect, isSaving, onSelect, probeTypes, work }: { readonly canSelect: boolean; readonly isSaving: boolean; readonly onSelect: (cycleId: string, probeTypeIds: readonly string[]) => void; readonly probeTypes: readonly import("@dental-lab/shared").ProbeTypeView[]; readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
   const cycles = [
     ...(work.activeProbeCycle ? [work.activeProbeCycle] : []),
     ...(work.completedProbeCycles ?? []),
   ];
+  const configuredProbeCodes = [...new Set((work.items ?? []).flatMap((item) => item.workType?.probeTypeCodes ?? []))];
+  const completedProbeCodes = new Set((work.completedProbeCycles ?? []).flatMap((cycle) => (cycle.probeTypes ?? [cycle.probeType]).map((type) => type.code).filter((code): code is string => Boolean(code))));
+  const completedProbeCounts = getProbeTypeCounts(work.completedProbeCycles ?? []);
+  const completedProbeSummary = [...completedProbeCounts.values()].map(({ count, name }) => `${name} · ${count}x`).join(" · ");
+  const remainingProbeNames = probeTypes.filter((type) => type.code && configuredProbeCodes.includes(type.code) && !completedProbeCodes.has(type.code)).map((type) => type.name);
   return (
     <Card>
       <CardHeader><CardTitle>Probe tehnice</CardTitle><CardDescription>Cicluri la nivelul întregii lucrări; istoricul păstrează denumirea probei.</CardDescription></CardHeader>
       <CardContent>
+        {work.activeProbeCycle ? <p className="works-page__cycle-next-stage"><strong>Proba curentă:</strong> {work.activeProbeCycle.sequence === 0 ? "inițială" : work.activeProbeCycle.sequence} · {work.activeProbeCycle.probeTypeNameSnapshot}. {remainingProbeNames.length > 0 ? `Probe rămase după aceasta: ${remainingProbeNames.join(", ")}.` : "Aceasta poate fi ultima probă; după finalizare lucrarea se arhivează."}</p> : null}
+        {completedProbeSummary ? <p className="works-page__muted"><strong>Probe efectuate în trecut:</strong> {completedProbeSummary}</p> : null}
         {cycles.length === 0 ? <p className="works-page__muted">Nu există probe canonice pentru această lucrare.</p> : cycles.map((cycle) => {
           const options = cycle.status === "ACTIVE" && cycle.probeType.isArchived && !probeTypes.some((type) => type.id === cycle.probeType.id)
             ? [cycle.probeType, ...probeTypes]
             : probeTypes;
+          const cycleLabel = cycle.sequence === 0 ? "Proba inițială" : `Proba ${cycle.sequence}`;
           return (
           <div className="works-page__cycle-item" key={cycle.id}>
-            <div><strong>{cycle.status === "ACTIVE" ? "Probă activă" : `Probă trecută ${cycle.sequence} — ${cycle.probeTypeNameSnapshot}`}</strong><span> · termen {formatDateTime(cycle.deadlineAt)}</span></div>
-            {cycle.status === "ACTIVE" ? <Select disabled={!canSelect || isSaving} label="Tip probă" options={options.map((type) => ({ label: type.name, value: type.id }))} value={cycle.probeType.id} onChange={(event) => onSelect(cycle.id, event.target.value)} /> : <span className="works-page__muted">Tip probă istoric: {cycle.probeTypeNameSnapshot}</span>}
+            <div><strong>{cycle.status === "ACTIVE" ? `${cycleLabel} · ${cycle.probeTypeNameSnapshot}` : `${cycleLabel} trecută — ${cycle.probeTypeNameSnapshot}`}</strong><span> · termen {formatDateTime(cycle.deadlineAt)}</span></div>
+            {cycle.status === "ACTIVE" ? <ProbeTypeMultiSelect canSelect={canSelect} cycle={cycle} disabled={isSaving} onSave={(ids) => onSelect(cycle.id, ids)} options={options} probeCounts={completedProbeCounts} /> : <span className="works-page__muted">Tip probă istoric: {cycle.probeTypeNameSnapshot}</span>}
           </div>
           );
         })}
       </CardContent>
     </Card>
   );
+}
+
+function getProbeTypeCounts(cycles: readonly ProbeCycleView[]): ReadonlyMap<string, { readonly count: number; readonly name: string }> {
+  const counts = new Map<string, { count: number; name: string }>();
+  for (const cycle of cycles) {
+    const types = cycle.probeTypes?.length ? cycle.probeTypes : [cycle.probeType];
+    for (const type of types) {
+      const existing = counts.get(type.id);
+      counts.set(type.id, { count: (existing?.count ?? 0) + 1, name: type.name });
+    }
+  }
+  return counts;
+}
+
+function ProbeTypeMultiSelect({ canSelect, cycle, disabled, onSave, options, probeCounts }: { readonly canSelect: boolean; readonly cycle: import("@dental-lab/shared").ProbeCycleView; readonly disabled: boolean; readonly onSave: (ids: readonly string[]) => void; readonly options: readonly import("@dental-lab/shared").ProbeTypeView[]; readonly probeCounts: ReadonlyMap<string, { readonly count: number; readonly name: string }> }): ReactNode {
+  const currentIds = cycle.probeTypes?.map((type) => type.id) ?? [cycle.probeType.id];
+  const [selectedIds, setSelectedIds] = useState<readonly string[]>(currentIds);
+  useEffect(() => setSelectedIds(currentIds), [cycle.id, cycle.probeTypeNameSnapshot]);
+  return <fieldset className="works-page__probe-type-options" disabled={!canSelect || disabled}><legend>Tipuri probă</legend>{options.map((type) => { const previousCount = probeCounts.get(type.id)?.count; return <label key={type.id}><input checked={selectedIds.includes(type.id)} onChange={() => setSelectedIds((current) => current.includes(type.id) ? (current.length === 1 ? current : current.filter((id) => id !== type.id)) : [...current, type.id])} type="checkbox" />{type.name}{previousCount ? ` · ${previousCount}x în trecut` : ""}</label>; })}<Button disabled={selectedIds.length === 0 || !canSelect || disabled} onClick={() => onSave(selectedIds)} size="small" type="button">Salvează tipurile probei</Button></fieldset>;
 }
 
 function WorkCyclesSection({
@@ -1705,33 +1763,38 @@ function CanonicalReceiveProbeModal({
   readonly isLoading: boolean;
   readonly isOpen: boolean;
   readonly onOpenChange: (isOpen: boolean) => void;
-  readonly onSubmit: (input: { readonly deadlineAt: string; readonly probeTypeId: string }) => void;
+  readonly onSubmit: (input: { readonly deadlineAt: string; readonly probeTypeIds: readonly string[] }) => void;
   readonly probeTypes: readonly import("@dental-lab/shared").ProbeTypeView[];
   readonly work: import("@dental-lab/shared").WorkDetail;
 }): ReactNode {
-  const [probeTypeId, setProbeTypeId] = useState("");
+  const [probeTypeIds, setProbeTypeIds] = useState<readonly string[]>([]);
   const [deadlineAt, setDeadlineAt] = useState("");
   const configuredCodes = work.items?.flatMap((item) => item.workType?.probeTypeCodes ?? []) ?? [];
   const selectableProbeTypes = configuredCodes.length > 0
     ? probeTypes.filter((type) => typeof type.code === "string" && configuredCodes.includes(type.code))
     : probeTypes;
+  const completedProbeCounts = getProbeTypeCounts(work.completedProbeCycles ?? []);
+  const completedProbeSummary = [...completedProbeCounts.values()]
+    .map(({ count, name }) => `${name} · ${count}x`)
+    .join(" · ");
   useEffect(() => {
     if (isOpen) {
-      setProbeTypeId(selectableProbeTypes[0]?.id ?? "");
+      setProbeTypeIds(selectableProbeTypes[0]?.id ? [selectableProbeTypes[0].id] : []);
       setDeadlineAt("");
     }
   }, [isOpen, selectableProbeTypes]);
-  const canSubmit = probeTypeId !== "" && deadlineAt !== "";
+  const canSubmit = probeTypeIds.length > 0 && deadlineAt !== "";
   return <Modal
     description={`${work.code} · ultima probă a fost marcată gata; aceeași lucrare continuă.`}
-    footer={<Button disabled={!canSubmit} isLoading={isLoading} onClick={() => onSubmit({ deadlineAt: new Date(deadlineAt).toISOString(), probeTypeId })}>Recepționează și începe proba</Button>}
+    footer={<Button disabled={!canSubmit} isLoading={isLoading} onClick={() => onSubmit({ deadlineAt: new Date(deadlineAt).toISOString(), probeTypeIds })}>Recepționează și începe proba</Button>}
     isOpen={isOpen}
     onOpenChange={onOpenChange}
     title="Recepționată"
   >
     <FormLayout>
       <p className="works-page__muted">Ultima probă finalizată rămâne în istoric. Alege tipul și termenul explicit pentru următoarea probă.</p>
-      <Select label="Tip probă nouă" options={selectableProbeTypes.map((type) => ({ label: type.name, value: type.id }))} value={probeTypeId} onChange={(event) => setProbeTypeId(event.target.value)} required />
+      {completedProbeSummary ? <div className="works-page__probe-history"><strong>Probe efectuate anterior</strong><span>{completedProbeSummary}</span></div> : null}
+      <fieldset className="works-page__probe-type-options"><legend>Tipuri probă nouă</legend>{selectableProbeTypes.map((type) => { const previousCount = completedProbeCounts.get(type.id)?.count; return <label key={type.id}><input checked={probeTypeIds.includes(type.id)} onChange={() => setProbeTypeIds((current) => current.includes(type.id) ? current.filter((id) => id !== type.id) : [...current, type.id])} type="checkbox" />{type.name}{previousCount ? ` · ${previousCount}x în trecut` : ""}</label>; })}</fieldset>
       <label className="works-page__detail-field"><span>Termen nou</span><input aria-label="Termen probă nouă" className="dl-control" onChange={(event) => setDeadlineAt(event.target.value)} type="datetime-local" value={deadlineAt} required /></label>
     </FormLayout>
   </Modal>;
@@ -1903,12 +1966,16 @@ const quickPatientLabels: Record<keyof PatientFormValues, string> = {
 };
 
 function QuickPatientModal({
+  clinicId,
+  doctorId,
   isOpen,
   isSaving,
   onOpenChange,
   onSubmit,
   submitError,
 }: {
+  readonly clinicId: string;
+  readonly doctorId: string;
   readonly isOpen: boolean;
   readonly isSaving: boolean;
   readonly onOpenChange: (isOpen: boolean) => void;
@@ -1916,7 +1983,7 @@ function QuickPatientModal({
   readonly submitError: unknown;
 }): ReactNode {
   const form = useForm<PatientFormValues>({
-    defaultValues: quickPatientDefaults,
+    defaultValues: { ...quickPatientDefaults, clinicId: clinicId || null, doctorId: doctorId || null },
     resolver: zodResolver(patientFormSchema),
   });
   const summaryRef = useErrorSummaryFocus(form.formState.errors, form.formState.submitCount);
@@ -1924,9 +1991,9 @@ function QuickPatientModal({
 
   useEffect(() => {
     if (!isOpen) {
-      form.reset(quickPatientDefaults);
+      form.reset({ ...quickPatientDefaults, clinicId: clinicId || null, doctorId: doctorId || null });
     }
-  }, [form, isOpen]);
+  }, [clinicId, doctorId, form, isOpen]);
 
   useEffect(() => {
     if (submitError) {

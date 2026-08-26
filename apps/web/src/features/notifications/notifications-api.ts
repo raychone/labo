@@ -39,8 +39,13 @@ async function dismissNotification(id: string): Promise<void> {
   await apiFetch(`/notifications/${encodeURIComponent(id)}/dismiss`, { headers: { "x-csrf-token": csrfToken }, method: "PATCH" });
 }
 
+async function dismissAllNotifications(): Promise<void> {
+  const csrfToken = await fetchCsrfToken();
+  await apiFetch("/notifications/dismiss-all", { headers: { "x-csrf-token": csrfToken }, method: "PATCH" });
+}
+
 export function useNotifications(enabled: boolean) {
-  return useQuery({ enabled, queryFn: fetchNotifications, queryKey: ["notifications", "list"], refetchInterval: 30_000, refetchOnWindowFocus: true, retry: false });
+  return useQuery({ enabled, queryFn: fetchNotifications, queryKey: ["notifications", "list"], refetchInterval: 5_000, refetchOnWindowFocus: true, retry: false });
 }
 
 export function useMarkNotificationRead() {
@@ -56,4 +61,9 @@ export function useMarkAllNotificationsRead() {
 export function useDismissNotification() {
   const queryClient = useQueryClient();
   return useMutation({ mutationFn: dismissNotification, onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["notifications"] }); } });
+}
+
+export function useDismissAllNotifications() {
+  const queryClient = useQueryClient();
+  return useMutation({ mutationFn: dismissAllNotifications, onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["notifications"] }); } });
 }

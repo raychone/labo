@@ -76,8 +76,6 @@ export class PatientsService {
         OR: [
           { clinicId, doctorId },
           { workOrders: { some: { clinicId, doctorId } } },
-          { clinicId, workOrders: { some: { doctorId } } },
-          { doctorId, workOrders: { some: { clinicId } } },
         ],
       } : clinicId ? {
         OR: [{ clinicId }, { workOrders: { some: { clinicId } } }],

@@ -232,6 +232,11 @@ export const B18_NOTIFICATION_TYPES = [
   "OVERDUE_WORK",
   "NEW_WORK_AVAILABLE",
   "NEW_PROBE_AVAILABLE",
+  "RETURNED_WORK",
+  "NEW_PROBE",
+  "ROUTE_RECEIVED",
+  "NEW_WORK_TYPE",
+  "NEW_IMPLANT_PLATFORM",
 ] as const;
 export type B18NotificationType = (typeof B18_NOTIFICATION_TYPES)[number];
 
@@ -249,6 +254,11 @@ export const B18_NOTIFICATION_LABELS_RO: Readonly<Record<B18NotificationType, st
   OVERDUE_WORK: "Lucrare întârziată",
   NEW_WORK_AVAILABLE: "Lucrare nouă disponibilă",
   NEW_PROBE_AVAILABLE: "Probă nouă disponibilă",
+  RETURNED_WORK: "Lucrare revenită",
+  NEW_PROBE: "Probă nouă",
+  ROUTE_RECEIVED: "Traseu primit",
+  NEW_WORK_TYPE: "Tip de lucrare nou",
+  NEW_IMPLANT_PLATFORM: "Platformă implant nouă",
 };
 
 export function isAdultFdiTooth(value: number): value is AdultFdiTooth {

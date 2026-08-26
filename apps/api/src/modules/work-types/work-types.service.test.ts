@@ -99,6 +99,7 @@ describe("WorkTypesService", () => {
       data: expect.objectContaining({
         basePriceMinor: 35000,
         code: "WT-0001",
+        colorHex: null,
         createdByUserId: "actor_1",
         name: "Coroana zirconiu",
         symbol: "Zr",
@@ -163,6 +164,7 @@ describe("WorkTypesService", () => {
       {
         basePriceMinor: 35000,
         code: "WT-0001",
+        colorHex: null,
         id: "active_1",
         name: "Coroana zirconiu",
         symbol: "Zr",

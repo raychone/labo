@@ -31,6 +31,7 @@ export const defaultWorkFormValues: WorkFormValues = {
   implantPlatform: null,
   implantPlatformCustom: null,
   patientId: "",
+  patientName: "",
   patientReference: null,
   priority: "NORMAL",
   urgency: "NORMAL",
@@ -52,6 +53,7 @@ const workFieldLabels: Record<keyof WorkFormValues, string> = {
   implantPlatform: "Platformă implant",
   implantPlatformCustom: "Alt tip platformă",
   patientId: "Pacient",
+  patientName: "Nume pacient",
   patientReference: "Identificator pacient",
   priority: "Prioritate",
   urgency: "Urgență",
@@ -89,6 +91,7 @@ export function toWorkFormValues(work: WorkDetail | undefined): WorkFormValues {
     implantPlatform: work.implantPlatform && IMPLANT_PLATFORM_OPTIONS.includes(work.implantPlatform as (typeof IMPLANT_PLATFORM_OPTIONS)[number]) ? work.implantPlatform : work.implantPlatform ? "Alt tip" : null,
     implantPlatformCustom: work.implantPlatform && !IMPLANT_PLATFORM_OPTIONS.includes(work.implantPlatform as (typeof IMPLANT_PLATFORM_OPTIONS)[number]) ? work.implantPlatform : null,
     patientId: work.patient?.id ?? "",
+    patientName: work.patient?.fullName ?? work.patientName,
     patientReference: work.patientReference,
     priority: work.priority,
     urgency: work.urgency ?? "NORMAL",
@@ -113,6 +116,7 @@ export function toWorkMutationInput(values: WorkFormValues, template: WorkFormTe
     externalReference: values.externalReference,
     internalNotes: values.internalNotes,
     ...(includePatient ? { patientId: values.patientId } : {}),
+    ...(!includePatient ? { patientName: values.patientName } : {}),
     patientReference: values.patientReference,
     priority: values.priority,
     urgency: values.urgency,
@@ -193,11 +197,14 @@ export function validateDynamicWorkForm(form: UseFormReturn<WorkFormValues>, tem
 }
 
 function toManualDueAt(date: string, time: string): string | null {
-  if (date === "" || time === "") {
+  if (date === "") {
     return null;
   }
 
-  const value = new Date(`${date}T${time}:00`);
+  // The date is the only required deadline value. If reception clears the
+  // time, preserve the manually entered date at the start of that day instead
+  // of falling back to a calculated/default deadline.
+  const value = new Date(`${date}T${time === "" ? "00:00" : time}:00`);
   return Number.isNaN(value.getTime()) ? null : value.toISOString();
 }
 
@@ -217,6 +224,8 @@ export function WorkForm({
   onCreatePatient,
   onSubmit,
   allowPatientEdit = true,
+  allowPatientNameEdit = false,
+  hideWorkSelection = false,
   workDetailsSlot,
   multiItem = false,
   workTypeOptions,
@@ -233,6 +242,8 @@ export function WorkForm({
   readonly onCreatePatient: () => void;
   readonly onSubmit: (values: WorkFormValues) => void;
   readonly allowPatientEdit?: boolean;
+  readonly allowPatientNameEdit?: boolean;
+  readonly hideWorkSelection?: boolean;
   readonly workDetailsSlot?: ReactNode;
   readonly multiItem?: boolean;
   readonly totalPreview?: string | null;
@@ -282,23 +293,23 @@ export function WorkForm({
 
   useEffect(() => {
     if (clinicId !== "" && selectedClinic) {
-      setClinicSearch(`${selectedClinic.code} · ${selectedClinic.name}`);
+      setClinicSearch(selectedClinic.name);
     }
   }, [clinicId, selectedClinic]);
 
   useEffect(() => {
     if (doctorId !== "" && selectedDoctor) {
-      setDoctorSearch(selectedDoctor.displayName);
+      setDoctorSearch(stripDoctorTitle(selectedDoctor.displayName));
     }
   }, [doctorId, selectedDoctor]);
 
   const visibleClinicOptions = useMemo(() => filterSearchableOptions(clinicOptions.map((clinic) => ({
-    label: `${clinic.code} · ${clinic.name}`,
+    label: clinic.name,
     secondary: undefined,
     value: clinic.id,
   })), clinicSearch), [clinicOptions, clinicSearch]);
   const visibleDoctorOptions = useMemo(() => filterSearchableOptions(doctorOptions.map((doctor) => ({
-    label: doctor.displayName,
+    label: stripDoctorTitle(doctor.displayName),
     secondary: undefined,
     value: doctor.id,
   })), doctorSearch), [doctorOptions, doctorSearch]);
@@ -392,10 +403,11 @@ export function WorkForm({
           {allowPatientEdit ? <div>
             <Button disabled={isDisabled} onClick={onCreatePatient} type="button" variant="secondary">Pacient nou</Button>
           </div> : null}
+          {allowPatientNameEdit ? <TextInput disabled={isDisabled} error={form.formState.errors.patientName?.message} id="patientName" label="Nume pacient" required {...form.register("patientName")} /> : null}
         </FormGrid>
       </FormSection>
 
-      <FormSection title="Lucrare">
+      {!hideWorkSelection ? <FormSection title="Lucrare">
         {multiItem ? <FormGrid className="works-page__multi-item-details-grid">{workDetailsSlot}</FormGrid> : <FormGrid className="works-page__work-selection-grid">
           <SearchablePickerField
             disabled={isDisabled}
@@ -478,7 +490,7 @@ export function WorkForm({
           </div> : null}
           {workDetailsSlot}
         </FormGrid>}
-      </FormSection>
+      </FormSection> : null}
 
       <FormSection title="Termen și urgență">
         <FormGrid>
@@ -514,6 +526,10 @@ export function WorkForm({
       </FormSection>
     </FormLayout>
   );
+}
+
+function stripDoctorTitle(value: string): string {
+  return value.replace(/^dr\.?\s*/i, "").trim();
 }
 
 function displayWorkTypeName(name: string): string {

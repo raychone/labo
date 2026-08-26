@@ -55,6 +55,7 @@ export interface ProbeCycleView {
   readonly status: ProbeCycleStatus;
   readonly probeType: ProbeTypeView;
   readonly probeTypeNameSnapshot: string;
+  readonly probeTypes: readonly ProbeTypeView[];
   readonly openedAt: string;
   readonly completedAt: string | null;
   readonly deadlineAt: string;
@@ -203,6 +204,8 @@ export type ExecutionSnapshotView = {
 export interface WorkSummary {
   /** Active work cycle; cycle 1 is the initial intake, later cycles are returns. */
   readonly cycleNumber?: number | null;
+  /** Probe stages configured for the active cycle, in display order. */
+  readonly probeTypeNames?: readonly string[];
   readonly clinic: WorkClinicSummary | null;
   readonly code: string;
   readonly createdAt: string;
@@ -351,6 +354,7 @@ export interface CreateWorkInput {
 }
 
 export type UpdateWorkInput = Partial<Omit<CreateWorkInput, "workFormSubmission">> & {
+  readonly patientName?: string;
   readonly confirmWorkTypeChange?: boolean;
   readonly expectedDeadlineRevision?: number;
   readonly workFormSubmission?: CreateWorkFormSubmissionInput;

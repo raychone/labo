@@ -41,7 +41,7 @@ export async function seedTechnicalCatalog(prisma: PrismaClient): Promise<{ read
           data: {
             isArchived: true,
             archivedByUserId: manager.id,
-            name: `${probe.name} (legacy ${duplicate.id})`,
+            name: `${probe.name} (legacy-${duplicate.id})`,
             updatedByUserId: manager.id,
           },
           where: { id: duplicate.id },
@@ -61,6 +61,7 @@ export async function seedTechnicalCatalog(prisma: PrismaClient): Promise<{ read
   for (const [sortOrder, item] of CREATIVE_WORK_CATALOG.entries()) {
     const id = `technical_work_type_${item.key}`;
     const code = `TECH-CR-${String(sortOrder + 1).padStart(3, "0")}`;
+    const existingWorkType = await prisma.workType.findUnique({ where: { id }, select: { colorHex: true } });
     await prisma.workType.upsert({
       create: {
         allowedAddOns: item.allowedAddOns.map((addOn) => ({ code: addOn, label: addOn === "GINGIE" ? "Gingie" : "Plăcată", amountMinor: addOn === "GINGIE" ? 20_000 : 5_000 })),
@@ -68,9 +69,9 @@ export async function seedTechnicalCatalog(prisma: PrismaClient): Promise<{ read
         name: item.displayName, probeFamily: item.probeFamily,
         colorHex: defaultWorkTypeColor(item.displayName, item.probeFamily),
         probeTypeCodes: item.probeFamily === "MC" ? ["MC_METAL", "MC_CERAMICA", "MC_GLAZE"] : item.probeFamily === "ZR" ? ["ZR_ZR", "ZR_MIYO"] : item.probeFamily === "ZRP" ? ["ZRP_METAL", "ZRP_CERAMICA", "ZRP_MIYO", "ZRP_GLAZE"] : item.probeFamily === "PRO" ? ["PRO_LG", "PRO_SO", "PRO_MACHETA", "PRO_GLAZE"] : [],
-        symbol: `TECH-${item.symbol}`, unit: item.unit, updatedByUserId: manager.id,
+        symbol: `TECH-${item.symbol}`.slice(0, 40), unit: item.unit, updatedByUserId: manager.id,
       },
-      update: { allowedAddOns: item.allowedAddOns.map((addOn) => ({ code: addOn, label: addOn === "GINGIE" ? "Gingie" : "Plăcată", amountMinor: addOn === "GINGIE" ? 20_000 : 5_000 })), basePriceMinor: item.priceMinor, colorHex: defaultWorkTypeColor(item.displayName, item.probeFamily), isActive: true, name: item.displayName, probeFamily: item.probeFamily, unit: item.unit, updatedByUserId: manager.id },
+      update: { allowedAddOns: item.allowedAddOns.map((addOn) => ({ code: addOn, label: addOn === "GINGIE" ? "Gingie" : "Plăcată", amountMinor: addOn === "GINGIE" ? 20_000 : 5_000 })), basePriceMinor: item.priceMinor, colorHex: existingWorkType?.colorHex ?? defaultWorkTypeColor(item.displayName, item.probeFamily), isActive: true, name: item.displayName, probeFamily: item.probeFamily, unit: item.unit, updatedByUserId: manager.id },
       where: { id },
     });
   }
@@ -142,7 +143,7 @@ export async function seedTechnicalCatalog(prisma: PrismaClient): Promise<{ read
         ?? await prisma.workType.findUnique({ where: { symbol: workTypeSymbol } });
       const workType = existingWorkType
         ? await prisma.workType.update({
-          data: { basePriceMinor: item.priceMinor, code: workTypeCode, colorHex: defaultWorkTypeColor(item.displayName), isActive: true, name: item.displayName, symbol: workTypeSymbol, unit: item.unit, updatedByUserId: manager.id },
+          data: { basePriceMinor: item.priceMinor, code: workTypeCode, colorHex: existingWorkType.colorHex ?? defaultWorkTypeColor(item.displayName), isActive: true, name: item.displayName, symbol: workTypeSymbol, unit: item.unit, updatedByUserId: manager.id },
           where: { id: existingWorkType.id },
         })
         : await prisma.workType.create({

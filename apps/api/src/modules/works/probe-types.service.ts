@@ -17,7 +17,10 @@ export class ProbeTypesService {
   ) {}
 
   public async list(actorUserId: string, includeArchived = false): Promise<readonly ProbeTypeView[]> {
-    await this.authorizationService.requirePermission({ permission: "probe_types.read", requiredScope: "ALL", userId: actorUserId });
+    // The catalog is read-only for technicians and is needed while editing an
+    // assigned work.  Requiring ALL here contradicted the controller's
+    // ASSIGNED grant and caused a 403 after the route guard had already passed.
+    await this.authorizationService.requirePermission({ permission: "probe_types.read", requiredScope: "ASSIGNED", userId: actorUserId });
     const types = await this.prisma.probeType.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }], where: includeArchived ? {} : { isArchived: false } });
     return types.map(toProbeTypeView);
   }

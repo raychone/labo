@@ -101,6 +101,12 @@ export interface OperationalStatusRow {
   readonly logistics: {
     readonly status: LogisticsStatus | null;
   };
+  readonly components: readonly {
+    readonly colorHex: string | null;
+    readonly name: string;
+    readonly symbol: string;
+    readonly teeth: readonly number[];
+  }[];
   readonly patient: {
     readonly id: string | null;
     readonly name: string;

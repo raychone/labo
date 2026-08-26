@@ -10,8 +10,6 @@ import {
   PickupRequestStatus,
   WorkLogisticsStatus,
   WorkWorkflowExecutionStatus,
-  DeliveryEventType,
-  DeliveryStatus,
   type Prisma,
   type WorkLogisticsState,
 } from "@prisma/client";
@@ -22,7 +20,6 @@ import type { LegalEntityContext } from "../organization-context/organization-co
 import { AuthorizationService } from "../rbac/authorization.service.js";
 import { CreateWorkDto } from "../works/dto/works.dto.js";
 import { WorksService } from "../works/works.service.js";
-import { DeliveryCodeService } from "../delivery/delivery-code.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import { LOGISTICS_ATTACHMENT_LIMITS, LOGISTICS_AUDIT_ACTIONS, LOGISTICS_RESOURCE_TYPES } from "./logistics.constants.js";
 import type {
@@ -60,6 +57,7 @@ import {
   toLogisticsCenterItem,
   toWorkLogisticsView,
 } from "./logistics.view.js";
+import type { CourierOption } from "@dental-lab/shared";
 
 type LogisticsCenterCategory = "ALL" | "INTRARI_ASTAZI" | "DE_VERIFICAT" | "IN_PRODUCTIE" | "NEASIGNATE" | "BLOCARE" | "URGENTE" | "INTARZIATE" | "FINALIZATE_AZI" | "DE_AMBALAT" | "IN_AMBALARE" | "GATA_DE_LIVRARE" | "NEFACTURATE" | "IN_ASTEPTARE" | "DE_LIVRAT" | "DE_RIDICAT";
 
@@ -198,71 +196,33 @@ export class LogisticsService {
     @Inject(AuthorizationService) private readonly authorizationService: AuthorizationService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(WorksService) private readonly worksService: WorksService,
-    @Inject(DeliveryCodeService) private readonly deliveryCodeService?: DeliveryCodeService,
     @Inject(NotificationsService) private readonly notificationsService?: NotificationsService,
   ) {}
 
   public async fastDelegate(context: ActorContext, workOrderId: string, input: FastTransportInput): Promise<{ readonly direction: FastTransportInput["direction"]; readonly id: string; readonly workOrderId: string; readonly status: string }> {
     await this.ensurePermission(context.actor.id, "logistics.manage_groups");
-    let resolvedFailedDeliveryId: string | null = null;
     const result = await this.prisma.$transaction(async (tx) => {
-      const work = await tx.workOrder.findUnique({
-        include: { activeCycle: { include: { logisticsState: true } }, deliveryPreparationItems: { include: { group: { include: { deliveries: { where: { isActive: true } } } } }, where: { isActive: true } } },
-        where: { id: workOrderId },
-      });
+      const work = await tx.workOrder.findUnique({ include: { activeCycle: { include: { logisticsState: true } } }, where: { id: workOrderId } });
       if (!work) throw new NotFoundException("Lucrarea nu a fost găsită.");
       if ((work.activeCycle?.logisticsState?.version ?? work.version) !== input.version) throw new ConflictException("Datele logistice au fost modificate. Reîncarcă înainte de acțiune.");
       if (input.direction === "DELIVERY" && work.technicalReadiness !== "PROBE_READY" && work.technicalReadiness !== "FINAL_READY") {
         throw new BadRequestException("Doar lucrările marcate Probă gata sau Finalizată pot fi trimise către clinică.");
       }
-      if (input.direction === "PICKUP") {
-        if (!work.requiresPickup) throw new ConflictException("Lucrarea nu mai necesită ridicare.");
-        const existing = await tx.courierRouteStop.findFirst({ where: { outcomeStatus: "PENDING", type: "PICKUP", workOrderId } });
-        if (existing) throw new ConflictException("Lucrarea este deja în fluxul curierului.");
-        const routeDate = new Date();
-        const route = await tx.courierRoute.create({
-          data: {
-            courierUserId: input.courierUserId ?? null,
-            createdByUserId: context.actor.id,
-            name: "Ridicare rapidă",
-            routeDate,
-            routeNumber: await this.nextRouteNumber(tx, routeDate),
-            status: input.courierUserId ? "ASSIGNED" : "DRAFT",
-            updatedByUserId: context.actor.id,
-            stops: { create: [{ stopOrder: 1, type: "PICKUP", workOrder: { connect: { id: workOrderId } } }] },
-          },
-        });
-        await tx.workOrder.update({ data: { requiresPickup: false, updatedByUserId: context.actor.id, version: { increment: 1 } }, where: { id: workOrderId } });
-        await this.recordAudit(tx, context, LOGISTICS_AUDIT_ACTIONS.routeCreated, route.id, { direction: input.direction, workOrderId, courierUserId: input.courierUserId ?? null });
-        return { direction: input.direction, id: route.id, status: route.status, workOrderId };
-      }
-      const existingGroup = work.deliveryPreparationItems[0]?.group ?? null;
-      const activeDelivery = existingGroup?.deliveries[0] ?? null;
-      if (activeDelivery && activeDelivery.status !== DeliveryStatus.FAILED) throw new ConflictException("Lucrarea este deja în fluxul livrărilor.");
-      if (activeDelivery) {
-        resolvedFailedDeliveryId = activeDelivery.id;
-        await tx.delivery.update({ data: { isActive: false, updatedByUserId: context.actor.id, version: { increment: 1 } }, where: { id: activeDelivery.id } });
-      }
-      if (!work.clinicId) throw new BadRequestException("Lucrarea nu are o clinică pentru livrare.");
-      const group = existingGroup && existingGroup.status !== "CANCELLED"
-        ? existingGroup
-        : await tx.deliveryPreparationGroup.create({ data: { clinicId: work.clinicId, code: await this.generateGroupCode(tx), createdByUserId: context.actor.id, updatedByUserId: context.actor.id } });
-      if (!existingGroup || activeDelivery) {
-        await tx.deliveryPreparationItem.create({ data: { addedByUserId: context.actor.id, groupId: group.id, workCycleId: work.activeCycle?.id ?? null, workOrderId } });
-      }
-      await tx.deliveryPreparationGroup.update({ data: { status: "READY", plannedDate: new Date(), updatedByUserId: context.actor.id, version: { increment: 1 } }, where: { id: group.id } });
-      const now = new Date();
-      if (input.courierUserId) await this.assertCourier(tx, input.courierUserId);
-      if (!this.deliveryCodeService) throw new BadRequestException("Fluxul de livrare nu este disponibil.");
-      const code = await this.deliveryCodeService.generate(tx, now);
-      const delivery = await tx.delivery.create({ data: { assignedAt: input.courierUserId ? now : null, assignedByUserId: input.courierUserId ? context.actor.id : null, clinicId: work.clinicId, code, courierUserId: input.courierUserId ?? null, createdByUserId: context.actor.id, plannedDate: now, preparationGroupId: group.id, status: input.courierUserId ? "ASSIGNED" : "PLANNED", updatedByUserId: context.actor.id } });
-      await tx.workOrder.update({ data: { requiresDelivery: false, updatedByUserId: context.actor.id, version: { increment: 1 } }, where: { id: workOrderId } });
-      await tx.deliveryEvent.create({ data: { actorUserId: context.actor.id, deliveryId: delivery.id, type: DeliveryEventType.DELIVERY_CREATED, metadata: { direction: input.direction, workOrderId } } });
-      await this.recordAudit(tx, context, LOGISTICS_AUDIT_ACTIONS.groupMarkedReady, group.id, { direction: input.direction, deliveryId: delivery.id, workOrderId, courierUserId: input.courierUserId ?? null });
-      return { direction: input.direction, id: delivery.id, status: delivery.status, workOrderId };
+      const requiresField = input.direction === "DELIVERY" ? "requiresDelivery" : "requiresPickup";
+      const isReadyForDelivery = input.direction === "DELIVERY" && (work.technicalReadiness === "PROBE_READY" || work.technicalReadiness === "FINAL_READY");
+      if (!work[requiresField] && !isReadyForDelivery) throw new ConflictException("Lucrarea este deja în lista curentă sau nu mai necesită această operațiune.");
+      const existing = await tx.courierRouteStop.findFirst({
+        where: {
+          outcomeStatus: "PENDING",
+          type: input.direction === "DELIVERY" ? "DELIVERY" : "PICKUP",
+          workOrderId,
+          route: { status: { in: ["DRAFT", "ASSIGNED", "IN_PROGRESS"] } },
+        },
+      });
+      if (existing) throw new ConflictException("Lucrarea este deja în lista de traseu.");
+      await tx.workOrder.update({ data: { [requiresField]: true, updatedByUserId: context.actor.id, version: { increment: 1 } }, where: { id: workOrderId } });
+      return { direction: input.direction, id: workOrderId, status: "QUEUED", workOrderId };
     });
-    await this.notificationsService?.resolveLogisticsReadiness(workOrderId);
-    if (resolvedFailedDeliveryId) await this.notificationsService?.resolve("DELIVERY_FAILED", `delivery-failed:${resolvedFailedDeliveryId}`);
     return result;
   }
 
@@ -409,7 +369,16 @@ export class LogisticsService {
     const workOrderIds = dto.stops.map((stop) => stop.workOrderId).filter((id): id is string => Boolean(id));
     const pickupRequestIds = dto.stops.map((stop) => stop.pickupRequestId).filter((id): id is string => Boolean(id));
     if (workOrderIds.length > 0 || pickupRequestIds.length > 0) {
-      const existing = await this.prisma.courierRouteStop.findFirst({ where: { OR: [{ workOrderId: { in: workOrderIds } }, { pickupRequestId: { in: pickupRequestIds } }] } });
+      // A completed stop is historical and must not block a later cycle or a
+      // new delivery. Only a pending stop still owns the item in the route
+      // pipeline; failed outcomes are also allowed to re-enter logistics.
+      const existing = await this.prisma.courierRouteStop.findFirst({
+        where: {
+          outcomeStatus: "PENDING",
+          route: { status: { in: [CourierRouteStatus.DRAFT, CourierRouteStatus.ASSIGNED, CourierRouteStatus.IN_PROGRESS] } },
+          OR: [{ workOrderId: { in: workOrderIds } }, { pickupRequestId: { in: pickupRequestIds } }],
+        },
+      });
       if (existing) throw new ConflictException("Acest item este deja inclus într-o listă de traseu.");
     }
     const route = await this.prisma.$transaction(async (tx) => {
@@ -450,7 +419,11 @@ export class LogisticsService {
       await this.recordAudit(tx, context, LOGISTICS_AUDIT_ACTIONS.routeCreated, created.id, this.toRouteAuditMetadata(created));
       return created;
     });
-    return this.toCourierRouteView(route);
+    const view = this.toCourierRouteView(route);
+    if (route.courierUserId) {
+      await this.notificationsService?.publishRouteReceived({ routeId: route.id, routeNumber: route.routeNumber, routeDate: route.routeDate.toISOString().slice(0, 10), stopCount: route.stops.length, courierUserId: route.courierUserId });
+    }
+    return view;
   }
 
   public async listRoutes(actor: AuthenticatedUser, query: CourierRoutesQueryDto): Promise<PaginatedCourierRoutesResponse> {
@@ -519,7 +492,11 @@ export class LogisticsService {
       await this.recordAudit(tx, context, LOGISTICS_AUDIT_ACTIONS.routeUpdated, route.id, this.toRouteAuditMetadata(route));
       return route;
     });
-    return this.toCourierRouteView(updated);
+    const view = this.toCourierRouteView(updated);
+    if (updated.courierUserId && dto.courierUserId) {
+      await this.notificationsService?.publishRouteReceived({ routeId: updated.id, routeNumber: updated.routeNumber, routeDate: updated.routeDate.toISOString().slice(0, 10), stopCount: updated.stops.length, courierUserId: updated.courierUserId });
+    }
+    return view;
   }
 
   public async deleteRoute(context: ActorContext, routeId: string): Promise<void> {
@@ -618,6 +595,22 @@ export class LogisticsService {
           },
           where: { id: stop.workOrderId },
         });
+        if (stop.type === "DELIVERY" && dto.outcomeStatus === "DELIVERED" && tx.workLogisticsState?.updateMany) {
+          await tx.workLogisticsState.updateMany({
+            data: { status: WorkLogisticsStatus.DELIVERED, updatedByUserId: context.actor.id, version: { increment: 1 } },
+            where: { workOrderId: stop.workOrderId, workCycle: { status: "ACTIVE" } },
+          });
+        }
+        if (stop.type === "DELIVERY" && (dto.outcomeStatus === "DELIVERED" || dto.outcomeStatus === "NOT_DELIVERED")) {
+          await tx.delivery.updateMany({
+            data: { isActive: false, updatedByUserId: context.actor.id, version: { increment: 1 } },
+            where: { isActive: true, preparationGroup: { items: { some: { workOrderId: stop.workOrderId } } } },
+          });
+          await tx.deliveryPreparationItem.updateMany({
+            data: { isActive: false, removedAt: now, removedByUserId: context.actor.id },
+            where: { workOrderId: stop.workOrderId, isActive: true },
+          });
+        }
       }
       const allDone = current.stops.every((item) => item.id === stopId ? dto.outcomeStatus !== "PENDING" : item.outcomeStatus !== "PENDING");
       const updated = await tx.courierRoute.update({
@@ -669,6 +662,14 @@ export class LogisticsService {
       pageSize,
       total: filtered.length,
     };
+  }
+
+  public async listCourierOptions(): Promise<readonly CourierOption[]> {
+    return this.prisma.user.findMany({
+      orderBy: { displayName: "asc" },
+      select: { displayName: true, id: true },
+      where: { isActive: true, roles: { some: { role: { key: "CURIER" } } } },
+    });
   }
 
   public async getCenterSummary(actor: AuthenticatedUser, query: LogisticsCenterQueryDto): Promise<LogisticsCenterSummary> {
@@ -914,7 +915,7 @@ export class LogisticsService {
     await this.ensurePermission(context.actor.id, "logistics.manage_groups");
     const group = await this.prisma.$transaction(async (tx) => {
       const [groupRecord, work] = await Promise.all([
-        tx.deliveryPreparationGroup.findUnique({ include: { items: { where: { isActive: true } } }, where: { id: groupId } }),
+        tx.deliveryPreparationGroup.findUnique({ include: { items: true }, where: { id: groupId } }),
         tx.workOrder.findUnique({
           include: {
             activeCycle: { include: { logisticsState: true } },
@@ -938,14 +939,22 @@ export class LogisticsService {
       })) {
         throw new BadRequestException("Lucrarea trebuie să fie gata de livrare, fără grup activ și din aceeași clinică.");
       }
-      await tx.deliveryPreparationItem.create({
-        data: {
-          addedByUserId: context.actor.id,
-          groupId,
-          workCycleId: work.activeCycleId,
-          workOrderId,
-        },
-      });
+      const existingGroupItem = groupRecord.items.find((item) => item.workOrderId === workOrderId) ?? null;
+      if (existingGroupItem) {
+        await tx.deliveryPreparationItem.update({
+          data: { addedByUserId: context.actor.id, isActive: true, removedAt: null, removedByUserId: null, workCycleId: work.activeCycleId },
+          where: { id: existingGroupItem.id },
+        });
+      } else {
+        await tx.deliveryPreparationItem.create({
+          data: {
+            addedByUserId: context.actor.id,
+            groupId,
+            workCycleId: work.activeCycleId,
+            workOrderId,
+          },
+        });
+      }
       await this.recordLogisticsEvent(tx, context, workOrderId, work.activeCycleId, work.activeCycle?.logisticsState?.id ?? null, LogisticsEventType.WORK_ADDED_TO_DELIVERY_GROUP, {
         clinicId: groupRecord.clinicId,
         groupId,
@@ -1121,7 +1130,20 @@ export class LogisticsService {
     if (query.workflowStageKey) {
       and.push({ activeCycle: { is: { workflowExecution: { is: { currentStage: { is: { stageKeySnapshot: query.workflowStageKey } } } } } } });
     }
-    and.push({ courierRouteStops: { none: { outcomeStatus: "PENDING", route: { status: { not: "CANCELLED" } } } } });
+    // A work kept in a draft/list is still a candidate for the route builder.
+    // A completed delivery, however, must leave the operational queue until a
+    // later probe/return makes it ready again. Pending stops in assigned or
+    // active routes also remain hidden from the source queue.
+    and.push({
+      NOT: {
+        courierRouteStops: {
+          some: {
+            outcomeStatus: "PENDING",
+            route: { status: { in: [CourierRouteStatus.ASSIGNED, CourierRouteStatus.IN_PROGRESS] } },
+          },
+        },
+      },
+    });
     if (dateRange) {
       // Finalized works belong to the day they were completed; other works remain date-filtered by deadline.
       and.push({
@@ -1157,14 +1179,21 @@ export class LogisticsService {
     const dateRanges = [toScheduledDateRange(query), toHorizonDateRange(query.pickupHorizonDays)].filter(
       (range): range is Prisma.DateTimeFilter => range !== null,
     );
+    const and: Prisma.PickupRequestWhereInput[] = [
+      // A successfully completed pickup is historical and must not be offered
+      // again. A failed/uncompleted pickup remains reusable for a new route.
+      { routeStops: { none: { outcomeStatus: "PICKED_UP" } } },
+      { routeStops: { none: { outcomeStatus: "PENDING", route: { status: { in: [CourierRouteStatus.ASSIGNED, CourierRouteStatus.IN_PROGRESS] } } } } },
+    ];
+    for (const scheduledDate of dateRanges) {
+      and.push({ scheduledDate });
+    }
     return {
       status: PickupRequestStatus.SCHEDULED,
-      routeStops: { none: { outcomeStatus: "PENDING", route: { status: { not: "CANCELLED" } } } },
+      AND: and,
       ...(query.clinicId ? { clinicId: query.clinicId } : {}),
       ...(query.doctorId ? { doctorId: query.doctorId } : {}),
       ...(query.receptionUserId ? { createdByUserId: query.receptionUserId } : {}),
-      ...(dateRanges.length === 1 ? { scheduledDate: dateRanges[0] } : {}),
-      ...(dateRanges.length > 1 ? { AND: dateRanges.map((scheduledDate) => ({ scheduledDate })) } : {}),
     };
   }
 
@@ -1565,11 +1594,6 @@ export class LogisticsService {
     if (!result.allowed) {
       throw new ForbiddenException("Nu ai permisiunea necesară pentru această acțiune logistică.");
     }
-  }
-
-  private async assertCourier(tx: LogisticsTx, courierUserId: string): Promise<void> {
-    const user = await tx.user.findFirst({ select: { id: true }, where: { id: courierUserId, isActive: true, roles: { some: { role: { key: "CURIER" } } } } });
-    if (!user) throw new BadRequestException("Curierul selectat nu este activ.");
   }
 
   private async ensureRoutePermission(userId: string, permission: "routes.create" | "routes.update"): Promise<void> {

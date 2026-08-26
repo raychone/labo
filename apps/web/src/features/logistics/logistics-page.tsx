@@ -51,6 +51,7 @@ import {
   useCreatePickupRequest,
   useLogisticsCenter,
   useLogisticsSummary,
+  useFastDelegateLogisticsWork,
   useUpdateLogisticsWorkActions,
   usePickupRequests,
   type PickupRequestsQuery,
@@ -150,6 +151,13 @@ function isWithinDays(value: string, days: 1 | 2 | 3): boolean {
   return difference >= 0 && difference <= days;
 }
 
+function isReadyForLogisticsRoute(item: LogisticsCenterItem): boolean {
+  return item.requiresDelivery
+    || item.requiresPickup
+    || item.logisticsActionReasons.includes("READY_FOR_PROBE_DELIVERY")
+    || item.logisticsActionReasons.includes("READY_FOR_FINAL_DELIVERY");
+}
+
 export function LogisticsPage(): ReactNode {
   const navigate = useNavigate();
   const toast = useToast();
@@ -210,6 +218,7 @@ export function LogisticsPage(): ReactNode {
   }, [query.clinicId, query.dateFrom, query.dateTo, query.doctorId, query.exactDate, query.pickupHorizonDays, query.receptionUserId]);
   const pickupsQuery = usePickupRequests(showPickups, pickupQuery);
   const updateWorkActions = useUpdateLogisticsWorkActions();
+  const queueTransport = useFastDelegateLogisticsWork();
   const routesQuery = useCourierRoutes({ page: 1, pageSize: 100 }, canReadRoutes);
   const updateWorkStatus = useMutation({
     mutationFn: ({ status, workOrderId }: { readonly status: (typeof FINAL_WORK_STATUSES)[number]; readonly workOrderId: string }) => setWorkStatus(workOrderId, { status }),
@@ -237,10 +246,28 @@ export function LogisticsPage(): ReactNode {
   }
 
   const assignedStopKeys = useMemo(() => new Set((routesQuery.data?.items ?? [])
-    .filter((route) => route.status !== "CANCELLED" && !(route.status === "DRAFT" && route.courier === null && route.name === "Lista pentru viitoarele trasee"))
+    .filter((route) => ["DRAFT", "ASSIGNED", "IN_PROGRESS"].includes(route.status) && !(route.status === "DRAFT" && route.courier === null && route.name === "Lista pentru viitoarele trasee"))
     .flatMap((route) => route.stops.filter((stop) => stop.outcomeStatus === "PENDING").map((stop) => `${stop.type}:${stop.workOrderId ?? stop.pickupRequestId ?? stop.id}`))), [routesQuery.data?.items]);
 
+  const visibleRouteQueueCount = useMemo(() => {
+    if (!routeQueueOnly) return null;
+    const workCount = (centerQuery.data?.items ?? []).filter((item) => {
+      if (!isReadyForLogisticsRoute(item)) return false;
+      const horizon = query.deliveryHorizonDays;
+      return (!horizon || isWithinDays(item.requestedDeliveryDate, horizon))
+        && !assignedStopKeys.has(`DELIVERY:${item.id}`)
+        && !assignedStopKeys.has(`PICKUP:${item.id}`);
+    }).length;
+    const pickupCount = (pickupsQuery.data ?? []).filter((pickup) => {
+      const horizon = query.pickupHorizonDays;
+      return (!horizon || isWithinDays(pickup.scheduledDate, horizon))
+        && !assignedStopKeys.has(`PICKUP:${pickup.id}`);
+    }).length;
+    return workCount + pickupCount;
+  }, [assignedStopKeys, centerQuery.data?.items, pickupsQuery.data, query.deliveryHorizonDays, query.pickupHorizonDays, routeQueueOnly]);
+
   function openRouteLists(operation: "DELIVERY" | "PICKUP"): void {
+    setRouteQueueWindow(undefined);
     toast.showToast({ message: operation === "DELIVERY" ? "Lucrarea este disponibilă în lista De livrat." : "Lucrarea este disponibilă în lista De ridicat.", variant: "success" });
   }
   if (permissionsQuery.isLoading) {
@@ -275,7 +302,7 @@ export function LogisticsPage(): ReactNode {
             onClick={() => setRouteQueueWindow()}
             {...(query.deliveryHorizonDays ? { dayWindow: query.deliveryHorizonDays } : {})}
             onDayWindowChange={(days) => setRouteQueueWindow(days)}
-            value={(summaryQuery.data?.toDeliver ?? 0) + (summaryQuery.data?.toPickup ?? 0)}
+            value={visibleRouteQueueCount ?? ((summaryQuery.data?.toDeliver ?? 0) + (summaryQuery.data?.toPickup ?? 0))}
           />
         </div>
 
@@ -447,12 +474,18 @@ export function LogisticsPage(): ReactNode {
               </div>
               {(centerQuery.data?.items ?? []).filter((item) => {
                 if (!routeQueueOnly) return true;
-                if (!item.requiresDelivery && !item.requiresPickup) return false;
+                if (!isReadyForLogisticsRoute(item)) return false;
                 const horizon = query.deliveryHorizonDays;
                 return !horizon || isWithinDays(item.requestedDeliveryDate, horizon);
               }).filter((item) => !assignedStopKeys.has(`DELIVERY:${item.id}`) && !assignedStopKeys.has(`PICKUP:${item.id}`)).map((item) => (
                 <WorkRow item={item} key={item.id} onFastAction={(direction) => {
-                  openRouteLists(direction);
+                  queueTransport.mutate({
+                    workOrderId: item.id,
+                    input: { direction, version: item.logistics.version },
+                  }, {
+                    onSuccess: () => openRouteLists(direction),
+                    onError: (error) => toast.showToast({ title: "Lucrarea nu a fost adăugată în coadă", message: getErrorMessage(error), variant: "error" }),
+                  });
                 }} onOpen={() => navigate(`/works?workId=${encodeURIComponent(item.id)}`)} onStatus={(status) => updateWorkStatus.mutate({ status, workOrderId: item.id })} onUpdateActions={(input) => {
                   const nextDelivery = input.requiresDelivery ?? item.requiresDelivery;
                   const nextPickup = input.requiresPickup ?? item.requiresPickup;
@@ -520,7 +553,7 @@ function PickupRouteRow({
       <div className="logistics-page__row-state"><StatusBadge label={PICKUP_REQUEST_STATUS_LABELS[pickup.status]} variant="planned" /></div>
       <div className="logistics-page__row-alerts">{pickup.notes ?? pickup.address ?? "-"}</div>
       <div aria-label={`Selectează ridicarea de la ${pickup.clinic.name}`} className="logistics-page__row-requirements">
-        <Button disabled={selected} onClick={() => onSelected(true)} size="small" type="button" variant="outline">Ridicat</Button>
+        <Button disabled={selected} onClick={() => onSelected(true)} size="small" type="button" variant="outline">Ridicare</Button>
         <div className="logistics-page__row-actions">
           {canUpdate && pickup.status === "SCHEDULED" ? <Button onClick={onEdit} size="small" type="button" variant="outline">Editează</Button> : null}
           {canCancel && pickup.status === "SCHEDULED" ? <Button onClick={onCancel} size="small" type="button" variant="ghost">Anulează</Button> : null}
@@ -1000,7 +1033,7 @@ function WorkRow({
         {formatDate(item.requestedDeliveryDate)}
       </div>
       <div className="logistics-page__row-state">
-        <StatusPicker itemCode={item.workCode} onChange={onStatus} value={item.operationalStatus} />
+        <StatusPicker itemCode={item.workCode} onChange={onStatus} readiness={item.technicalReadiness} value={item.operationalStatus} />
       </div>
       <div className="logistics-page__row-alerts">
         {item.dueState === "OVERDUE" ? <span aria-label="Termen depășit" className="logistics-page__overdue-alert">!</span> : null}
@@ -1014,7 +1047,7 @@ function WorkRow({
   );
 }
 
-function StatusPicker({ itemCode, onChange, value }: { readonly itemCode: string; readonly onChange: (status: (typeof FINAL_WORK_STATUSES)[number]) => void; readonly value: (typeof FINAL_WORK_STATUSES)[number] }): ReactNode {
+function StatusPicker({ itemCode, onChange, readiness, value }: { readonly itemCode: string; readonly onChange: (status: (typeof FINAL_WORK_STATUSES)[number]) => void; readonly readiness: LogisticsCenterItem["technicalReadiness"]; readonly value: (typeof FINAL_WORK_STATUSES)[number] }): ReactNode {
   const [open, setOpen] = useState(false);
   const options = [
     { label: "Recepție", value: "RECEPTIE" },
@@ -1022,7 +1055,9 @@ function StatusPicker({ itemCode, onChange, value }: { readonly itemCode: string
     { label: "În așteptare", value: "IN_ASTEPTARE" },
     { label: "Finalizată", value: "FINALIZATA" },
   ] as const;
-  const selected = options.find((option) => option.value === value) ?? options[0];
+  const selected = readiness === "PROBE_READY"
+    ? { label: "Probă", value }
+    : options.find((option) => option.value === value) ?? options[0];
 
   return (
     <div className="logistics-page__state-picker">

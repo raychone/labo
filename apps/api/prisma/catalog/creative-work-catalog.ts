@@ -78,6 +78,10 @@ export const CREATIVE_WORK_CATALOG: readonly CreativeWorkCatalogEntry[] = [
   entry("gutiera-albire", "Gutieră albire (x2)", "UNIT", 140, "LA_GATA", none, "GUTIERE"),
   entry("model-studiu", "Model de studiu/printat (arcadă)", "UNIT", 60, "LA_GATA", none),
   entry("rebazare", "Rebazare", "UNIT", 100, "LA_GATA", none),
+  entry("all-on-x-12-crco", "All on X 12 structura CrCo", "UNIT", 0, "LA_GATA", ["PLACATA"]),
+  entry("all-on-x-14-crco", "All on X 14 structura CrCo", "UNIT", 0, "LA_GATA", ["PLACATA"]),
+  entry("all-on-x-12-titan", "All on X 12 structura titan", "UNIT", 0, "LA_GATA", ["PLACATA"]),
+  entry("all-on-x-14-titan", "All on X 14 structura titan", "UNIT", 0, "LA_GATA", ["PLACATA"]),
 ];
 
 function entry(key: string, displayName: string, unit: WorkTypeUnit, priceLei: number, probeFamily: CreativeProbeFamily, allowedAddOns: readonly CreativeAddOnCode[], exclusiveGroup?: string): CreativeWorkCatalogEntry {

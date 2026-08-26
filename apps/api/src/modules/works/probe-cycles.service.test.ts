@@ -44,8 +44,8 @@ describe("ProbeCyclesService / B10", () => {
     const tx = {
       workOrder: { findUnique: vi.fn().mockResolvedValue({ activeProbeCycleId: null, status: "IN_ASTEPTARE", technicalReadiness: "PROBE_READY" }) },
       probeCycle: {
-        findFirst: vi.fn().mockResolvedValue({ completionOutcome: "PROBE_READY", sequence: 1, status: "COMPLETED" }),
-        create: vi.fn().mockImplementation(async () => { created.push("candidate"); return { id: "cycle-2", sequence: 2, status: "ACTIVE", probeTypeNameSnapshot: "Biscuit", openedAt: new Date(), completedAt: null, deadlineAt: new Date(), probeType: { id: "pt-1", name: "Biscuit", sortOrder: 0, isArchived: false } }; }),
+        findMany: vi.fn().mockResolvedValue([{ id: "cycle-1", completionOutcome: "PROBE_READY", sequence: 0, status: "COMPLETED" }]),
+        create: vi.fn().mockImplementation(async () => { created.push("candidate"); return { id: "cycle-2", sequence: 1, status: "ACTIVE", probeTypeNameSnapshot: "Biscuit", openedAt: new Date(), completedAt: null, deadlineAt: new Date(), probeType: { id: "pt-1", name: "Biscuit", sortOrder: 0, isArchived: false } }; }),
       },
       workOrderUpdateCount: 0,
       workOrderUpdateMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -61,6 +61,47 @@ describe("ProbeCyclesService / B10", () => {
     await expect(service.createNextActiveAfterReception({ actorUserId: "reception", workOrderId: "wo-1", probeTypeId: "pt-1", deadlineAt: "2026-08-25T10:00:00.000Z", returnedAfterCompletedCycle: true })).rejects.toThrow("modificată simultan");
     expect(tx.workOrderUpdateMany).toHaveBeenCalled();
     expect(created).toEqual([]);
+  });
+
+  it("releases a received return to the technician queue and publishes the probe notification", async () => {
+    const audit = { record: vi.fn() };
+    const notifications = { publishProbeAvailable: vi.fn().mockResolvedValue(undefined), publishNewProbe: vi.fn().mockResolvedValue(undefined) };
+    const probeType = { id: "pt-2", code: "LINGURA", name: "Lingură", sortOrder: 0, isArchived: false };
+    const cycle = {
+      id: "cycle-2",
+      sequence: 2,
+      status: "ACTIVE" as const,
+      probeType,
+      probeTypes: [{ probeType }],
+      probeTypeNameSnapshot: "Lingură",
+      openedAt: new Date("2026-08-26T08:00:00.000Z"),
+      completedAt: null,
+      deadlineAt: new Date("2026-08-29T08:00:00.000Z"),
+    };
+    const tx = {
+      workOrder: {
+        findUnique: vi.fn().mockResolvedValue({ activeProbeCycleId: null, status: "IN_ASTEPTARE", technicalReadiness: "PROBE_READY" }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      probeCycle: {
+        findMany: vi.fn().mockResolvedValue([{ id: "cycle-1", completionOutcome: "PROBE_READY", sequence: 0, status: "COMPLETED" }]),
+        create: vi.fn().mockResolvedValue({ ...cycle, sequence: 1 }),
+        update: vi.fn(),
+      },
+    };
+    const prisma = {
+      workOrder: { findFirst: vi.fn().mockResolvedValue({ id: "wo-1", code: "WO-1", patientName: "Pacient Test", items: [] }) },
+      $transaction: vi.fn(async (callback: (value: unknown) => unknown) => callback(tx)),
+    } as never;
+    const service = new ProbeCyclesService(createAuthorization(), audit as never, prisma, { requireSelectable: vi.fn().mockResolvedValue(probeType) } as never, notifications as never);
+
+    await expect(service.createNextActiveAfterReception({ actorUserId: "reception", workOrderId: "wo-1", probeTypeId: "pt-2", deadlineAt: "2026-08-29T08:00:00.000Z", returnedAfterCompletedCycle: true })).resolves.toMatchObject({ id: "cycle-2", sequence: 1 });
+    expect(tx.workOrder.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ activeProbeCycleId: "cycle-2", claimStatus: "UNCLAIMED", assignedTechnicianId: null, status: "RECEPTIE", technicalReadiness: null }),
+      where: expect.objectContaining({ activeProbeCycleId: null, status: { not: "FINALIZATA" } }),
+    }));
+    expect(notifications.publishProbeAvailable).toHaveBeenCalledWith(expect.objectContaining({ workOrderId: "wo-1", sequence: 1, probeTypeName: "Lingură" }));
+    expect(notifications.publishNewProbe).toHaveBeenCalledWith(expect.objectContaining({ workOrderId: "wo-1", sequence: 1, probeTypeName: "Lingură" }));
   });
 
   it("updates only the active probe deadline and synchronizes the current projection", async () => {

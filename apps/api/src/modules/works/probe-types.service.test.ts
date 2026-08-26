@@ -15,6 +15,6 @@ describe("ProbeTypesService / B10", () => {
 
     await expect(service.list("manager")).resolves.toEqual([{ id: "pt-1", name: "Lingură", sortOrder: 0, isArchived: false }]);
     await expect(service.requireSelectable("pt-2", prisma as never)).rejects.toThrow("arhivat");
-    expect((authorization as { requirePermission: ReturnType<typeof vi.fn> }).requirePermission).toHaveBeenCalledWith({ permission: "probe_types.read", requiredScope: "ALL", userId: "manager" });
+    expect((authorization as { requirePermission: ReturnType<typeof vi.fn> }).requirePermission).toHaveBeenCalledWith({ permission: "probe_types.read", requiredScope: "ASSIGNED", userId: "manager" });
   });
 });

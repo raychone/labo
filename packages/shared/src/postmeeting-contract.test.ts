@@ -113,7 +113,7 @@ describe("POSTMODEL-001 canonical contract", () => {
   });
 
   it("defines the bounded B18 notification vocabulary", () => {
-    expect(B18_NOTIFICATION_TYPES).toHaveLength(13);
+    expect(B18_NOTIFICATION_TYPES).toHaveLength(18);
     expect(B18_NOTIFICATION_LABELS_RO.NEW_WORK_AVAILABLE).toBe("Lucrare nouă disponibilă");
     expect(B18_NOTIFICATION_LABELS_RO.PAYMENT_NOTE_REQUIRED).toBe("Notă de plată de generat");
   });

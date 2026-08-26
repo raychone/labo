@@ -176,17 +176,18 @@ type WorkOrderRecordPayload = Prisma.WorkOrderGetPayload<{
     activeProbeCycle: {
       include: {
         probeType: true;
+        probeTypes: { include: { probeType: true }, orderBy: { sortOrder: "asc" } };
       };
     };
     probeCycles: {
       include: {
         probeType: true;
+        probeTypes: { include: { probeType: true }, orderBy: { sortOrder: "asc" } };
       };
       orderBy: { sequence: "asc" };
-      where: {
-        status: "COMPLETED",
-        OR: [{ completionOutcome: "PROBE_READY" }, { completionOutcome: null }],
-      };
+      // Keep every completed cycle in the history, including a terminal
+      // finalization, so reception can see all previous probes for a return.
+      where: { status: "COMPLETED" };
     };
     patient: true;
     workFormSubmissions: {
@@ -250,6 +251,7 @@ export interface WorkTypeFormOptionView {
 
 export interface WorkSummaryView {
   readonly cycleNumber: number | null;
+  readonly probeTypeNames: readonly string[];
   readonly clinic: {
     readonly code: string;
     readonly id: string;
@@ -550,8 +552,14 @@ export function toWorkTypeFormOptionView(workType: { readonly code: string; read
 }
 
 export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: boolean, access: WorkClaimAccessViewInput): WorkSummaryView {
+  const activeProbeTypes = workOrder.activeProbeCycle?.probeTypes?.length
+    ? workOrder.activeProbeCycle.probeTypes.map(({ probeType }) => probeType.name)
+    : workOrder.activeProbeCycle?.probeType
+      ? [workOrder.activeProbeCycle.probeType.name]
+      : [];
   return {
     cycleNumber: workOrder.activeCycle?.cycleNumber ?? null,
+    probeTypeNames: activeProbeTypes,
     clinic: workOrder.clinic
       ? {
           code: workOrder.clinic.code,
@@ -809,11 +817,13 @@ export function toWorkDetailView(workOrder: WorkOrderRecord, includePricing: boo
 }
 
 function toProbeCycleView(cycle: NonNullable<WorkOrderRecord["activeProbeCycle"]> | NonNullable<WorkOrderRecord["probeCycles"]>[number]): import("@dental-lab/shared").ProbeCycleView {
+  const probeTypes = cycle.probeTypes?.length ? cycle.probeTypes.map(({ probeType }) => probeType) : [cycle.probeType];
   return {
     id: cycle.id,
     sequence: cycle.sequence,
     status: cycle.status,
     probeType: { id: cycle.probeType.id, isArchived: cycle.probeType.isArchived, name: cycle.probeType.name, sortOrder: cycle.probeType.sortOrder },
+    probeTypes: probeTypes.map((type) => ({ id: type.id, isArchived: type.isArchived, name: type.name, sortOrder: type.sortOrder })),
     probeTypeNameSnapshot: cycle.probeTypeNameSnapshot,
     openedAt: cycle.openedAt.toISOString(),
     completedAt: cycle.completedAt?.toISOString() ?? null,

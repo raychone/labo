@@ -1365,6 +1365,7 @@ model ProbeType {
   updatedBy        User?        @relation("ProbeTypeUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   archivedBy       User?        @relation("ProbeTypeArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
   probeCycles      ProbeCycle[]
+  probeCycleTypes  ProbeCycleProbeType[]
 
   @@unique([name])
   @@index([isArchived, sortOrder])
@@ -1391,6 +1392,7 @@ model ProbeCycle {
   workOrder                     WorkOrder                      @relation("ProbeCycleWorkOrder", fields: [workOrderId], references: [id], onDelete: Cascade)
   activeForWorkOrder            WorkOrder?                     @relation("ActiveProbeCycle")
   probeType                     ProbeType                      @relation(fields: [probeTypeId], references: [id], onDelete: Restrict)
+  probeTypes                    ProbeCycleProbeType[]
   createdBy                     User?                          @relation("ProbeCycleCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   completedBy                   User?                          @relation("ProbeCycleCompletedBy", fields: [completedByUserId], references: [id], onDelete: SetNull)
   performedTechnicianOperations TechnicianPerformedOperation[]
@@ -1399,6 +1401,21 @@ model ProbeCycle {
   @@index([workOrderId, status])
   @@index([probeTypeId])
   @@map("probe_cycles")
+}
+
+model ProbeCycleProbeType {
+  id                    String    @id @default(cuid())
+  probeCycleId          String    @map("probe_cycle_id")
+  probeTypeId           String    @map("probe_type_id")
+  probeTypeNameSnapshot String    @map("probe_type_name_snapshot") @db.VarChar(120)
+  sortOrder             Int       @default(0) @map("sort_order")
+  probeCycle            ProbeCycle @relation(fields: [probeCycleId], references: [id], onDelete: Cascade)
+  probeType             ProbeType  @relation(fields: [probeTypeId], references: [id], onDelete: Restrict)
+
+  @@unique([probeCycleId, sortOrder])
+  @@index([probeCycleId, sortOrder])
+  @@index([probeTypeId])
+  @@map("probe_cycle_probe_types")
 }
 
 enum ProbeCycleStatus {

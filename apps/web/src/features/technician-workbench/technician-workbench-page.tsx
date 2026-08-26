@@ -56,9 +56,8 @@ export function TechnicianWorkbenchPage(): ReactNode {
   const toast = useToast();
   const navigate = useNavigate();
   const listAnchorRef = useRef<HTMLDivElement | null>(null);
-  const [tab, setTab] = useState<WorkbenchTab>("AVAILABLE");
+  const [tab, setTab] = useState<WorkbenchTab>(() => new URLSearchParams(window.location.search).get("tab") === "mine" ? "MINE" : "AVAILABLE");
   const [claimFilters, setClaimFilters] = useState<ClaimWorksListParams>(defaultClaimFilters);
-  const [claimTarget, setClaimTarget] = useState<WorkSummary | null>(null);
   const [operationsTarget, setOperationsTarget] = useState<WorkSummary | null>(null);
   const [finalizeTarget, setFinalizeTarget] = useState<WorkSummary | null>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -92,11 +91,34 @@ export function TechnicianWorkbenchPage(): ReactNode {
 
   function activateSummary(tabTarget: WorkbenchTab): void {
     setTab(tabTarget);
+    const next = new URLSearchParams(window.location.search);
+    next.set("tab", tabTarget === "MINE" ? "mine" : "available");
+    window.history.replaceState(null, "", `${window.location.pathname}?${next.toString()}`);
     focusWorkList();
+  }
+
+  function selectTab(tabTarget: WorkbenchTab): void {
+    setTab(tabTarget);
+    const next = new URLSearchParams(window.location.search);
+    next.set("tab", tabTarget === "MINE" ? "mine" : "available");
+    window.history.replaceState(null, "", `${window.location.pathname}?${next.toString()}`);
   }
 
   function finalizeWork(work: WorkSummary): void {
     setFinalizeTarget(work);
+  }
+
+  function claimWork(work: WorkSummary): void {
+    claimMutation.mutate({
+      input: { expectedClaimRevision: work.claim.revision },
+      workOrderId: work.id,
+    }, {
+      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost revendicată", variant: "error" }),
+      onSuccess: () => {
+        selectTab("MINE");
+        toast.showToast({ message: "Lucrarea a fost preluată, iar contextul de execuție a fost fixat.", variant: "success" });
+      },
+    });
   }
 
   function markProbeReady(work: WorkSummary): void {
@@ -153,8 +175,8 @@ export function TechnicianWorkbenchPage(): ReactNode {
           </CardHeader>
           <CardContent className="technician-workbench__content">
             <div className="technician-workbench__tabs" role="list" aria-label="Filtre rapide">
-              <button aria-pressed={tab === "AVAILABLE"} onClick={() => setTab("AVAILABLE")} type="button">Lucrări de preluat</button>
-              <button aria-pressed={tab === "MINE"} onClick={() => setTab("MINE")} type="button">Lucrările mele</button>
+              <button aria-pressed={tab === "AVAILABLE"} onClick={() => selectTab("AVAILABLE")} type="button">Lucrări de preluat</button>
+              <button aria-pressed={tab === "MINE"} onClick={() => selectTab("MINE")} type="button">Lucrările mele</button>
             </div>
 
             <div className="technician-workbench__mobile-toolbar">
@@ -194,7 +216,7 @@ export function TechnicianWorkbenchPage(): ReactNode {
                   items={visibleAvailableWorks}
                   compact={isCompactMobile}
                   mode="available"
-                  onClaim={setClaimTarget}
+                  onClaim={claimWork}
                   onDetails={(work) => navigate(`/works?workId=${work.id}`)}
                 />
               ) : (
@@ -217,34 +239,6 @@ export function TechnicianWorkbenchPage(): ReactNode {
             </div>
           </CardContent>
         </Card>
-        <ClaimWorkModal
-          isLoading={claimMutation.isPending}
-          isOpen={claimTarget !== null}
-          onOpenChange={(isOpen) => {
-            if (!isOpen) {
-              setClaimTarget(null);
-            }
-          }}
-          onSubmit={() => {
-            if (!claimTarget) {
-              return;
-            }
-            claimMutation.mutate({
-              input: {
-                expectedClaimRevision: claimTarget.claim.revision,
-              },
-              workOrderId: claimTarget.id,
-            }, {
-              onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost revendicată", variant: "error" }),
-              onSuccess: () => {
-                setClaimTarget(null);
-                setTab("MINE");
-                toast.showToast({ message: "Lucrarea a fost preluată, iar contextul de execuție a fost fixat.", variant: "success" });
-              },
-            });
-          }}
-          work={claimTarget}
-        />
         <OperationsModal
           isOpen={operationsTarget !== null}
           onOpenChange={(isOpen) => {
@@ -391,7 +385,11 @@ function ClaimList({
             <span>Responsabil: {work.claim.technician?.displayName ?? "Nerevendicată"}</span>
             {!compact ? <span>Companie execuție: {work.claim.executionLegalEntity?.code ?? "Neselectată"}</span> : null}
             {!compact ? <span>Context execuție: {work.executionSnapshot.summary.exists ? "Fixat" : "Nefixat"}</span> : null}
-            <span>{work.cycleNumber !== null && work.cycleNumber !== undefined && work.cycleNumber > 1 ? "Probă trecută" : "Probă inițială"}</span>
+            <span>
+              {work.probeTypeNames?.length
+                ? `Proba ${work.cycleNumber ?? 1}: ${work.probeTypeNames.join(" + ")}`
+                : `Proba ${work.cycleNumber ?? 1}`}
+            </span>
           </div>
           <div className="technician-workbench__actions">
             {mode === "available" ? (
@@ -404,7 +402,7 @@ function ClaimList({
                 <Button onClick={() => onDetails(work)} variant="outline">Detalii</Button>
                 <Button onClick={() => onOperations?.(work)} variant="outline">Manopere</Button>
                 <Button onClick={() => onRelease?.(work)} variant="outline">Eliberează</Button>
-                {(work.workType.probeTypeCodes?.length ?? 0) > 0 ? <Button disabled={work.status === "FINALIZATA" || work.technicalReadiness === "PROBE_READY" || work.technicalReadiness === "FINAL_READY"} isLoading={probeReadyWorkId === work.id} onClick={() => onProbeReady?.(work)}>Probă gata</Button> : null}
+                <Button disabled={work.status === "FINALIZATA" || work.technicalReadiness === "PROBE_READY" || work.technicalReadiness === "FINAL_READY"} isLoading={probeReadyWorkId === work.id} onClick={() => onProbeReady?.(work)}>Probă gata</Button>
                 <Button aria-label="Finalizata" disabled={work.status === "FINALIZATA" || work.technicalReadiness === "PROBE_READY" || work.technicalReadiness === "FINAL_READY"} isLoading={finalizeWorkId === work.id} onClick={() => onFinalize?.(work)}>Finalizată</Button>
               </>
             )}
@@ -412,32 +410,6 @@ function ClaimList({
         </article>
       ))}
     </div>
-  );
-}
-
-function ClaimWorkModal({
-  isLoading,
-  isOpen,
-  onOpenChange,
-  onSubmit,
-  work,
-}: {
-  readonly isLoading: boolean;
-  readonly isOpen: boolean;
-  readonly onOpenChange: (isOpen: boolean) => void;
-  readonly onSubmit: () => void;
-  readonly work: WorkSummary | null;
-}): ReactNode {
-  return (
-    <Modal
-      description={work ? `${work.code} · ${work.patientName}` : "Colaborarea clinicii stabilește automat entitatea de execuție."}
-      footer={<Button isLoading={isLoading} onClick={onSubmit}>Revendică lucrarea</Button>}
-      isOpen={isOpen}
-      onOpenChange={onOpenChange}
-      title="Revendică lucrare"
-    >
-      <p className="technician-workbench__modal-note">La revendicare, entitatea de execuție este preluată automat din colaborarea clinicii.</p>
-    </Modal>
   );
 }
 
@@ -511,10 +483,13 @@ function OperationsModal({
       toast.showToast({ message: "Manopera a fost dezactivată.", variant: "success" });
       return;
     }
-    performMutation.mutate({ operationId, selectedTeeth, workOrderId: work.id }, {
-      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Manopera nu a fost adăugată", variant: "error" }),
-      onSuccess: () => toast.showToast({ message: "Manopera a fost activată.", variant: "success" }),
-    });
+    const teethToPerform = isCaseLevel ? [[] as readonly AdultFdiTooth[]] : selectedTeeth.map((tooth) => [tooth] as readonly AdultFdiTooth[]);
+    for (const teeth of teethToPerform) {
+      performMutation.mutate({ operationId, selectedTeeth: teeth, workOrderId: work.id }, {
+        onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Manopera nu a fost adăugată", variant: "error" }),
+        onSuccess: () => toast.showToast({ message: "Manopera a fost activată.", variant: "success" }),
+      });
+    }
   }
 
   return (
@@ -526,6 +501,18 @@ function OperationsModal({
       size="full"
       title="Manopere"
     >
+      {detailQuery.data?.activeProbeCycle ? (
+        <section className="technician-workbench__probe-context" aria-label="Proba activă pentru manopere">
+          <div>
+            <span>Etapa curentă</span>
+            <strong>
+              {detailQuery.data.activeProbeCycle.sequence === 0 ? "Proba inițială" : `Proba ${detailQuery.data.activeProbeCycle.sequence}`}
+              {detailQuery.data.activeProbeCycle.probeTypeNameSnapshot ? ` · ${detailQuery.data.activeProbeCycle.probeTypeNameSnapshot}` : ""}
+            </strong>
+          </div>
+          <span>Manoperele adăugate aici se înregistrează pentru această probă.</span>
+        </section>
+      ) : null}
       {!canReadOperations ? <ErrorState title="Acces refuzat" description="Contul curent nu poate citi catalogul de manopere." /> : null}
       {canReadOperations && (operationsQuery.isLoading || performedQuery.isLoading || detailQuery.isLoading) ? <LoadingState text="Se încarcă manoperele" /> : null}
       {canReadOperations && operationsQuery.error ? <ErrorState title="Catalogul nu a fost încărcat" description={getErrorMessage(operationsQuery.error)} /> : null}
@@ -588,7 +575,9 @@ function OperationsModal({
           {(performedQuery.data ?? []).map((performed) => (
             <article className={`technician-workbench__performed-row${performed.removedAt === null ? " technician-workbench__performed-row--active" : ""}`} key={performed.id}>
               <strong>{performed.operationNameSnapshot ?? performed.operation.name}</strong>
-              <span>{(performed.selectedTeeth ?? []).length > 0 ? `Dinți: ${(performed.selectedTeeth ?? []).join(", ")}` : "Manoperă de caz"} · {performed.quantity ?? "-"} × {performed.rateMinorSnapshot === null || performed.rateMinorSnapshot === undefined ? "-" : formatMoneyMinor(performed.rateMinorSnapshot, performed.currency, "ro-RO")} = {formatMoneyMinor(performed.earningMinor, performed.currency, "ro-RO")}</span>
+              <span>
+                Proba {performed.probeCycle?.sequence ?? detailQuery.data?.activeProbeCycle?.sequence ?? work?.cycleNumber ?? 1} · {(performed.selectedTeeth ?? []).length > 0 ? `Dinți: ${(performed.selectedTeeth ?? []).join(", ")}` : "Manoperă de caz"} · {performed.quantity ?? "-"} × {performed.rateMinorSnapshot === null || performed.rateMinorSnapshot === undefined ? "-" : formatMoneyMinor(performed.rateMinorSnapshot, performed.currency, "ro-RO")} = {formatMoneyMinor(performed.earningMinor, performed.currency, "ro-RO")}
+              </span>
               {performed.removedAt ? <span>Eliminată · {performed.removalReason ?? "fără motiv"}</span> : null}
             </article>
           ))}

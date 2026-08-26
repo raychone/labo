@@ -126,6 +126,23 @@ export const operationalStatusWorkInclude = {
       id: true,
     },
   },
+  items: {
+    include: {
+      teeth: {
+        orderBy: [{ sortOrder: "asc" }, { fdiTooth: "asc" }],
+      },
+      workType: {
+        select: {
+          colorHex: true,
+          id: true,
+          name: true,
+          symbol: true,
+        },
+      },
+    },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    where: { archivedAt: null },
+  },
   workType: {
     select: {
       id: true,
@@ -183,6 +200,12 @@ export interface OperationalStatusRowView {
   readonly logistics: {
     readonly status: WorkLogisticsStatus | null;
   };
+  readonly components: readonly {
+    readonly colorHex: string | null;
+    readonly name: string;
+    readonly symbol: string;
+    readonly teeth: readonly number[];
+  }[];
   readonly operationalStatus: "RECEPTIE" | "IN_LUCRU" | "IN_ASTEPTARE" | "FINALIZATA";
   readonly technicalReadiness: "PROBE_READY" | "FINAL_READY" | null;
   readonly patient: {
@@ -283,7 +306,9 @@ export function matchesOperationalStatusTab(row: OperationalStatusRowView, tab: 
       || row.delivery.status === "DELIVERED";
   }
   if (tab === "RETURNED") {
-    return row.currentCycle !== null && row.currentCycle.number > 1 && row.delivery.status !== "DELIVERED";
+    // A probe-ready cycle is still on its way to the clinic/logistics. It is a
+    // real return only after reception has opened the next cycle for it.
+    return row.currentCycle !== null && row.currentCycle.number > 1;
   }
   return row.operationalStatus === "FINALIZATA"
     || row.workflow.status === "COMPLETED"
@@ -325,6 +350,12 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
           name: work.clinic.name,
         }
       : null,
+    components: (work.items ?? []).map((item) => ({
+      colorHex: item.workType?.colorHex ?? null,
+      name: item.workType?.name ?? "Tip personalizat",
+      symbol: item.workType?.symbol ?? "CUSTOM",
+      teeth: item.teeth.map((tooth) => tooth.fdiTooth),
+    })),
     currentCycle: work.activeCycle ? {
       code: `CYCLE_${work.activeCycle.cycleNumber}`,
       id: work.activeCycle.id,
