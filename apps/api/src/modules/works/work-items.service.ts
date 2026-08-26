@@ -24,7 +24,7 @@ import { ToothConnectionsService } from "./tooth-connections.service.js";
 
 export const WORK_ORDER_ITEM_INCLUDE = {
   teeth: { orderBy: [{ sortOrder: "asc" as const }, { fdiTooth: "asc" as const }] },
-  workType: { select: { code: true, id: true, name: true, symbol: true, unit: true, probeFamily: true, probeTypeCodes: true } },
+  workType: { select: { code: true, colorHex: true, id: true, name: true, symbol: true, unit: true, probeFamily: true, probeTypeCodes: true } },
 } satisfies PrismaTypes.WorkOrderItemInclude;
 
 export type WorkOrderItemRecord = PrismaTypes.WorkOrderItemGetPayload<{ include: typeof WORK_ORDER_ITEM_INCLUDE }>;

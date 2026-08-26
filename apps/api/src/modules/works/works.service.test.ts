@@ -87,6 +87,7 @@ function workType(overrides: Partial<WorkType> = {}): WorkType {
     archivedByUserId: null,
     basePriceMinor: 35000,
     code: "WT-0001",
+    colorHex: null,
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     createdByUserId: "actor_1",
     description: null,

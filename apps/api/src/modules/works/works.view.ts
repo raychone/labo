@@ -237,6 +237,7 @@ export interface WorkClaimAccessViewInput {
 
 export interface WorkTypeFormOptionView {
   readonly code: string;
+  readonly colorHex: string | null;
   readonly id: string;
   readonly name: string;
   readonly symbol: string;
@@ -299,6 +300,7 @@ export interface WorkSummaryView {
   readonly workflow: ReturnType<typeof toWorkflowSummaryView>;
   readonly workType: {
     readonly code: string;
+    readonly colorHex: string | null;
     readonly id: string;
     readonly name: string;
     readonly probeTypeCodes?: readonly string[];
@@ -529,9 +531,10 @@ export interface PaginatedWorksView {
   readonly total: number;
 }
 
-export function toWorkTypeFormOptionView(workType: { readonly code: string; readonly id: string; readonly name: string; readonly symbol: string; readonly unit: string; readonly probeFamily: string | null; readonly probeTypeCodes: Prisma.JsonValue | null; readonly allowedAddOns: Prisma.JsonValue | null; readonly exclusiveGroup: string | null }): WorkTypeFormOptionView {
+export function toWorkTypeFormOptionView(workType: { readonly code: string; readonly colorHex: string | null; readonly id: string; readonly name: string; readonly symbol: string; readonly unit: string; readonly probeFamily: string | null; readonly probeTypeCodes: Prisma.JsonValue | null; readonly allowedAddOns: Prisma.JsonValue | null; readonly exclusiveGroup: string | null }): WorkTypeFormOptionView {
   return {
     code: workType.code,
+    colorHex: workType.colorHex,
     id: workType.id,
     name: workType.name,
     symbol: workType.symbol,
@@ -605,6 +608,7 @@ export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: bo
     workflow: toWorkflowSummaryView(workOrder.activeCycle?.workflowExecution ?? null),
     workType: {
       code: workOrder.workType.code,
+      colorHex: workOrder.workType.colorHex,
       id: workOrder.workType.id,
       name: workOrder.workType.name,
       probeTypeCodes: Array.isArray(workOrder.workType.probeTypeCodes) ? workOrder.workType.probeTypeCodes.filter((value): value is string => typeof value === "string") : [],

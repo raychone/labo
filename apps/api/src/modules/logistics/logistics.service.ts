@@ -122,7 +122,7 @@ export interface PickupRequestView {
   readonly doctor: {
     readonly id: string;
     readonly name: string;
-  };
+  } | null;
   readonly exactTime: string | null;
   readonly id: string;
   readonly notes: string | null;
@@ -303,7 +303,7 @@ export class LogisticsService {
         data: {
           address: dto.address ?? null,
           clinicId: dto.clinicId,
-          doctorId: dto.doctorId,
+          doctorId: dto.doctorId ?? null,
           exactTime: schedule.exactTime,
           notes: dto.notes ?? null,
           phone: dto.phone ?? null,
@@ -338,7 +338,7 @@ export class LogisticsService {
         data: {
           address: dto.address ?? null,
           clinicId: dto.clinicId,
-          doctorId: dto.doctorId,
+          doctorId: dto.doctorId ?? null,
           exactTime: schedule.exactTime,
           notes: dto.notes ?? null,
           phone: dto.phone ?? null,
@@ -414,6 +414,10 @@ export class LogisticsService {
     }
     const route = await this.prisma.$transaction(async (tx) => {
       const routeNumber = await this.nextRouteNumber(tx, routeDate);
+      // The operational centre uses this unnamed draft as a persistent staging
+      // list. Adding an item to that list must not mark it as already routed;
+      // the flags are consumed only when the draft is turned into a real route.
+      const isFutureRoutesList = !dto.courierUserId && dto.name === "Lista pentru viitoarele trasee";
       const created = await tx.courierRoute.create({
         data: {
           courierUserId: dto.courierUserId ?? null,
@@ -427,14 +431,16 @@ export class LogisticsService {
         },
         include: courierRouteInclude,
       });
-      await Promise.all(dto.stops.filter((stop): stop is typeof dto.stops[number] & { readonly workOrderId: string } => Boolean(stop.workOrderId)).map((stop) => tx.workOrder.update({
-        data: {
-          ...(stop.type === "DELIVERY" ? { requiresDelivery: false } : { requiresPickup: false }),
-          updatedByUserId: context.actor.id,
-          version: { increment: 1 },
-        },
-        where: { id: stop.workOrderId },
-      })));
+      if (!isFutureRoutesList) {
+        await Promise.all(dto.stops.filter((stop): stop is typeof dto.stops[number] & { readonly workOrderId: string } => Boolean(stop.workOrderId)).map((stop) => tx.workOrder.update({
+          data: {
+            ...(stop.type === "DELIVERY" ? { requiresDelivery: false } : { requiresPickup: false }),
+            updatedByUserId: context.actor.id,
+            version: { increment: 1 },
+          },
+          where: { id: stop.workOrderId },
+        })));
+      }
       await this.recordRouteEvent(tx, context, created.id, CourierRouteEventType.ROUTE_CREATED, {
         routeDate: created.routeDate.toISOString().slice(0, 10),
         routeId: created.id,
@@ -480,7 +486,7 @@ export class LogisticsService {
     if (dto.courierUserId) await this.ensurePermission(context.actor.id, "routes.assign");
     const stops = this.toRouteStopCreates(dto.stops);
     const updated = await this.prisma.$transaction(async (tx) => {
-      const current = await tx.courierRoute.findUnique({ where: { id: routeId }, select: { status: true, version: true } });
+      const current = await tx.courierRoute.findUnique({ where: { id: routeId }, select: { name: true, status: true, version: true } });
       if (!current) throw new NotFoundException("Traseul nu a fost găsit.");
       if (current.version !== dto.version) throw new ConflictException("Traseul a fost modificat între timp.");
       const route = await tx.courierRoute.update({
@@ -499,6 +505,17 @@ export class LogisticsService {
         include: courierRouteInclude,
         where: { id: routeId },
       });
+      const isFutureRoutesList = !dto.courierUserId && dto.name === "Lista pentru viitoarele trasee";
+      if (!isFutureRoutesList) {
+        await Promise.all(dto.stops.filter((stop): stop is typeof dto.stops[number] & { readonly workOrderId: string } => Boolean(stop.workOrderId)).map((stop) => tx.workOrder.update({
+          data: {
+            ...(stop.type === "DELIVERY" ? { requiresDelivery: false } : { requiresPickup: false }),
+            updatedByUserId: context.actor.id,
+            version: { increment: 1 },
+          },
+          where: { id: stop.workOrderId },
+        })));
+      }
       await this.recordAudit(tx, context, LOGISTICS_AUDIT_ACTIONS.routeUpdated, route.id, this.toRouteAuditMetadata(route));
       return route;
     });
@@ -1350,15 +1367,15 @@ export class LogisticsService {
     return hour * 60 + minute;
   }
 
-  private async ensurePickupClinicDoctor(clinicId: string, doctorId: string): Promise<void> {
+  private async ensurePickupClinicDoctor(clinicId: string, doctorId?: string | null): Promise<void> {
     const [clinic, doctor] = await Promise.all([
       this.prisma.clinic.findFirst({ select: { id: true }, where: { id: clinicId, isActive: true } }),
-      this.prisma.doctor.findFirst({ select: { id: true }, where: { clinicId, id: doctorId, isActive: true } }),
+      doctorId ? this.prisma.doctor.findFirst({ select: { id: true }, where: { clinicId, id: doctorId, isActive: true } }) : Promise.resolve(null),
     ]);
     if (!clinic) {
       throw new BadRequestException("Clinica selectată nu este validă.");
     }
-    if (!doctor) {
+    if (doctorId && !doctor) {
       throw new BadRequestException("Medicul selectat nu este valid pentru clinica aleasă.");
     }
   }
@@ -1367,12 +1384,13 @@ export class LogisticsService {
     const exactTime = pickup.exactTime;
     const windowStartTime = pickup.windowStartTime;
     const windowEndTime = pickup.windowEndTime;
+    const clinicAddress = [pickup.clinic.addressLine1, pickup.clinic.addressLine2, pickup.clinic.postalCode, pickup.clinic.city].filter(Boolean).join(", ") || null;
     return {
       cancelledAt: pickup.cancelledAt?.toISOString() ?? null,
-      address: pickup.address,
+      address: pickup.address ?? clinicAddress,
       clinic: { id: pickup.clinic.id, name: pickup.clinic.name },
       createdAt: pickup.createdAt.toISOString(),
-      doctor: { id: pickup.doctor.id, name: pickup.doctor.displayName },
+      doctor: pickup.doctor ? { id: pickup.doctor.id, name: pickup.doctor.displayName } : null,
       exactTime,
       id: pickup.id,
       notes: pickup.notes,
@@ -1385,7 +1403,7 @@ export class LogisticsService {
       version: pickup.version,
       windowEndTime,
       windowStartTime,
-      phone: pickup.phone,
+      phone: pickup.phone ?? pickup.clinic.phone ?? pickup.clinic.contactPersonPhone,
     };
   }
 

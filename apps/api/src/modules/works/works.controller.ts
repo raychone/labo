@@ -113,8 +113,11 @@ export class WorksController {
   @Post(":id/probe-cycles/receive")
   @UseGuards(CsrfGuard)
   @RequirePermission("cycles.create_next", "ALL")
-  public receiveProbe(@Param("id") workOrderId: string, @Body() dto: import("./dto/probe-cycles.dto.js").ReceiveProbeDto, @CurrentUser() actor: AuthenticatedUser, @CurrentLegalEntity() legalEntity: LegalEntityContext, @Req() request: Request) {
-    return this.probeCyclesService.createNextActiveAfterReception({ actorUserId: actor.id, deadlineAt: dto.deadlineAt, legalEntity, probeTypeId: dto.probeTypeId, requestMetadata: getRequestMetadata(request), returnedAfterCompletedCycle: true, workOrderId });
+  public receiveProbe(@Param("id") workOrderId: string, @Body() dto: import("./dto/probe-cycles.dto.js").ReceiveProbeDto, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
+    // A work may belong to either CDT or NG, determined by its clinic. The
+    // reception user's currently selected legal-entity context must not hide
+    // an otherwise visible work from the return/probe flow.
+    return this.probeCyclesService.createNextActiveAfterReception({ actorUserId: actor.id, deadlineAt: dto.deadlineAt, probeTypeId: dto.probeTypeId, requestMetadata: getRequestMetadata(request), returnedAfterCompletedCycle: true, workOrderId });
   }
 
   @Get()

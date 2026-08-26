@@ -750,8 +750,8 @@ async function seedDemoClinics(prisma: PrismaClient, dataset: DemoDataset): Prom
     prisma.legalEntity.findUniqueOrThrow({ select: { id: true }, where: { code: "NG" } }),
   ]);
   for (const clinic of dataset.clinics) {
-    await prisma.clinic.create({
-      data: {
+    await prisma.clinic.upsert({
+      create: {
         addressLine1: `Adresa demo ${clinic.code}`,
         billingAddressLine1: `Adresa facturare demo ${clinic.code}`,
         billingCity: clinic.city,
@@ -782,6 +782,31 @@ async function seedDemoClinics(prisma: PrismaClient, dataset: DemoDataset): Prom
         taxId: clinic.taxId,
         website: "https://demo.local",
       },
+      update: {
+        addressLine1: `Adresa demo ${clinic.code}`,
+        billingAddressLine1: `Adresa facturare demo ${clinic.code}`,
+        billingCity: clinic.city,
+        billingCountyOrRegion: clinic.countyOrRegion,
+        billingName: clinic.legalName,
+        city: clinic.city,
+        contactPersonEmail: `contact.${clinic.code.toLowerCase()}@demo.local`,
+        contactPersonName: "Contact Demo",
+        contactPersonPhone: "+40000000000",
+        countryCode: "RO",
+        countyOrRegion: clinic.countyOrRegion,
+        email: clinic.email,
+        internalNotes: "Clinica fictiva pentru prezentare demo.",
+        isActive: clinic.isActive,
+        legalEntityId: clinic.id === "demo_clinic_point" ? ng.id : cdt.id,
+        legalName: clinic.legalName,
+        name: clinic.name,
+        phone: "+40000000000",
+        postalCode: "000000",
+        registrationNumber: clinic.registrationNumber,
+        taxId: clinic.taxId,
+        website: "https://demo.local",
+      },
+      where: { id: clinic.id },
     });
   }
 }
@@ -810,8 +835,8 @@ async function seedDemoDoctors(prisma: PrismaClient, dataset: DemoDataset): Prom
 
 async function seedDemoWorkTypes(prisma: PrismaClient, dataset: DemoDataset): Promise<void> {
   for (const workType of dataset.workTypes) {
-    await prisma.workType.create({
-      data: {
+    await prisma.workType.upsert({
+      create: {
         // These legacy demo-only types remain available for historical demo works,
         // but must not compete with the canonical manager catalog in selectors.
         archivedAt: new Date(),
@@ -824,6 +849,16 @@ async function seedDemoWorkTypes(prisma: PrismaClient, dataset: DemoDataset): Pr
         symbol: workType.symbol,
         unit: "UNIT",
       },
+      update: {
+        archivedAt: new Date(),
+        basePriceMinor: workType.basePriceMinor,
+        description: workType.description,
+        isActive: false,
+        name: workType.name,
+        symbol: workType.symbol,
+        unit: "UNIT",
+      },
+      where: { id: workType.id },
     });
   }
 }
@@ -1268,10 +1303,25 @@ async function seedDemoWorks(prisma: PrismaClient, dataset: DemoDataset): Promis
 }
 
 async function seedDemoOptionalIntakeWorks(prisma: PrismaClient, now: Date): Promise<void> {
+  const manager = await prisma.user.findUniqueOrThrow({ select: { id: true }, where: { id: "demo_user_manager" } });
+  for (const [sortOrder, probe] of [[0, { code: "ZR_ZR", name: "ZR", symbol: "ZR" }], [1, { code: "ZR_MIYO", name: "Miyo", symbol: "MY" }]] as const) {
+    const existing = await prisma.probeType.findUnique({ select: { id: true }, where: { code: probe.code } });
+    if (!existing) {
+      await prisma.probeType.create({ data: { code: probe.code, createdByUserId: manager.id, name: `ZR · ${probe.name}`, sortOrder, symbol: probe.symbol, updatedByUserId: manager.id } });
+    }
+  }
+  const probeJourneyWorkType = await prisma.workType.findUnique({ select: { id: true }, where: { id: "technical_work_type_zr-multistrat" } });
+  const probeJourneyWorkTypeId = probeJourneyWorkType?.id ?? "demo_wt_zirconiu";
+  if (!probeJourneyWorkType) {
+    await prisma.workType.update({ data: { probeFamily: "ZR", probeTypeCodes: ["ZR_ZR", "ZR_MIYO"] }, where: { id: probeJourneyWorkTypeId } });
+  }
+
   const cases = [
-    { id: "demo_work_optional_clinic", clinicId: "demo_clinic_aurora", doctorId: null, code: "WO-26-9050" },
-    { id: "demo_work_optional_doctor", clinicId: null, doctorId: "demo_doctor_smile_radu", code: "WO-26-9051" },
-    { id: "demo_work_optional_none", clinicId: null, doctorId: null, code: "WO-26-9052" },
+    { id: "demo_work_optional_clinic", clinicId: "demo_clinic_aurora", doctorId: null, code: "WO-26-9050", workTypeId: "demo_wt_zirconiu" },
+    { id: "demo_work_optional_doctor", clinicId: null, doctorId: "demo_doctor_smile_radu", code: "WO-26-9051", workTypeId: "demo_wt_zirconiu" },
+    { id: "demo_work_optional_none", clinicId: null, doctorId: null, code: "WO-26-9052", workTypeId: "demo_wt_zirconiu" },
+    // Dedicated lifecycle case: initial work -> probe 1 -> probe 2.
+    { id: "demo_work_probe_journey", clinicId: "demo_clinic_central", doctorId: "demo_doctor_central_cristian", code: "WO-26-9053", workTypeId: probeJourneyWorkTypeId },
   ] as const;
 
   for (const [index, item] of cases.entries()) {
@@ -1296,7 +1346,7 @@ async function seedDemoOptionalIntakeWorks(prisma: PrismaClient, now: Date): Pro
         status: "RECEPTIE",
         statusChangedAt: createdAt,
         totalPriceMinor: 65_000,
-        workTypeId: "demo_wt_zirconiu",
+        workTypeId: item.workTypeId,
         cycles: {
           create: {
             clinicId: item.clinicId,
@@ -1317,7 +1367,7 @@ async function seedDemoOptionalIntakeWorks(prisma: PrismaClient, now: Date): Pro
 async function seedDemoTechnicianOperations(prisma: PrismaClient, now: Date): Promise<void> {
   const operationSpecs = [
     ["Coroană zirconiu", "SCANARE", "demo_operation_scanare", "Scanare"], ["Coroană zirconiu", "DESIGN", "demo_operation_design", "Design"], ["Coroană zirconiu", "FREZARE", "demo_operation_frezare_zr", "Frezare"], ["Coroană zirconiu", "PRELUCRARE", "demo_operation_prelucrare_zr", "Prelucrare"], ["Coroană zirconiu", "MIYO", "demo_operation_miyo", "Miyo"], ["Coroană zirconiu", "PLACARE_CERAMICA_ZR", "demo_operation_placare", "Placare ceramică"],
-    ["Coroană ceramică", "METAL_TF", "demo_operation_tf", "Metal TF"], ["Coroană ceramică", "METAL_SF", "demo_operation_sf", "Metal SF"], ["Coroană ceramică", "MODELARE", "demo_operation_modelare", "Modelare"], ["Coroană ceramică", "PRESARE", "demo_operation_presare", "Presare"], ["Coroană ceramică", "GLAZURA", "demo_operation_glazura", "Glazură"], ["Coroană ceramică", "PLACARE_CERAMICA_CERAMICA", "demo_operation_placare_ceramica", "Placare ceramică"],
+    ["Coroană ceramică", "METAL_TF", "demo_operation_tf", "TF"], ["Coroană ceramică", "METAL_SF", "demo_operation_sf", "SF"], ["Coroană ceramică", "MODELARE", "demo_operation_modelare", "Modelare"], ["Coroană ceramică", "PRESARE", "demo_operation_presare", "Presare"], ["Coroană ceramică", "GLAZURA", "demo_operation_glazura", "Glaze"], ["Coroană ceramică", "PLACARE_CERAMICA_CERAMICA", "demo_operation_placare_ceramica", "Placare ceramică"],
     ["Altele", "PLACARE_CERAMICA_ALTELE", "demo_operation_placare_altele", "Placare ceramică"], ["Altele", "COROANA_COMPOZIT_INLAY", "demo_operation_compozit_inlay", "Coroană compozit / Inlay"], ["Altele", "PROTEZA", "demo_operation_proteza", "Proteză"], ["Altele", "COROANE_ADIACENTE", "demo_operation_coroane_adiacente", "Coroane adiacente"], ["Altele", "GINGIE", "demo_operation_gingie", "Gingie"],
   ] as const;
   const operations = operationSpecs.map(([category, code, id, name], index) => ({ category, code, id, name, sortOrder: index + 1 }));

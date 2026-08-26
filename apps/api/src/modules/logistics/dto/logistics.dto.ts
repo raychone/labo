@@ -253,9 +253,10 @@ export class CreatePickupRequestDto {
   @IsString()
   public readonly clinicId!: string;
 
-  @Transform(({ value }) => trimRequiredString(value))
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
   @IsString()
-  public readonly doctorId!: string;
+  public readonly doctorId?: string | null;
 
   @IsISO8601({ strict: true })
   public readonly scheduledDate!: string;

@@ -387,6 +387,7 @@ model Doctor {
 model WorkType {
   id                String             @id @default(cuid())
   code              String             @unique @db.VarChar(20)
+  colorHex          String?            @map("color_hex") @db.VarChar(7)
   symbol            String             @unique @db.VarChar(40)
   name              String             @db.VarChar(160)
   description       String?            @db.VarChar(1000)
@@ -1151,7 +1152,7 @@ model WorkAttachment {
 model PickupRequest {
   id                String              @id @default(cuid())
   clinicId          String              @map("clinic_id")
-  doctorId          String              @map("doctor_id")
+  doctorId          String?             @map("doctor_id")
   scheduledDate     DateTime            @map("scheduled_date") @db.Date
   scheduleType      PickupScheduleType  @map("schedule_type")
   exactTime         String?             @map("exact_time") @db.VarChar(5)
@@ -1169,7 +1170,7 @@ model PickupRequest {
   updatedAt         DateTime            @updatedAt @map("updated_at")
   version           Int                 @default(1)
   clinic            Clinic              @relation(fields: [clinicId], references: [id], onDelete: Restrict)
-  doctor            Doctor              @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  doctor            Doctor?             @relation(fields: [doctorId], references: [id], onDelete: SetNull)
   createdBy         User                @relation("PickupRequestCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
   updatedBy         User?               @relation("PickupRequestUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   cancelledBy       User?               @relation("PickupRequestCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)

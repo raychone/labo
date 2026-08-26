@@ -577,6 +577,7 @@ export class WorksService {
         name: "asc",
       },
       select: {
+        colorHex: true,
         code: true,
         id: true,
         name: true,
@@ -1766,6 +1767,19 @@ export class WorksService {
           workOrderId: createdWorkOrder.id,
         },
       });
+      // Keep the technical probe lifecycle aligned with the operational cycle.
+      // This makes the first probe eligible for the same technician ->
+      // logistics -> courier flow as later probes.
+      if (tx.probeType && Array.isArray(createdWorkOrder.workType.probeTypeCodes)) {
+        const probeCodes = createdWorkOrder.workType.probeTypeCodes.filter((value): value is string => typeof value === "string");
+        if (probeCodes.length > 0) {
+          const initialProbeType = await tx.probeType.findFirst({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true }, where: { code: { in: probeCodes }, isArchived: false } });
+          if (initialProbeType) {
+            const initialProbeCycle = await tx.probeCycle.create({ data: { createdByUserId: context.actorUserId, deadlineAt: deadline.effectiveDueAt ?? requestedDeliveryDate ?? operationNow, openedAt: operationNow, probeTypeId: initialProbeType.id, probeTypeNameSnapshot: initialProbeType.name, sequence: 1, status: "ACTIVE", workOrderId: createdWorkOrder.id } });
+            await tx.workOrder.update({ data: { activeProbeCycleId: initialProbeCycle.id }, where: { id: createdWorkOrder.id } });
+          }
+        }
+      }
       await tx.workOrder.update({
         data: { activeCycleId: initialCycle.id },
         where: { id: createdWorkOrder.id },

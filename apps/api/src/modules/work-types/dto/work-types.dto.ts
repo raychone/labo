@@ -1,5 +1,5 @@
 import { Transform, Type } from "class-transformer";
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from "class-validator";
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from "class-validator";
 
 import { MAX_BASE_PRICE_MINOR, SORT_DIRECTIONS, WORK_TYPE_SORT_FIELDS, WORK_TYPE_UNITS } from "../work-types.constants.js";
 
@@ -40,6 +40,12 @@ function trimRequiredString(value: unknown): string {
   return typeof value === "string" ? value.trim() : value as string;
 }
 
+function normalizeColor(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  return typeof value === "string" ? value.trim().toUpperCase() : value as string;
+}
+
 export class ListWorkTypesQueryDto {
   @IsOptional()
   @Type(() => Number)
@@ -73,6 +79,11 @@ export class ListWorkTypesQueryDto {
 }
 
 export class WorkTypeMutationDto {
+  @IsOptional()
+  @Transform(({ value }) => normalizeColor(value))
+  @IsString()
+  @Matches(/^#[0-9A-F]{6}$/i)
+  public readonly colorHex?: string | null;
   @IsOptional()
   @Transform(({ value }) => trimRequiredString(value))
   @IsString()

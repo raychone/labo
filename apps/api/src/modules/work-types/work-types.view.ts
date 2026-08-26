@@ -6,6 +6,7 @@ export type WorkTypeRecord = Prisma.WorkTypeGetPayload<object>;
 export interface WorkTypeOptionView {
   readonly basePriceMinor: number | null;
   readonly code: string;
+  readonly colorHex: string | null;
   readonly id: string;
   readonly name: string;
   readonly symbol: string;
@@ -39,10 +40,11 @@ export interface PaginatedWorkTypesView {
   readonly total: number;
 }
 
-export function toWorkTypeOptionView(workType: Pick<WorkTypeRecord, "basePriceMinor" | "code" | "id" | "name" | "symbol" | "unit" | "probeFamily" | "probeTypeCodes" | "allowedAddOns" | "exclusiveGroup">): WorkTypeOptionView {
+export function toWorkTypeOptionView(workType: Pick<WorkTypeRecord, "basePriceMinor" | "code" | "colorHex" | "id" | "name" | "symbol" | "unit" | "probeFamily" | "probeTypeCodes" | "allowedAddOns" | "exclusiveGroup">): WorkTypeOptionView {
   return {
     basePriceMinor: workType.basePriceMinor,
     code: workType.code,
+    colorHex: workType.colorHex,
     id: workType.id,
     name: workType.name,
     symbol: workType.symbol,

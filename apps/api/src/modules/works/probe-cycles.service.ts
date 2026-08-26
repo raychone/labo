@@ -118,10 +118,19 @@ export class ProbeCyclesService {
     const work = await this.findTransitionWork(input.actorUserId, input.workOrderId);
     this.assertTechnicianOwnsWork(work, input.actorUserId);
     if (work.status === "FINALIZATA") throw new ConflictException("Lucrarea este deja finalizată.");
-    if (!work.activeProbeCycleId) throw new ConflictException("Lucrarea nu are o probă activă.");
-    const activeCycleId = work.activeProbeCycleId;
     const now = new Date();
     const completed = await this.prisma.$transaction(async (tx) => {
+      let activeCycleId = work.activeProbeCycleId;
+      if (!activeCycleId) {
+        const probeCodes = jsonStringArray(work.workType.probeTypeCodes);
+        if (probeCodes.length === 0) throw new ConflictException("Lucrarea nu are un tip de probă configurat.");
+        const probeType = await tx.probeType.findFirst({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true }, where: { code: { in: [...probeCodes] }, isArchived: false } });
+        if (!probeType) throw new ConflictException("Tipul probei nu a fost găsit în catalogul tehnic.");
+        const previous = await tx.probeCycle.findFirst({ orderBy: { sequence: "desc" }, select: { sequence: true }, where: { workOrderId: input.workOrderId } });
+        const created = await tx.probeCycle.create({ data: { createdByUserId: input.actorUserId, deadlineAt: work.effectiveDueAt ?? work.requestedDeliveryDate ?? now, openedAt: now, probeTypeId: probeType.id, probeTypeNameSnapshot: probeType.name, sequence: (previous?.sequence ?? 0) + 1, status: "ACTIVE", workOrderId: input.workOrderId } });
+        activeCycleId = created.id;
+        await tx.workOrder.updateMany({ data: { activeProbeCycleId: created.id }, where: { id: input.workOrderId, activeProbeCycleId: null } });
+      }
       const cycle = await tx.probeCycle.findFirst({ select: { id: true, sequence: true, probeTypeNameSnapshot: true, deadlineAt: true }, where: { id: activeCycleId, status: "ACTIVE", workOrderId: input.workOrderId } });
       if (!cycle) throw new ConflictException("Proba activă a fost deja închisă sau modificată.");
       const cycleUpdate = await tx.probeCycle.updateMany({ data: { completedAt: now, completedByUserId: input.actorUserId, completionOutcome: "PROBE_READY", status: "COMPLETED", version: { increment: 1 } }, where: { id: cycle.id, status: "ACTIVE" } });
@@ -198,9 +207,9 @@ export class ProbeCyclesService {
     return work;
   }
 
-  private async findTransitionWork(actorUserId: string, workOrderId: string, legalEntity?: LegalEntityContext): Promise<{ readonly id: string; readonly code: string; readonly patientName: string; readonly status: string; readonly activeProbeCycleId: string | null; readonly claimStatus: string; readonly claimedByUserId: string | null; readonly executionLegalEntityId: string | null; readonly claimRevision: number }> {
+  private async findTransitionWork(actorUserId: string, workOrderId: string, legalEntity?: LegalEntityContext): Promise<{ readonly id: string; readonly code: string; readonly patientName: string; readonly status: string; readonly activeProbeCycleId: string | null; readonly claimStatus: string; readonly claimedByUserId: string | null; readonly executionLegalEntityId: string | null; readonly claimRevision: number; readonly effectiveDueAt: Date | null; readonly requestedDeliveryDate: Date | null; readonly workType: { readonly probeTypeCodes: unknown } }> {
     const visibleWhere = await getVisibleWorkWhere(this.authorizationService, actorUserId);
-    const work = await this.prisma.workOrder.findFirst({ select: { activeProbeCycleId: true, claimRevision: true, claimStatus: true, claimedByUserId: true, code: true, executionLegalEntityId: true, id: true, patientName: true, status: true }, where: { AND: [{ id: workOrderId }, visibleWhere, ...(legalEntity ? [{ executionLegalEntityId: legalEntity.id }] : [])] } });
+    const work = await this.prisma.workOrder.findFirst({ select: { activeProbeCycleId: true, claimRevision: true, claimStatus: true, claimedByUserId: true, code: true, effectiveDueAt: true, executionLegalEntityId: true, id: true, patientName: true, requestedDeliveryDate: true, status: true, workType: { select: { probeTypeCodes: true } } }, where: { AND: [{ id: workOrderId }, visibleWhere, ...(legalEntity ? [{ executionLegalEntityId: legalEntity.id }] : [])] } });
     if (!work) throw new NotFoundException("Lucrarea nu a fost găsită.");
     return work;
   }

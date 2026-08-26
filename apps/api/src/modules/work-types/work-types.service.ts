@@ -25,7 +25,7 @@ interface ActorContext {
 
 type AuditClient = Pick<PrismaTypes.TransactionClient, "auditLog"> | Pick<PrismaService, "auditLog">;
 
-const WORK_TYPE_MUTATION_FIELDS = ["basePriceMinor", "description", "name", "symbol", "unit"] as const satisfies readonly (keyof UpdateWorkTypeDto)[];
+const WORK_TYPE_MUTATION_FIELDS = ["basePriceMinor", "colorHex", "description", "name", "symbol", "unit"] as const satisfies readonly (keyof UpdateWorkTypeDto)[];
 
 @Injectable()
 export class WorkTypesService {
@@ -98,6 +98,7 @@ export class WorkTypesService {
       const code = await this.workTypeCodeService.generate(tx);
       const data: PrismaTypes.WorkTypeUncheckedCreateInput = {
         basePriceMinor: dto.basePriceMinor,
+        colorHex: dto.colorHex ?? null,
         code,
         createdByUserId: context.actorUserId,
         name: dto.name,
@@ -115,7 +116,7 @@ export class WorkTypesService {
       await this.recordAudit(tx, {
         action: WORK_TYPES_AUDIT_ACTIONS.created,
         actorUserId: context.actorUserId,
-        metadata: { basePriceMinor: dto.basePriceMinor, code, name: dto.name, symbol: dto.symbol },
+        metadata: { basePriceMinor: dto.basePriceMinor, code, colorHex: dto.colorHex ?? null, name: dto.name, symbol: dto.symbol },
         requestMetadata: context.requestMetadata,
         resourceId: createdWorkType.id,
       });
@@ -389,6 +390,9 @@ export class WorkTypesService {
         if (typeof value === "number") {
           data.basePriceMinor = value;
         }
+        return;
+      case "colorHex":
+        data.colorHex = typeof value === "string" ? value : null;
         return;
       case "description":
         data.description = typeof value === "number" ? null : value;

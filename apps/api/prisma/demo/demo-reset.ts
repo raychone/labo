@@ -45,15 +45,13 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
         ],
       },
     });
-    // Older demo runs can have pickup IDs without the current demo prefix,
-    // while the pickup itself is still selected for deletion by clinic.
-    // Delete those dependent stops by relation before deleting pickup rows.
+    // Older demo runs can have pickup IDs without the current demo prefix;
+    // only remove them when their request is still explicitly demo-owned.
     await tx.courierRouteStop.deleteMany({
       where: {
         pickupRequest: {
           OR: [
             { id: { startsWith: `${DEMO_ID_PREFIX}pickup_` } },
-            { clinicId: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
           ],
         },
       },
@@ -62,7 +60,6 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
       where: {
         OR: [
           { id: { startsWith: `${DEMO_ID_PREFIX}pickup_` } },
-          { clinicId: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
         ],
       },
     });
@@ -100,8 +97,6 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
       where: {
         OR: [
           { id: { startsWith: `${DEMO_ID_PREFIX}pricing_agreement_` } },
-          { clinicId: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
-          { doctorId: { startsWith: `${DEMO_ID_PREFIX}doctor_` } },
         ],
       },
     });
@@ -138,7 +133,6 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
       where: {
         OR: [
           { id: { startsWith: `${DEMO_ID_PREFIX}delivery_` } },
-          { clinicId: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
         ],
       },
     });
@@ -157,7 +151,6 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
       where: {
         OR: [
           { id: { startsWith: `${DEMO_ID_PREFIX}delivery_group_` } },
-          { clinicId: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
         ],
       },
     });
@@ -184,7 +177,6 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
       where: {
         OR: [
           { id: { startsWith: `${DEMO_ID_PREFIX}payment_` } },
-          { clinicId: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
           { billingDocumentId: { startsWith: `${DEMO_ID_PREFIX}invoice_` } },
           { billingDocumentId: { startsWith: `${DEMO_ID_PREFIX}proforma_` } },
           { billingDocument: demoBillingDocumentWhere() },
@@ -273,16 +265,7 @@ export async function resetDemoData(prisma: PrismaClient): Promise<void> {
     });
 
     await tx.doctor.deleteMany({
-      where: {
-        OR: [
-          { id: { startsWith: `${DEMO_ID_PREFIX}doctor_` } },
-          { clinicId: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
-        ],
-      },
-    });
-
-    await tx.clinic.deleteMany({
-      where: { id: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
+      where: { id: { startsWith: `${DEMO_ID_PREFIX}doctor_` } },
     });
 
     await tx.workType.deleteMany({
@@ -364,22 +347,16 @@ function demoBillingDocumentWhere(): Prisma.BillingDocumentWhereInput {
   return {
     OR: [
       { id: { startsWith: DEMO_ID_PREFIX } },
-      { clinicId: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
-      { doctorId: { startsWith: `${DEMO_ID_PREFIX}doctor_` } },
       { series: { in: [DEMO_PROFORMA_SERIES, DEMO_INVOICE_SERIES] } },
     ],
   };
 }
 
 function demoWorkOrderWhere(): Prisma.WorkOrderWhereInput {
-  return {
-    OR: [
-      { id: { startsWith: `${DEMO_ID_PREFIX}work_` } },
-      { clinicId: { startsWith: `${DEMO_ID_PREFIX}clinic_` } },
-      { doctorId: { startsWith: `${DEMO_ID_PREFIX}doctor_` } },
-      { workTypeId: { startsWith: DEMO_ID_PREFIX } },
-    ],
-  };
+  // Never infer ownership from a shared demo clinic/doctor. Reception can
+  // create real work using those records; only explicit demo work IDs belong
+  // to the resettable dataset.
+  return { id: { startsWith: `${DEMO_ID_PREFIX}work_` } };
 }
 
 function demoWorkflowExecutionWhere(): Prisma.WorkWorkflowExecutionWhereInput {

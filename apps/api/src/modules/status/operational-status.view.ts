@@ -184,6 +184,7 @@ export interface OperationalStatusRowView {
     readonly status: WorkLogisticsStatus | null;
   };
   readonly operationalStatus: "RECEPTIE" | "IN_LUCRU" | "IN_ASTEPTARE" | "FINALIZATA";
+  readonly technicalReadiness: "PROBE_READY" | "FINAL_READY" | null;
   readonly patient: {
     readonly id: string | null;
     readonly name: string;
@@ -367,6 +368,7 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
     priority: work.priority,
     realLabSheet,
     shade: work.shade,
+    technicalReadiness: work.technicalReadiness,
     updatedAt: work.updatedAt.toISOString(),
     workCode: work.code,
     workOwner: work.claimedBy ? toPerson(work.claimedBy) : work.assignedTechnician ? toPerson(work.assignedTechnician) : null,
