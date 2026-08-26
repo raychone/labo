@@ -1087,8 +1087,13 @@ export class WorksService {
         ? await this.prisma.clinic.findUnique({ select: { legalEntity: { select: { code: true } } }, where: { id: before.clinicId } })
         : null;
     const clinicLegalEntityCode = inlineClinicLegalEntityCode ?? clinicLegalEntity?.legalEntity?.code;
-    const legalEntity = clinicLegalEntityCode === "CDT" || clinicLegalEntityCode === "NG"
-      ? await this.validateExecutionLegalEntity(this.prisma, clinicLegalEntityCode)
+    // The claim dialog may explicitly select the execution company. Previously
+    // this value was silently ignored and the clinic's collaboration was used,
+    // leaving the active cycle without the company/pricing snapshot expected
+    // by billing when the work was later finalized.
+    const requestedLegalEntityCode = dto.executionLegalEntityCode ?? clinicLegalEntityCode;
+    const legalEntity = requestedLegalEntityCode === "CDT" || requestedLegalEntityCode === "NG"
+      ? await this.validateExecutionLegalEntity(this.prisma, requestedLegalEntityCode)
       : null;
     if (!before.activeCycle) {
       throw new ConflictException("Lucrarea nu are un ciclu activ.");

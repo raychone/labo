@@ -209,6 +209,7 @@ export class ProbeCyclesService {
       if (updated) {
         await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.workOrderFinalized, actorUserId: input.actorUserId, metadata: { workOrderLabel: work.code, notificationEvent: B17_LOGISTICS_NOTIFICATION_EVENTS.finalWorkReady, notificationKey: getB17LogisticsNotificationKey(B17_LOGISTICS_NOTIFICATION_EVENTS.finalWorkReady, { workOrderId: input.workOrderId }) }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: input.workOrderId, resourceType: "work_order" });
         await this.notificationsService?.publishFinal({ workOrderId: input.workOrderId, code: work.code, patientName: work.patientName });
+        await this.notificationsService?.publishBillingCandidate({ workOrderId: input.workOrderId, code: work.code, patientName: work.patientName });
       }
       return;
     }
@@ -226,6 +227,7 @@ export class ProbeCyclesService {
     });
     await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.workOrderFinalized, actorUserId: input.actorUserId, metadata: { probeTypeName: completed.probeTypeNameSnapshot, workOrderLabel: work.code, notificationEvent: B17_LOGISTICS_NOTIFICATION_EVENTS.finalWorkReady, notificationKey: getB17LogisticsNotificationKey(B17_LOGISTICS_NOTIFICATION_EVENTS.finalWorkReady, { workOrderId: input.workOrderId }) }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: input.workOrderId, resourceType: "work_order" });
     await this.notificationsService?.publishFinal({ workOrderId: input.workOrderId, code: work.code, patientName: work.patientName });
+    await this.notificationsService?.publishBillingCandidate({ workOrderId: input.workOrderId, code: work.code, patientName: work.patientName });
   }
 
   private async findVisibleWork(actorUserId: string, workOrderId: string, legalEntity?: LegalEntityContext): Promise<{ readonly id: string; readonly code: string; readonly patientName: string; readonly items: readonly { readonly workType: { readonly probeTypeCodes: unknown } | null }[] }> {

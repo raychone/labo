@@ -185,7 +185,10 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   public async publishFinal(input: { readonly workOrderId: string; readonly code: string; readonly patientName: string }): Promise<void> {
-    await this.publish({ dedupeKey: `final-ready:${input.workOrderId}`, deepLink: `/logistics?workId=${encodeURIComponent(input.workOrderId)}`, message: `${input.code} · ${input.patientName}`, recipientPermission: "logistics", resourceId: input.workOrderId, resourceType: "work_order", severity: "ACTION", title: B18_NOTIFICATION_LABELS_RO.FINAL_WORK_READY, type: B17_LOGISTICS_NOTIFICATION_EVENTS.finalWorkReady });
+    // Finalization is a financial hand-off for the manager. The logistics
+    // queue still discovers finalized work through its normal operational
+    // listing, while the actionable notification must open billing.
+    await this.publish({ dedupeKey: `final-ready:${input.workOrderId}`, deepLink: `/billing?tab=uninvoiced&workId=${encodeURIComponent(input.workOrderId)}`, message: `${input.code} · ${input.patientName}`, recipientPermission: "manager", resourceId: input.workOrderId, resourceType: "work_order", severity: "ACTION", title: B18_NOTIFICATION_LABELS_RO.FINAL_WORK_READY, type: B17_LOGISTICS_NOTIFICATION_EVENTS.finalWorkReady });
   }
 
   public async publishDelivery(input: { readonly deliveryId: string; readonly workOrderId: string; readonly code: string; readonly patientName: string; readonly failed: boolean; readonly failureReason?: string | null }): Promise<void> {
@@ -271,7 +274,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async publishBillingCandidate(input: { readonly workOrderId: string; readonly code: string; readonly patientName: string }): Promise<void> {
+  public async publishBillingCandidate(input: { readonly workOrderId: string; readonly code: string; readonly patientName: string }): Promise<void> {
     const deepLink = `/billing?tab=uninvoiced&workId=${encodeURIComponent(input.workOrderId)}`;
     const base = { deepLink, message: `${input.code} · ${input.patientName}`, recipientPermission: "manager" as const, resourceId: input.workOrderId, resourceType: "work_order", severity: "ACTION" as const };
     await this.publish({ ...base, dedupeKey: `invoice-required:work:${input.workOrderId}`, title: B18_NOTIFICATION_LABELS_RO.INVOICE_REQUIRED, type: "INVOICE_REQUIRED" });

@@ -21,7 +21,7 @@ type CatalogItemWithRules = PriceCatalogItem & {
   readonly executionTimeRules: readonly ExecutionTimeRule[];
 };
 
-type PricingResolverClient = Pick<PrismaService, "legalEntitySettings" | "priceCatalogItem" | "pricingAgreement">;
+type PricingResolverClient = Pick<PrismaService, "legalEntitySettings" | "priceCatalogItem" | "pricingAgreement"> & Partial<Pick<PrismaService, "workType">>;
 
 interface AppliedRule {
   readonly agreement: AgreementWithRules;
@@ -32,7 +32,7 @@ export interface PricingResolution {
   readonly appliedAgreementId: string | null;
   readonly appliedAgreementType: "CLINIC" | "DOCTOR" | null;
   readonly appliedRuleScope: PricingRuleScope | null;
-  readonly catalogItemId: string;
+  readonly catalogItemId: string | null;
   readonly currency: string;
   readonly executionTimeRule: ExecutionTimeRule | null;
   readonly executionTimeRules: readonly ExecutionTimeRule[];
@@ -65,7 +65,7 @@ export class PricingResolverService {
       }),
     ]);
 
-    const trace: string[] = [`Catalog ${input.legalEntityCode} găsit pentru tipul de lucrare.`];
+    const trace: string[] = [catalogItem ? `Catalog ${input.legalEntityCode} găsit pentru tipul de lucrare.` : `Se folosește prețul tipului de lucrare pentru ${input.legalEntityCode}.`];
     const [doctorAgreements, clinicAgreements] = await Promise.all([
       this.findActiveAgreements(client, {
         evaluationDate: input.evaluationDate,
@@ -81,10 +81,18 @@ export class PricingResolverService {
       }),
     ]);
 
-    const doctorRule = findFirstApplicableAgreementRule(doctorAgreements, catalogItem);
-    const clinicRule = doctorRule ? null : findFirstApplicableAgreementRule(clinicAgreements, catalogItem);
+    const doctorRule = catalogItem ? findFirstApplicableAgreementRule(doctorAgreements, catalogItem) : null;
+    const clinicRule = catalogItem && !doctorRule ? findFirstApplicableAgreementRule(clinicAgreements, catalogItem) : null;
     const applied = doctorRule ?? clinicRule;
-    const finalUnitPriceMinor = applied ? applyPricingAdjustment(catalogItem.standardPriceMinor, applied.rule) : catalogItem.standardPriceMinor;
+    const fallbackWorkTypePrice = !catalogItem && client.workType
+      ? (await client.workType.findUnique({ select: { basePriceMinor: true }, where: { id: input.workTypeId } }))?.basePriceMinor
+      : null;
+    const standardUnitPriceMinor = catalogItem?.standardPriceMinor ?? fallbackWorkTypePrice;
+    const finalUnitPriceMinor = applied ? applyPricingAdjustment(standardUnitPriceMinor!, applied.rule) : standardUnitPriceMinor;
+
+    if (finalUnitPriceMinor === null || finalUnitPriceMinor === undefined) {
+      throw new NotFoundException("Tipul de lucrare nu are un preț configurat.");
+    }
 
     if (finalUnitPriceMinor < 0) {
       throw new BadRequestException("Regula de preț produce o valoare negativă.");
@@ -94,7 +102,7 @@ export class PricingResolverService {
       throw new BadRequestException("Cantitatea trebuie să fie un întreg pozitiv.");
     }
 
-    const executionRule = selectExecutionTimeRule(catalogItem.executionTimeRules, input.quantity);
+    const executionRule = selectExecutionTimeRule(catalogItem?.executionTimeRules ?? [], input.quantity);
     const source = applied?.agreement.subjectType ?? null;
 
     if (doctorAgreements.length > 0 && !doctorRule) {
@@ -121,22 +129,22 @@ export class PricingResolverService {
       appliedAgreementId: applied?.agreement.id ?? null,
       appliedAgreementType: source,
       appliedRuleScope: applied?.rule.scope ?? null,
-      catalogItemId: catalogItem.id,
+      catalogItemId: catalogItem?.id ?? null,
       currency: settings?.currency ?? "RON",
       executionTimeRule: executionRule,
-      executionTimeRules: catalogItem.executionTimeRules,
+      executionTimeRules: catalogItem?.executionTimeRules ?? [],
       explanation: createExplanation(source, applied?.rule.scope ?? null),
       finalUnitPriceMinor,
       legalEntityCode: input.legalEntityCode,
       quantity: input.quantity,
       resolutionTrace: trace,
-      standardUnitPriceMinor: catalogItem.standardPriceMinor,
+      standardUnitPriceMinor: standardUnitPriceMinor!,
       totalPriceMinor: finalUnitPriceMinor * input.quantity,
       workTypeId: input.workTypeId,
     };
   }
 
-  private async findCatalogItem(client: PricingResolverClient, legalEntityId: string, workTypeId: string): Promise<CatalogItemWithRules> {
+  private async findCatalogItem(client: PricingResolverClient, legalEntityId: string, workTypeId: string): Promise<CatalogItemWithRules | null> {
     const catalogItem = await client.priceCatalogItem.findFirst({
       include: {
         executionTimeRules: {
@@ -154,10 +162,6 @@ export class PricingResolverService {
         workTypeId,
       },
     });
-
-    if (!catalogItem) {
-      throw new NotFoundException("Nu există preț standard activ pentru firma activă și tipul de lucrare.");
-    }
 
     return catalogItem;
   }
