@@ -113,6 +113,8 @@ function createService({ allowUpload = true } = {}) {
       courierRoute: { count: courierRouteCount, create: courierRouteCreate, findUnique: courierRouteFindUnique, update: courierRouteUpdate },
       courierRouteEvent: { create: courierRouteEventCreate },
       courierRouteStop: { findFirst: courierRouteStopFindFirst, update: courierRouteStopUpdate },
+      delivery: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      deliveryPreparationItem: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       pickupRequest: { create: pickupRequestCreate, findUnique: pickupRequestFindUnique, update: pickupRequestUpdate },
       workAttachment: { create: workAttachmentCreate },
       workOrder: { update: workOrderUpdate },

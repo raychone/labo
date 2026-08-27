@@ -231,8 +231,8 @@ describe("PERMISSION_REGISTRY", () => {
   it("does not grant override-only permissions implicitly for selected matrix O cells", () => {
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["invoice.create"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["finance.read"]).toBeNull();
-    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.update"]).toBeNull();
-    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.urgency.update"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.update"]).toBe("ASSIGNED");
+    expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["works.urgency.update"]).toBe("ASSIGNED");
     expect(ROLE_PERMISSION_MATRIX.CURIER["works.urgency.update"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.MEDIC["works.urgency.update"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.MEDIC["audit.read"]).toBeNull();

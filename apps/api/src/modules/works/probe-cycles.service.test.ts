@@ -146,6 +146,7 @@ describe("ProbeCyclesService / B10", () => {
 
   it("closes the active cycle as terminal finalization and hides it from normal probe history", async () => {
     const audit = { record: vi.fn() };
+    const notifications = { publishFinal: vi.fn().mockResolvedValue(undefined), publishBillingCandidate: vi.fn().mockResolvedValue(undefined) };
     const activeCycle = { id: "cycle-1", sequence: 2, probeTypeNameSnapshot: "Biscuit" };
     const tx = {
       probeCycle: { findFirst: vi.fn().mockResolvedValue(activeCycle), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
@@ -156,12 +157,26 @@ describe("ProbeCyclesService / B10", () => {
       workOrder: { findFirst: vi.fn().mockResolvedValue({ id: "wo-1", code: "WO-1", status: "IN_LUCRU", activeProbeCycleId: "cycle-1", claimStatus: "CLAIMED", claimedByUserId: "tech-1", executionLegalEntityId: null, claimRevision: 4 }) },
       $transaction: vi.fn(async (callback: (value: unknown) => unknown) => callback(tx)),
     } as never;
-    const service = new ProbeCyclesService(createAuthorization(), audit as never, prisma, {} as never);
+    const service = new ProbeCyclesService(createAuthorization(), audit as never, prisma, {} as never, notifications as never);
 
     await service.finalizeWork({ actorUserId: "tech-1", workOrderId: "wo-1" });
 
     expect(tx.probeCycle.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ completionOutcome: "FINALIZED", status: "COMPLETED" }) }));
     expect(tx.workOrder.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ technicalReadiness: "FINAL_READY", status: "FINALIZATA", finalizedAt: expect.any(Date) }) }));
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: "work_order.finalized" }));
+    expect(notifications.publishFinal).toHaveBeenCalledTimes(1);
+    expect(notifications.publishBillingCandidate).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a repeated finalization before it can create another cycle or notification", async () => {
+    const prisma = {
+      workOrder: { findFirst: vi.fn().mockResolvedValue({ id: "wo-1", code: "WO-1", status: "FINALIZATA", activeProbeCycleId: null, claimStatus: "CLAIMED", claimedByUserId: "tech-1" }) },
+    } as never;
+    const notifications = { publishFinal: vi.fn(), publishBillingCandidate: vi.fn() };
+    const service = new ProbeCyclesService(createAuthorization(), { record: vi.fn() } as never, prisma, {} as never, notifications as never);
+
+    await expect(service.finalizeWork({ actorUserId: "tech-1", workOrderId: "wo-1" })).rejects.toThrow("deja finalizată");
+    expect(notifications.publishFinal).not.toHaveBeenCalled();
+    expect(notifications.publishBillingCandidate).not.toHaveBeenCalled();
   });
 });

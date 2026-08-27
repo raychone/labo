@@ -9,6 +9,7 @@ import { AuthorizationService } from "../rbac/authorization.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import { getVisibleWorkWhere } from "./work-readability.js";
 import { ProbeTypesService } from "./probe-types.service.js";
+import { WorksService } from "./works.service.js";
 import type { SelectProbeTypeDto } from "./dto/probe-cycles.dto.js";
 
 @Injectable()
@@ -19,6 +20,7 @@ export class ProbeCyclesService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(ProbeTypesService) private readonly probeTypesService: ProbeTypesService,
     @Optional() @Inject(NotificationsService) private readonly notificationsService?: NotificationsService,
+    @Optional() @Inject(WorksService) private readonly worksService?: WorksService,
   ) {}
 
   public async selectProbeType(input: {
@@ -135,7 +137,7 @@ export class ProbeCyclesService {
     return toProbeCycleView(created);
   }
 
-  public async markProbeReady(input: { readonly actorUserId: string; readonly workOrderId: string; readonly legalEntity?: LegalEntityContext; readonly requestMetadata?: RequestMetadata }): Promise<void> {
+  public async markProbeReady(input: { readonly actorUserId: string; readonly executionLegalEntityCode?: "CDT" | "NG"; readonly workOrderId: string; readonly legalEntity?: LegalEntityContext; readonly requestMetadata?: RequestMetadata }): Promise<void> {
     await this.authorizationService.requirePermission({ permission: "works.change_status", requiredScope: "OWN_STAGE", userId: input.actorUserId });
     // Technician transitions are authorized by ownership, not by the currently
     // selected organization context. A technician may work on a clinic whose
@@ -145,6 +147,7 @@ export class ProbeCyclesService {
     if (work.status === "FINALIZATA") throw new ConflictException("Lucrarea este deja finalizată.");
     const now = new Date();
     const completed = await this.prisma.$transaction(async (tx) => {
+      await this.worksService?.ensureLateExecutionContext(tx, input.workOrderId, input.actorUserId, input.requestMetadata, now, input.executionLegalEntityCode);
       let activeCycleId = work.activeProbeCycleId;
       if (!activeCycleId) {
         const probeCodes = jsonStringArray(work.workType.probeTypeCodes);
@@ -172,7 +175,7 @@ export class ProbeCyclesService {
     await this.notificationsService?.publishProbe({ workOrderId: input.workOrderId, probeCycleId: completed.id, code: work.code, patientName: work.patientName, sequence: completed.sequence, probeTypeName: completed.probeTypeNameSnapshot, deadlineAt: completed.deadlineAt.toISOString() });
   }
 
-  public async finalizeWork(input: { readonly actorUserId: string; readonly workOrderId: string; readonly legalEntity?: LegalEntityContext; readonly requestMetadata?: RequestMetadata }): Promise<void> {
+  public async finalizeWork(input: { readonly actorUserId: string; readonly executionLegalEntityCode?: "CDT" | "NG"; readonly workOrderId: string; readonly legalEntity?: LegalEntityContext; readonly requestMetadata?: RequestMetadata }): Promise<void> {
     await this.authorizationService.requirePermission({ permission: "works.change_status", requiredScope: "OWN_STAGE", userId: input.actorUserId });
     const work = await this.findTransitionWork(input.actorUserId, input.workOrderId);
     this.assertTechnicianOwnsWork(work, input.actorUserId);
@@ -180,6 +183,7 @@ export class ProbeCyclesService {
     if (!work.activeProbeCycleId) {
       const now = new Date();
       const updated = await this.prisma.$transaction(async (tx) => {
+        await this.worksService?.ensureLateExecutionContext(tx, input.workOrderId, input.actorUserId, input.requestMetadata, now, input.executionLegalEntityCode);
         const workUpdate = await tx.workOrder.updateMany({
           data: {
             claimStatus: "UNCLAIMED",
@@ -216,6 +220,7 @@ export class ProbeCyclesService {
     const activeCycleId = work.activeProbeCycleId;
     const now = new Date();
     const completed = await this.prisma.$transaction(async (tx) => {
+      await this.worksService?.ensureLateExecutionContext(tx, input.workOrderId, input.actorUserId, input.requestMetadata, now, input.executionLegalEntityCode);
       const cycle = await tx.probeCycle.findFirst({ select: { id: true, sequence: true, probeTypeNameSnapshot: true }, where: { id: activeCycleId, status: "ACTIVE", workOrderId: input.workOrderId } });
       if (!cycle) throw new ConflictException("Contextul tehnic a fost deja închis sau modificat.");
       const cycleUpdate = await tx.probeCycle.updateMany({ data: { completedAt: now, completedByUserId: input.actorUserId, completionOutcome: "FINALIZED", status: "COMPLETED", version: { increment: 1 } }, where: { id: cycle.id, status: "ACTIVE" } });

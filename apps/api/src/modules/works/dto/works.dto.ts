@@ -37,6 +37,13 @@ function trimRequiredString(value: unknown): string {
   return typeof value === "string" ? value.trim() : value as string;
 }
 
+export class CompleteTechnicalWorkDto {
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsIn(["CDT", "NG"])
+  public readonly executionLegalEntityCode?: "CDT" | "NG";
+}
+
 export class ListWorksQueryDto {
   @IsOptional()
   @Type(() => Number)

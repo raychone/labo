@@ -5,7 +5,7 @@ import type { WorkDeadlineData } from "./work-deadline.service.js";
 
 export const EXECUTION_SNAPSHOT_VERSION = 1;
 
-export type ExecutionSnapshotSource = "MANAGER_ASSIGNMENT" | "TECHNICIAN_FIRST_CLAIM";
+export type ExecutionSnapshotSource = "ADMIN_REPAIR" | "MANAGER_ASSIGNMENT" | "TECHNICIAN_FIRST_CLAIM";
 
 export interface ExecutionSnapshotWorkContext {
   readonly clinicName: string;

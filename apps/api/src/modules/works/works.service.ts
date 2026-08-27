@@ -447,6 +447,61 @@ export class WorksService {
     @Optional() @Inject(NotificationsService) private readonly notificationsService?: NotificationsService,
   ) {}
 
+  /**
+   * Late-bind the execution company for works that were claimed before the
+   * clinic had CDT/NG configured. Claiming remains non-blocking; billing gets
+   * a complete immutable context when the work reaches its first probe or is
+   * finalized.
+   */
+  public async ensureLateExecutionContext(
+    tx: Prisma.TransactionClient,
+    workOrderId: string,
+    actorUserId: string,
+    requestMetadata: RequestMetadata = {},
+    occurredAt = new Date(),
+    requestedLegalEntityCode?: "CDT" | "NG",
+  ): Promise<void> {
+    const work = await tx.workOrder.findUnique({ include: WORK_ORDER_INCLUDE, where: { id: workOrderId } });
+    if (!work?.activeCycle || work.activeCycle.executionSnapshot) return;
+
+    const clinic = work.clinicId
+      ? await tx.clinic.findUnique({ select: { legalEntity: { select: { code: true, displayName: true, id: true, isActive: true } } }, where: { id: work.clinicId } })
+      : null;
+    const clinicEntity = clinic?.legalEntity;
+    const entityCode = requestedLegalEntityCode
+      ?? (clinicEntity?.code === "CDT" || clinicEntity?.code === "NG"
+      ? clinicEntity.code
+      : work.executionLegalEntity?.code === "CDT" || work.executionLegalEntity?.code === "NG"
+        ? work.executionLegalEntity.code
+        : null);
+    const technicianId = work.claimedByUserId ?? work.assignedTechnicianId;
+    if (!entityCode) throw new ConflictException("Selectează firma CDT sau NG înainte de a marca lucrarea ca Probă gata sau Finalizată.");
+    if (!technicianId) throw new ConflictException("Lucrarea nu are tehnicianul responsabil pentru fixarea firmei de execuție.");
+
+    const legalEntity = await this.validateExecutionLegalEntity(tx, entityCode);
+    try {
+      const snapshot = await this.prepareExecutionSnapshot(tx, {
+        actorUserId,
+        claimedAt: work.claimedAt ?? occurredAt,
+        legalEntity,
+        nextClaimRevision: work.claimRevision,
+        requestMetadata,
+        source: "ADMIN_REPAIR",
+        technicianId,
+        workOrder: work,
+      });
+      await tx.workOrder.update({
+        data: { ...(snapshot.deadlineUpdate ?? {}), executionLegalEntityId: legalEntity.id, updatedByUserId: actorUserId, version: { increment: 1 } },
+        where: { id: workOrderId },
+      });
+    } catch (error) {
+      // Missing pricing configuration must not stop production. The work can
+      // still finish, and remains visible as unavailable for billing until a
+      // manager configures pricing.
+      if (!(error instanceof ConflictException) || !error.message.includes("nu există un preț aplicabil")) throw error;
+    }
+  }
+
   public async listWorks(actorUserId: string, query: ListWorksQueryDto, includePricing: boolean): Promise<PaginatedWorksView> {
     const access = await this.createClaimAccess(actorUserId);
     return this.listWorksWithWhere(query, includePricing, access, await this.getVisibleWorkWhere(actorUserId), {});
@@ -1502,11 +1557,11 @@ export class WorksService {
   public async setWorkStatus(context: ActorContext, workOrderId: string, dto: SetWorkStatusDto): Promise<WorkDetailView> {
     const before = await this.findWorkOrderOrThrow(workOrderId);
     await this.ensureCanChangeStatus(context.actorUserId, before);
-    if (dto.status === "FINALIZATA" && before.activeProbeCycleId) {
-      throw new ConflictException("Folosește acțiunea canonică «Finalizată» pentru ciclul tehnic activ.");
+    if (dto.status === "FINALIZATA") {
+      throw new ConflictException("Folosește acțiunea canonică «Finalizată» pentru a închide ciclul tehnic și a trimite lucrarea la facturare.");
     }
     this.assertAllowedStatusTransition(before.status, dto.status);
-    if ((dto.status === "IN_LUCRU" || dto.status === "IN_ASTEPTARE" || dto.status === "FINALIZATA") && before.claimStatus !== "CLAIMED") {
+    if ((dto.status === "IN_LUCRU" || dto.status === "IN_ASTEPTARE") && before.claimStatus !== "CLAIMED") {
       throw new BadRequestException("Lucrarea trebuie preluată înainte de această stare.");
     }
 
@@ -1636,7 +1691,9 @@ export class WorksService {
     // The requested date is the only deadline source for a newly registered work.
     // When the form omits the time, keep the date at midnight instead of falling
     // back to the calculated/template deadline.
-    const manualDueAt = dto.manualDueAt ? new Date(dto.manualDueAt) : requestedDeliveryDate;
+    // A requested delivery date is part of the normal reception data. Only an
+    // explicit manualDueAt is a privileged deadline override.
+    const manualDueAt = dto.manualDueAt ? new Date(dto.manualDueAt) : null;
     if (manualDueAt && !canSetManualDeadline) {
       throw new BadRequestException("Nu ai permisiunea necesară pentru termen manual.");
     }

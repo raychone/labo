@@ -82,6 +82,17 @@ export async function seedTechnicalCatalog(prisma: PrismaClient): Promise<{ read
       update: { category, description: "Manoperă din catalogul tehnic.", isActive: true, name, sortOrder: index + 1, updatedByUserId: manager.id },
       where: { id: `technical_operation_${code.toLowerCase()}` },
     });
+
+    // Demo/legacy seeds used the bare operation code and created a second
+    // active row next to the canonical technical operation. Keep the
+    // canonical row and hide those duplicates from all selectors.
+    await prisma.technicianOperation.updateMany({
+      data: { isActive: false, updatedByUserId: manager.id },
+      where: {
+        code,
+        NOT: { id: `technical_operation_${code.toLowerCase()}` },
+      },
+    });
   }
 
   // Older catalogs used different IDs/codes for these operations. Keep the
@@ -134,6 +145,12 @@ export async function seedTechnicalCatalog(prisma: PrismaClient): Promise<{ read
   for (const legalEntity of legalEntities) {
     for (const [sortOrder, item] of REAL_PRICING_CATALOG.entries()) {
       const technicalWorkTypeId = `technical_pricing_work_type_${item.key}`;
+      const allowedAddOns = item.symbol === "EX-11"
+        ? [
+          { code: "GINGIE", label: "Gingie", amountMinor: 20_000 },
+          { code: "PLACATA", label: "Plăcată", amountMinor: 5_000 },
+        ]
+        : [];
       // WorkType.code is VARCHAR(20). Use the canonical Excel symbol, which
       // is short and unique (including for Reparație 1–4).
       const workTypeCode = `TECH-${item.symbol}`;
@@ -143,11 +160,11 @@ export async function seedTechnicalCatalog(prisma: PrismaClient): Promise<{ read
         ?? await prisma.workType.findUnique({ where: { symbol: workTypeSymbol } });
       const workType = existingWorkType
         ? await prisma.workType.update({
-          data: { basePriceMinor: item.priceMinor, code: workTypeCode, colorHex: existingWorkType.colorHex ?? defaultWorkTypeColor(item.displayName), isActive: true, name: item.displayName, symbol: workTypeSymbol, unit: item.unit, updatedByUserId: manager.id },
+          data: { allowedAddOns, basePriceMinor: item.priceMinor, code: workTypeCode, colorHex: existingWorkType.colorHex ?? defaultWorkTypeColor(item.displayName), isActive: true, name: item.displayName, symbol: workTypeSymbol, unit: item.unit, updatedByUserId: manager.id },
           where: { id: existingWorkType.id },
         })
         : await prisma.workType.create({
-          data: { basePriceMinor: item.priceMinor, code: workTypeCode, colorHex: defaultWorkTypeColor(item.displayName), createdByUserId: manager.id, id: technicalWorkTypeId, isActive: true, name: item.displayName, symbol: workTypeSymbol, unit: item.unit, updatedByUserId: manager.id },
+          data: { allowedAddOns, basePriceMinor: item.priceMinor, code: workTypeCode, colorHex: defaultWorkTypeColor(item.displayName), createdByUserId: manager.id, id: technicalWorkTypeId, isActive: true, name: item.displayName, symbol: workTypeSymbol, unit: item.unit, updatedByUserId: manager.id },
       });
       const workTypeId = workType.id;
       const priceCatalogItemId = `technical_price_${legalEntity.code.toLowerCase()}_${item.key}`;

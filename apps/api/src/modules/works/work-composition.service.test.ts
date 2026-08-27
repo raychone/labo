@@ -35,7 +35,10 @@ function item(id: string, tooth: number, overrides: Record<string, unknown> = {}
 
 function setup(initialItems: readonly unknown[], initialConnections: readonly unknown[] = []) {
   const prisma = {
-    workOrder: { findFirst: vi.fn().mockResolvedValue({ id: "work_1", code: "WO-1" }) },
+    workOrder: {
+      findFirst: vi.fn().mockResolvedValue({ id: "work_1", code: "WO-1" }),
+      findUnique: vi.fn().mockResolvedValue({ id: "work_1", code: "WO-1" }),
+    },
     workType: { findUnique: vi.fn().mockResolvedValue({ id: "type_1" }) },
     workOrderItem: {
       findMany: vi.fn().mockResolvedValueOnce(initialItems),
@@ -51,7 +54,10 @@ function setup(initialItems: readonly unknown[], initialConnections: readonly un
     $transaction: vi.fn(),
   };
   prisma.$transaction.mockImplementation(async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
-  const authorizationService = { requirePermission: vi.fn().mockResolvedValue({ allowed: true }) };
+  const authorizationService = {
+    hasPermission: vi.fn().mockResolvedValue({ allowed: true }),
+    requirePermission: vi.fn().mockResolvedValue({ allowed: true }),
+  };
   const auditService = { record: vi.fn().mockResolvedValue(undefined) };
   const toothConnectionsService = { cleanupOrphanedConnections: vi.fn() };
   return { prisma, authorizationService, auditService, subject: new WorkItemsService(authorizationService as never, auditService as never, prisma as never, toothConnectionsService as never) };

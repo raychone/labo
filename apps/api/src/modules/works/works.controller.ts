@@ -17,6 +17,7 @@ import { PermissionsGuard } from "../rbac/permissions.guard.js";
 import { RequirePermission } from "../rbac/require-permission.decorator.js";
 import {
   ClaimWorkDto,
+  CompleteTechnicalWorkDto,
   CreateNextWorkCycleDto,
   CreateWorkDto,
   FinalizeRealLabSheetDto,
@@ -97,16 +98,16 @@ export class WorksController {
   @Post(":id/probe-ready")
   @UseGuards(CsrfGuard)
   @RequirePermission("works.change_status", "OWN_STAGE")
-  public async markProbeReady(@Param("id") workOrderId: string, @CurrentUser() actor: AuthenticatedUser, @CurrentLegalEntity() legalEntity: LegalEntityContext, @Req() request: Request) {
-    await this.probeCyclesService.markProbeReady({ actorUserId: actor.id, legalEntity, requestMetadata: getRequestMetadata(request), workOrderId });
+  public async markProbeReady(@Param("id") workOrderId: string, @Body() dto: CompleteTechnicalWorkDto, @CurrentUser() actor: AuthenticatedUser, @CurrentLegalEntity() legalEntity: LegalEntityContext, @Req() request: Request) {
+    await this.probeCyclesService.markProbeReady({ actorUserId: actor.id, ...(dto.executionLegalEntityCode ? { executionLegalEntityCode: dto.executionLegalEntityCode } : {}), legalEntity, requestMetadata: getRequestMetadata(request), workOrderId });
     return { probeReady: true };
   }
 
   @Post(":id/finalize")
   @UseGuards(CsrfGuard)
   @RequirePermission("works.change_status", "OWN_STAGE")
-  public async finalizeWork(@Param("id") workOrderId: string, @CurrentUser() actor: AuthenticatedUser, @CurrentLegalEntity() legalEntity: LegalEntityContext, @Req() request: Request) {
-    await this.probeCyclesService.finalizeWork({ actorUserId: actor.id, legalEntity, requestMetadata: getRequestMetadata(request), workOrderId });
+  public async finalizeWork(@Param("id") workOrderId: string, @Body() dto: CompleteTechnicalWorkDto, @CurrentUser() actor: AuthenticatedUser, @CurrentLegalEntity() legalEntity: LegalEntityContext, @Req() request: Request) {
+    await this.probeCyclesService.finalizeWork({ actorUserId: actor.id, ...(dto.executionLegalEntityCode ? { executionLegalEntityCode: dto.executionLegalEntityCode } : {}), legalEntity, requestMetadata: getRequestMetadata(request), workOrderId });
     return { finalized: true };
   }
 

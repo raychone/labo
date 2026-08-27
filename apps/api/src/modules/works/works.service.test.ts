@@ -1279,7 +1279,7 @@ describe("WorksService", () => {
     }
   });
 
-  it("finalizes claimed work and blocks invalid status transitions", async () => {
+  it("rejects generic status finalization so billing uses the canonical production flow", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-20T10:00:00.000Z"));
     const before = workOrder({
@@ -1288,16 +1288,8 @@ describe("WorksService", () => {
       claimedByUserId: "actor_1",
       status: "IN_LUCRU",
     });
-    const after = workOrder({
-      ...before,
-      completedAt: new Date("2026-08-20T10:00:00.000Z"),
-      completedByUserId: "actor_1",
-      status: "FINALIZATA",
-      statusChangedAt: new Date("2026-08-20T10:00:00.000Z"),
-      statusChangedByUserId: "actor_1",
-    });
     const auditCreate = vi.fn().mockResolvedValue({});
-    const update = vi.fn().mockResolvedValue(after);
+    const update = vi.fn();
     const service = createService({
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
@@ -1316,33 +1308,11 @@ describe("WorksService", () => {
     });
 
     try {
-      const result = await service.setWorkStatus({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {
-        status: "FINALIZATA",
-      });
-
-      expect(result.status).toBe("FINALIZATA");
-      expect(result.completedAt).toBe("2026-08-20T10:00:00.000Z");
-      expect(result.completedByUserId).toBe("actor_1");
-      expect(update).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({
-          completedAt: new Date("2026-08-20T10:00:00.000Z"),
-          completedByUserId: "actor_1",
-          status: "FINALIZATA",
-        }),
-      }));
-      expect(auditCreate).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({
-          action: "work_orders.status_changed",
-          metadata: expect.objectContaining({
-            completedAt: "2026-08-20T10:00:00.000Z",
-            completedByUserId: "actor_1",
-            newStatus: "FINALIZATA",
-          }),
-        }),
-      }));
       await expect(service.setWorkStatus({ actorUserId: "actor_1", requestMetadata: {} }, "work_order_1", {
         status: "FINALIZATA",
-      })).rejects.toBeInstanceOf(BadRequestException);
+      })).rejects.toThrow("acțiunea canonică");
+      expect(update).not.toHaveBeenCalled();
+      expect(auditCreate).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }

@@ -121,16 +121,40 @@ describe("DoctorsService", () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it("rejects doctor creation when requested ownership mismatches the clinic", async () => {
+  it("inherits the clinic ownership when a different ownership is requested", async () => {
+    const doctorCreate = vi.fn().mockResolvedValue({
+      archivedAt: null,
+      clinic: { code: "CL-1", id: "clinic_1", name: "Clinica" },
+      clinicId: "clinic_1",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      displayName: "Ana Popescu",
+      email: null,
+      firstName: "Ana",
+      id: "doctor_1",
+      internalNotes: null,
+      isActive: true,
+      lastName: "Popescu",
+      legalEntity: { code: "CDT", displayName: "CDT" },
+      phone: null,
+      professionalCode: null,
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      version: 1,
+    });
     const service = createDoctorsService({
-      clinic: { findUnique: vi.fn().mockResolvedValue({ isActive: true, legalEntity: { code: "CDT", id: "entity_cdt" } }) },
-      legalEntity: { findFirst: vi.fn().mockResolvedValue({ code: "NG", displayName: "NG", id: "entity_ng" }) },
+      clinic: { findUnique: vi.fn().mockResolvedValue({ isActive: true, legalEntity: { code: "CDT", id: "entity_cdt", displayName: "CDT" } }) },
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+        doctor: { create: doctorCreate },
+      })),
     });
 
-    await expect(service.createDoctor(
+    const result = await service.createDoctor(
       { actorUserId: "actor_1", requestMetadata: {} },
       { clinicId: "clinic_1", firstName: "Ana", lastName: "Popescu", legalEntityCode: "NG" },
-    )).rejects.toThrow("aceeași cu firma clinicii");
+    );
+
+    expect(doctorCreate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ legalEntityId: "entity_cdt" }) }));
+    expect(result.legalEntity).toEqual({ code: "CDT", displayName: "CDT" });
   });
 
   it("rejects doctor ownership changes that mismatch the target clinic", async () => {

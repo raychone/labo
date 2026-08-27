@@ -531,10 +531,13 @@ export class LogisticsService {
       const current = await tx.courierRoute.findUnique({ include: courierRouteInclude, where: { id: routeId } });
       if (!current) throw new NotFoundException("Traseul nu a fost găsit.");
       await this.assertRouteExecutionAccess(context.actor.id, current.courierUserId);
-      if (current.status !== CourierRouteStatus.ASSIGNED) {
+      const canStartUnassignedDraft = !current.courierUserId
+        && current.status === CourierRouteStatus.DRAFT
+        && await this.hasPermission(context.actor.id, "routes.execute_own", "ALL");
+      if (current.status !== CourierRouteStatus.ASSIGNED && !canStartUnassignedDraft) {
         throw new ConflictException("Acest traseu nu poate fi pornit acum.");
       }
-      const previous = await tx.courierRoute.findFirst({
+      const previous = current.courierUserId ? await tx.courierRoute.findFirst({
         select: { routeNumber: true },
         where: {
           courierUserId: current.courierUserId,
@@ -545,7 +548,7 @@ export class LogisticsService {
           ],
         },
         orderBy: [{ routeDate: "asc" }, { routeNumber: "asc" }],
-      });
+      }) : null;
       if (previous) {
         throw new ConflictException("Finalizează traseul anterior înainte să începi acest traseu.");
       }
