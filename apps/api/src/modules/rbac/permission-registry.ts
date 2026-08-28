@@ -622,6 +622,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "works.create": "ALL",
     "works.deadline.preview": "ALL",
     "works.deadline.read": "ALL",
+    "works.deadline.set_manual": "ALL",
     "works.execution_snapshot.read": "ALL",
     "works.execution_snapshot.read_deadline": "ALL",
     "works.execution_snapshot.history.read": "ALL",

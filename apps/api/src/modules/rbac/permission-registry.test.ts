@@ -253,6 +253,7 @@ describe("PERMISSION_REGISTRY", () => {
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["clinics.read"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.urgency.update"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.deadline.current.update"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.deadline.set_manual"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["doctors.read"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["cycles.create_next"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["cycles.create_next"]).toBeNull();
