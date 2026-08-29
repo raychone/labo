@@ -483,18 +483,35 @@ function OperationsModal({
 
   function toggleOperation(operationId: string): void {
     if (!work || !canManageOperations || (!isCaseLevel && selectedTeeth.length === 0) || isMutating) return;
-    const selectedTeethKey = [...selectedTeeth].sort((a, b) => a - b).join(",");
-    const activePerformed = (performedQuery.data ?? []).filter((performed) => {
-      if (performed.removedAt !== null || performed.operation.id !== operationId) return false;
-      if (isCaseLevel) return (performed.selectedTeeth ?? []).length === 0;
-      return [...(performed.selectedTeeth ?? [])].sort((a, b) => a - b).join(",") === selectedTeethKey;
-    });
-    if (activePerformed.length > 0) {
-      for (const performed of activePerformed) removeMutation.mutate({ input: { reason: "Corecție tehnică" }, performedOperationId: performed.id });
-      toast.showToast({ message: "Manopera a fost dezactivată.", variant: "success" });
+    const activePerformed = (performedQuery.data ?? []).filter((performed) => performed.removedAt === null && performed.operation.id === operationId);
+    if (isCaseLevel) {
+      const caseOperation = activePerformed.find((performed) => (performed.selectedTeeth ?? []).length === 0);
+      if (caseOperation) {
+        removeMutation.mutate({ input: { reason: "Corecție tehnică" }, performedOperationId: caseOperation.id });
+        toast.showToast({ message: "Manopera a fost dezactivată.", variant: "success" });
+        return;
+      }
+    }
+
+    const selectedSet = new Set(selectedTeeth);
+    const coveredTeeth = new Set(activePerformed.flatMap((performed) => performed.selectedTeeth ?? []).filter((tooth) => selectedSet.has(tooth as AdultFdiTooth)));
+    const teethToRemove = selectedTeeth.filter((tooth) => coveredTeeth.has(tooth));
+    if (!isCaseLevel && teethToRemove.length === selectedTeeth.length) {
+      const affectedOperations = activePerformed.filter((performed) => (performed.selectedTeeth ?? []).some((tooth) => coveredTeeth.has(tooth as AdultFdiTooth)));
+      for (const performed of affectedOperations) {
+        const remainingTeeth = (performed.selectedTeeth ?? []).filter((tooth) => !coveredTeeth.has(tooth as AdultFdiTooth)) as AdultFdiTooth[];
+        removeMutation.mutate({ input: { reason: "Corecție tehnică" }, performedOperationId: performed.id, }, {
+          onSuccess: () => {
+            if (remainingTeeth.length > 0) performMutation.mutate({ operationId, selectedTeeth: remainingTeeth, workOrderId: work.id });
+          },
+        });
+      }
+      toast.showToast({ message: `Manopera a fost eliminată de pe ${teethToRemove.length === 1 ? "dinte" : "dinții"} selectat${teethToRemove.length === 1 ? "" : "i"}.`, variant: "success" });
       return;
     }
-    const teeth = isCaseLevel ? [] as readonly AdultFdiTooth[] : selectedTeeth;
+
+    const teeth = isCaseLevel ? [] as readonly AdultFdiTooth[] : selectedTeeth.filter((tooth) => !coveredTeeth.has(tooth));
+    if (!isCaseLevel && teeth.length === 0) return;
     performMutation.mutate({ operationId, selectedTeeth: teeth, workOrderId: work.id }, {
       onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Manopera nu a fost adăugată", variant: "error" }),
       onSuccess: () => toast.showToast({ message: `Manopera a fost activată${teeth.length > 1 ? ` pentru ${teeth.length} dinți` : ""}.`, variant: "success" }),
@@ -561,11 +578,10 @@ function OperationsModal({
                 <h3 id={`operation-category-${category}`}>{category}</h3>
                 <div className="technician-workbench__operation-grid">
                   {(operations ?? []).map((operation) => {
-                    const selectedTeethKey = [...selectedTeeth].sort((a, b) => a - b).join(",");
-                    const active = (isCaseLevel || selectedTeeth.length > 0) && (performedQuery.data ?? []).some((performed) => {
-                      if (performed.removedAt !== null || performed.operation.id !== operation.id) return false;
+                    const active = (isCaseLevel || selectedTeeth.length > 0) && (performedQuery.data ?? []).filter((performed) => performed.removedAt === null && performed.operation.id === operation.id).some((performed) => {
                       if (isCaseLevel) return (performed.selectedTeeth ?? []).length === 0;
-                      return [...(performed.selectedTeeth ?? [])].sort((a, b) => a - b).join(",") === selectedTeethKey;
+                      const performedTeeth = new Set(performed.selectedTeeth ?? []);
+                      return selectedTeeth.every((tooth) => performedTeeth.has(tooth));
                     });
                     return <button
                       aria-pressed={active}
