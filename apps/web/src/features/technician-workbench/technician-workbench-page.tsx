@@ -483,19 +483,22 @@ function OperationsModal({
 
   function toggleOperation(operationId: string): void {
     if (!work || !canManageOperations || (!isCaseLevel && selectedTeeth.length === 0) || isMutating) return;
-    const activePerformed = (performedQuery.data ?? []).filter((performed) => performed.removedAt === null && performed.operation.id === operationId && (isCaseLevel || (performed.selectedTeeth ?? []).some((tooth) => selectedTeeth.includes(tooth as AdultFdiTooth))));
+    const selectedTeethKey = [...selectedTeeth].sort((a, b) => a - b).join(",");
+    const activePerformed = (performedQuery.data ?? []).filter((performed) => {
+      if (performed.removedAt !== null || performed.operation.id !== operationId) return false;
+      if (isCaseLevel) return (performed.selectedTeeth ?? []).length === 0;
+      return [...(performed.selectedTeeth ?? [])].sort((a, b) => a - b).join(",") === selectedTeethKey;
+    });
     if (activePerformed.length > 0) {
       for (const performed of activePerformed) removeMutation.mutate({ input: { reason: "Corecție tehnică" }, performedOperationId: performed.id });
       toast.showToast({ message: "Manopera a fost dezactivată.", variant: "success" });
       return;
     }
-    const teethToPerform = isCaseLevel ? [[] as readonly AdultFdiTooth[]] : selectedTeeth.map((tooth) => [tooth] as readonly AdultFdiTooth[]);
-    for (const teeth of teethToPerform) {
-      performMutation.mutate({ operationId, selectedTeeth: teeth, workOrderId: work.id }, {
-        onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Manopera nu a fost adăugată", variant: "error" }),
-        onSuccess: () => toast.showToast({ message: "Manopera a fost activată.", variant: "success" }),
-      });
-    }
+    const teeth = isCaseLevel ? [] as readonly AdultFdiTooth[] : selectedTeeth;
+    performMutation.mutate({ operationId, selectedTeeth: teeth, workOrderId: work.id }, {
+      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Manopera nu a fost adăugată", variant: "error" }),
+      onSuccess: () => toast.showToast({ message: `Manopera a fost activată${teeth.length > 1 ? ` pentru ${teeth.length} dinți` : ""}.`, variant: "success" }),
+    });
   }
 
   return (
@@ -558,7 +561,12 @@ function OperationsModal({
                 <h3 id={`operation-category-${category}`}>{category}</h3>
                 <div className="technician-workbench__operation-grid">
                   {(operations ?? []).map((operation) => {
-                    const active = (isCaseLevel || selectedTeeth.length > 0) && (performedQuery.data ?? []).some((performed) => performed.removedAt === null && performed.operation.id === operation.id && (isCaseLevel || (performed.selectedTeeth ?? []).some((tooth) => selectedTeeth.includes(tooth as AdultFdiTooth))));
+                    const selectedTeethKey = [...selectedTeeth].sort((a, b) => a - b).join(",");
+                    const active = (isCaseLevel || selectedTeeth.length > 0) && (performedQuery.data ?? []).some((performed) => {
+                      if (performed.removedAt !== null || performed.operation.id !== operation.id) return false;
+                      if (isCaseLevel) return (performed.selectedTeeth ?? []).length === 0;
+                      return [...(performed.selectedTeeth ?? [])].sort((a, b) => a - b).join(",") === selectedTeethKey;
+                    });
                     return <button
                       aria-pressed={active}
                       className={`technician-workbench__operation-card${active ? " technician-workbench__operation-card--active" : ""}`}
@@ -572,7 +580,7 @@ function OperationsModal({
               </section>
             ))}
           </div>
-          <p className="technician-workbench__modal-note">Click pe o manoperă pentru activare. Click din nou pe cardul verde o dezactivează pentru dinții selectați.</p>
+          <p className="technician-workbench__modal-note">Selectează unul sau mai mulți dinți, apoi apasă manopera. Se va salva o singură manoperă cu cantitatea egală cu numărul dinților selectați. Click din nou pe cardul verde o dezactivează pentru aceeași selecție.</p>
         </div>
       ) : null}
       {canReadOperations && (performedQuery.data?.length ?? 0) > 0 ? (

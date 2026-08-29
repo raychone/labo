@@ -1048,3 +1048,55 @@
 .works-page__probe-history span {
   color: var(--dl-text-muted, #647774);
 }
+
+.works-page__probe-type-options {
+  border: 0;
+  margin: var(--dl-space-3) 0 0;
+  padding: 0;
+}
+
+.works-page__probe-type-options legend {
+  font-weight: var(--dl-font-weight-semibold);
+  margin-bottom: var(--dl-space-2);
+}
+
+.works-page__probe-type-grid {
+  display: grid;
+  gap: var(--dl-space-2);
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  margin-bottom: var(--dl-space-3);
+}
+
+.works-page__probe-type-card {
+  background: var(--dl-color-surface);
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  color: var(--dl-color-text);
+  cursor: pointer;
+  font: inherit;
+  font-weight: var(--dl-font-weight-semibold);
+  min-height: 2.75rem;
+  padding: var(--dl-space-2) var(--dl-space-3);
+  text-align: left;
+}
+
+.works-page__probe-type-card:hover:not(:disabled),
+.works-page__probe-type-card:focus-visible {
+  border-color: var(--dl-color-accent);
+  outline: 3px solid var(--dl-color-focus-ring, var(--dl-color-accent));
+  outline-offset: 2px;
+}
+
+.works-page__probe-type-card--active {
+  background: var(--dl-color-success, #16803c);
+  border-color: var(--dl-color-success, #16803c);
+  color: #fff;
+}
+
+.works-page__probe-type-card span {
+  display: block;
+  font-size: var(--dl-font-size-small);
+  font-weight: var(--dl-font-weight-normal);
+  margin-top: var(--dl-space-1);
+  opacity: 0.8;
+}
