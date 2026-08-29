@@ -406,6 +406,10 @@ export class CreateWorkDto extends WorkMutationDto {
   public readonly manualDueAt?: string | null;
 
   @IsOptional()
+  @IsBoolean()
+  public readonly manualDueTimeSet?: boolean;
+
+  @IsOptional()
   @ValidateNested()
   @Type(() => WorkFormSubmissionDto)
   public readonly workFormSubmission?: WorkFormSubmissionDto;
@@ -451,6 +455,10 @@ export class UpdateWorkDto extends WorkMutationDto {
   public readonly manualDueAt?: string | null;
 
   @IsOptional()
+  @IsBoolean()
+  public readonly manualDueTimeSet?: boolean;
+
+  @IsOptional()
   @ValidateNested()
   @Type(() => WorkFormSubmissionDto)
   public readonly workFormSubmission?: WorkFormSubmissionDto;
@@ -490,6 +498,10 @@ export class WorkDeadlinePreviewDto {
   @IsISO8601({ strict: true })
   @Matches(/^\d{4}-\d{2}-\d{2}T.+(?:Z|[+-]\d{2}:\d{2})$/)
   public readonly manualDueAt?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  public readonly manualDueTimeSet?: boolean;
 }
 
 export class RecalculateWorkDeadlineDto {

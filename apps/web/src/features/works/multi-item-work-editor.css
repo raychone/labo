@@ -225,3 +225,29 @@
     grid-column: 1 / -1;
   }
 }
+.multi-item-work-editor__work-type-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.multi-item-work-editor__work-type-cards {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-top: 1rem;
+}
+
+.multi-item-work-editor__work-type-card-button {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: block;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.multi-item-work-editor__work-type-card-button:hover {
+  color: var(--dl-color-primary, #0f766e);
+}

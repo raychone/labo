@@ -317,6 +317,16 @@ export function getFirstAuthorizedRoute(permissionKeys: readonly string[]): stri
   return getNavigationRoutes(permissionKeys)[0]?.path ?? getDefaultAuthorizedRoute(permissionKeys);
 }
 
+export function getSafeNotificationTarget(target: string, permissionKeys: readonly string[]): string {
+  if (!target.startsWith("/") || target.startsWith("//")) {
+    return getFirstAuthorizedRoute(permissionKeys);
+  }
+
+  const pathname = target.split(/[?#]/, 1)[0] ?? target;
+  const route = getRouteByPath(pathname);
+  return route && hasRouteAccess(permissionKeys, route) ? target : getFirstAuthorizedRoute(permissionKeys);
+}
+
 export function getSafeReturnTo(value: string | null): string | null {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
     return null;

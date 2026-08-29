@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getNavigationRoutes, getRouteByPath, getSafeReturnTo, hasRouteAccess, operationalStatusReadPermissions, scanPermissions, workReadPermissions } from "./route-registry.js";
+import { getNavigationRoutes, getRouteByPath, getSafeNotificationTarget, getSafeReturnTo, hasRouteAccess, operationalStatusReadPermissions, scanPermissions, workReadPermissions } from "./route-registry.js";
 
 describe("route registry", () => {
   it("filters navigation by permission snapshot", () => {
@@ -103,6 +103,12 @@ describe("route registry", () => {
     expect(getSafeReturnTo("https://evil.example")).toBeNull();
     expect(getSafeReturnTo("//evil.example/works")).toBeNull();
     expect(getSafeReturnTo("/works?search=abc")).toBe("/works?search=abc");
+  });
+
+  it("does not send a notification to a route outside the user's permissions", () => {
+    expect(getSafeNotificationTarget("/billing?tab=uninvoiced&workId=work_1", ["works.read_all"])).toBe("/dashboard");
+    expect(getSafeNotificationTarget("/billing?tab=uninvoiced&workId=work_1", ["invoice.create"])).toBe("/billing?tab=uninvoiced&workId=work_1");
+    expect(getSafeNotificationTarget("/pagina-care-nu-exista", ["works.read_all"])).toBe("/dashboard");
   });
 
   it("resolves the dedicated TV status route without shadowing /status", () => {

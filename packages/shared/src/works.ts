@@ -108,6 +108,7 @@ export interface WorkDeadlineSummary {
   readonly includeStartDay: boolean | null;
   readonly isLocked: boolean;
   readonly manualDueAt: string | null;
+  readonly timeSet?: boolean;
   readonly mode: WorkDeadlineMode | null;
   readonly reasonCode: string | null;
   readonly revision: number;
@@ -344,6 +345,7 @@ export interface CreateWorkInput {
   readonly quantity: number;
   readonly requestedDeliveryDate: string;
   readonly manualDueAt?: string | null;
+  readonly manualDueTimeSet?: boolean;
   readonly workFormSubmission?: CreateWorkFormSubmissionInput;
   readonly workTypeId: string;
   readonly probeTypeId: string;
@@ -426,6 +428,7 @@ export interface WorkDeadlinePreviewInput {
   readonly clinicId?: string | null;
   readonly doctorId?: string | null;
   readonly manualDueAt?: string | null;
+  readonly manualDueTimeSet?: boolean;
   readonly quantity: number;
   readonly startAt?: string;
   readonly workTypeId: string;
@@ -443,6 +446,7 @@ export interface WorkDeadlinePreview {
   readonly explanation: string;
   readonly includeStartDay: boolean;
   readonly manualDueAt: string | null;
+  readonly timeSet: boolean;
   readonly mode: WorkDeadlineMode;
   readonly reasonCode: string | null;
   readonly sourceSummary: WorkDeadlineSourceSummary;

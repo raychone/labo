@@ -8,7 +8,7 @@ import {
   type AnatomicalScopeType,
   type WorkTypeFormOption,
 } from "@dental-lab/shared";
-import { Button, Checkbox, FormGrid, FormGridFull, TextInput, Textarea } from "@dental-lab/ui";
+import { Button, Card, CardContent, CardHeader, CardTitle, Checkbox, FormGrid, FormGridFull, Modal, TextInput, Textarea } from "@dental-lab/ui";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { SearchablePickerField } from "./work-form.js";
@@ -129,6 +129,7 @@ export function MultiItemWorkEditor({
   const [selectedAddOns, setSelectedAddOns] = useState<readonly { readonly code: string; readonly amountMinor: number | null }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [savingCustomType, setSavingCustomType] = useState(false);
+  const [workTypeModalOpen, setWorkTypeModalOpen] = useState(false);
 
   const compositionTeeth = useMemo(() => getDraftCompositionTeeth(items), [items]);
   const effectiveConnectionComposition = useMemo(
@@ -349,33 +350,13 @@ export function MultiItemWorkEditor({
       </div>
       <div className="multi-item-work-editor__fields">
         <FormGrid className="multi-item-work-editor__selection-grid">
-          <SearchablePickerField
-            disabled={disabled}
-            emptyMessage="Nu există tipuri de lucrări potrivite."
-            error={workTypeId === "" && error ? "Tipul lucrării este obligatoriu." : undefined}
-            id="draft-work-type"
-            label="Tip lucrare"
-            onSearchChange={(value) => {
-              setWorkTypeSearch(value);
-              if (value === "") setWorkTypeCategory("");
-            }}
-            onSelect={(value) => {
-              if (value === CUSTOM_WORK_TYPE_CATEGORY) {
-                setWorkTypeCategory(CUSTOM_WORK_TYPE_CATEGORY);
-                setWorkTypeId("");
-                setCustomWorkTypeName("");
-                return;
-              }
-              setWorkTypeCategory("");
-              setWorkTypeId(value);
-              setCustomWorkTypeName("");
-            }}
-            options={visibleWorkTypeOptions}
-            placeholder="Caută tipul lucrării"
-            required={false}
-            searchValue={workTypeSearch}
-            selectedValue={workTypeId}
-          />
+          <div className="multi-item-work-editor__work-type-field">
+            <span className="multi-item-work-editor__field-label">Tip lucrare</span>
+            <Button disabled={disabled} onClick={() => setWorkTypeModalOpen(true)} type="button" variant="outline">
+              {selectedWorkType ? displayWorkTypeName(selectedWorkType.name) : workTypeCategory === CUSTOM_WORK_TYPE_CATEGORY ? "Alt tip de lucrare" : "Alege tipul lucrării"}
+            </Button>
+            {workTypeId === "" && error ? <small className="multi-item-work-editor__error">Tipul lucrării este obligatoriu.</small> : null}
+          </div>
           {workTypeCategory === CUSTOM_WORK_TYPE_CATEGORY ? <div className="multi-item-work-editor__custom-type">
             <TextInput label="Denumire tip personalizat" required value={customWorkTypeName} onChange={(event) => setCustomWorkTypeName(event.target.value)} />
             {canSaveCustomWorkType ? <Button disabled={disabled || savingCustomType} isLoading={savingCustomType} onClick={() => void saveCustomWorkType()} type="button" variant="outline">Salvează în catalog</Button> : null}
@@ -430,6 +411,28 @@ export function MultiItemWorkEditor({
           </div>
         ))}
       </div> : <p className="multi-item-work-editor__empty">Adaugă cel puțin o componentă.</p>}
+      <Modal isOpen={workTypeModalOpen} onOpenChange={setWorkTypeModalOpen} size="lg" title="Alege tipul lucrării">
+        <TextInput label="Caută tipul lucrării" value={workTypeSearch} onChange={(event) => setWorkTypeSearch(event.target.value)} />
+        <div className="multi-item-work-editor__work-type-cards">
+          {visibleWorkTypeOptions.map((option) => <Card className="multi-item-work-editor__work-type-card" key={option.value}>
+            <button className="multi-item-work-editor__work-type-card-button" onClick={() => {
+              if (option.value === CUSTOM_WORK_TYPE_CATEGORY) {
+                setWorkTypeCategory(CUSTOM_WORK_TYPE_CATEGORY);
+                setWorkTypeId("");
+                setCustomWorkTypeName("");
+              } else {
+                setWorkTypeCategory("");
+                setWorkTypeId(option.value);
+                setCustomWorkTypeName("");
+              }
+              setWorkTypeModalOpen(false);
+            }} type="button">
+              <CardHeader><CardTitle>{option.label}</CardTitle></CardHeader>
+              <CardContent>{option.value === CUSTOM_WORK_TYPE_CATEGORY ? "Denumire introdusă manual" : "Selectează acest tip"}</CardContent>
+            </button>
+          </Card>)}
+        </div>
+      </Modal>
     </div>
   );
 }

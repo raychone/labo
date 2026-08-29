@@ -353,6 +353,7 @@ export interface WorkDeadlineView {
   readonly includeStartDay: boolean | null;
   readonly isLocked: boolean;
   readonly manualDueAt: string | null;
+  readonly timeSet: boolean;
   readonly mode: string | null;
   readonly reasonCode: string | null;
   readonly revision: number;
@@ -678,6 +679,7 @@ export function toWorkAssignmentEventView(event: WorkOrderRecord["assignmentEven
 }
 
 function toWorkDeadlineView(workOrder: WorkOrderRecord): WorkDeadlineView {
+  const deadlineSnapshot = workOrder.deadlineRuleSnapshot as { readonly timeSet?: boolean } | null;
   const effectiveDueAt = workOrder.effectiveDueAt?.toISOString() ?? null;
   const visual = resolveDeadlineVisualState({
     effectiveDueAt,
@@ -697,6 +699,7 @@ function toWorkDeadlineView(workOrder: WorkOrderRecord): WorkDeadlineView {
     includeStartDay: workOrder.deadlineIncludeStartDay,
     isLocked: workOrder.deadlineLockedAt !== null,
     manualDueAt: workOrder.manualDueAt?.toISOString() ?? null,
+    timeSet: deadlineSnapshot?.timeSet === true,
     mode: workOrder.deadlineMode,
     reasonCode: workOrder.deadlineReasonCode,
     revision: workOrder.deadlineRevision,

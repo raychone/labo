@@ -43,7 +43,7 @@ import { ToothConnectionsService } from "./tooth-connections.service.js";
 import { CreateToothConnectionDto } from "./dto/tooth-connections.dto.js";
 import { ProbeTypesService } from "./probe-types.service.js";
 import { ProbeCyclesService } from "./probe-cycles.service.js";
-import { SelectProbeTypeDto, UpdateProbeDeadlineDto } from "./dto/probe-cycles.dto.js";
+import { ReworkProbeDto, SelectProbeTypeDto, UpdateProbeDeadlineDto } from "./dto/probe-cycles.dto.js";
 import { LOGISTICS_ATTACHMENT_LIMITS } from "../logistics/logistics.constants.js";
 import type { UploadedAttachmentFile } from "../logistics/logistics.service.js";
 
@@ -119,6 +119,23 @@ export class WorksController {
     // reception user's currently selected legal-entity context must not hide
     // an otherwise visible work from the return/probe flow.
     return this.probeCyclesService.createNextActiveAfterReception({ actorUserId: actor.id, deadlineAt: dto.deadlineAt, probeTypeId: dto.probeTypeId ?? dto.probeTypeIds?.[0] ?? "", ...(dto.probeTypeIds ? { probeTypeIds: dto.probeTypeIds } : {}), requestMetadata: getRequestMetadata(request), returnedAfterCompletedCycle: true, workOrderId });
+  }
+
+  @Post(":id/probe-cycles/rework")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("works.change_status", "ALL")
+  public reworkProbe(@Param("id") workOrderId: string, @Body() dto: ReworkProbeDto, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
+    return this.probeCyclesService.createNextActiveAfterReception({
+      actorUserId: actor.id,
+      deadlineAt: dto.deadlineAt,
+      ...(dto.probeTypeId ? { probeTypeId: dto.probeTypeId } : {}),
+      ...(dto.probeTypeIds ? { probeTypeIds: dto.probeTypeIds } : {}),
+      directRework: true,
+      reasonNotes: dto.reason,
+      requestMetadata: getRequestMetadata(request),
+      returnedAfterCompletedCycle: true,
+      workOrderId,
+    });
   }
 
   @Get()

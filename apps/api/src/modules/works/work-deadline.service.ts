@@ -33,6 +33,7 @@ export interface WorkDeadlineData {
   readonly deadlineTimezone: string;
   readonly effectiveDueAt: Date | null;
   readonly manualDueAt: Date | null;
+  readonly timeSet?: boolean;
 }
 
 export interface WorkDeadlinePrismaData {
@@ -63,6 +64,7 @@ export interface WorkDeadlinePreviewView {
   readonly explanation: string;
   readonly includeStartDay: boolean;
   readonly manualDueAt: string | null;
+  readonly timeSet: boolean;
   readonly mode: "CALCULATED" | "MANUAL" | "UNRESOLVED";
   readonly reasonCode: string | null;
   readonly sourceSummary: {
@@ -104,6 +106,7 @@ export class WorkDeadlineService {
     readonly includeStartDay?: boolean;
     readonly legalEntity: LegalEntityContext;
     readonly manualDueAt?: string | null;
+    readonly manualDueTimeSet?: boolean;
     readonly now: Date;
     readonly quantity: number;
     readonly startAt?: string;
@@ -117,6 +120,7 @@ export class WorkDeadlineService {
       includeStartDay: input.includeStartDay ?? false,
       legalEntity: input.legalEntity,
       manualDueAt,
+      manualDueTimeSet: input.manualDueTimeSet ?? false,
       now: input.now,
       quantity: input.quantity,
       source: "CREATION",
@@ -134,6 +138,7 @@ export class WorkDeadlineService {
     readonly includeStartDay?: boolean;
     readonly legalEntity: LegalEntityContext;
     readonly manualDueAt?: Date | null;
+    readonly manualDueTimeSet?: boolean;
     readonly now: Date;
     readonly quantity: number;
     readonly source: WorkDeadlineData["deadlineSource"];
@@ -146,6 +151,7 @@ export class WorkDeadlineService {
       includeStartDay: input.includeStartDay ?? false,
       legalEntity: input.legalEntity,
       manualDueAt: input.manualDueAt ?? null,
+      manualDueTimeSet: input.manualDueTimeSet ?? false,
       now: input.now,
       quantity: input.quantity,
       source: input.source,
@@ -162,6 +168,7 @@ export class WorkDeadlineService {
     readonly includeStartDay: boolean;
     readonly legalEntity: LegalEntityContext;
     readonly manualDueAt: Date | null;
+    readonly manualDueTimeSet: boolean;
     readonly now: Date;
     readonly quantity: number;
     readonly source: WorkDeadlineData["deadlineSource"];
@@ -213,6 +220,7 @@ export class WorkDeadlineService {
         deadlineTimezone: timezone,
         effectiveDueAt: calculatedDueAt,
         manualDueAt: null,
+        timeSet: false,
       };
     }
 
@@ -235,6 +243,7 @@ export class WorkDeadlineService {
       deadlineTimezone: timezone,
       effectiveDueAt: null,
       manualDueAt: null,
+      timeSet: false,
     };
   }
 
@@ -244,6 +253,7 @@ export class WorkDeadlineService {
     readonly now: Date;
     readonly source: WorkDeadlineData["deadlineSource"];
     readonly startAt: Date;
+    readonly manualDueTimeSet?: boolean;
   }, timezone: string): WorkDeadlineData {
     if (!input.manualDueAt) {
       throw new BadRequestException("Termenul manual este obligatoriu.");
@@ -265,12 +275,13 @@ export class WorkDeadlineService {
       deadlineLockedReason: "Termen manual setat explicit.",
       deadlineMode: "MANUAL",
       deadlineReasonCode: null,
-      deadlineRuleSnapshot: createManualRuleSnapshot(input.includeStartDay, timezone),
+      deadlineRuleSnapshot: createManualRuleSnapshot(input.includeStartDay, timezone, input.manualDueTimeSet === true),
       deadlineSource: input.source,
       deadlineStartAt: input.startAt,
       deadlineTimezone: timezone,
       effectiveDueAt: input.manualDueAt,
       manualDueAt: input.manualDueAt,
+      timeSet: input.manualDueTimeSet === true,
     };
   }
 
@@ -347,7 +358,7 @@ function createRuleSnapshot(result: DeadlineCalculationResult, resolution: Prici
   };
 }
 
-function createManualRuleSnapshot(includeStartDay: boolean, timezone: string): Prisma.InputJsonObject {
+function createManualRuleSnapshot(includeStartDay: boolean, timezone: string, timeSet: boolean): Prisma.InputJsonObject {
   return {
     calendarCoverage: { fromYear: 2026, toYear: 2030 },
     dueHour: DEADLINE_DEFAULT_DUE_HOUR,
@@ -361,6 +372,7 @@ function createManualRuleSnapshot(includeStartDay: boolean, timezone: string): P
     requiresManualDueDate: false,
     sourceType: "NONE",
     timezone,
+    timeSet,
     version: 1,
     workingWeekdays: [1, 2, 3, 4, 5],
   };
@@ -379,6 +391,7 @@ function toDeadlinePreview(deadline: WorkDeadlineData): WorkDeadlinePreviewView 
     explanation: deadline.deadlineExplanation,
     includeStartDay: deadline.deadlineIncludeStartDay,
     manualDueAt: deadline.manualDueAt?.toISOString() ?? null,
+    timeSet: deadline.timeSet === true,
     mode: deadline.deadlineMode,
     reasonCode: deadline.deadlineReasonCode,
     sourceSummary: {

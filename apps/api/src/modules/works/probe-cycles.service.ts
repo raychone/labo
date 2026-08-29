@@ -88,49 +88,61 @@ export class ProbeCyclesService {
   public async createNextActiveAfterReception(input: {
     readonly actorUserId: string;
     readonly workOrderId: string;
-    readonly probeTypeId: string;
+    readonly probeTypeId?: string;
     readonly probeTypeIds?: readonly string[];
     readonly deadlineAt: string;
     readonly returnedAfterCompletedCycle: true;
+    readonly directRework?: boolean;
+    readonly reasonNotes?: string;
     readonly legalEntity?: LegalEntityContext;
     readonly requestMetadata?: RequestMetadata;
   }): Promise<ProbeCycleView> {
     if (input.returnedAfterCompletedCycle !== true) throw new ConflictException("O nouă probă poate fi deschisă numai după recepționarea explicită a lucrării.");
-    await this.authorizationService.requirePermission({ permission: "cycles.create_next", requiredScope: "ALL", userId: input.actorUserId });
+    await this.authorizationService.requirePermission({ permission: input.directRework ? "works.change_status" : "cycles.create_next", requiredScope: "ALL", userId: input.actorUserId });
     const work = await this.findVisibleWork(input.actorUserId, input.workOrderId, input.legalEntity);
     const deadlineAt = new Date(input.deadlineAt);
     if (!Number.isFinite(deadlineAt.getTime())) throw new BadRequestException("Termenul probei nu este valid.");
-    const requestedTypeIds = [...new Set([...(input.probeTypeIds ?? []), ...(input.probeTypeId ? [input.probeTypeId] : [])])];
+    const latestProbe = input.directRework
+      ? await this.prisma.probeCycle.findFirst({ orderBy: { sequence: "desc" }, select: { probeTypeId: true }, where: { workOrderId: work.id } })
+      : null;
+    const configuredProbeCodes = unionConfiguredProbeCodes((work.items ?? []).map((item) => jsonStringArray(item.workType?.probeTypeCodes)));
+    const fallbackProbe = input.directRework && !latestProbe && configuredProbeCodes.length > 0
+      ? await this.prisma.probeType.findFirst({ orderBy: { sortOrder: "asc" }, select: { id: true }, where: { code: { in: [...configuredProbeCodes] }, isArchived: false } })
+      : null;
+    const requestedTypeIds = [...new Set([...(input.probeTypeIds ?? []), ...(input.probeTypeId ? [input.probeTypeId] : []), ...(latestProbe?.probeTypeId ? [latestProbe.probeTypeId] : []), ...(fallbackProbe?.id ? [fallbackProbe.id] : [])])];
     if (requestedTypeIds.length === 0) throw new BadRequestException("Selectează cel puțin un tip de probă.");
     const nextTypes = await Promise.all(requestedTypeIds.map((id) => this.probeTypesService.requireSelectable(id, this.prisma)));
     const nextType = nextTypes[0]!;
     // A work may contain several components with different compatible probe
     // stages. A return is valid when the selected stage belongs to at least
     // one component; requiring the intersection rejects valid multi-item work.
-    const configuredProbeCodes = unionConfiguredProbeCodes((work.items ?? []).map((item) => jsonStringArray(item.workType?.probeTypeCodes)));
     if (configuredProbeCodes.length > 0 && nextTypes.some((type) => !type.code || !configuredProbeCodes.includes(type.code))) {
       throw new BadRequestException("Tipul probei nu este compatibil cu tipurile de lucrări ale acestei reveniri.");
     }
     const created = await this.prisma.$transaction(async (tx) => {
       const current = await tx.workOrder.findUnique({ select: { activeProbeCycleId: true, status: true, technicalReadiness: true }, where: { id: work.id } });
       if (!current) throw new NotFoundException("Lucrarea nu a fost găsită.");
-      if (current.status === "FINALIZATA" || current.technicalReadiness === "FINAL_READY") throw new ConflictException("O lucrare finalizată nu poate fi recepționată pentru o probă nouă.");
+      if (!input.directRework && (current.status === "FINALIZATA" || current.technicalReadiness === "FINAL_READY")) throw new ConflictException("O lucrare finalizată nu poate fi recepționată pentru o probă nouă.");
       if (current.activeProbeCycleId) throw new ConflictException("Lucrarea are deja o probă activă.");
       const cycles = await tx.probeCycle.findMany({ orderBy: { sequence: "desc" }, select: { completionOutcome: true, id: true, sequence: true, status: true }, where: { workOrderId: work.id } });
       const last = cycles[0];
-      if (!last || last.status !== "COMPLETED" || last.completionOutcome !== "PROBE_READY") throw new ConflictException("Următoarea probă poate fi creată doar după marcarea probei ca Probă gata.");
+      if (input.directRework && current.technicalReadiness !== "PROBE_READY" && current.technicalReadiness !== "FINAL_READY") throw new ConflictException("Doar lucrările Probă gata sau Finalizate pot fi trimise la refacere.");
+      if (!input.directRework && (!last || last.status !== "COMPLETED" || last.completionOutcome !== "PROBE_READY")) throw new ConflictException("Următoarea probă poate fi creată doar după marcarea probei ca Probă gata.");
       // Legacy initial cycles used sequence 1. Normalize that marker to 0 on the first return.
-      let nextSequence = last.sequence + 1;
-      if (last.sequence === 1 && !cycles.some((cycle) => cycle.sequence === 0)) {
+      let nextSequence = last ? last.sequence + 1 : 0;
+      if (last && last.sequence === 1 && !cycles.some((cycle) => cycle.sequence === 0)) {
         await tx.probeCycle.update({ data: { sequence: 0 }, where: { id: last.id } });
         nextSequence = 1;
       }
       const cycle = await tx.probeCycle.create({ data: { createdByUserId: input.actorUserId, deadlineAt, openedAt: new Date(), probeTypeId: nextType.id, probeTypeNameSnapshot: nextTypes.map((type) => type.name).join(" + "), sequence: nextSequence, status: "ACTIVE", workOrderId: work.id, probeTypes: { create: nextTypes.map((type, sortOrder) => ({ probeTypeId: type.id, probeTypeNameSnapshot: type.name, sortOrder })) } }, include: PROBE_CYCLE_INCLUDE });
-      const updated = await tx.workOrder.updateMany({ data: { activeProbeCycleId: cycle.id, claimStatus: "UNCLAIMED", claimedAt: null, claimedByUserId: null, assignedTechnicianId: null, deadlineMode: "MANUAL", effectiveDueAt: deadlineAt, manualDueAt: deadlineAt, deadlineSource: "CREATION", deadlineRevision: { increment: 1 }, probeReceivedAt: new Date(), status: "RECEPTIE", statusChangedAt: new Date(), statusChangedByUserId: input.actorUserId, technicalReadiness: null, waitingStartedAt: null, version: { increment: 1 }, updatedByUserId: input.actorUserId }, where: { id: work.id, activeProbeCycleId: null, status: { not: "FINALIZATA" } } });
+      if (input.directRework && tx.courierRouteStop?.deleteMany) {
+        await tx.courierRouteStop.deleteMany({ where: { outcomeStatus: "PENDING", route: { status: { in: ["DRAFT", "ASSIGNED", "IN_PROGRESS"] } }, workOrderId: work.id } });
+      }
+      const updated = await tx.workOrder.updateMany({ data: { activeProbeCycleId: cycle.id, claimStatus: "UNCLAIMED", claimedAt: null, claimedByUserId: null, assignedTechnicianId: null, completedAt: null, completedByUserId: null, deadlineMode: "MANUAL", effectiveDueAt: deadlineAt, manualDueAt: deadlineAt, deadlineSource: input.directRework ? "MANUAL_OVERRIDE" : "CREATION", deadlineRevision: { increment: 1 }, probeReceivedAt: new Date(), releaseReason: input.directRework ? `Trimisă la refacere: ${input.reasonNotes ?? "fără motiv"}` : null, status: input.directRework ? "IN_LUCRU" : "RECEPTIE", statusChangedAt: new Date(), statusChangedByUserId: input.actorUserId, technicalReadiness: null, waitingStartedAt: null, finalizedAt: null, version: { increment: 1 }, updatedByUserId: input.actorUserId }, where: { id: work.id, activeProbeCycleId: null, ...(input.directRework ? {} : { status: { not: "FINALIZATA" } }) } });
       if (updated.count !== 1) throw new ConflictException("Lucrarea a fost modificată simultan. Reîncarcă lucrarea.");
       return cycle;
     });
-    await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.caseReceived, actorUserId: input.actorUserId, metadata: { nextProbeTypeName: created.probeTypeNameSnapshot, probeNumber: created.sequence, workOrderLabel: work.code, deadlineAt: deadlineAt.toISOString() }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: work.id, resourceType: "work_order" });
+    await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.caseReceived, actorUserId: input.actorUserId, metadata: { ...(input.directRework ? { reason: input.reasonNotes ?? null, rework: true } : {}), nextProbeTypeName: created.probeTypeNameSnapshot, probeNumber: created.sequence, workOrderLabel: work.code, deadlineAt: deadlineAt.toISOString() }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: work.id, resourceType: "work_order" });
     await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.activeProbeCycleStarted, actorUserId: input.actorUserId, metadata: { probeTypeName: created.probeTypeNameSnapshot, probeNumber: created.sequence, workOrderLabel: work.code }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: created.id, resourceType: "probe_cycle" });
     await this.notificationsService?.publishProbeAvailable({ workOrderId: work.id, probeCycleId: created.id, code: work.code, patientName: work.patientName, sequence: created.sequence, probeTypeName: created.probeTypeNameSnapshot, deadlineAt: created.deadlineAt.toISOString() });
     await this.notificationsService?.publishNewProbe({ workOrderId: work.id, probeCycleId: created.id, code: work.code, patientName: work.patientName, sequence: created.sequence, probeTypeName: created.probeTypeNameSnapshot });

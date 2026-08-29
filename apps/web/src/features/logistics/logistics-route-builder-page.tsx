@@ -1,5 +1,5 @@
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, DateInput, ErrorState, IconButton, LoadingState, Select, TextInput, Tooltip, useToast } from "@dental-lab/ui";
-import type { CourierRouteStopInput, CourierRouteView, LogisticsCenterItem, PickupRequestView } from "@dental-lab/shared";
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, DateInput, ErrorState, IconButton, LoadingState, Select, StatusBadge, Textarea, TextInput, Tooltip, useToast } from "@dental-lab/ui";
+import type { CourierRouteStopInput, CourierRouteStopOutcome, CourierRouteStopView, CourierRouteView, LogisticsCenterItem, PickupRequestView } from "@dental-lab/shared";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router";
@@ -7,7 +7,7 @@ import { useSearchParams } from "react-router";
 import { fetchPermissions } from "../auth/auth-api.js";
 import { hasPermission } from "../users/users-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
-import { useCourierRoutes, useCreateCourierRoute, useDeleteCourierRoute, useLogisticsCenter, usePickupRequests, useRouteCourierOptions, useUpdateCourierRoute } from "./logistics-api.js";
+import { useCourierRoutes, useCreateCourierRoute, useDeleteCourierRoute, useLogisticsCenter, usePickupRequests, useRecordCourierRouteStopOutcome, useRouteCourierOptions, useStartCourierRoute, useUpdateCourierRoute } from "./logistics-api.js";
 import "./logistics-page.css";
 
 type SelectedStop =
@@ -52,6 +52,7 @@ export function LogisticsRouteBuilderPage(): ReactNode {
   const canCreate = hasPermission(permissionsQuery.data, "routes.create") || canReadCenter;
   const canAssign = hasPermission(permissionsQuery.data, "routes.assign");
   const canCancel = hasPermission(permissionsQuery.data, "routes.cancel");
+  const canExecute = hasPermission(permissionsQuery.data, "routes.execute_own");
   const deliveryCandidatesQuery = useLogisticsCenter({
     // Load the complete operational set and apply the same readiness rule as
     // the centre. This also keeps probe-ready works visible when the API's
@@ -69,6 +70,8 @@ export function LogisticsRouteBuilderPage(): ReactNode {
   const createRoute = useCreateCourierRoute();
   const updateRoute = useUpdateCourierRoute();
   const deleteRoute = useDeleteCourierRoute();
+  const startRoute = useStartCourierRoute();
+  const outcomeRoute = useRecordCourierRouteStopOutcome();
   const selectedKeys = useMemo(() => new Set(selectedStops.map((stop) => stop.id)), [selectedStops]);
   const deliveryCandidates = deliveryCandidatesQuery.data?.items ?? [];
   const deliveryRouteCandidates = deliveryCandidates.filter((work) =>
@@ -145,6 +148,20 @@ export function LogisticsRouteBuilderPage(): ReactNode {
     deleteRoute.mutate(route.id, {
       onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Traseul nu a fost șters", variant: "error" }),
       onSuccess: () => toast.showToast({ message: "Traseul a fost șters, iar stopurile au revenit în liste.", title: "Traseu șters", variant: "success" }),
+    });
+  }
+
+  function startRouteAsLogistics(routeId: string): void {
+    startRoute.mutate(routeId, {
+      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Traseul nu a putut fi pornit", variant: "error" }),
+      onSuccess: () => toast.showToast({ message: "Traseul a fost pornit de logistică.", title: "Traseu pornit", variant: "success" }),
+    });
+  }
+
+  function recordRouteStopAsLogistics(routeId: string, stopId: string, outcomeStatus: CourierRouteStopOutcome, notes: string): void {
+    outcomeRoute.mutate({ input: { notes, outcomeStatus }, routeId, stopId }, {
+      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Rezultatul nu a fost salvat", variant: "error" }),
+      onSuccess: () => toast.showToast({ message: "Rezultatul stopului a fost salvat.", variant: "success" }),
     });
   }
 
@@ -375,6 +392,7 @@ export function LogisticsRouteBuilderPage(): ReactNode {
                 <ol className="logistics-page__print-stops">{route.stops.map((stop) => <li key={stop.id}><strong>{stop.type === "DELIVERY" ? "Livrare" : "Ridicare"}</strong><span>{stop.targetLabel}</span><span>Adresă: {stop.addressOverride || "-"}</span><span>Telefon: {stop.phoneOverride || "-"}</span></li>)}</ol>
                 <div className="logistics-page__group-actions">
                   {route.status === "DRAFT" ? <Button onClick={() => editRoute(route)} size="small" type="button" variant="outline">Creează traseu</Button> : null}
+                  {canExecute && (route.status === "ASSIGNED" || (route.status === "DRAFT" && !route.courier)) ? <Button disabled={startRoute.isPending} onClick={() => startRouteAsLogistics(route.id)} size="small" type="button">{route.courier ? "Începe traseul" : "Începe fără curier"}</Button> : null}
                   {canAssign ? <Button onClick={() => startAssigning(route)} size="small" type="button" variant="outline">{route.courier ? "Schimbă curierul" : "Expediază curierului"}</Button> : null}
                   {assigningRouteId === route.id ? (
                     <>
@@ -390,6 +408,7 @@ export function LogisticsRouteBuilderPage(): ReactNode {
                     <IconButton aria-label={`Editează traseul ${route.routeNumber}`} icon="✎" onClick={() => editRoute(route)} size="medium" variant="outline" />
                   </Tooltip>
                 </div>
+                {canExecute && route.status === "IN_PROGRESS" ? <LogisticsRouteExecution route={route} onRecord={(stop, outcome, notes) => recordRouteStopAsLogistics(route.id, stop.id, outcome, notes)} pending={outcomeRoute.isPending} /> : null}
               </div>
             ))}
           </CardContent>
@@ -397,6 +416,28 @@ export function LogisticsRouteBuilderPage(): ReactNode {
       </section>
     </main>
   );
+}
+
+function LogisticsRouteExecution({ onRecord, pending, route }: { readonly onRecord: (stop: CourierRouteStopView, outcome: CourierRouteStopOutcome, notes: string) => void; readonly pending: boolean; readonly route: CourierRouteView }): ReactNode {
+  return <div className="logistics-page__route-execution">
+    <strong>Execuție logistică · backup curier</strong>
+    {route.stops.map((stop) => <LogisticsRouteStop key={stop.id} onRecord={(outcome, notes) => onRecord(stop, outcome, notes)} pending={pending} stop={stop} />)}
+  </div>;
+}
+
+function LogisticsRouteStop({ onRecord, pending, stop }: { readonly onRecord: (outcome: CourierRouteStopOutcome, notes: string) => void; readonly pending: boolean; readonly stop: CourierRouteStopView }): ReactNode {
+  const [notes, setNotes] = useState("");
+  if (stop.outcomeStatus !== "PENDING") {
+    return <div className="logistics-page__route-stop"><span>{stop.stopOrder}</span><strong>{stop.type === "DELIVERY" ? "Livrare" : "Ridicare"}</strong><StatusBadge label={stop.outcomeStatus} variant={stop.outcomeStatus.includes("NOT") ? "rejected" : "delivered"} /></div>;
+  }
+  const positive: CourierRouteStopOutcome = stop.type === "DELIVERY" ? "DELIVERED" : "PICKED_UP";
+  const negative: CourierRouteStopOutcome = stop.type === "DELIVERY" ? "NOT_DELIVERED" : "NOT_PICKED_UP";
+  return <div className="logistics-page__route-stop">
+    <span>{stop.stopOrder}</span><strong>{stop.type === "DELIVERY" ? "Livrare" : "Ridicare"}</strong><p>{stop.targetLabel}</p>
+    <Textarea label="Observații" onChange={(event) => setNotes(event.target.value)} value={notes} />
+    <Button disabled={pending} onClick={() => onRecord(positive, notes)} size="small">{stop.type === "DELIVERY" ? "Livrat" : "Ridicat"}</Button>
+    <Button disabled={pending} onClick={() => onRecord(negative, notes)} size="small" variant="secondary">{stop.type === "DELIVERY" ? "Nelivrat" : "Neridicat"}</Button>
+  </div>;
 }
 
 function DateWheelPicker({ label, onChange, value }: { readonly label: string; readonly onChange: (value: string) => void; readonly value: string }): ReactNode {

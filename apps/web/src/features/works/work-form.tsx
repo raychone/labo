@@ -97,7 +97,7 @@ export function toWorkFormValues(work: WorkDetail | undefined): WorkFormValues {
     urgency: work.urgency ?? "NORMAL",
     quantity: work.quantity,
     requestedDeliveryDate: work.requestedDeliveryDate.slice(0, 10),
-    requestedDeliveryTime: work.deadline.manualDueAt?.slice(11, 16) ?? work.deadline.effectiveDueAt?.slice(11, 16) ?? "",
+    requestedDeliveryTime: work.deadline.timeSet ? (work.deadline.manualDueAt?.slice(11, 16) ?? work.deadline.effectiveDueAt?.slice(11, 16) ?? "") : "",
     restorationType: restorationValue === "cimentata" || restorationValue === "insurubata" ? restorationValue : null,
     shade: work.shade,
     workFormValues,
@@ -122,7 +122,7 @@ export function toWorkMutationInput(values: WorkFormValues, template: WorkFormTe
     urgency: values.urgency,
     quantity: values.quantity,
     requestedDeliveryDate: values.requestedDeliveryDate,
-    ...(includeManualDueAt ? { manualDueAt: toManualDueAt(values.requestedDeliveryDate, values.requestedDeliveryTime) } : {}),
+    ...(includeManualDueAt ? { manualDueAt: toManualDueAt(values.requestedDeliveryDate, values.requestedDeliveryTime), manualDueTimeSet: values.requestedDeliveryTime !== "" } : {}),
     shade: values.shade,
     implantPlatform: values.implantPlatform === "Alt tip" ? values.implantPlatformCustom : values.implantPlatform,
     ...(template
@@ -167,6 +167,7 @@ export function toWorkDeadlinePreviewInput(values: Pick<WorkFormValues, "clinicI
     clinicId: values.clinicId === "" ? null : values.clinicId,
     doctorId: values.doctorId === "" ? null : values.doctorId,
     manualDueAt: toManualDueAt(values.requestedDeliveryDate, values.requestedDeliveryTime),
+    manualDueTimeSet: values.requestedDeliveryTime !== "",
     quantity: values.quantity,
     workTypeId: values.workTypeId,
   };
@@ -201,10 +202,8 @@ function toManualDueAt(date: string, time: string): string | null {
     return null;
   }
 
-  // The date is the only required deadline value. If reception clears the
-  // time, preserve the manually entered date at the start of that day instead
-  // of falling back to a calculated/default deadline.
-  const value = new Date(`${date}T${time === "" ? "00:00" : time}:00`);
+  // The date is required; without an hour the deadline covers the whole day.
+  const value = new Date(`${date}T${time === "" ? "23:59" : time}:00`);
   return Number.isNaN(value.getTime()) ? null : value.toISOString();
 }
 
@@ -508,11 +507,12 @@ export function WorkForm({
             disabled={isDisabled}
             error={form.formState.errors.requestedDeliveryTime?.message}
             id="requestedDeliveryTime"
-            label="Ora termenului"
+            label="Ora termenului (opțional)"
             placeholder="HH:mm"
             type="time"
             {...form.register("requestedDeliveryTime")}
           />
+          <small>Data este obligatorie. Dacă ora nu este setată, termenul este valabil pentru întreaga zi.</small>
           <Select disabled={isDisabled} error={form.formState.errors.urgency?.message} id="urgency" label="Urgență" options={URGENCY_LEVELS.map((value) => ({ label: URGENCY_LABELS_RO[value], value }))} {...form.register("urgency")} />
         </FormGrid>
       </FormSection>

@@ -42,4 +42,60 @@ test("release readiness smoke path", async ({ page }) => {
   await loginAs(page, "MANAGER");
   await page.goto("/billing");
   await expect(page.getByRole("heading", { name: /Facturare/i })).toBeVisible();
+
+  const workDetail = await browserJson<{
+    readonly clinic: { readonly id: string };
+  }>(page, `/works/${createdWork.id}`);
+  const billable = await browserJson<{
+    readonly items: readonly { readonly id: string; readonly code: string }[];
+  }>(page, `/billing/billable-works?uninvoicedOnly=true&workCode=${encodeURIComponent(createdWork.code)}`);
+  expect(billable.items.some((item) => item.id === createdWork.id && item.code === createdWork.code)).toBe(true);
+
+  const issuedInvoice = await browserJson<{
+    readonly id: string;
+    readonly status: string;
+    readonly totalMinor: number;
+  }>(page, "/billing-documents/invoices/issue", {
+    body: JSON.stringify({
+      dueDate: "2026-09-15",
+      issueDate: "2026-08-26",
+      workOrderIds: [createdWork.id],
+    }),
+    headers: {
+      "Content-Type": "application/json",
+      "x-csrf-token": (await browserJson<{ readonly csrfToken: string }>(page, "/auth/csrf")).csrfToken,
+    },
+    method: "POST",
+  });
+  expect(issuedInvoice.status).toBe("ISSUED");
+  expect(issuedInvoice.totalMinor).toBeGreaterThan(0);
+
+  const statementBeforePayment = await browserJson<{ readonly rows: readonly { readonly workCodes: readonly string[] }[] }>(
+    page,
+    `/billing/statements/clinic?clinicId=${encodeURIComponent(workDetail.clinic.id)}&dateFrom=2026-08-01&dateTo=2026-08-31`,
+  );
+  expect(statementBeforePayment.rows.some((row) => row.workCodes.includes(createdWork.code))).toBe(true);
+
+  const paidInvoice = await browserJson<{ readonly status: string; readonly payments: readonly unknown[] }>(page, `/billing-documents/${issuedInvoice.id}/payments`, {
+    body: JSON.stringify({
+      amountMinor: issuedInvoice.totalMinor,
+      method: "BANK_TRANSFER",
+      paymentDate: "2026-08-26",
+      reference: `SMOKE-${createdWork.code}`,
+    }),
+    headers: {
+      "Content-Type": "application/json",
+      "x-csrf-token": (await browserJson<{ readonly csrfToken: string }>(page, "/auth/csrf")).csrfToken,
+    },
+    method: "POST",
+  });
+  expect(paidInvoice.status).toBe("PAID");
+  expect(paidInvoice.payments).toHaveLength(1);
+
+  const afterPayment = await browserJson<{
+    readonly uninvoicedWorkCount: number;
+    readonly paidMinor: number;
+  }>(page, "/billing/overview?dateFrom=2026-08-01&dateTo=2026-08-31");
+  expect(afterPayment.uninvoicedWorkCount).toBe(0);
+  expect(afterPayment.paidMinor).toBeGreaterThanOrEqual(issuedInvoice.totalMinor);
 });

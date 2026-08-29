@@ -337,6 +337,15 @@
   grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
+.logistics-page__route-execution {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--dl-border, #d8dfdc);
+  border-radius: 10px;
+}
+
 .logistics-page__empty {
   color: var(--color-muted-foreground);
   margin: 0;

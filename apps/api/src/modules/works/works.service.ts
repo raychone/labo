@@ -1557,23 +1557,35 @@ export class WorksService {
   public async setWorkStatus(context: ActorContext, workOrderId: string, dto: SetWorkStatusDto): Promise<WorkDetailView> {
     const before = await this.findWorkOrderOrThrow(workOrderId);
     await this.ensureCanChangeStatus(context.actorUserId, before);
-    if (dto.status === "FINALIZATA") {
+    const statusPermission = await this.authorizationService.hasPermission({ permission: "works.change_status", userId: context.actorUserId });
+    const isGlobalStatusEditor = statusPermission.effectiveScopes.includes("ALL");
+    if (dto.status === "FINALIZATA" && !isGlobalStatusEditor) {
       throw new ConflictException("Folosește acțiunea canonică «Finalizată» pentru a închide ciclul tehnic și a trimite lucrarea la facturare.");
     }
-    this.assertAllowedStatusTransition(before.status, dto.status);
-    if ((dto.status === "IN_LUCRU" || dto.status === "IN_ASTEPTARE") && before.claimStatus !== "CLAIMED") {
+    if (!isGlobalStatusEditor) this.assertAllowedStatusTransition(before.status, dto.status);
+    if (!isGlobalStatusEditor && (dto.status === "IN_LUCRU" || dto.status === "IN_ASTEPTARE") && before.claimStatus !== "CLAIMED") {
       throw new BadRequestException("Lucrarea trebuie preluată înainte de această stare.");
     }
 
     const operationNow = new Date();
     const after = await this.prisma.$transaction(async (tx) => {
+      if (isGlobalStatusEditor && dto.status === "FINALIZATA" && before.activeProbeCycleId) {
+        await tx.probeCycle.updateMany({
+          data: { completedAt: operationNow, completedByUserId: context.actorUserId, completionOutcome: "FINALIZED", status: "COMPLETED", version: { increment: 1 } },
+          where: { id: before.activeProbeCycleId, status: "ACTIVE" },
+        });
+      }
       const updated = await tx.workOrder.update({
         data: {
+          ...(isGlobalStatusEditor && dto.status === "FINALIZATA" ? { activeProbeCycleId: null } : {}),
+          ...(isGlobalStatusEditor ? { assignedTechnicianId: null, claimStatus: "UNCLAIMED" as const, claimedAt: null, claimedByUserId: null } : {}),
           completedAt: dto.status === "FINALIZATA" ? operationNow : null,
           completedByUserId: dto.status === "FINALIZATA" ? context.actorUserId : null,
+          finalizedAt: dto.status === "FINALIZATA" ? operationNow : null,
           status: dto.status,
           statusChangedAt: operationNow,
           statusChangedByUserId: context.actorUserId,
+          technicalReadiness: dto.status === "FINALIZATA" ? "FINAL_READY" : null,
           updatedByUserId: context.actorUserId,
           version: { increment: 1 },
           waitingStartedAt: dto.status === "IN_ASTEPTARE" ? operationNow : null,
@@ -1599,7 +1611,7 @@ export class WorksService {
       return updated;
     });
 
-    return toWorkDetailView(after, false, await this.createClaimAccess(context.actorUserId));
+    return toWorkDetailView(after as WorkOrderRecord, false, await this.createClaimAccess(context.actorUserId));
   }
 
   public async updateTechnicianDetails(context: ActorContext, workOrderId: string, dto: UpdateTechnicianWorkDetailsDto): Promise<WorkDetailView> {
@@ -1678,6 +1690,7 @@ export class WorksService {
       doctorId,
       legalEntity,
       ...(dto.manualDueAt !== undefined ? { manualDueAt: dto.manualDueAt } : {}),
+      ...(dto.manualDueTimeSet !== undefined ? { manualDueTimeSet: dto.manualDueTimeSet } : {}),
       now: new Date(),
       quantity: dto.quantity,
       ...(dto.startAt !== undefined ? { startAt: dto.startAt } : {}),
@@ -1744,6 +1757,7 @@ export class WorksService {
         doctorId,
         legalEntity,
         manualDueAt,
+        manualDueTimeSet: dto.manualDueTimeSet ?? false,
         now: operationNow,
         quantity,
         source: manualDueAt ? "MANUAL_OVERRIDE" : "CREATION",
@@ -2012,6 +2026,7 @@ export class WorksService {
         doctorId: dto.doctorId ?? before.doctorId,
         legalEntity,
         manualDueAt: new Date(dto.manualDueAt!),
+        manualDueTimeSet: dto.manualDueTimeSet ?? true,
         now: new Date(),
         quantity: dto.quantity ?? before.quantity,
         source: "MANUAL_OVERRIDE",

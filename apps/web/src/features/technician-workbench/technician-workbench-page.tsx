@@ -5,7 +5,6 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  ConfirmActionModal,
   ErrorState,
   LoadingState,
   Modal,
@@ -36,6 +35,12 @@ import { hasPermission } from "../users/users-api.js";
 import "./technician-workbench-page.css";
 
 type WorkbenchTab = "AVAILABLE" | "MINE";
+type CompletionTarget = { readonly action: "FINALIZE" | "PROBE_READY"; readonly work: WorkSummary };
+
+function currentCompletionCompany(work: WorkSummary): "" | "CDT" | "NG" {
+  const code = work.claim.executionLegalEntity?.code;
+  return code === "CDT" || code === "NG" ? code : "";
+}
 
 const defaultClaimFilters: ClaimWorksListParams = {
   deadlineFilter: undefined,
@@ -59,7 +64,8 @@ export function TechnicianWorkbenchPage(): ReactNode {
   const [tab, setTab] = useState<WorkbenchTab>(() => new URLSearchParams(window.location.search).get("tab") === "mine" ? "MINE" : "AVAILABLE");
   const [claimFilters, setClaimFilters] = useState<ClaimWorksListParams>(defaultClaimFilters);
   const [operationsTarget, setOperationsTarget] = useState<WorkSummary | null>(null);
-  const [finalizeTarget, setFinalizeTarget] = useState<WorkSummary | null>(null);
+  const [completionTarget, setCompletionTarget] = useState<CompletionTarget | null>(null);
+  const [completionCompany, setCompletionCompany] = useState<"" | "CDT" | "NG">("");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const isCompactMobile = useMediaQuery("(max-width: 719px)");
   const permissionsResult = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
@@ -105,7 +111,8 @@ export function TechnicianWorkbenchPage(): ReactNode {
   }
 
   function finalizeWork(work: WorkSummary): void {
-    setFinalizeTarget(work);
+    setCompletionCompany(currentCompletionCompany(work));
+    setCompletionTarget({ action: "FINALIZE", work });
   }
 
   function claimWork(work: WorkSummary): void {
@@ -122,18 +129,17 @@ export function TechnicianWorkbenchPage(): ReactNode {
   }
 
   function markProbeReady(work: WorkSummary): void {
-    probeReadyMutation.mutate({ workOrderId: work.id }, {
-      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Proba nu a fost marcată gata", variant: "error" }),
-      onSuccess: () => undefined,
-    });
+    setCompletionCompany(currentCompletionCompany(work));
+    setCompletionTarget({ action: "PROBE_READY", work });
   }
 
-  function confirmFinalize(): void {
-    if (!finalizeTarget) return;
-    const work = finalizeTarget;
-    finalizeMutation.mutate({ workOrderId: work.id }, {
-      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost finalizată", variant: "error" }),
-      onSuccess: () => { setFinalizeTarget(null); },
+  function confirmCompletion(): void {
+    if (!completionTarget || !completionCompany) return;
+    const { action, work } = completionTarget;
+    const mutation = action === "PROBE_READY" ? probeReadyMutation : finalizeMutation;
+    mutation.mutate({ executionLegalEntityCode: completionCompany, workOrderId: work.id }, {
+      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Proba nu a fost marcată gata", variant: "error" }),
+      onSuccess: () => setCompletionTarget(null),
     });
   }
 
@@ -250,16 +256,16 @@ export function TechnicianWorkbenchPage(): ReactNode {
           canReadOperations={canReadOperations}
           work={operationsTarget}
         />
-        <ConfirmActionModal
-          confirmLabel="Finalizează"
-          description="Lucrarea nu va mai reveni pentru o probă nouă."
-          isLoading={finalizeMutation.isPending}
-          isOpen={finalizeTarget !== null}
-          onCancel={() => setFinalizeTarget(null)}
-          onConfirm={confirmFinalize}
-          title="Finalizezi definitiv lucrarea?"
-          variant="danger"
-        />
+        <Modal
+          footer={<div className="dl-form-confirm-actions"><Button disabled={probeReadyMutation.isPending || finalizeMutation.isPending} onClick={() => setCompletionTarget(null)} type="button" variant="secondary">Renunță</Button><Button disabled={!completionCompany} isLoading={probeReadyMutation.isPending || finalizeMutation.isPending} onClick={confirmCompletion} type="button" variant={completionTarget?.action === "FINALIZE" ? "danger" : "primary"}>{completionTarget?.action === "FINALIZE" ? "Finalizează" : "Marchează gata"}</Button></div>}
+          isOpen={completionTarget !== null}
+          onOpenChange={(open) => { if (!open && !probeReadyMutation.isPending && !finalizeMutation.isPending) setCompletionTarget(null); }}
+          size="sm"
+          title={completionTarget?.action === "FINALIZE" ? "Finalizezi definitiv lucrarea?" : "Marchezi proba gata?"}
+        >
+          <p>Selectează firma care va fi folosită pentru plata tehnicianului și facturare.</p>
+          <Select label="Firmă" onChange={(event) => setCompletionCompany(event.target.value as "" | "CDT" | "NG")} options={[{ label: "CDT", value: "CDT" }, { label: "NG", value: "NG" }]} placeholder="Alege firma" value={completionCompany} />
+        </Modal>
       </section>
     </main>
   );

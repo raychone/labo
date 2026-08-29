@@ -1,5 +1,5 @@
 import { Transform } from "class-transformer";
-import { ArrayNotEmpty, IsArray, IsISO8601, IsOptional, IsString } from "class-validator";
+import { ArrayNotEmpty, IsArray, IsISO8601, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 
 function trim(value: unknown): unknown {
   return typeof value === "string" ? value.trim() : value;
@@ -35,4 +35,12 @@ export class ReceiveProbeDto {
 
   @IsISO8601({ strict: true })
   public readonly deadlineAt!: string;
+}
+
+export class ReworkProbeDto extends ReceiveProbeDto {
+  @Transform(({ value }) => trim(value))
+  @IsString()
+  @MinLength(3)
+  @MaxLength(1000)
+  public readonly reason!: string;
 }

@@ -31,7 +31,7 @@ import { LOGISTICS_MARKERS, type LogisticsMarker } from "@dental-lab/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
-import { useEffect, useId, useMemo, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState, type ChangeEvent, type DragEvent, type FormEvent, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router";
 
@@ -42,7 +42,7 @@ import { fetchUsers, hasPermission } from "../users/users-api.js";
 import { useTechnicianOptions } from "../technician-workbench/technician-workbench-api.js";
 import { WorkForm, defaultWorkFormValues, toWorkDeadlinePreviewInput, toWorkMutationInput } from "../works/work-form.js";
 import { useActiveWorkFormTemplate } from "../work-forms/work-form-templates-api.js";
-import { setWorkStatus, useWorkDeadlinePreview, useWorkFormWorkTypeOptions } from "../works/works-api.js";
+import { setWorkStatus, useReworkProbe, useWorkDeadlinePreview, useWorkFormWorkTypeOptions } from "../works/works-api.js";
 import { workFormSchema, type WorkFormValues } from "../works/works-page.schema.js";
 import {
   useCreateLogisticsWork,
@@ -167,6 +167,7 @@ export function LogisticsPage(): ReactNode {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [routeQueueOnly, setRouteQueueOnly] = useState(false);
   const [editingPickup, setEditingPickup] = useState<PickupRequestView | null>(null);
+  const [reworkItem, setReworkItem] = useState<LogisticsCenterItem | null>(null);
   const queryClient = useQueryClient();
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   const canRead = hasPermission(permissionsQuery.data, "logistics.center.read");
@@ -486,7 +487,7 @@ export function LogisticsPage(): ReactNode {
                     onSuccess: () => openRouteLists(direction),
                     onError: (error) => toast.showToast({ title: "Lucrarea nu a fost adăugată în coadă", message: getErrorMessage(error), variant: "error" }),
                   });
-                }} onOpen={() => navigate(`/works?workId=${encodeURIComponent(item.id)}`)} onStatus={(status) => updateWorkStatus.mutate({ status, workOrderId: item.id })} onUpdateActions={(input) => {
+                }} onOpen={() => navigate(`/works?workId=${encodeURIComponent(item.id)}`)} onRework={() => setReworkItem(item)} onStatus={(status) => updateWorkStatus.mutate({ status, workOrderId: item.id })} onUpdateActions={(input) => {
                   const nextDelivery = input.requiresDelivery ?? item.requiresDelivery;
                   const nextPickup = input.requiresPickup ?? item.requiresPickup;
                   updateWorkActions.mutate({ input: { ...input, ...(nextDelivery ? { requiresPickup: false } : {}), ...(nextPickup ? { requiresDelivery: false } : {}) }, workOrderId: item.id });
@@ -520,8 +521,56 @@ export function LogisticsPage(): ReactNode {
 
       <LogisticsCreateWorkModal isOpen={isCreateWorkOpen} onOpenChange={setCreateWorkOpen} />
       <PickupRequestModal editingPickup={editingPickup} isOpen={isPickupModalOpen} onOpenChange={(open) => { setPickupModalOpen(open); if (!open) setEditingPickup(null); }} />
+      <ReworkProbeModal item={reworkItem} isOpen={reworkItem !== null} onOpenChange={(open) => { if (!open) setReworkItem(null); }} />
     </main>
   );
+}
+
+function toDeadlineIso(date: string, time: string): string {
+  return new Date(`${date}T${time || "23:59"}:00`).toISOString();
+}
+
+function ReworkProbeModal({ item, isOpen, onOpenChange }: { readonly item: LogisticsCenterItem | null; readonly isOpen: boolean; readonly onOpenChange: (open: boolean) => void }): ReactNode {
+  const toast = useToast();
+  const rework = useReworkProbe();
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [reason, setReason] = useState("");
+
+  useEffect(() => {
+    if (!isOpen || !item) return;
+    setDate(item.requestedDeliveryDate.slice(0, 10));
+    setTime("");
+    setReason("");
+  }, [isOpen, item]);
+
+  function submit(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    if (!item || !date || reason.trim().length < 3) return;
+    rework.mutate({ workOrderId: item.id, input: { deadlineAt: toDeadlineIso(date, time), reason: reason.trim() } }, {
+      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Lucrarea nu a fost trimisă la refacere", variant: "error" }),
+      onSuccess: () => {
+        toast.showToast({ message: "Lucrarea a revenit în lista tehnicienilor.", title: "Refacere inițiată", variant: "success" });
+        onOpenChange(false);
+      },
+    });
+  }
+
+  return <Modal
+    footer={<FormActions formId="rework-probe-form" isSubmitting={rework.isPending} submitLabel="Trimite la refacere" />}
+    isOpen={isOpen}
+    onOpenChange={onOpenChange}
+    size="md"
+    title={`Refacere · ${item?.workCode ?? "lucrare"}`}
+  >
+    <form id="rework-probe-form" onSubmit={submit}>
+      <p>Lucrarea revine direct în „Lucrări de preluat”, fără curier și fără traseu logistic.</p>
+      <DateInput label="Termen" required value={date} onChange={(event) => setDate(event.target.value)} />
+      <TextInput label="Ora (opțional)" type="time" value={time} onChange={(event) => setTime(event.target.value)} />
+      {!time ? <small>Ora nu este setată. Este obligatorie doar data.</small> : null}
+      <Textarea label="Motivul refacerii" required rows={4} value={reason} onChange={(event) => setReason(event.target.value)} />
+    </form>
+  </Modal>;
 }
 
 function PickupRouteRow({
@@ -998,12 +1047,14 @@ function WorkRow({
   item,
   onOpen,
   onFastAction,
+  onRework,
   onStatus,
   onUpdateActions,
 }: {
   readonly item: LogisticsCenterItem;
   readonly onOpen: () => void;
   readonly onFastAction: (direction: "DELIVERY" | "PICKUP") => void;
+  readonly onRework: () => void;
   readonly onStatus: (status: (typeof FINAL_WORK_STATUSES)[number]) => void;
   readonly onUpdateActions: (input: { readonly logisticsNote?: string | null; readonly marker?: LogisticsMarker | null; readonly requiresDelivery?: boolean; readonly requiresPickup?: boolean }) => void;
 }): ReactNode {
@@ -1034,6 +1085,7 @@ function WorkRow({
       </div>
       <div className="logistics-page__row-state">
         <StatusPicker itemCode={item.workCode} onChange={onStatus} readiness={item.technicalReadiness} value={item.operationalStatus} />
+        {item.technicalReadiness === "PROBE_READY" || item.technicalReadiness === "FINAL_READY" ? <Button onClick={onRework} size="small" type="button" variant="outline">Trimite la refacere</Button> : null}
       </div>
       <div className="logistics-page__row-alerts">
         {item.dueState === "OVERDUE" ? <span aria-label="Termen depășit" className="logistics-page__overdue-alert">!</span> : null}
