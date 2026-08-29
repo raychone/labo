@@ -43,6 +43,7 @@ const CLINIC_MUTATION_FIELDS = [
   "countyOrRegion",
   "email",
   "internalNotes",
+  "legalEntityCode",
   "legalName",
   "name",
   "phone",
@@ -431,7 +432,9 @@ export class ClinicsService {
     before: Prisma.ClinicGetPayload<object>,
     after: Prisma.ClinicGetPayload<object>,
   ): readonly (typeof CLINIC_MUTATION_FIELDS)[number][] {
-    return CLINIC_MUTATION_FIELDS.filter((field) => before[field] !== after[field]);
+    return CLINIC_MUTATION_FIELDS.filter((field) => field === "legalEntityCode"
+      ? before.legalEntityId !== after.legalEntityId
+      : before[field] !== after[field]);
   }
 
   private async recordAudit(

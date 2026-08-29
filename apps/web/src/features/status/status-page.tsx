@@ -240,7 +240,7 @@ function toStatusVariant(row: OperationalStatusRow): "awaiting" | "closed" | "de
 }
 
 function toOperationalLabel(row: OperationalStatusRow): string {
-  if (row.currentCycle !== null && row.currentCycle.number > 1) return "Probă";
+  if (row.technicalReadiness === "PROBE_READY" || (row.currentCycle !== null && row.currentCycle.number > 1)) return "Probă";
   return row.operationalStatus === "RECEPTIE" ? "Recepție"
     : row.operationalStatus === "IN_LUCRU" ? "În lucru"
       : row.operationalStatus === "IN_ASTEPTARE" ? "În așteptare"
@@ -742,7 +742,7 @@ function StatusDetailDrawer({ onOpenChange, row }: { readonly onOpenChange: (ope
           <Metric label="Prioritate" value={toPriorityLabel(row.priority)} />
           <Metric label="Companie" value={row.executionCompany?.code ?? "Nefixată"} />
           <Metric label="Termen" value={row.deadline.tooltip} />
-          <Metric label="Termen efectiv" value={row.deadline.effectiveDueAt ? formatDateTime(row.deadline.effectiveDueAt) : "Fără termen"} />
+          <Metric label="Termen" value={row.deadline.effectiveDueAt ? formatDateTime(row.deadline.effectiveDueAt) : "Fără termen"} />
           <Metric label="Logistică" value={row.logistics.status ? LOGISTICS_STATUS_LABELS[row.logistics.status] : "Fără status"} />
           <Metric label="Livrare" value={row.delivery.status ? DELIVERY_STATUS_LABELS[row.delivery.status] : "Fără livrare"} />
           <Metric label="Fișă" value={`${row.realLabSheet.label}${row.realLabSheet.cycleNumber ? ` · Ciclul ${row.realLabSheet.cycleNumber}` : ""}`} />

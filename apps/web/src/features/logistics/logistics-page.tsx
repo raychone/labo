@@ -527,7 +527,13 @@ export function LogisticsPage(): ReactNode {
 }
 
 function toDeadlineIso(date: string, time: string): string {
-  return new Date(`${date}T${time || "23:59"}:00`).toISOString();
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute] = (time || "23:59").split(":").map(Number);
+  const utcGuess = Date.UTC(year!, month! - 1, day, hour, minute);
+  const parts = new Intl.DateTimeFormat("en-CA", { day: "2-digit", hour: "2-digit", minute: "2-digit", month: "2-digit", timeZone: "Europe/Bucharest", year: "numeric", hourCycle: "h23" }).formatToParts(new Date(utcGuess));
+  const get = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
+  const zonedAsUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"));
+  return new Date(utcGuess - (zonedAsUtc - utcGuess)).toISOString();
 }
 
 function ReworkProbeModal({ item, isOpen, onOpenChange }: { readonly item: LogisticsCenterItem | null; readonly isOpen: boolean; readonly onOpenChange: (open: boolean) => void }): ReactNode {

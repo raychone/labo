@@ -190,8 +190,8 @@ export async function updateActiveProbeDeadline(workOrderId: string, cycleId: st
   return sendJson(`/works/${workOrderId}/probe-cycles/${cycleId}/deadline`, "PATCH", { deadlineAt });
 }
 
-export async function setManualWorkDeadline(workOrderId: string, dueAt: string, expectedRevision: number): Promise<WorkDetail> {
-  return sendJson<WorkDetail>(`/works/${workOrderId}/deadline/manual`, "POST", { dueAt, expectedRevision });
+export async function setManualWorkDeadline(workOrderId: string, dueAt: string, expectedRevision: number, manualDueTimeSet: boolean): Promise<WorkDetail> {
+  return sendJson<WorkDetail>(`/works/${workOrderId}/deadline/manual`, "POST", { dueAt, expectedRevision, manualDueTimeSet });
 }
 
 export async function markProbeReady(workOrderId: string, executionLegalEntityCode?: "CDT" | "NG"): Promise<{ readonly probeReady: true }> {
@@ -502,7 +502,7 @@ export function useUpdateActiveProbeDeadline() {
 export function useSetManualWorkDeadline() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ workOrderId, dueAt, expectedRevision }: { readonly workOrderId: string; readonly dueAt: string; readonly expectedRevision: number }) => setManualWorkDeadline(workOrderId, dueAt, expectedRevision),
+    mutationFn: ({ workOrderId, dueAt, expectedRevision, manualDueTimeSet }: { readonly workOrderId: string; readonly dueAt: string; readonly expectedRevision: number; readonly manualDueTimeSet: boolean }) => setManualWorkDeadline(workOrderId, dueAt, expectedRevision, manualDueTimeSet),
     onSuccess: async (_work, variables) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: worksQueryKeys.detail(variables.workOrderId) }),

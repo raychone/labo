@@ -23,6 +23,7 @@
     "db:migrate:deploy": "pnpm --filter @dental-lab/api prisma:migrate:deploy",
     "seed:demo:deploy": "pnpm --filter @dental-lab/api prisma:seed:deploy && pnpm --filter @dental-lab/api prisma:seed:demo:deploy",
     "seed:technical": "pnpm --filter @dental-lab/api prisma:db:seed && pnpm --filter @dental-lab/api prisma:db:seed:technical",
+    "reset:minimal:neon": "pnpm --filter @dental-lab/api prisma:reset:minimal:deploy",
     "seed:once:deploy": "pnpm --filter @dental-lab/api prisma:migrate:deploy && pnpm --filter @dental-lab/api prisma:seed:deploy && pnpm --filter @dental-lab/api prisma:seed:once:deploy"
   },
   "devDependencies": {

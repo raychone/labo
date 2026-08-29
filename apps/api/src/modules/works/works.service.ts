@@ -1719,8 +1719,12 @@ export class WorksService {
     const workOrder = await this.prisma.$transaction(async (tx) => {
       const clinicId = dto.clinicId ?? null;
       const doctorId = dto.doctorId ?? null;
-      await this.validateClinic(tx, clinicId, true);
+      const clinic = await this.validateClinic(tx, clinicId, true);
       await this.validateDoctor(tx, doctorId, clinicId, true);
+      const clinicEntity = clinic?.legalEntity ?? null;
+      const workLegalEntity: LegalEntityContext = clinicEntity?.isActive
+        ? { code: clinicEntity.code as LegalEntityContext["code"], displayName: clinicEntity.displayName, id: clinicEntity.id }
+        : legalEntity;
       this.rejectConflictingPatientPayload(dto.patientId, dto.patientName);
       const patient = await this.patientsService.findActivePatientOrThrow(tx, dto.patientId);
       const workType = await this.validateWorkType(tx, legacyWorkTypeId, true);
@@ -1755,7 +1759,7 @@ export class WorksService {
       const deadline = await this.workDeadlineService.resolveForWork({
         clinicId,
         doctorId,
-        legalEntity,
+        legalEntity: workLegalEntity,
         manualDueAt,
         manualDueTimeSet: dto.manualDueTimeSet ?? false,
         now: operationNow,
@@ -1782,6 +1786,7 @@ export class WorksService {
         currency: pricing.currency,
         ...deadlineDataToPrisma(deadline, 1),
         doctorId,
+        executionLegalEntityId: workLegalEntity.id,
         patientId: patient.id,
         patientName: toPatientSnapshotName(patient),
         priority: dto.priority,
@@ -2231,6 +2236,7 @@ export class WorksService {
       includeStartDay: before.deadlineIncludeStartDay ?? false,
       legalEntity,
       manualDueAt: new Date(dto.dueAt),
+      manualDueTimeSet: dto.manualDueTimeSet ?? true,
       now: operationNow,
       quantity: before.quantity,
       source: "MANUAL_OVERRIDE",
@@ -2565,14 +2571,26 @@ export class WorksService {
     }
   }
 
-  private async validateClinic(client: Prisma.TransactionClient | PrismaService, clinicId: string | null | undefined, requireActive: boolean): Promise<void> {
+  private async validateClinic(
+    client: Prisma.TransactionClient | PrismaService,
+    clinicId: string | null | undefined,
+    requireActive: boolean,
+  ): Promise<{ isActive: boolean; legalEntity: { id: string; code: string; displayName: string; isActive: boolean } | null } | null> {
     if (!clinicId) {
-      return;
+      return null;
     }
 
     const clinic = await client.clinic.findUnique({
       select: {
         isActive: true,
+        legalEntity: {
+          select: {
+            code: true,
+            displayName: true,
+            id: true,
+            isActive: true,
+          },
+        },
       },
       where: {
         id: clinicId,
@@ -2586,6 +2604,8 @@ export class WorksService {
     if (requireActive && !clinic.isActive) {
       throw new BadRequestException("Clinic must be active.");
     }
+
+    return clinic;
   }
 
   private async validateDoctor(

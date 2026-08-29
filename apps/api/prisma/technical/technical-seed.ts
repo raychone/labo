@@ -109,6 +109,38 @@ export async function seedTechnicalCatalog(prisma: PrismaClient): Promise<{ read
     },
   });
 
+  // Give the two standard demo technicians an initial rate for every
+  // canonical operation so a fresh minimal database can record manopere
+  // immediately. These are seed defaults and remain editable by a manager.
+  const demoTechnicians = await prisma.user.findMany({
+    select: { id: true, email: true },
+    where: { email: { in: ["tehnician1@demo.local", "tehnician2@demo.local"] }, isActive: true },
+  });
+  const canonicalOperations = await prisma.technicianOperation.findMany({
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, sortOrder: true },
+    where: { id: { startsWith: "technical_operation_" }, isActive: true },
+  });
+  const rateEffectiveFrom = new Date("2026-01-01T00:00:00.000Z");
+  for (const technician of demoTechnicians) {
+    const technicianNumber = technician.email === "tehnician2@demo.local" ? 2 : 1;
+    for (const operation of canonicalOperations) {
+      const rateMinor = (technicianNumber === 2 ? 3_500 : 3_000) + operation.sortOrder * 250;
+      await prisma.technicianOperationRate.upsert({
+        create: {
+          createdByUserId: manager.id,
+          effectiveFrom: rateEffectiveFrom,
+          id: `technical_rate_t${technicianNumber}_${operation.id.replace("technical_operation_", "")}`,
+          operationId: operation.id,
+          rateMinor,
+          technicianId: technician.id,
+        },
+        update: { effectiveFrom: rateEffectiveFrom, rateMinor, operationId: operation.id, technicianId: technician.id },
+        where: { id: `technical_rate_t${technicianNumber}_${operation.id.replace("technical_operation_", "")}` },
+      });
+    }
+  }
+
   const legalEntities = await prisma.legalEntity.findMany({ select: { code: true, id: true }, where: { code: { in: ["CDT", "NG"] } } });
   const canonicalPricingSymbols = REAL_PRICING_CATALOG.map((item) => `PRICE-${item.symbol}`.slice(0, 40));
   const legacyPricingWorkTypes = await prisma.workType.findMany({

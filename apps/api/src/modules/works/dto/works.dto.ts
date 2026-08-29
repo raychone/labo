@@ -526,6 +526,10 @@ export class SetManualWorkDeadlineDto {
   public readonly expectedRevision!: number;
 
   @IsOptional()
+  @IsBoolean()
+  public readonly manualDueTimeSet?: boolean;
+
+  @IsOptional()
   @Transform(({ value }) => trimOptionalString(value))
   @IsString()
   @MaxLength(500)

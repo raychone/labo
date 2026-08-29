@@ -18,6 +18,7 @@
     "prisma:seed:deploy": "env -u ELECTRON_RUN_AS_NODE tsx prisma/seed.ts",
     "prisma:seed:demo:deploy": "env -u ELECTRON_RUN_AS_NODE ALLOW_DEMO_SEED=true tsx prisma/seed-demo.ts",
     "prisma:seed:technical:deploy": "env -u ELECTRON_RUN_AS_NODE tsx prisma/seed-technical.ts",
+    "prisma:reset:minimal:deploy": "env -u ELECTRON_RUN_AS_NODE tsx prisma/reset-minimal.ts",
     "prisma:seed:once:deploy": "env -u ELECTRON_RUN_AS_NODE ALLOW_DEMO_SEED=true tsx prisma/seed-once.ts",
     "prisma:reset:demo:deploy": "env -u ELECTRON_RUN_AS_NODE ALLOW_DEMO_SEED=true tsx prisma/reset-demo.ts",
     "prisma:validate": "dotenv -e ../../.env -- prisma validate",

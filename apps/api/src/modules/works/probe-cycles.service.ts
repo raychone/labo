@@ -144,8 +144,14 @@ export class ProbeCyclesService {
     });
     await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.caseReceived, actorUserId: input.actorUserId, metadata: { ...(input.directRework ? { reason: input.reasonNotes ?? null, rework: true } : {}), nextProbeTypeName: created.probeTypeNameSnapshot, probeNumber: created.sequence, workOrderLabel: work.code, deadlineAt: deadlineAt.toISOString() }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: work.id, resourceType: "work_order" });
     await this.auditService.record({ action: POSTMEETING_AUDIT_ACTIONS.activeProbeCycleStarted, actorUserId: input.actorUserId, metadata: { probeTypeName: created.probeTypeNameSnapshot, probeNumber: created.sequence, workOrderLabel: work.code }, ...(input.requestMetadata ? { requestMetadata: input.requestMetadata } : {}), resourceId: created.id, resourceType: "probe_cycle" });
-    await this.notificationsService?.publishProbeAvailable({ workOrderId: work.id, probeCycleId: created.id, code: work.code, patientName: work.patientName, sequence: created.sequence, probeTypeName: created.probeTypeNameSnapshot, deadlineAt: created.deadlineAt.toISOString() });
-    await this.notificationsService?.publishNewProbe({ workOrderId: work.id, probeCycleId: created.id, code: work.code, patientName: work.patientName, sequence: created.sequence, probeTypeName: created.probeTypeNameSnapshot });
+    if (input.directRework) {
+      // A logistics rework goes straight back to the technician queue. Do not
+      // notify logistics again because the same user initiated the rework.
+      await this.notificationsService?.publishProbeAvailable({ workOrderId: work.id, probeCycleId: created.id, code: work.code, patientName: work.patientName, sequence: created.sequence, probeTypeName: created.probeTypeNameSnapshot, deadlineAt: created.deadlineAt.toISOString() });
+    } else {
+      await this.notificationsService?.publishProbeAvailable({ workOrderId: work.id, probeCycleId: created.id, code: work.code, patientName: work.patientName, sequence: created.sequence, probeTypeName: created.probeTypeNameSnapshot, deadlineAt: created.deadlineAt.toISOString() });
+      await this.notificationsService?.publishNewProbe({ workOrderId: work.id, probeCycleId: created.id, code: work.code, patientName: work.patientName, sequence: created.sequence, probeTypeName: created.probeTypeNameSnapshot });
+    }
     return toProbeCycleView(created);
   }
 

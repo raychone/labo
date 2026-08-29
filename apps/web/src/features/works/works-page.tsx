@@ -185,6 +185,24 @@ function formatTime(value: string): string {
   return new Intl.DateTimeFormat("ro-RO", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Bucharest" }).format(new Date(value));
 }
 
+function toLocalDateTimeInput(value: string | null, fallbackDate: string, timeSet: boolean | undefined): string {
+  if (!value) return `${fallbackDate.slice(0, 10)}T${timeSet === true ? "00:00" : "23:59"}`;
+  const date = new Date(value);
+  const parts = new Intl.DateTimeFormat("en-CA", { day: "2-digit", hour: "2-digit", minute: "2-digit", month: "2-digit", timeZone: "Europe/Bucharest", year: "numeric", hourCycle: "h23" }).formatToParts(date);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "00";
+  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
+}
+
+function toBucharestIso(date: string, time: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute] = (time || "23:59").split(":").map(Number);
+  const utcGuess = Date.UTC(year!, month! - 1, day, hour, minute);
+  const zonedParts = new Intl.DateTimeFormat("en-CA", { day: "2-digit", hour: "2-digit", minute: "2-digit", month: "2-digit", timeZone: "Europe/Bucharest", year: "numeric", hourCycle: "h23" }).formatToParts(new Date(utcGuess));
+  const get = (type: string) => Number(zonedParts.find((part) => part.type === type)?.value ?? 0);
+  const zonedAsUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"));
+  return new Date(utcGuess - (zonedAsUtc - utcGuess)).toISOString();
+}
+
 function formatPrice(value: number | null, currency: string, locale: string): string {
   return value === null ? "Restricționat" : formatMoneyMinor(value, currency, locale);
 }
@@ -226,8 +244,14 @@ function DeadlineBadge({ deadline, showTooltip = true }: { readonly deadline: Wo
 
 function DeadlineDetailCard({ canEdit, work }: { readonly canEdit: boolean; readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
   const mutation = useSetManualWorkDeadline();
-  const [value, setValue] = useState(work.deadline.effectiveDueAt ? work.deadline.effectiveDueAt.slice(0, 16) : `${work.requestedDeliveryDate}T00:00`);
-  useEffect(() => setValue(work.deadline.effectiveDueAt ? work.deadline.effectiveDueAt.slice(0, 16) : `${work.requestedDeliveryDate}T00:00`), [work.deadline.effectiveDueAt, work.requestedDeliveryDate]);
+  const initialValue = toLocalDateTimeInput(work.deadline.effectiveDueAt, work.requestedDeliveryDate, work.deadline.timeSet);
+  const [date, setDate] = useState(initialValue.slice(0, 10));
+  const [time, setTime] = useState(work.deadline.timeSet ? initialValue.slice(11, 16) : "");
+  useEffect(() => {
+    const value = toLocalDateTimeInput(work.deadline.effectiveDueAt, work.requestedDeliveryDate, work.deadline.timeSet);
+    setDate(value.slice(0, 10));
+    setTime(work.deadline.timeSet ? value.slice(11, 16) : "");
+  }, [work.deadline.effectiveDueAt, work.deadline.timeSet, work.requestedDeliveryDate]);
   return (
     <Card>
       <CardHeader>
@@ -253,7 +277,7 @@ function DeadlineDetailCard({ canEdit, work }: { readonly canEdit: boolean; read
             <strong>{work.deadline.countdown}</strong>
           </div>
         </div>
-        {canEdit && work.status !== "FINALIZATA" ? <div className="works-page__actions"><label>Modifică termenul<input aria-label="Termen lucrare" className="dl-control" onChange={(event) => setValue(event.target.value)} type="datetime-local" value={value} /></label><Button disabled={!value || mutation.isPending} isLoading={mutation.isPending} onClick={() => mutation.mutate({ dueAt: new Date(value).toISOString(), expectedRevision: work.deadline.revision, workOrderId: work.id })} type="button">Salvează termenul</Button></div> : null}
+        {canEdit && work.status !== "FINALIZATA" ? <div className="works-page__actions"><label>Data termenului<input aria-label="Data termenului" className="dl-control" onChange={(event) => setDate(event.target.value)} type="date" value={date} /></label><label>Ora termenului (opțional)<input aria-label="Ora termenului" className="dl-control" onChange={(event) => setTime(event.target.value)} type="time" value={time} /></label><Button disabled={!date || mutation.isPending} isLoading={mutation.isPending} onClick={() => mutation.mutate({ dueAt: toBucharestIso(date, time), expectedRevision: work.deadline.revision, manualDueTimeSet: time !== "", workOrderId: work.id })} type="button">Salvează termenul</Button></div> : null}
       </CardContent>
     </Card>
   );
@@ -262,12 +286,18 @@ function DeadlineDetailCard({ canEdit, work }: { readonly canEdit: boolean; read
 function ActiveProbeDeadlineCard({ canEdit, work }: { readonly canEdit: boolean; readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
   const cycle = work.activeProbeCycle;
   const mutation = useUpdateActiveProbeDeadline();
-  const [value, setValue] = useState(cycle ? cycle.deadlineAt.slice(0, 16) : "");
-  useEffect(() => setValue(cycle ? cycle.deadlineAt.slice(0, 16) : ""), [cycle?.deadlineAt]);
+  const initialValue = cycle ? toLocalDateTimeInput(cycle.deadlineAt, work.requestedDeliveryDate, true) : "";
+  const [date, setDate] = useState(initialValue.slice(0, 10));
+  const [time, setTime] = useState(initialValue.slice(11, 16));
+  useEffect(() => {
+    const value = cycle ? toLocalDateTimeInput(cycle.deadlineAt, work.requestedDeliveryDate, true) : "";
+    setDate(value.slice(0, 10));
+    setTime(value.slice(11, 16));
+  }, [cycle?.deadlineAt, work.requestedDeliveryDate]);
   if (!cycle) return null;
-  return <Card><CardHeader><CardTitle>Termen probă curentă</CardTitle><CardDescription>{cycle.probeTypeNameSnapshot}</CardDescription></CardHeader><CardContent>
-    <div className="works-page__detail-field"><span>Termen explicit</span><strong>{formatDateTime(cycle.deadlineAt)}</strong></div>
-    {canEdit && work.status !== "FINALIZATA" ? <div className="works-page__actions"><label>Modifică termenul<input aria-label="Termen probă curentă" className="dl-control" onChange={(event) => setValue(event.target.value)} type="datetime-local" value={value} /></label><Button disabled={!value || mutation.isPending} isLoading={mutation.isPending} onClick={() => mutation.mutate({ cycleId: cycle.id, deadlineAt: new Date(value).toISOString(), workOrderId: work.id })} type="button">Salvează termenul</Button></div> : null}
+  return <Card><CardHeader><CardTitle>Termen</CardTitle><CardDescription>{cycle.probeTypeNameSnapshot}</CardDescription></CardHeader><CardContent>
+    <div className="works-page__detail-field"><span>Termen</span><strong>{formatDateTime(cycle.deadlineAt)}</strong></div>
+    {canEdit && work.status !== "FINALIZATA" ? <div className="works-page__actions"><label>Data termenului<input aria-label="Data termenului probă curentă" className="dl-control" onChange={(event) => setDate(event.target.value)} type="date" value={date} /></label><label>Ora termenului (opțional)<input aria-label="Ora termenului probă curentă" className="dl-control" onChange={(event) => setTime(event.target.value)} type="time" value={time} /></label><Button disabled={!date || mutation.isPending} isLoading={mutation.isPending} onClick={() => mutation.mutate({ cycleId: cycle.id, deadlineAt: toBucharestIso(date, time), workOrderId: work.id })} type="button">Salvează termenul</Button></div> : null}
   </CardContent></Card>;
 }
 
@@ -1199,9 +1229,7 @@ function WorkDetailsDrawer({
             <div className="works-page__meta">
               <StatusBadge label={work.status === "FINALIZATA" ? "Finalizată" : work.technicalReadiness === "PROBE_READY" ? "Probă gata" : work.status === "RECEPTIE" && work.probeReceivedAt ? "Probă" : "Înregistrată"} variant={work.status === "FINALIZATA" ? "closed" : work.technicalReadiness === "PROBE_READY" ? "production" : "registered"} />
               {work.urgency ? <BadgePill label={urgencyLabel(work.urgency)} tone={work.urgency !== "NORMAL" ? "warning" : "neutral"} /> : <PriorityBadge label={work.priority === "URGENT" ? "Urgent" : "Normal"} variant={work.priority === "URGENT" ? "urgent" : "normal"} />}
-              <span>Termen promis: {formatDate(work.requestedDeliveryDate)}</span>
-              <span>Termen efectiv: {work.deadline.effectiveDueAt ? formatDateTime(work.deadline.effectiveDueAt) : "Nerezolvat"}</span>
-              <span>Deadline: {work.deadline.status} · rev. {work.deadline.revision}</span>
+              <span>Termen: {work.deadline.effectiveDueAt ? formatDateTime(work.deadline.effectiveDueAt) : "Nerezolvat"}</span>
               {canReadPricing ? <span>Total: {formatPrice(work.totalPriceMinor, work.currency ?? currency, locale)}</span> : null}
             </div>
             {work.activeProbeCycle || (work.completedProbeCycles ?? []).length > 0 ? <ProbeCycleSummary canSelect={canSelectProbeType} isSaving={updateProbeTypesMutation.isPending} onSelect={(cycleId, probeTypeIds) => updateProbeTypesMutation.mutate({ cycleId, probeTypeIds, workOrderId: work.id })} probeTypes={probeTypeOptions} work={work} /> : null}
@@ -1502,7 +1530,7 @@ function ExecutionNowCard({ activeCycleNumber, showLegacyExecution, work }: { re
           <MetricCell label="Tehnician" value={currentTechnician?.displayName ?? "Nerevendicată"} />
           <MetricCell label="Firmă" value={executionCompany} />
           {showLegacyExecution ? <MetricCell label="Progres" value={progress} /> : null}
-          <MetricCell label="Termen exact" value={formatOptionalDateTime(work.executionSnapshot.deadline?.effectiveDueAt ?? work.deadline.effectiveDueAt)} />
+          <MetricCell label="Termen" value={formatOptionalDateTime(work.executionSnapshot.deadline?.effectiveDueAt ?? work.deadline.effectiveDueAt)} />
           <MetricCell label="Status" value={work.status} />
           <MetricCell label="Start execuție" value={formatOptionalDateTime(work.executionSnapshot.deadline?.startAt ?? work.deadline.startAt)} />
         </div>

@@ -319,7 +319,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async resolveRecipients(kind: PublishInput["recipientPermission"], client: NotificationDb = this.prisma): Promise<readonly string[]> {
-    const users = await client.user.findMany({ select: { id: true }, where: { isActive: true } });
+    const users = await client.user.findMany({ select: { id: true, roles: { select: { role: { select: { key: true } } } } }, where: { isActive: true } });
     const checks = kind === "manager"
       ? (["finance.read", "invoice.create"] as const)
       : kind === "logistics"
@@ -327,6 +327,8 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
         : (["technician.workbench.read", "works.claim.available.read", "works.claim.create"] as const);
     const recipientIds: string[] = [];
     for (const user of users) {
+      const roleKeys = user.roles?.map((assignment) => assignment.role.key) ?? [];
+      if (kind === "logistics" && roleKeys.length > 0 && !roleKeys.includes("LOGISTICA") && !roleKeys.includes("MANAGER")) continue;
       for (const permission of checks) {
         const permissionResult = await this.authorizationService.hasPermission({ permission, userId: user.id });
         if (permissionResult.allowed) {

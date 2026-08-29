@@ -7,16 +7,16 @@ import {
   ROLE_DEFINITIONS,
   ROLE_PERMISSION_MATRIX,
 } from "../src/modules/rbac/permission-registry.js";
+import { DEMO_PASSWORD } from "./demo/demo.constants.js";
 
-const connectionString = process.env.DATABASE_URL;
-
-if (!connectionString) {
-  throw new Error("DATABASE_URL is required.");
-}
-
-const prisma = new PrismaClient({
-  adapter: new PrismaPg({ connectionString }),
-});
+const MINIMAL_DEMO_USERS = [
+  { displayName: "Demo Receptie", email: "receptie@demo.local", id: "demo_user_receptie", roleKey: "RECEPTIE" as const },
+  { displayName: "Demo Logistica", email: "logistica@demo.local", id: "demo_user_logistica", roleKey: "LOGISTICA" as const },
+  { displayName: "Demo Tehnician 1", email: "tehnician1@demo.local", id: "demo_user_tehnician_1", roleKey: "TEHNICIAN" as const, preferredColor: "#0f766e" },
+  { displayName: "Demo Tehnician 2", email: "tehnician2@demo.local", id: "demo_user_tehnician_2", roleKey: "TEHNICIAN" as const, preferredColor: "#7c3aed" },
+  { displayName: "Demo Curier", email: "curier@demo.local", id: "demo_user_curier", roleKey: "CURIER" as const },
+  { displayName: "Demo Medic Portal", email: "medic@demo.local", id: "demo_user_medic", roleKey: "MEDIC" as const },
+] as const;
 
 interface LegalEntitySettingsSeed {
   readonly addressLine1: string;
@@ -69,7 +69,7 @@ function getLegalEntitySettingsSeed(prefix: "CDT" | "NG"): LegalEntitySettingsSe
   };
 }
 
-async function main(): Promise<void> {
+export async function seedCore(prisma: PrismaClient): Promise<void> {
   const email = process.env.AUTH_SEED_EMAIL?.trim().toLowerCase();
   const password = process.env.AUTH_SEED_PASSWORD;
   const displayName = process.env.AUTH_SEED_DISPLAY_NAME?.trim() ?? "Development Manager";
@@ -209,6 +209,40 @@ async function main(): Promise<void> {
     }
   }
 
+  if (process.env.AUTH_SEED_INCLUDE_DEMO_USERS === "true") {
+    const demoPasswordHash = await hashPassword(DEMO_PASSWORD);
+
+    for (const demoUser of MINIMAL_DEMO_USERS) {
+      const user = await prisma.user.upsert({
+        create: {
+          displayName: demoUser.displayName,
+          email: demoUser.email,
+          id: demoUser.id,
+          isActive: true,
+          mustChangePassword: false,
+          passwordHash: demoPasswordHash,
+          ...( "preferredColor" in demoUser ? { preferredColor: demoUser.preferredColor } : {}),
+        },
+        update: {
+          displayName: demoUser.displayName,
+          isActive: true,
+          mustChangePassword: false,
+          passwordHash: demoPasswordHash,
+          passwordChangedAt: new Date(),
+          ...( "preferredColor" in demoUser ? { preferredColor: demoUser.preferredColor } : {}),
+          version: { increment: 1 },
+        },
+        where: { email: demoUser.email },
+      });
+      const role = await prisma.role.findUniqueOrThrow({ where: { key: demoUser.roleKey } });
+      await prisma.userRole.upsert({
+        create: { roleId: role.id, userId: user.id },
+        update: {},
+        where: { userId_roleId: { roleId: role.id, userId: user.id } },
+      });
+    }
+  }
+
   const managerRole = await prisma.role.findUniqueOrThrow({
     where: {
       key: "MANAGER",
@@ -328,12 +362,28 @@ async function main(): Promise<void> {
   }
 }
 
-main()
-  .then(async () => {
-    await prisma.$disconnect();
-  })
-  .catch(async (error: unknown) => {
-    console.error(error);
-    await prisma.$disconnect();
-    process.exit(1);
-  });
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  throw new Error("DATABASE_URL is required.");
+}
+
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString }),
+});
+
+async function main(): Promise<void> {
+  await seedCore(prisma);
+}
+
+if (process.env.RUN_SEED_ENTRYPOINT !== "false") {
+  main()
+    .then(async () => {
+      await prisma.$disconnect();
+    })
+    .catch(async (error: unknown) => {
+      console.error(error);
+      await prisma.$disconnect();
+      process.exit(1);
+    });
+}
