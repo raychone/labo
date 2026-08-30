@@ -944,7 +944,7 @@ describe("WorksPage", () => {
     renderWithProviders(<WorksPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
-    expect(await screen.findByText("Acțiunea mea acum")).toBeDefined();
+    expect(await screen.findByText("Detaliile lucrării")).toBeDefined();
     expect(await screen.findByRole("heading", { name: "Flux producție" })).toBeDefined();
     expect(await screen.findByText("Flux zirconiu · versiunea 3")).toBeDefined();
 

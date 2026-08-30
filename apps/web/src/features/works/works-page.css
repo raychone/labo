@@ -246,6 +246,21 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.works-page__inline-edit-section,
+.works-page__inline-composition-editor {
+  background: var(--dl-color-surface-muted, #f7faf9);
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  display: grid;
+  gap: var(--dl-space-3);
+  margin-top: var(--dl-space-3);
+  padding: var(--dl-space-4);
+}
+
+.works-page__inline-edit-section .works-page__detail-section-header {
+  align-items: center;
+}
+
 .works-page__execution-now-grid > div,
 .works-page__patient-grid > div {
   display: grid;

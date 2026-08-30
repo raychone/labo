@@ -1973,13 +1973,12 @@ export class WorksService {
     const hasTechnicalCode = Object.prototype.hasOwnProperty.call(dto, "technicalCodeNotes");
     if (hasTechnicalCode) {
       const codePermission = await this.authorizationService.hasPermission({ permission: "works.technical_code.edit", userId: context.actorUserId });
-      if (!codePermission.allowed || before.status === "FINALIZATA" || before.technicalReadiness === "FINAL_READY") {
+      if (!codePermission.allowed) {
         throw new ForbiddenException("Codul tehnic nu poate fi modificat de acest utilizator.");
       }
     }
     if (dto.urgency !== undefined) {
       await this.authorizationService.requirePermission({ permission: "works.urgency.update", requiredScope: "ALL", userId: context.actorUserId });
-      if (before.status === "FINALIZATA") throw new BadRequestException("Urgența nu mai poate fi modificată după finalizarea lucrării.");
     }
     const beforeGenericSubmission = getGenericWorkFormSubmission(before);
     this.rejectConflictingPatientPayload(dto.patientId, dto.patientName);

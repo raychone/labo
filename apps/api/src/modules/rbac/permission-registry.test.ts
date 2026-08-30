@@ -271,7 +271,7 @@ describe("PERMISSION_REGISTRY", () => {
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["work_forms.real.update"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["work_forms.real.update"]).toBe("ASSIGNED");
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["work_forms.real.read"]).toBe("ALL");
-    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["work_forms.real.update"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["work_forms.real.update"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.MEDIC["work_forms.real.update"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["forms.read"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["forms.archive"]).toBeNull();
@@ -326,7 +326,9 @@ describe("PERMISSION_REGISTRY", () => {
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["cycles.mark_received"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.custom_type.save_to_catalog"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.custom_platform.save_to_catalog"]).toBe("ALL");
-    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["works.connections.manage"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["works.connections.manage"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["works.item.update"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["cycles.probe_type.select"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.CURIER["works.item.create"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.CURIER["notifications.read_own"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["notifications.read_own"]).toBe("ALL");

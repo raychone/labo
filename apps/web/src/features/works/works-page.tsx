@@ -174,7 +174,7 @@ function formatDate(value: string): string {
 }
 
 function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", hourCycle: "h23", timeStyle: "short" }).format(new Date(value));
 }
 
 function formatOptionalDateTime(value: string | null): string {
@@ -182,7 +182,7 @@ function formatOptionalDateTime(value: string | null): string {
 }
 
 function formatTime(value: string): string {
-  return new Intl.DateTimeFormat("ro-RO", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Bucharest" }).format(new Date(value));
+  return new Intl.DateTimeFormat("ro-RO", { hour: "2-digit", hourCycle: "h23", minute: "2-digit", timeZone: "Europe/Bucharest" }).format(new Date(value));
 }
 
 function toLocalDateTimeInput(value: string | null, fallbackDate: string, timeSet: boolean | undefined): string {
@@ -278,7 +278,7 @@ function DeadlineDetailCard({ canEdit, work }: { readonly canEdit: boolean; read
             <strong>{work.deadline.countdown}</strong>
           </div>
         </div>
-        {canEdit && work.status !== "FINALIZATA" ? <div className="works-page__actions"><label>Data termenului<input aria-label="Data termenului" className="dl-control" onChange={(event) => setDate(event.target.value)} type="date" value={date} /></label><label>Ora termenului (opțional)<input aria-label="Ora termenului" className="dl-control" onChange={(event) => setTime(event.target.value)} type="time" value={time} /></label><Button disabled={!date || mutation.isPending} isLoading={mutation.isPending} onClick={() => mutation.mutate({ dueAt: toBucharestIso(date, time), expectedRevision: work.deadline.revision, manualDueTimeSet: time !== "", workOrderId: work.id })} type="button">Salvează termenul</Button></div> : null}
+    {canEdit ? <div className="works-page__actions"><label>Data termenului<input aria-label="Data termenului" className="dl-control" onChange={(event) => setDate(event.target.value)} type="date" value={date} /></label><label>Ora termenului (opțional)<input aria-label="Ora termenului" className="dl-control" onChange={(event) => setTime(event.target.value)} type="time" value={time} /></label><Button disabled={!date || mutation.isPending} isLoading={mutation.isPending} onClick={() => mutation.mutate({ dueAt: toBucharestIso(date, time), expectedRevision: work.deadline.revision, manualDueTimeSet: time !== "", workOrderId: work.id })} type="button">Salvează termenul</Button></div> : null}
       </CardContent>
     </Card>
   );
@@ -298,7 +298,7 @@ function ActiveProbeDeadlineCard({ canEdit, work }: { readonly canEdit: boolean;
   if (!cycle) return null;
   return <Card><CardHeader><CardTitle>Termen</CardTitle><CardDescription>{cycle.probeTypeNameSnapshot}</CardDescription></CardHeader><CardContent>
     <div className="works-page__detail-field"><span>Termen</span><strong>{formatDateTime(cycle.deadlineAt)}</strong></div>
-    {canEdit && work.status !== "FINALIZATA" ? <div className="works-page__actions"><label>Data termenului<input aria-label="Data termenului probă curentă" className="dl-control" onChange={(event) => setDate(event.target.value)} type="date" value={date} /></label><label>Ora termenului (opțional)<input aria-label="Ora termenului probă curentă" className="dl-control" onChange={(event) => setTime(event.target.value)} type="time" value={time} /></label><Button disabled={!date || mutation.isPending} isLoading={mutation.isPending} onClick={() => mutation.mutate({ cycleId: cycle.id, deadlineAt: toBucharestIso(date, time), workOrderId: work.id })} type="button">Salvează termenul</Button></div> : null}
+    {canEdit ? <div className="works-page__actions"><label>Data termenului<input aria-label="Data termenului probă curentă" className="dl-control" onChange={(event) => setDate(event.target.value)} type="date" value={date} /></label><label>Ora termenului (opțional)<input aria-label="Ora termenului probă curentă" className="dl-control" onChange={(event) => setTime(event.target.value)} type="time" value={time} /></label><Button disabled={!date || mutation.isPending} isLoading={mutation.isPending} onClick={() => mutation.mutate({ cycleId: cycle.id, deadlineAt: toBucharestIso(date, time), workOrderId: work.id })} type="button">Salvează termenul</Button></div> : null}
   </CardContent></Card>;
 }
 
@@ -604,7 +604,7 @@ export function WorksPage(): ReactNode {
       />
 
         <WorkDetailsDrawer
-        canEditTechnicalCode={canEditTechnicalCode && selectedWork?.status !== "FINALIZATA" && selectedWork?.technicalReadiness !== "FINAL_READY"}
+        canEditTechnicalCode={canEditTechnicalCode}
         canUploadFiles={canUploadFiles}
         canCreateNextCycle={canCreateNextCycle}
         canSelectProbeType={canSelectProbeType}
@@ -1236,7 +1236,7 @@ function WorkDetailsDrawer({
             {work.activeProbeCycle || (work.completedProbeCycles ?? []).length > 0 ? <ProbeCycleSummary canSelect={canSelectProbeType} isSaving={updateProbeTypesMutation.isPending} onSelect={(cycleId, probeTypeIds) => updateProbeTypesMutation.mutate({ cycleId, probeTypeIds, workOrderId: work.id })} probeTypes={probeTypeOptions} work={work} /> : null}
             <div className="works-page__actions">
               <Button onClick={() => onShowQr(work.id)} variant="outline">Vezi QR</Button>
-              {canUpdate ? <Button onClick={() => { setEditingCaseFields(true); window.setTimeout(() => editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }} type="button" variant="outline">Editează datele lucrării</Button> : null}
+              {canUpdate ? <Button onClick={() => { if (editingCaseFields) { form.reset(toWorkFormValues(work)); setEditingCaseFields(false); } else { setEditingCaseFields(true); window.setTimeout(() => editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); } }} type="button" variant="outline">{editingCaseFields ? "Închide editarea" : "Editează datele lucrării"}</Button> : null}
             </div>
             {work.activeProbeCycle ? <ActiveProbeDeadlineCard canEdit={canEditDeadline} work={work} /> : <DeadlineDetailCard canEdit={canEditDeadline} work={work} />}
             <WorkDetailComposition canEdit={canUpdate} canEditTechnicalCode={canEditTechnicalCode} isOpen={isOpen} work={work} workTypeOptions={formWorkTypeOptions} />
@@ -1253,33 +1253,28 @@ function WorkDetailsDrawer({
               />
             ) : null}
             {workTypeOptionsError ? <ErrorState title="Opțiunile nu au fost încărcate" description={getErrorMessage(workTypeOptionsError)} /> : null}
-            <Modal
-              description="Editează clinica, medicul, pacientul, termenul, urgența și observațiile lucrării. Tipul, dinții și culoarea se editează din «Editează lucrarea»."
-              footer={editingCaseFields ? <WorkFormActions
-                canReset={form.formState.isDirty}
-                formId="update-work-form"
-                isSaving={isSaving}
-                onReset={() => form.reset(toWorkFormValues(work))}
-                submitDisabled={submitDisabled}
-                submitLabel="Salvează datele"
-              /> : null}
-              isOpen={editingCaseFields}
-              onOpenChange={(open) => {
-                if (!open) {
-                  form.reset(toWorkFormValues(work));
-                  setEditingCaseFields(false);
-                }
-              }}
-              size="xl"
-              title="Editează lucrarea"
-            >
+            {editingCaseFields ? <section className="works-page__inline-edit-section" aria-labelledby="work-inline-edit-title">
+              <div className="works-page__detail-section-header">
+                <div>
+                  <h2 id="work-inline-edit-title">Editează datele lucrării</h2>
+                  <p className="works-page__muted">Modificările se salvează direct aici. Tipul, dinții și manoperele pot fi editate în secțiunile de mai jos.</p>
+                </div>
+                <WorkFormActions
+                  canReset={form.formState.isDirty}
+                  formId="update-work-form"
+                  isSaving={isSaving}
+                  onReset={() => form.reset(toWorkFormValues(work))}
+                  submitDisabled={submitDisabled}
+                  submitLabel="Salvează datele"
+                />
+              </div>
               <div ref={editFormRef} className="works-page__work-edit-form">
                 <WorkForm
               clinicOptions={clinicOptions}
               doctorOptions={doctorsQuery.data ?? []}
               form={form}
               formId="update-work-form"
-                isDisabled={!canUpdate || isSaving || work.status === "FINALIZATA"}
+                isDisabled={!canUpdate || isSaving}
               onClinicChange={() => form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true })}
               allowPatientEdit={false}
                 allowPatientNameEdit={false}
@@ -1308,7 +1303,7 @@ function WorkDetailsDrawer({
               workDetailsSlot={<WorkCodeAndFilesFields canEditCode={canEditTechnicalCode} canUploadFiles={canUploadFiles} work={work} />}
                 />
               </div>
-            </Modal>
+            </section> : null}
             {!canUpdate ? <p className="works-page__muted">Ai acces de citire, dar nu poți modifica lucrarea.</p> : null}
           </div>
         ) : !workError ? <LoadingState text="Se încarcă detaliile" /> : null}
@@ -1391,7 +1386,16 @@ function ProbeCycleSummary({ canSelect, isSaving, onSelect, probeTypes, work }: 
           const cycleLabel = cycle.sequence === 0 ? "Proba inițială" : `Proba ${cycle.sequence}`;
           return (
           <div className="works-page__cycle-item" key={cycle.id}>
-            <div><strong>{cycle.status === "ACTIVE" ? `${cycleLabel} · ${cycle.probeTypeNameSnapshot}` : `${cycleLabel} trecută — ${cycle.probeTypeNameSnapshot}`}</strong><span> · termen {formatDateTime(cycle.deadlineAt)}</span></div>
+            <div className="works-page__cycle-title">
+              <strong>{cycle.status === "ACTIVE" ? `${cycleLabel} · ${cycle.probeTypeNameSnapshot}` : `${cycleLabel} trecută · ${cycle.probeTypeNameSnapshot}`}</strong>
+              <StatusBadge label={cycle.status === "ACTIVE" ? "Activă" : "Finalizată"} variant={cycle.status === "ACTIVE" ? "production" : "closed"} />
+            </div>
+            <div className="works-page__cycle-grid">
+              <MetricCell label="Probă" value={cycleLabel} />
+              <MetricCell label="Tip probă" value={cycle.probeTypeNameSnapshot} />
+              <MetricCell label="Introdusă la" value={formatDateTime(cycle.openedAt)} />
+              <MetricCell label="Termen" value={formatDateTime(cycle.deadlineAt)} />
+            </div>
             {cycle.status === "ACTIVE" ? <ProbeTypeMultiSelect canSelect={canSelect} cycle={cycle} disabled={isSaving} onSave={(ids) => onSelect(cycle.id, ids)} options={options} probeCounts={completedProbeCounts} /> : <span className="works-page__muted">Tip probă istoric: {cycle.probeTypeNameSnapshot}</span>}
           </div>
           );
@@ -1516,26 +1520,25 @@ function ExecutionNowCard({ activeCycleNumber, showLegacyExecution, work }: { re
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Acțiunea mea acum</CardTitle>
+        <CardTitle>Detaliile lucrării</CardTitle>
         <CardDescription>{work.code} · {work.workType.name}</CardDescription>
       </CardHeader>
       <CardContent className="works-page__execution-now">
         <div className="works-page__execution-now-grid">
-          <MetricCell label="Lucrare" value={work.code} />
+          <MetricCell label="Clinică / Medic" value={`${work.clinic?.name ?? "Fără clinică"} · ${work.doctor?.displayName ?? "Fără medic"}`} />
+          <MetricCell label="Pacient" value={work.patient?.fullName ?? work.patientName} />
           <MetricCell label="Tip lucrare" value={work.workType.name} />
+          <MetricCell label="Urgență" value={work.urgency ? urgencyLabel(work.urgency) : (work.priority === "URGENT" ? "Urgent" : "Normal")} />
+          <MetricCell label="Firmă" value={executionCompany} />
+          <MetricCell label="Start execuție" value={formatOptionalDateTime(work.executionSnapshot.deadline?.startAt ?? work.deadline.startAt)} />
+          <MetricCell label="Termen" value={formatOptionalDateTime(work.executionSnapshot.deadline?.effectiveDueAt ?? work.deadline.effectiveDueAt)} />
+          {showLegacyExecution ? <MetricCell label="Tehnician" value={currentTechnician?.displayName ?? "Nerevendicată"} /> : null}
           {showLegacyExecution ? <MetricCell label="Ciclu curent" value={currentCycleLabel} /> : null}
           {showLegacyExecution ? <MetricCell label="Etapă curentă" value={currentStage?.name ?? "Fără etapă curentă"} /> : null}
           {showLegacyExecution ? <MetricCell label="Poziție etapă" value={currentStage ? `Etapa ${currentStage.sortOrder} din ${work.workflow?.progress.total ?? 0}` : "N/A"} /> : null}
           {showLegacyExecution ? <MetricCell label="Status etapă" value={currentStage ? getWorkStageExecutionStatusLabel(currentStage.status) : "Nedefinit"} /> : null}
-          <MetricCell label={work.urgency ? "Urgență" : "Prioritate istorică"} value={work.urgency ? urgencyLabel(work.urgency) : (work.priority === "URGENT" ? "Urgent" : "Normal")} />
-          <MetricCell label="Tehnician" value={currentTechnician?.displayName ?? "Nerevendicată"} />
-          <MetricCell label="Firmă" value={executionCompany} />
           {showLegacyExecution ? <MetricCell label="Progres" value={progress} /> : null}
-          <MetricCell label="Termen" value={formatOptionalDateTime(work.executionSnapshot.deadline?.effectiveDueAt ?? work.deadline.effectiveDueAt)} />
-          <MetricCell label="Status" value={work.status} />
-          <MetricCell label="Start execuție" value={formatOptionalDateTime(work.executionSnapshot.deadline?.startAt ?? work.deadline.startAt)} />
         </div>
-        {showLegacyExecution ? <p className="works-page__muted">Acțiunile istorice de producție sunt disponibile în acest drawer.</p> : null}
       </CardContent>
     </Card>
   );

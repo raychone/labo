@@ -10,7 +10,7 @@ import {
   type WorkOrderItemView,
   type WorkTypeFormOption,
 } from "@dental-lab/shared";
-import { Button, ErrorState, Modal, StatusBadge } from "@dental-lab/ui";
+import { Button, ErrorState, StatusBadge } from "@dental-lab/ui";
 import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -162,34 +162,18 @@ export function WorkDetailComposition({
 
   return (
     <div className="works-page__composition-stack">
-      <section className="works-page__detail-section" aria-labelledby="work-identity-title">
-        <div className="works-page__detail-section-header"><h2 id="work-identity-title">Identitatea lucrării</h2></div>
-        <div className="works-page__detail-section-grid">
-          <DetailValue label="Cod lucrare" value={work.code} />
-          <DetailValue label="Pacient" value={work.patient?.fullName ?? work.patientName} />
-          <DetailValue label="Clinică" value={work.clinic ? `${work.clinic.code} · ${work.clinic.name}` : "Fără clinică"} />
-          <DetailValue label="Medic" value={work.doctor?.displayName ?? "Fără medic"} />
-          <DetailValue label="Entitate legală" value={work.executionSnapshot.summary.legalEntity?.displayName ?? work.claim.executionLegalEntity?.displayName ?? "Nerezolvată"} />
-          <DetailValue label="Note generale" value={work.clinicalNotes ?? work.internalNotes} />
-        </div>
-      </section>
       <section className="works-page__detail-section" aria-labelledby="work-composition-title">
         <div className="works-page__detail-section-header works-page__composition-header">
           <div><h2 id="work-composition-title">Compoziția dentară</h2><p className="works-page__muted">O singură lucrare · {work.code} · {items.length} componente active</p></div>
-          {canEdit && !editing ? <Button onClick={beginEditing} type="button" variant="outline">Editează lucrarea</Button> : null}
+          {canEdit && items.length > 0 && !editing ? <Button onClick={beginEditing} type="button" variant="outline">Editează lucrarea</Button> : null}
         </div>
         {editing ? (
-          <Modal
-            description="Editează dinții, tipurile de lucrări, culorile, adaosurile și opțiunile implantului."
-            isOpen
-            onOpenChange={(open) => { if (!open && !savePending) setEditing(false); }}
-            size="full"
-            title="Editează lucrarea"
-          >
+          <div className="works-page__inline-composition-editor">
+            <p className="works-page__muted">Editează dinții, tipurile de lucrări, culorile, adaosurile și opțiunile implantului direct în detalii.</p>
             <MultiItemWorkEditor canEditTechnicalCode={canEditTechnicalCode} canSaveCustomWorkType onSaveCustomWorkType={saveOperationalWorkTypeName} disabled={savePending} items={draftItems} connections={draftConnections} workTypeOptions={effectiveWorkTypeOptions} onChange={(items, connections) => { setDraftItems(items); setDraftConnections(connections); }} />
             {saveError ? <ErrorState title="Componentele nu au fost salvate" description={getErrorMessage(saveError)} /> : null}
             <div className="works-page__actions"><Button disabled={savePending} isLoading={savePending} onClick={() => void saveComposition()} type="button">Salvează editarea</Button><Button disabled={savePending} onClick={() => setEditing(false)} type="button" variant="outline">Anulează</Button></div>
-          </Modal>
+          </div>
         ) : (
           <>
             <ToothDiagram availableTeeth={ADULT_FDI_TEETH} configuredTeeth={compositionTeeth} connectionTeeth={compositionTeeth} connections={work.toothConnections ?? []} mode="readOnly" showShortcuts={false} toothColors={workTypeVisualization.toothColors} />
@@ -207,7 +191,8 @@ function WorkItemCard({ item, index }: { readonly item: WorkOrderItemView; reado
   const unit = item.workType?.unit;
   const quantity = unit === "ELEMENT" ? Math.max(1, item.teeth.length) : unit === "UNIT" ? 1 : null;
   const isImplantWorkType = item.workType?.name?.toLocaleLowerCase("ro-RO").includes("implant") ?? false;
-  return <article className="works-page__composition-item"><div className="works-page__composition-item-title"><strong>Componenta {index + 1}</strong><StatusBadge label={ANATOMICAL_SCOPE_LABELS_RO[item.scope]} variant="registered" /></div><div className="works-page__detail-section-grid"><DetailValue label="Categorie" value={formatWorkTypeCategory(item.workType?.probeFamily)} /><DetailValue label="Tip lucrare" value={itemDisplayValue(item, "workType")} /><DetailValue label="Unitate / cantitate" value={quantity === null ? unit ?? null : `${unit === "ELEMENT" ? "Elemente" : "Bucată"}: ${quantity}`} /><DetailValue label="Domeniu" value={scopeLabel(item.scope, item.teeth.map((tooth) => tooth.fdiTooth))} /><DetailValue label="Culoare" value={item.shade} />{isImplantWorkType ? <><DetailValue label="Platformă implant" value={itemDisplayValue(item, "platform")} /><DetailValue label="Tip restaurare" value={item.restorationType} /></> : null}<DetailValue label="Cod / detalii tehnice" value={item.technicalCodeNotes} /><DetailValue label="Note componentă" value={item.notes} /></div></article>;
+  const hasPlatformDetails = Boolean(item.implantPlatform || item.customImplantPlatformSnapshot);
+  return <article className="works-page__composition-item"><div className="works-page__composition-item-title"><strong>Componenta {index + 1}</strong><StatusBadge label={ANATOMICAL_SCOPE_LABELS_RO[item.scope]} variant="registered" /></div><div className="works-page__detail-section-grid"><DetailValue label="Categorie" value={formatWorkTypeCategory(item.workType?.probeFamily)} /><DetailValue label="Tip lucrare" value={itemDisplayValue(item, "workType")} /><DetailValue label="Unitate / cantitate" value={quantity === null ? unit ?? null : `${unit === "ELEMENT" ? "Elemente" : "Bucată"}: ${quantity}`} /><DetailValue label="Domeniu" value={scopeLabel(item.scope, item.teeth.map((tooth) => tooth.fdiTooth))} /><DetailValue label="Culoare" value={item.shade} />{isImplantWorkType || hasPlatformDetails ? <><DetailValue label="Platformă implant" value={itemDisplayValue(item, "platform")} /><DetailValue label="Tip restaurare" value={item.restorationType} /></> : null}<DetailValue label="Cod / detalii tehnice" value={item.technicalCodeNotes} /><DetailValue label="Note componentă" value={item.notes} /></div></article>;
 }
 
 function DetailValue({ label, value }: { readonly label: string; readonly value: string | null | undefined }): ReactNode {

@@ -36,7 +36,7 @@ describe("WorkDetailComposition", () => {
     renderSubject();
     expect(screen.getByText("Dinte 11")).toBeDefined();
     expect(screen.getAllByText("Arcada inferioară").length).toBeGreaterThan(0);
-    expect(screen.getByText("Identitatea lucrării")).toBeDefined();
+    expect(screen.getByText("Compoziția dentară")).toBeDefined();
     expect(screen.getByText("A · Coroană A")).toBeDefined();
     expect(screen.getByText("B · Gutieră")).toBeDefined();
     expect(screen.getByRole("button", { name: "Dinte 11" }).className).toContain("tooth-diagram__tooth--work-colored");
