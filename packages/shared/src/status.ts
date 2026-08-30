@@ -101,7 +101,8 @@ export interface OperationalStatusRow {
   readonly logistics: {
     readonly status: LogisticsStatus | null;
   };
-  readonly hasCompletedPickup: boolean;
+  /** True when a courier pickup stop was completed for this work. */
+  readonly hasCompletedPickup?: boolean;
   readonly components: readonly {
     readonly colorHex: string | null;
     readonly name: string;
