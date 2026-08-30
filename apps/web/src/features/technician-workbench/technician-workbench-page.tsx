@@ -552,6 +552,10 @@ function OperationsModal({
         <div className="technician-workbench__operations-editor">
           {allowedTeeth.length > 0 ? <>
             <h3>Selectează dinții</h3>
+            <div aria-live="polite" className="technician-workbench__selected-teeth-preview">
+              <strong>Dinți selectați:</strong>
+              <span>{selectedTeeth.length > 0 ? selectedTeeth.join(", ") : "niciun dinte"}</span>
+            </div>
             <ToothDiagram
               availableTeeth={allowedTeeth}
               configuredTeeth={allowedTeeth}
@@ -562,10 +566,6 @@ function OperationsModal({
               onToothToggle={toggleTooth}
               onShortcut={(teeth) => setSelectedTeeth(teeth.filter((tooth) => allowedTeeth.includes(tooth)))}
             />
-            <div aria-live="polite" className="technician-workbench__selected-teeth-preview">
-              <strong>Dinți selectați:</strong>
-              <span>{selectedTeeth.length > 0 ? selectedTeeth.join(", ") : "niciun dinte"}</span>
-            </div>
             {workTypeVisualization.legend.length > 0 ? <div className="technician-workbench__operation-legend" aria-label="Legendă tipuri de lucrări">
               {workTypeVisualization.legend.map((entry) => <span key={`${entry.code}-${entry.label}`}><i aria-hidden="true" style={{ background: entry.color }} />{entry.code} · {entry.label}</span>)}
             </div> : null}
