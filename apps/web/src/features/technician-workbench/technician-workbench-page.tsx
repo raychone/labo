@@ -38,7 +38,7 @@ type WorkbenchTab = "AVAILABLE" | "MINE";
 type CompletionTarget = { readonly action: "FINALIZE" | "PROBE_READY"; readonly work: WorkSummary };
 
 function currentCompletionCompany(work: WorkSummary): "" | "CDT" | "NG" {
-  const code = work.claim.executionLegalEntity?.code;
+  const code = work.executionSnapshot.summary.legalEntity?.code ?? work.claim.executionLegalEntity?.code;
   return code === "CDT" || code === "NG" ? code : "";
 }
 
@@ -263,8 +263,7 @@ export function TechnicianWorkbenchPage(): ReactNode {
           size="sm"
           title={completionTarget?.action === "FINALIZE" ? "Finalizezi definitiv lucrarea?" : "Marchezi proba gata?"}
         >
-          <p>Selectează firma care va fi folosită pentru plata tehnicianului și facturare.</p>
-          <Select label="Firmă" onChange={(event) => setCompletionCompany(event.target.value as "" | "CDT" | "NG")} options={[{ label: "CDT", value: "CDT" }, { label: "NG", value: "NG" }]} placeholder="Alege firma" value={completionCompany} />
+          {completionCompany ? <p>Firma <strong>{completionCompany}</strong> este deja fixată pentru această lucrare și va fi folosită pentru plata tehnicianului și facturare.</p> : <><p>Selectează firma care va fi folosită pentru plata tehnicianului și facturare.</p><Select label="Firmă" onChange={(event) => setCompletionCompany(event.target.value as "" | "CDT" | "NG")} options={[{ label: "CDT", value: "CDT" }, { label: "NG", value: "NG" }]} placeholder="Alege firma" value={completionCompany} /></>}
         </Modal>
       </section>
     </main>
@@ -561,8 +560,12 @@ function OperationsModal({
               selectedTeeth={selectedTeeth as never}
               toothColors={workTypeVisualization.toothColors}
               onToothToggle={toggleTooth}
-              showShortcuts={false}
+              onShortcut={(teeth) => setSelectedTeeth(teeth.filter((tooth) => allowedTeeth.includes(tooth)))}
             />
+            <div aria-live="polite" className="technician-workbench__selected-teeth-preview">
+              <strong>Dinți selectați:</strong>
+              <span>{selectedTeeth.length > 0 ? selectedTeeth.join(", ") : "niciun dinte"}</span>
+            </div>
             {workTypeVisualization.legend.length > 0 ? <div className="technician-workbench__operation-legend" aria-label="Legendă tipuri de lucrări">
               {workTypeVisualization.legend.map((entry) => <span key={`${entry.code}-${entry.label}`}><i aria-hidden="true" style={{ background: entry.color }} />{entry.code} · {entry.label}</span>)}
             </div> : null}

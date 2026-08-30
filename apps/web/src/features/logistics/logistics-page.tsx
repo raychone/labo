@@ -1096,7 +1096,7 @@ function WorkRow({
       </div>
       <div className="logistics-page__row-state">
         <StatusPicker itemCode={item.workCode} onChange={onStatus} readiness={item.technicalReadiness} value={item.operationalStatus} />
-        {item.technicalReadiness === "PROBE_READY" || item.technicalReadiness === "FINAL_READY" ? <Button onClick={onRework} size="small" type="button" variant="outline">Trimite la refacere</Button> : null}
+        {item.technicalReadiness === "PROBE_READY" ? <Button onClick={onRework} size="small" title="Înregistrează revenirea probei și trimite lucrarea la tehnician" type="button" variant="outline">Probă</Button> : item.technicalReadiness === "FINAL_READY" ? <Button onClick={onRework} size="small" type="button" variant="outline">Trimite la refacere</Button> : null}
       </div>
       <div className="logistics-page__row-alerts">
         {item.dueState === "OVERDUE" ? <span aria-label="Termen depășit" className="logistics-page__overdue-alert">!</span> : null}

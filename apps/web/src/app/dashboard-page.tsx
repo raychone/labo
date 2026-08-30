@@ -671,7 +671,28 @@ function ReceptionDashboard({
           {selectedReturnedWorkDetailQuery.isLoading ? <LoadingState text="Se încarcă tipurile compatibile" /> : null}
           {probeTypesQuery.isError ? <ErrorState title="Tipurile de probă nu au putut fi încărcate" description="Verifică accesul la catalogul tehnic și reîncarcă pagina." /> : null}
           {!probeTypesQuery.isLoading && !probeTypesQuery.isError && selectableProbeTypes.length === 0 ? <p className="dashboard-page__empty-note">Nu există tipuri de probă active în catalogul tehnic.</p> : null}
-          {selectableProbeTypes.length > 0 ? <fieldset className="dashboard-page__probe-types"><legend>Tipuri probă</legend>{selectableProbeTypes.map((type) => <label key={type.id}><input checked={probeTypeIds.includes(type.id)} onChange={() => setProbeTypeIds((current) => current.includes(type.id) ? current.filter((id) => id !== type.id) : [...current, type.id])} type="checkbox" />{type.name}</label>)}</fieldset> : null}
+          {selectableProbeTypes.length > 0 ? (
+            <fieldset className="dashboard-page__probe-types">
+              <legend>Tipuri probă</legend>
+              <div className="dashboard-page__probe-type-cards">
+                {selectableProbeTypes.map((type) => {
+                  const previousCount = completedProbeHistory.filter((cycle) => cycle.probeTypeNameSnapshot === type.name).length;
+                  const isSelected = probeTypeIds.includes(type.id);
+                  return (
+                    <label className={`dashboard-page__probe-type-card${isSelected ? " dashboard-page__probe-type-card--selected" : ""}`} key={type.id}>
+                      <input
+                        checked={isSelected}
+                        onChange={() => setProbeTypeIds((current) => current.includes(type.id) ? current.filter((id) => id !== type.id) : [...current, type.id])}
+                        type="checkbox"
+                      />
+                      <span className="dashboard-page__probe-type-name">{type.name}</span>
+                      {previousCount > 0 ? <span className="dashboard-page__probe-type-history">{previousCount}x în trecut</span> : null}
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          ) : null}
           <div className="dashboard-page__probe-schedule">
             <label>
               Data termenului probei *

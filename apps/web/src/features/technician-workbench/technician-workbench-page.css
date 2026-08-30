@@ -300,6 +300,23 @@
   margin: 0;
 }
 
+.technician-workbench__selected-teeth-preview {
+  align-items: baseline;
+  background: var(--dl-color-surface-muted, #f5faf9);
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-2);
+  margin-top: var(--dl-space-3);
+  padding: var(--dl-space-2) var(--dl-space-3);
+}
+
+.technician-workbench__selected-teeth-preview span {
+  color: var(--dl-color-accent-active);
+  font-weight: var(--dl-font-weight-semibold);
+}
+
 .technician-workbench__operations-list {
   display: grid;
   gap: var(--dl-space-3);

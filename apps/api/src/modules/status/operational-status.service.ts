@@ -43,7 +43,10 @@ export class OperationalStatusService {
     const hasMoreBaseRows = baseRows.length > OPERATIONAL_STATUS_MAX_SCANNED_ROWS;
     const scannedRows = baseRows.slice(0, OPERATIONAL_STATUS_MAX_SCANNED_ROWS);
     const now = new Date();
-    const rows = scannedRows.map((work) => toOperationalStatusRow(work, now)).filter((row) => this.matchesComputedFilters(row, query));
+    const rows = scannedRows
+      .map((work) => toOperationalStatusRow(work, now))
+      .filter((row) => !(row.technicalReadiness === "PROBE_READY" && (row.logistics.status === "DELIVERED" || row.delivery.status === "DELIVERED")))
+      .filter((row) => this.matchesComputedFilters(row, query));
     const counters = createOperationalStatusCounters(rows);
     const tabRows = rows
       .filter((row) => matchesOperationalStatusTab(row, query.tab))

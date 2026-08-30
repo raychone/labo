@@ -906,6 +906,65 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.dashboard-page__probe-types {
+  border: 0;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.dashboard-page__probe-types legend {
+  font-size: 1rem;
+  font-weight: 800;
+  margin-bottom: var(--dl-space-2);
+}
+
+.dashboard-page__probe-type-cards {
+  display: grid;
+  gap: var(--dl-space-2);
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.dashboard-page__probe-type-card {
+  background: var(--dl-color-surface);
+  border: var(--dl-border-width) solid var(--dl-color-border);
+  border-radius: var(--dl-radius-md);
+  cursor: pointer;
+  display: grid;
+  gap: 0.2rem;
+  min-height: 4.5rem;
+  padding: var(--dl-space-3);
+  position: relative;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.dashboard-page__probe-type-card input {
+  height: 1px;
+  opacity: 0;
+  position: absolute;
+  width: 1px;
+}
+
+.dashboard-page__probe-type-card:focus-within {
+  outline: 2px solid var(--dl-color-accent);
+  outline-offset: 2px;
+}
+
+.dashboard-page__probe-type-card--selected {
+  background: var(--dl-color-accent);
+  border-color: var(--dl-color-accent);
+  color: var(--dl-color-on-accent, #fff);
+}
+
+.dashboard-page__probe-type-name {
+  font-weight: 800;
+}
+
+.dashboard-page__probe-type-history {
+  font-size: 0.82rem;
+  opacity: 0.72;
+}
+
 .dashboard-page__probe-date,
 .dashboard-page__probe-time {
   min-width: 0;

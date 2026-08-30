@@ -21,6 +21,7 @@ function createWorkRecord(id: string, input: {
   readonly claimedByUserId?: string | null;
   readonly deliveryStatus?: "DELIVERED" | null;
   readonly effectiveDueAt?: Date | null;
+  readonly technicalReadiness?: "PROBE_READY" | "FINAL_READY" | null;
 } = {}): OperationalStatusWorkRecord {
   return {
     assignedTechnician: null,
@@ -54,6 +55,7 @@ function createWorkRecord(id: string, input: {
     patientName: "Pacient Demo",
     patientReference: null,
     priority: "NORMAL",
+    technicalReadiness: input.technicalReadiness ?? null,
     updatedAt: new Date("2026-08-02T08:00:00.000Z"),
     workflowExecution: {
       currentStage: null,
@@ -126,6 +128,24 @@ describe("OperationalStatusService", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("hides a delivered probe until a new cycle is opened", async () => {
+    const { service } = createService({
+      findManyRows: [createWorkRecord("probe-delivered", { deliveryStatus: "DELIVERED", technicalReadiness: "PROBE_READY" })],
+      readAll: true,
+    });
+
+    const response = await service.getOperationalStatus(actor, {
+      page: 1,
+      pageSize: 25,
+      sortBy: "updatedAt",
+      sortDirection: "desc",
+      tab: "TODAY",
+    });
+
+    expect(response.items).toHaveLength(0);
+    expect(response.counters.every((counter) => counter.count === 0)).toBe(true);
   });
 
   it("marks the response as bounded when base rows exceed the scan cap", async () => {
