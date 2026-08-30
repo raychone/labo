@@ -33,6 +33,21 @@ export const operationalStatusWorkInclude = {
       name: true,
     },
   },
+  courierRouteStops: {
+    orderBy: {
+      outcomeAt: "desc",
+    },
+    select: {
+      outcomeAt: true,
+      outcomeStatus: true,
+      type: true,
+    },
+    take: 1,
+    where: {
+      outcomeStatus: "PICKED_UP",
+      type: "PICKUP",
+    },
+  },
   deliveryPreparationItems: {
     include: {
       group: {
@@ -200,6 +215,7 @@ export interface OperationalStatusRowView {
   readonly logistics: {
     readonly status: WorkLogisticsStatus | null;
   };
+  readonly hasCompletedPickup: boolean;
   readonly components: readonly {
     readonly colorHex: string | null;
     readonly name: string;
@@ -312,6 +328,7 @@ export function matchesOperationalStatusTab(row: OperationalStatusRowView, tab: 
   }
   return row.operationalStatus === "FINALIZATA"
     || row.workflow.status === "COMPLETED"
+    || row.hasCompletedPickup
     || row.logistics.status === "DELIVERED"
     || row.delivery.status === "DELIVERED";
 }
@@ -390,6 +407,7 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
     logistics: {
       status: logisticsState?.status ?? null,
     },
+    hasCompletedPickup: work.courierRouteStops.length > 0,
     operationalStatus: work.status === "REGISTERED" ? "RECEPTIE" : work.status,
     patient: {
       id: work.patient?.id ?? null,

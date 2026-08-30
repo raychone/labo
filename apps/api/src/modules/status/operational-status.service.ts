@@ -45,7 +45,7 @@ export class OperationalStatusService {
     const now = new Date();
     const rows = scannedRows
       .map((work) => toOperationalStatusRow(work, now))
-      .filter((row) => !(row.technicalReadiness === "PROBE_READY" && (row.logistics.status === "DELIVERED" || row.delivery.status === "DELIVERED")))
+      .filter((row) => !(row.technicalReadiness === "PROBE_READY" && !row.hasCompletedPickup && (row.logistics.status === "DELIVERED" || row.delivery.status === "DELIVERED")))
       .filter((row) => this.matchesComputedFilters(row, query));
     const counters = createOperationalStatusCounters(rows);
     const tabRows = rows
