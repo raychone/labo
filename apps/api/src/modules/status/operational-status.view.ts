@@ -28,9 +28,19 @@ export const operationalStatusWorkInclude = {
     },
   },
   clinic: {
-    select: {
-      id: true,
-      name: true,
+    include: {
+      pickupRequests: {
+        select: {
+          id: true,
+        },
+        where: {
+          routeStops: {
+            some: {
+              outcomeStatus: "PICKED_UP",
+            },
+          },
+        },
+      },
     },
   },
   courierRouteStops: {
@@ -408,7 +418,7 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
     logistics: {
       status: logisticsState?.status ?? null,
     },
-    hasCompletedPickup: work.courierRouteStops.length > 0,
+    hasCompletedPickup: work.courierRouteStops.length > 0 || (work.clinic?.pickupRequests.length ?? 0) > 0,
     operationalStatus: work.status === "REGISTERED" ? "RECEPTIE" : work.status,
     patient: {
       id: work.patient?.id ?? null,
