@@ -479,7 +479,7 @@ function ReceptionDashboard({
   const selectedReturnedWorkDetailQuery = useWork(selectedReturnedWorkId, (isReturnModalOpen || isProbeFormOpen) && selectedReturnedWorkId !== null);
   const probeTypesQuery = useProbeTypes((isReturnModalOpen || isProbeFormOpen) && canCreateNextCycle);
   const returnedProbeRows = returnQuery.data?.items ?? [];
-  const availableProbeRows = (availableProbeQuery.data?.items ?? []).filter((row) => row.technicalReadiness === "PROBE_READY" || row.hasCompletedPickup);
+  const availableProbeRows = (availableProbeQuery.data?.items ?? []).filter((row) => row.technicalReadiness === "PROBE_READY" || row.hasCompletedPickup || row.delivery.status === "PICKED_UP");
   const visibleAvailableProbeRows = availableProbeRows.filter((row) =>
     (!selectedClinicId || row.clinic?.id === selectedClinicId) &&
     (!selectedDoctorId || row.doctor?.id === selectedDoctorId) &&

@@ -329,6 +329,7 @@ export function matchesOperationalStatusTab(row: OperationalStatusRowView, tab: 
   return row.operationalStatus === "FINALIZATA"
     || row.workflow.status === "COMPLETED"
     || row.hasCompletedPickup
+    || row.delivery.status === "PICKED_UP"
     || row.logistics.status === "DELIVERED"
     || row.delivery.status === "DELIVERED";
 }
