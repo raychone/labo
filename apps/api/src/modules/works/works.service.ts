@@ -1786,7 +1786,10 @@ export class WorksService {
         currency: pricing.currency,
         ...deadlineDataToPrisma(deadline, 1),
         doctorId,
-        executionLegalEntityId: workLegalEntity.id,
+        // A clinic without an explicitly assigned legal entity must remain
+        // unresolved on the work. The actor's legal entity is only a fallback
+        // for deadline/pricing calculation, not a persisted company choice.
+        executionLegalEntityId: clinicEntity?.isActive ? clinicEntity.id : null,
         patientId: patient.id,
         patientName: toPatientSnapshotName(patient),
         priority: dto.priority,

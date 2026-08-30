@@ -224,7 +224,12 @@ export function LogisticsPage(): ReactNode {
   const updateWorkStatus = useMutation({
     mutationFn: ({ status, workOrderId }: { readonly status: (typeof FINAL_WORK_STATUSES)[number]; readonly workOrderId: string }) => setWorkStatus(workOrderId, { status }),
     onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Starea nu a fost schimbată", variant: "error" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["logistics"] }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["logistics"] }),
+        queryClient.invalidateQueries({ queryKey: ["status"] }),
+      ]);
+    },
   });
   const cancelPickup = useCancelPickupRequest();
 

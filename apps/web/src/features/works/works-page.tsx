@@ -220,14 +220,15 @@ function BadgePill({ label, tone = "neutral" }: { readonly label: string; readon
   return <span className={`works-page__pill works-page__pill--${tone}`}>{label}</span>;
 }
 
-function toWorkOperationalLabel(work: WorkSummary): { readonly label: string; readonly tone: "neutral" | "info" | "success" | "warning" | "danger" } {
-  // The work status is canonical; workflow status can lag while logistics prepares the next step.
-  if (work.status === "FINALIZATA" || work.workflow?.status === "COMPLETED") {
-    return { label: "Finalizată", tone: "success" };
-  }
-  if (work.claim.status === "CLAIMED" || work.workflow?.currentStageName) {
-    return { label: "În lucru", tone: "info" };
-  }
+function toWorkOperationalLabel(work: Pick<WorkSummary, "status" | "technicalReadiness">): { readonly label: string; readonly tone: "neutral" | "info" | "success" | "warning" | "danger" } {
+  // The work status is the source of truth. Claim/workflow data can lag while
+  // logistics prepares the next step, so it must not turn every unclaimed work
+  // into "Înregistrată".
+  if (work.status === "FINALIZATA" || work.technicalReadiness === "FINAL_READY") return { label: "Finalizată", tone: "success" };
+  if (work.technicalReadiness === "PROBE_READY") return { label: "Probă gata", tone: "info" };
+  if (work.status === "IN_ASTEPTARE") return { label: "În așteptare", tone: "warning" };
+  if (work.status === "IN_LUCRU") return { label: "În lucru", tone: "info" };
+  if (work.status === "RECEPTIE") return { label: "Recepție", tone: "warning" };
   return { label: "Înregistrată", tone: "warning" };
 }
 
@@ -1227,7 +1228,7 @@ function WorkDetailsDrawer({
               />
             ) : null}
             <div className="works-page__meta">
-              <StatusBadge label={work.status === "FINALIZATA" ? "Finalizată" : work.technicalReadiness === "PROBE_READY" ? "Probă gata" : work.status === "RECEPTIE" && work.probeReceivedAt ? "Probă" : "Înregistrată"} variant={work.status === "FINALIZATA" ? "closed" : work.technicalReadiness === "PROBE_READY" ? "production" : "registered"} />
+              <StatusBadge label={toWorkOperationalLabel(work).label} variant={work.status === "FINALIZATA" || work.technicalReadiness === "FINAL_READY" ? "closed" : work.technicalReadiness === "PROBE_READY" ? "production" : work.status === "IN_LUCRU" ? "production" : "registered"} />
               {work.urgency ? <BadgePill label={urgencyLabel(work.urgency)} tone={work.urgency !== "NORMAL" ? "warning" : "neutral"} /> : <PriorityBadge label={work.priority === "URGENT" ? "Urgent" : "Normal"} variant={work.priority === "URGENT" ? "urgent" : "normal"} />}
               <span>Termen: {work.deadline.effectiveDueAt ? formatDateTime(work.deadline.effectiveDueAt) : "Nerezolvat"}</span>
               {canReadPricing ? <span>Total: {formatPrice(work.totalPriceMinor, work.currency ?? currency, locale)}</span> : null}

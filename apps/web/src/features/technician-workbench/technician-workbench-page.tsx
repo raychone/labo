@@ -465,8 +465,7 @@ function OperationsModal({
         colorByWorkType.set(key, color);
         legend.push({ color, label: item.workType.name, code: item.workType.symbol });
       }
-      const teeth = item.workType.unit === "UNIT" ? item.teeth.slice(0, 1) : item.teeth;
-      for (const tooth of teeth.map((value) => value.fdiTooth)) {
+      for (const tooth of item.teeth.map((value) => value.fdiTooth)) {
         const current = toothColors.get(tooth) ?? [];
         if (!current.includes(color)) current.push(color);
         toothColors.set(tooth, current);

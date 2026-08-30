@@ -368,7 +368,7 @@ export function StatusPage(): ReactNode {
   const canReadStatus = hasPermission(permissionsQuery.data, "works.read_all") || hasPermission(permissionsQuery.data, "works.read_assigned");
   const canReadPricingOptions = hasPermission(permissionsQuery.data, "pricing.read");
   const canReadOptions = canReadStatus;
-  const statusQuery = useOperationalStatus(query, canReadStatus);
+  const statusQuery = useOperationalStatus(query, canReadStatus, { refetchIntervalMs: 5_000 });
   const clinicsQuery = useQuery({ enabled: canReadOptions, queryFn: fetchClinicOptions, queryKey: ["clinics", "options"], retry: false });
   const doctorsQuery = useQuery({ enabled: canReadOptions, queryFn: () => fetchDoctorOptions(query.clinicId ?? undefined), queryKey: ["doctors", "options", "status", query.clinicId], retry: false });
   const patientsQuery = useQuery({ enabled: canReadOptions, queryFn: () => fetchPatientOptions(query.search ?? ""), queryKey: ["patients", "options", "status", query.search ?? ""], retry: false });

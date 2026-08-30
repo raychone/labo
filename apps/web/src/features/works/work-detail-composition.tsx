@@ -120,8 +120,9 @@ export function WorkDetailComposition({
         colorByWorkType.set(key, color);
         legend.push({ color, label: displayWorkTypeName(workType.name), symbol: workType.symbol });
       }
-      const unit = effectiveWorkTypeOptions.find((option) => option.id === workType.id)?.unit;
-      for (const tooth of unit === "UNIT" ? item.teeth.slice(0, 1) : item.teeth) {
+      // A UNIT work can still cover a whole arch (for example "All on X").
+      // The unit is the billing quantity, not a restriction to one tooth.
+      for (const tooth of item.teeth) {
         const colors = toothColors.get(tooth.fdiTooth) ?? [];
         if (!colors.includes(color)) colors.push(color);
         toothColors.set(tooth.fdiTooth, colors);
