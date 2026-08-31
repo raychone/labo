@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ToothDiagram } from "../../components/dental/tooth-diagram.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
 import { saveOperationalWorkTypeName, useUpdateTechnicianWorkDetails, useWorkCompositionMutations } from "./works-api.js";
+import { displayWorkTypeSymbolOrName } from "./work-type-symbols.js";
 import { MultiItemWorkEditor, type DraftToothConnection, type DraftWorkOrderItem } from "./multi-item-work-editor.js";
 import "./work-detail-composition.css";
 
@@ -167,7 +168,7 @@ function WorkRows({ items }: { readonly items: readonly WorkOrderItemView[] }): 
     {items.map((item) => {
       const teeth = expandCanonicalWorkOrderItemTeeth({ scope: item.scope, teeth: item.teeth.map((tooth) => tooth.fdiTooth) });
       const color = item.workType?.colorHex?.trim() || "#64748b";
-      const symbol = item.workType?.symbol ?? snapshotValue(item.customWorkTypeSnapshot) ?? "—";
+      const symbol = item.workType ? displayWorkTypeSymbolOrName(item.workType.name) : snapshotValue(item.customWorkTypeSnapshot) || "—";
       return <div className="works-page__work-row" key={item.id}>
         <strong className="works-page__work-row-type"><i aria-hidden="true" style={{ background: color }} />{symbol}</strong>
         <span>Dinți: {teeth.join(", ") || "Fără dinți"}</span>

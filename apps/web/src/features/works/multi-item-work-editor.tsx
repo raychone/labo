@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { SearchablePickerField } from "./work-form.js";
 import { IMPLANT_PLATFORM_OPTIONS, RESTORATION_TYPE_OPTIONS, WORK_SHADE_OPTIONS } from "./works-page.schema.js";
 import { ToothDiagram } from "../../components/dental/tooth-diagram.js";
+import { displayWorkTypeSymbolOrName } from "./work-type-symbols.js";
 
 const CUSTOM_WORK_TYPE_CATEGORY = "__CUSTOM__";
 
@@ -177,11 +178,11 @@ export function MultiItemWorkEditor({
     };
     for (const item of items) {
       const option = workTypeOptions.find((candidate) => candidate.id === item.workTypeId);
-      addWorkType(item.workTypeId || `custom-${item.id}`, displayWorkTypeName(option?.name ?? (snapshotValue(item.customWorkTypeSnapshot) || "Alt tip de lucrare")), option?.symbol ?? "ALT", item.teeth, option?.colorHex);
+      addWorkType(item.workTypeId || `custom-${item.id}`, displayWorkTypeName(option?.name ?? (snapshotValue(item.customWorkTypeSnapshot) || "Alt tip de lucrare")), option ? displayWorkTypeSymbolOrName(option.name) : "ALT", item.teeth, option?.colorHex);
     }
     const activeOption = workTypeOptions.find((option) => option.id === workTypeId);
     if (selectedTeeth.length > 0 && (activeOption || customWorkTypeName.trim() !== "")) {
-      addWorkType(workTypeId || "__CUSTOM_DRAFT__", displayWorkTypeName(activeOption?.name ?? (customWorkTypeName.trim() || "Alt tip de lucrare")), activeOption?.symbol ?? "ALT", selectedTeeth, activeOption?.colorHex);
+      addWorkType(workTypeId || "__CUSTOM_DRAFT__", displayWorkTypeName(activeOption?.name ?? (customWorkTypeName.trim() || "Alt tip de lucrare")), activeOption ? displayWorkTypeSymbolOrName(activeOption.name) : "ALT", selectedTeeth, activeOption?.colorHex);
     }
     const resolvedToothColors: Record<number, string> = {};
     for (const [tooth, current] of toothColors.entries()) resolvedToothColors[tooth] = current.length === 1 ? current[0]! : `linear-gradient(90deg, ${current.join(", ")})`;
@@ -350,7 +351,7 @@ export function MultiItemWorkEditor({
           const option = workTypeOptions.find((candidate) => candidate.id === item.workTypeId);
           const color = option?.colorHex?.trim() || "#64748b";
           return <div className="multi-item-work-editor__item" key={item.id}>
-            <div className="multi-item-work-editor__item-summary"><span className="multi-item-work-editor__item-type"><i aria-hidden="true" style={{ background: color }} />{option?.symbol ?? snapshotValue(item.customWorkTypeSnapshot) ?? "—"}</span><span>Dinți: {item.teeth.join(", ") || "Fără dinți"}</span><span>Culoare: {item.shade || "—"}</span></div>
+            <div className="multi-item-work-editor__item-summary"><span className="multi-item-work-editor__item-type"><i aria-hidden="true" style={{ background: color }} />{option ? displayWorkTypeSymbolOrName(option.name) : snapshotValue(item.customWorkTypeSnapshot) || "—"}</span><span>Dinți: {item.teeth.join(", ") || "Fără dinți"}</span><span>Culoare: {item.shade || "—"}</span></div>
             <div className="multi-item-work-editor__item-actions">
               <Button aria-label={`Editează lucrarea ${index + 1}`} disabled={disabled} onClick={() => editItem(item)} type="button" variant="outline">✎</Button>
               <Button aria-label={`Șterge lucrarea ${index + 1}`} disabled={disabled} onClick={() => setDeleteItemId(item.id)} type="button" variant="outline">🗑</Button>
@@ -449,8 +450,8 @@ export function MultiItemWorkEditor({
               }
               setWorkTypeModalOpen(false);
             }} type="button">
-              <CardHeader><CardTitle>{option.label}</CardTitle></CardHeader>
-              <CardContent>{option.value === CUSTOM_WORK_TYPE_CATEGORY ? "Denumire introdusă manual" : "Selectează acest tip"}</CardContent>
+              <CardHeader><CardTitle>{option.value === CUSTOM_WORK_TYPE_CATEGORY ? option.label : displayWorkTypeSymbolOrName(option.label)}</CardTitle></CardHeader>
+              {option.value === CUSTOM_WORK_TYPE_CATEGORY ? <CardContent>Denumire introdusă manual</CardContent> : null}
             </button>
           </Card>)}
         </div>

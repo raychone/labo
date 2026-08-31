@@ -664,7 +664,7 @@ export class WorksService {
         // the older creative/technical work-type catalog.  The latter may be
         // needed for historical records, but must not produce duplicate or
         // invented choices in the reception/logistics work form.
-        symbol: { startsWith: "PRICE-" },
+        id: { startsWith: "technical_pricing_work_type_" },
       },
     });
 

@@ -12,6 +12,23 @@ const operationSpecs = [
   ["Altele", "PROTEZA", "Proteză"], ["Altele", "COROANE_ADIACENTE", "Coroane adiacente"], ["Altele", "GINGIE", "Gingie"],
 ] as const;
 
+// Human-facing symbols from the technical catalog spreadsheet. WorkType.code
+// remains stable for existing integrations and historical work orders.
+const TECHNICAL_WORK_TYPE_SYMBOLS: Readonly<Record<string, string>> = {
+  "Coroană/fațetă integral ceramică": "PRESS", "Coroană/fațetă integral ceramică-placată EMax": "PRESS E",
+  "Inlay, Table top, Bont hibrid integral ceramică": "Inlay,TableTop,Bont Press", "Coroană zirconia placată integral cu ceramică": "ZR E",
+  "Coroană zirconia pe implant placată integral cu ceramică": "ZR IE", "Coroană zirconia placată vestibular": "ZR SF",
+  "Coroană zirconia multistrat integral anatomică": "ZR", "Coroană zirconia multistrat pe implant integral anatomică": "ZR I",
+  "Coroană metalo-ceramică total fizionomică": "TF", "Cheie control Implanturi All on X": "Cheie All on X", "Cheie control Implanturi Solo": "Cheie Solo",
+  "Retainer Essix": "Essix", "Coroană provizorie PMMA": "PMMA", "RCR zirconia": "RCR ZR", "RCR cu sistem (2 piese)": "RCR 2", "RCR simplu": "RCR",
+  "Proteză scheletată (sisteme speciale x2)": "SCH", "Proteză acrilică totală": "PTA", "Proteză acrilică parțială": "PPA", "Proteză pe capse (sistemele nu sunt incluse)": "PTAC",
+  "Sisteme speciale pentru proteze acrilice (set)": "Sisteme PA", "Garnitură dinți compozit pentru proteze": "SET Comp", "Structură metalică pentru proteză": "Metal PTA", "Bară linguală": "Bara Linguala",
+  "Reparație 1": "Rep 1", "Reparație 2": "Rep 2", "Reparație 3": "Rep 3", "Reparație 4": "Rep 4", "Proteză Kemeny": "KMNY", "Lingură individuală implanturi": "LI", "Element wax-up/try-in digital": "WAXUP",
+  "Gutieră bruxism": "GB", "Gutieră contenție": "GC", "Gutieră albire (x2)": "GA", "Model de studiu/printat (arcadă)": "MODEL PRINT", Rebazare: "Rebazare",
+  "All on X 12 structura CrCo": "All on X 12 CRCo", "All on X 14 structura CrCo": "All on X 14 CRCo", "All on X 12 structura titan": "All on X 12 Ti", "All on X 14 structura titan": "All on X 14 Ti",
+  "Coroană metalo-ceramică semifizionomica": "SF", "Element try-in digital": "TRYIN",
+};
+
 function defaultWorkTypeColor(name: string, probeFamily?: string | null): string | null {
   const value = name.toLocaleLowerCase("ro-RO");
   if (value.includes("emax") || value.includes("integral ceramic")) return "#7C3AED";
@@ -142,10 +159,10 @@ export async function seedTechnicalCatalog(prisma: PrismaClient): Promise<{ read
   }
 
   const legalEntities = await prisma.legalEntity.findMany({ select: { code: true, id: true }, where: { code: { in: ["CDT", "NG"] } } });
-  const canonicalPricingSymbols = REAL_PRICING_CATALOG.map((item) => `PRICE-${item.symbol}`.slice(0, 40));
+  const canonicalPricingSymbols = REAL_PRICING_CATALOG.map((item) => (TECHNICAL_WORK_TYPE_SYMBOLS[item.displayName] ?? `PRICE-${item.symbol}`).slice(0, 40));
   const legacyPricingWorkTypes = await prisma.workType.findMany({
     select: { id: true },
-    where: { symbol: { startsWith: "PRICE-", notIn: canonicalPricingSymbols } },
+    where: { id: { startsWith: "technical_pricing_work_type_" }, symbol: { notIn: canonicalPricingSymbols } },
   });
   if (legacyPricingWorkTypes.length > 0) {
     const legacyWorkTypeIds = legacyPricingWorkTypes.map((workType) => workType.id);
@@ -186,10 +203,19 @@ export async function seedTechnicalCatalog(prisma: PrismaClient): Promise<{ read
       // WorkType.code is VARCHAR(20). Use the canonical Excel symbol, which
       // is short and unique (including for Reparație 1–4).
       const workTypeCode = `TECH-${item.symbol}`;
-      const workTypeSymbol = `PRICE-${item.symbol}`.slice(0, 40);
+      const workTypeSymbol = (TECHNICAL_WORK_TYPE_SYMBOLS[item.displayName] ?? `PRICE-${item.symbol}`).slice(0, 40);
       const existingWorkType = await prisma.workType.findUnique({ where: { code: workTypeCode } })
-        ?? await prisma.workType.findUnique({ where: { id: technicalWorkTypeId } })
-        ?? await prisma.workType.findUnique({ where: { symbol: workTypeSymbol } });
+        ?? await prisma.workType.findUnique({ where: { id: technicalWorkTypeId } });
+      const symbolOwner = await prisma.workType.findUnique({ where: { symbol: workTypeSymbol }, select: { id: true } });
+      if (symbolOwner && symbolOwner.id !== existingWorkType?.id) {
+        if (symbolOwner.id.startsWith("technical_pricing_work_type_")) {
+          throw new Error(`Simbolul ${workTypeSymbol} este deja folosit de un alt tip tehnic (${symbolOwner.id}).`);
+        }
+        await prisma.workType.update({
+          data: { symbol: `LEGACY-${symbolOwner.id}`.slice(0, 40), updatedByUserId: manager.id },
+          where: { id: symbolOwner.id },
+        });
+      }
       const workType = existingWorkType
         ? await prisma.workType.update({
           data: { allowedAddOns, basePriceMinor: item.priceMinor, code: workTypeCode, colorHex: existingWorkType.colorHex ?? defaultWorkTypeColor(item.displayName), isActive: true, name: item.displayName, symbol: workTypeSymbol, unit: item.unit, updatedByUserId: manager.id },

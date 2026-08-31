@@ -73,6 +73,7 @@ import { WorkQrModal } from "./work-qr-modal.js";
 import { filterDraftConnections, getDraftCompositionTeeth, MultiItemWorkEditor, type DraftToothConnection, type DraftWorkOrderItem } from "./multi-item-work-editor.js";
 import "./multi-item-work-editor.css";
 import { WorkDetailComposition } from "./work-detail-composition.js";
+import { displayWorkTypeSymbolOrName } from "./work-type-symbols.js";
 import { applyApiErrorsToForm, getErrorMessage, getFormErrorSummaryItems, UnsavedChangesPrompt, useBeforeUnloadPrompt, useCloseGuard, useErrorSummaryFocus } from "../../lib/form-utils.js";
 import { useTechnicianOptions } from "../technician-workbench/technician-workbench-api.js";
 import "./works-page.css";
@@ -1442,10 +1443,10 @@ function getWorkTypeSymbols(work: import("@dental-lab/shared").WorkDetail): stri
   for (const item of work.items ?? []) {
     const name = item.workType?.name ?? snapshotText(item.customWorkTypeSnapshot);
     if (!name) continue;
-    const symbol = item.workType?.symbol?.trim();
-    types.set(item.workTypeId ?? `custom:${name}`, symbol || "—");
+    const symbol = item.workType ? displayWorkTypeSymbolOrName(item.workType.name) : null;
+    types.set(item.workTypeId ?? `custom:${name}`, symbol || name);
   }
-  return [...types.values()].join(" · ") || work.workType.symbol || "—";
+  return [...types.values()].join(" · ") || displayWorkTypeSymbolOrName(work.workType.name) || "—";
 }
 
 function snapshotText(snapshot: Readonly<Record<string, unknown>> | null | undefined): string | null {
