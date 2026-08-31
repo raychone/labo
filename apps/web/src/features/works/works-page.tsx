@@ -169,20 +169,12 @@ function fromApiSort(field: string, direction: "asc" | "desc"): DataTableSort {
   };
 }
 
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium" }).format(new Date(value));
-}
-
 function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", hourCycle: "h23", timeStyle: "short" }).format(new Date(value));
 }
 
 function formatOptionalDateTime(value: string | null): string {
   return value ? formatDateTime(value) : "Nerezolvat";
-}
-
-function formatTime(value: string): string {
-  return new Intl.DateTimeFormat("ro-RO", { hour: "2-digit", hourCycle: "h23", minute: "2-digit", timeZone: "Europe/Bucharest" }).format(new Date(value));
 }
 
 function toLocalDateTimeInput(value: string | null, fallbackDate: string, timeSet: boolean | undefined): string {
@@ -201,10 +193,6 @@ function toBucharestIso(date: string, time: string): string {
   const get = (type: string) => Number(zonedParts.find((part) => part.type === type)?.value ?? 0);
   const zonedAsUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"));
   return new Date(utcGuess - (zonedAsUtc - utcGuess)).toISOString();
-}
-
-function formatPrice(value: number | null, currency: string, locale: string): string {
-  return value === null ? "Restricționat" : formatMoneyMinor(value, currency, locale);
 }
 
 function urgencyLabel(value: import("@dental-lab/shared").UrgencyLevel | null | undefined): string {
@@ -230,76 +218,6 @@ function toWorkOperationalLabel(work: Pick<WorkSummary, "status" | "technicalRea
   if (work.status === "IN_LUCRU") return { label: "În lucru", tone: "info" };
   if (work.status === "RECEPTIE") return { label: "Recepție", tone: "warning" };
   return { label: "Înregistrată", tone: "warning" };
-}
-
-function DeadlineBadge({ deadline, showTooltip = true }: { readonly deadline: WorkSummary["deadline"]; readonly showTooltip?: boolean }): ReactNode {
-  return (
-    <span
-      className={`works-page__deadline-badge works-page__deadline-badge--${deadline.color}`}
-      title={showTooltip ? deadline.tooltip : undefined}
-    >
-      {deadline.badge}
-    </span>
-  );
-}
-
-function DeadlineDetailCard({ canEdit, work }: { readonly canEdit: boolean; readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
-  const mutation = useSetManualWorkDeadline();
-  const initialValue = toLocalDateTimeInput(work.deadline.effectiveDueAt, work.requestedDeliveryDate, work.deadline.timeSet);
-  const [date, setDate] = useState(initialValue.slice(0, 10));
-  const [time, setTime] = useState(work.deadline.timeSet ? initialValue.slice(11, 16) : "");
-  useEffect(() => {
-    const value = toLocalDateTimeInput(work.deadline.effectiveDueAt, work.requestedDeliveryDate, work.deadline.timeSet);
-    setDate(value.slice(0, 10));
-    setTime(work.deadline.timeSet ? value.slice(11, 16) : "");
-  }, [work.deadline.effectiveDueAt, work.deadline.timeSet, work.requestedDeliveryDate]);
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Termen</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="works-page__deadline-card">
-          <DeadlineBadge deadline={work.deadline} showTooltip={false} />
-          <div>
-            <span className="works-page__muted">Data</span>
-            <strong>{work.deadline.effectiveDueAt ? formatDate(work.deadline.effectiveDueAt) : "Fără termen"}</strong>
-          </div>
-          <div>
-            <span className="works-page__muted">Ora</span>
-            <strong>{work.deadline.effectiveDueAt ? formatTime(work.deadline.effectiveDueAt) : "Nedisponibilă"}</strong>
-          </div>
-          <div>
-            <span className="works-page__muted">Status</span>
-            <strong>{work.deadline.badge}</strong>
-          </div>
-          <div>
-            <span className="works-page__muted">Countdown</span>
-            <strong>{work.deadline.countdown}</strong>
-          </div>
-        </div>
-    {canEdit ? <div className="works-page__actions"><label>Data termenului<input aria-label="Data termenului" className="dl-control" onChange={(event) => setDate(event.target.value)} type="date" value={date} /></label><label>Ora termenului (opțional)<input aria-label="Ora termenului" className="dl-control" onChange={(event) => setTime(event.target.value)} type="time" value={time} /></label><Button disabled={!date || mutation.isPending} isLoading={mutation.isPending} onClick={() => mutation.mutate({ dueAt: toBucharestIso(date, time), expectedRevision: work.deadline.revision, manualDueTimeSet: time !== "", workOrderId: work.id })} type="button">Salvează termenul</Button></div> : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ActiveProbeDeadlineCard({ canEdit, work }: { readonly canEdit: boolean; readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
-  const cycle = work.activeProbeCycle;
-  const mutation = useUpdateActiveProbeDeadline();
-  const initialValue = cycle ? toLocalDateTimeInput(cycle.deadlineAt, work.requestedDeliveryDate, true) : "";
-  const [date, setDate] = useState(initialValue.slice(0, 10));
-  const [time, setTime] = useState(initialValue.slice(11, 16));
-  useEffect(() => {
-    const value = cycle ? toLocalDateTimeInput(cycle.deadlineAt, work.requestedDeliveryDate, true) : "";
-    setDate(value.slice(0, 10));
-    setTime(value.slice(11, 16));
-  }, [cycle?.deadlineAt, work.requestedDeliveryDate]);
-  if (!cycle) return null;
-  return <Card><CardHeader><CardTitle>Termen</CardTitle><CardDescription>{cycle.probeTypeNameSnapshot}</CardDescription></CardHeader><CardContent>
-    <div className="works-page__detail-field"><span>Termen</span><strong>{formatDateTime(cycle.deadlineAt)}</strong></div>
-    {canEdit ? <div className="works-page__actions"><label>Data termenului<input aria-label="Data termenului probă curentă" className="dl-control" onChange={(event) => setDate(event.target.value)} type="date" value={date} /></label><label>Ora termenului (opțional)<input aria-label="Ora termenului probă curentă" className="dl-control" onChange={(event) => setTime(event.target.value)} type="time" value={time} /></label><Button disabled={!date || mutation.isPending} isLoading={mutation.isPending} onClick={() => mutation.mutate({ cycleId: cycle.id, deadlineAt: toBucharestIso(date, time), workOrderId: work.id })} type="button">Salvează termenul</Button></div> : null}
-  </CardContent></Card>;
 }
 
 export function WorksPage(): ReactNode {
@@ -1045,38 +963,6 @@ function WorkCodeAndFilesFields({
   );
 }
 
-function TechnicianTechnicalDetailsEditor({ canEdit, work }: { readonly canEdit: boolean; readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
-  const toast = useToast();
-  const updateMutation = useUpdateTechnicianWorkDetails();
-  const [clinicalNotes, setClinicalNotes] = useState(work.clinicalNotes ?? "");
-  const [internalNotes, setInternalNotes] = useState(work.internalNotes ?? "");
-  const [technicalCodeNotes, setTechnicalCodeNotes] = useState(work.technicalCodeNotes ?? "");
-
-  useEffect(() => {
-    setClinicalNotes(work.clinicalNotes ?? "");
-    setInternalNotes(work.internalNotes ?? "");
-    setTechnicalCodeNotes(work.technicalCodeNotes ?? "");
-  }, [work.clinicalNotes, work.id, work.internalNotes, work.technicalCodeNotes]);
-
-  if (!canEdit) return null;
-  return <Card>
-    <CardHeader><CardTitle>Detalii tehnice</CardTitle><CardDescription>Editează informațiile tehnice ale lucrării.</CardDescription></CardHeader>
-    <CardContent>
-      <FormGrid>
-        <Textarea label="Note clinice" onChange={(event) => setClinicalNotes(event.target.value)} rows={3} value={clinicalNotes} />
-        <Textarea label="Note interne" onChange={(event) => setInternalNotes(event.target.value)} rows={3} value={internalNotes} />
-        <Textarea label="Cod tehnic" onChange={(event) => setTechnicalCodeNotes(event.target.value)} rows={3} value={technicalCodeNotes} />
-      </FormGrid>
-      <div className="works-page__actions">
-        <Button disabled={updateMutation.isPending} isLoading={updateMutation.isPending} onClick={() => updateMutation.mutate({ input: { clinicalNotes: clinicalNotes.trim() || null, internalNotes: internalNotes.trim() || null, technicalCodeNotes: technicalCodeNotes.trim() || null }, workOrderId: work.id }, {
-          onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Detaliile tehnice nu au fost salvate", variant: "error" }),
-          onSuccess: () => toast.showToast({ message: "Detaliile tehnice au fost salvate.", variant: "success" }),
-        })} type="button">Salvează detaliile tehnice</Button>
-      </div>
-    </CardContent>
-  </Card>;
-}
-
 function WorkDetailsDrawer({
   canEditTechnicalCode,
   canUploadFiles,
@@ -1211,6 +1097,7 @@ function WorkDetailsDrawer({
       <Drawer
         className="works-page__work-details-drawer"
         description={work ? `${work.code} · ${work.status}` : "Detalii lucrare"}
+        headerAction={work ? <Button onClick={() => onShowQr(work.id)} type="button" variant="outline">Vezi QR</Button> : null}
         isOpen={isOpen}
         onOpenChange={closeGuard.handleOpenChange}
         title="Detalii lucrare"
@@ -1218,7 +1105,7 @@ function WorkDetailsDrawer({
         {workError ? <ErrorState title="Lucrarea nu a fost încărcată" description={getErrorMessage(workError)} /> : null}
         {work ? (
           <div className="works-page__drawer">
-            <ExecutionNowCard activeCycleNumber={canShowLegacyExecution ? activeCycleNumber : null} showLegacyExecution={canShowLegacyExecution} work={work} />
+            <ExecutionNowCard activeCycleNumber={canShowLegacyExecution ? activeCycleNumber : null} canEditDeadline={canEditDeadline} showLegacyExecution={canShowLegacyExecution} work={work} />
             {canShowLegacyExecution ? <WorkWorkflowSection isOpen={isOpen} workId={work.id} /> : null}
             {canReadCycles ? (
               <RealLabSheetSection
@@ -1227,20 +1114,8 @@ function WorkDetailsDrawer({
                 work={work}
               />
             ) : null}
-            <div className="works-page__meta">
-              <StatusBadge label={toWorkOperationalLabel(work).label} variant={work.status === "FINALIZATA" || work.technicalReadiness === "FINAL_READY" ? "closed" : work.technicalReadiness === "PROBE_READY" ? "production" : work.status === "IN_LUCRU" ? "production" : "registered"} />
-              {work.urgency ? <BadgePill label={urgencyLabel(work.urgency)} tone={work.urgency !== "NORMAL" ? "warning" : "neutral"} /> : <PriorityBadge label={work.priority === "URGENT" ? "Urgent" : "Normal"} variant={work.priority === "URGENT" ? "urgent" : "normal"} />}
-              <span>Termen: {work.deadline.effectiveDueAt ? formatDateTime(work.deadline.effectiveDueAt) : "Nerezolvat"}</span>
-              {canReadPricing ? <span>Total: {formatPrice(work.totalPriceMinor, work.currency ?? currency, locale)}</span> : null}
-            </div>
-            {work.activeProbeCycle || (work.completedProbeCycles ?? []).length > 0 ? <ProbeCycleSummary canSelect={canSelectProbeType} isSaving={updateProbeTypesMutation.isPending} onSelect={(cycleId, probeTypeIds) => updateProbeTypesMutation.mutate({ cycleId, probeTypeIds, workOrderId: work.id })} probeTypes={probeTypeOptions} work={work} /> : null}
-            <div className="works-page__actions">
-              <Button onClick={() => onShowQr(work.id)} variant="outline">Vezi QR</Button>
-              {canUpdate ? <Button onClick={() => { if (editingCaseFields) { form.reset(toWorkFormValues(work)); setEditingCaseFields(false); } else { setEditingCaseFields(true); window.setTimeout(() => editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); } }} type="button" variant="outline">{editingCaseFields ? "Închide editarea" : "Editează datele lucrării"}</Button> : null}
-            </div>
-            {work.activeProbeCycle ? <ActiveProbeDeadlineCard canEdit={canEditDeadline} work={work} /> : <DeadlineDetailCard canEdit={canEditDeadline} work={work} />}
-            <WorkDetailComposition canEdit={canUpdate} canEditTechnicalCode={canEditTechnicalCode} isOpen={isOpen} work={work} workTypeOptions={formWorkTypeOptions} />
-            <TechnicianTechnicalDetailsEditor canEdit={canUpdateTechnicianDetails} work={work} />
+            <ProbeCycleSummary canSelect={canSelectProbeType} isSaving={updateProbeTypesMutation.isPending} onSelect={(cycleId, probeTypeIds) => updateProbeTypesMutation.mutate({ cycleId, probeTypeIds, workOrderId: work.id })} probeTypes={probeTypeOptions} work={work} />
+            <WorkDetailComposition canEdit={canUpdate} canEditNotes={canUpdateTechnicianDetails} canEditTechnicalCode={canEditTechnicalCode} isOpen={isOpen} work={work} workTypeOptions={formWorkTypeOptions} />
             {canReadCycles && !work.activeProbeCycle && ((work.completedProbeCycles ?? []).length === 0 || work.technicalReadiness === "PROBE_READY") ? (
               <WorkCyclesSection
                 canCreateNextCycle={canCreateNextCycle}
@@ -1364,6 +1239,8 @@ function WorkDetailsDrawer({
 }
 
 function ProbeCycleSummary({ canSelect, isSaving, onSelect, probeTypes, work }: { readonly canSelect: boolean; readonly isSaving: boolean; readonly onSelect: (cycleId: string, probeTypeIds: readonly string[]) => void; readonly probeTypes: readonly import("@dental-lab/shared").ProbeTypeView[]; readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
+  const [isExpanded, setIsExpanded] = useState(false);
+  useEffect(() => setIsExpanded(false), [work.id]);
   const cycles = [
     ...(work.activeProbeCycle ? [work.activeProbeCycle] : []),
     ...(work.completedProbeCycles ?? []),
@@ -1374,9 +1251,14 @@ function ProbeCycleSummary({ canSelect, isSaving, onSelect, probeTypes, work }: 
   const completedProbeSummary = [...completedProbeCounts.values()].map(({ count, name }) => `${name} · ${count}x`).join(" · ");
   const remainingProbeNames = probeTypes.filter((type) => type.code && configuredProbeCodes.includes(type.code) && !completedProbeCodes.has(type.code)).map((type) => type.name);
   return (
-    <Card>
-      <CardHeader><CardTitle>Probe tehnice</CardTitle><CardDescription>Cicluri la nivelul întregii lucrări; istoricul păstrează denumirea probei.</CardDescription></CardHeader>
-      <CardContent>
+    <Card className="works-page__probe-accordion">
+      <CardHeader>
+        <button aria-controls="technical-probes-content" aria-expanded={isExpanded} aria-label={isExpanded ? "Închide Probe tehnice" : "Deschide Probe tehnice"} className="works-page__accordion-trigger" onClick={() => setIsExpanded((expanded) => !expanded)} type="button">
+          <span className="works-page__accordion-copy"><span className="dl-card__title" role="heading" aria-level={3}>Probe tehnice</span><span className="dl-card__description">Cicluri la nivelul întregii lucrări; istoricul păstrează denumirea probei.</span></span>
+          <span aria-hidden="true" className="works-page__accordion-chevron">{isExpanded ? "⌃" : "⌄"}</span>
+        </button>
+      </CardHeader>
+      {isExpanded ? <CardContent id="technical-probes-content">
         {work.activeProbeCycle ? <p className="works-page__cycle-next-stage"><strong>Proba curentă:</strong> {work.activeProbeCycle.sequence === 0 ? "inițială" : work.activeProbeCycle.sequence} · {work.activeProbeCycle.probeTypeNameSnapshot}. {remainingProbeNames.length > 0 ? `Probe rămase după aceasta: ${remainingProbeNames.join(", ")}.` : "Aceasta poate fi ultima probă; după finalizare lucrarea se arhivează."}</p> : null}
         {completedProbeSummary ? <p className="works-page__muted"><strong>Probe efectuate în trecut:</strong> {completedProbeSummary}</p> : null}
         {cycles.length === 0 ? <p className="works-page__muted">Nu există probe canonice pentru această lucrare.</p> : cycles.map((cycle) => {
@@ -1400,7 +1282,7 @@ function ProbeCycleSummary({ canSelect, isSaving, onSelect, probeTypes, work }: 
           </div>
           );
         })}
-      </CardContent>
+      </CardContent> : null}
     </Card>
   );
 }
@@ -1510,28 +1392,43 @@ function MetricCell({ label, value }: { readonly label: string; readonly value: 
   );
 }
 
-function ExecutionNowCard({ activeCycleNumber, showLegacyExecution, work }: { readonly activeCycleNumber: number | null; readonly showLegacyExecution: boolean; readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
+function ExecutionNowCard({ activeCycleNumber, canEditDeadline, showLegacyExecution, work }: { readonly activeCycleNumber: number | null; readonly canEditDeadline: boolean; readonly showLegacyExecution: boolean; readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
   const currentStage = work.workflow?.currentStage ?? null;
   const progress = work.workflow ? `${work.workflow.progress.completed}/${work.workflow.progress.total}` : "0/0";
   const currentTechnician = work.executionSnapshot.currentTechnician ?? work.claim.technician;
   const executionCompany = work.executionSnapshot.summary.legalEntity?.code ?? work.claim.executionLegalEntity?.code ?? "Nefixată";
   const currentCycleLabel = activeCycleNumber ? `Ciclul ${activeCycleNumber}` : "Fără ciclu activ";
+  const workTypeSymbols = getWorkTypeSymbols(work);
+  const [editingDeadline, setEditingDeadline] = useState(false);
+  const deadlineMutation = useSetManualWorkDeadline();
+  const activeProbeDeadlineMutation = useUpdateActiveProbeDeadline();
+  const initialDeadline = toLocalDateTimeInput(work.deadline.effectiveDueAt, work.requestedDeliveryDate, work.deadline.timeSet);
+  const [deadlineDate, setDeadlineDate] = useState(initialDeadline.slice(0, 10));
+  const [deadlineTime, setDeadlineTime] = useState(work.deadline.timeSet ? initialDeadline.slice(11, 16) : "");
+  useEffect(() => {
+    const next = toLocalDateTimeInput(work.deadline.effectiveDueAt, work.requestedDeliveryDate, work.deadline.timeSet);
+    setDeadlineDate(next.slice(0, 10));
+    setDeadlineTime(work.deadline.timeSet ? next.slice(11, 16) : "");
+    setEditingDeadline(false);
+  }, [work.deadline.effectiveDueAt, work.deadline.timeSet, work.requestedDeliveryDate]);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Detaliile lucrării</CardTitle>
-        <CardDescription>{work.code} · {work.workType.name}</CardDescription>
+        <div className="works-page__detail-section-header">
+          <div><CardTitle>Detalii</CardTitle></div>
+        </div>
       </CardHeader>
       <CardContent className="works-page__execution-now">
         <div className="works-page__execution-now-grid">
           <MetricCell label="Clinică / Medic" value={`${work.clinic?.name ?? "Fără clinică"} · ${work.doctor?.displayName ?? "Fără medic"}`} />
           <MetricCell label="Pacient" value={work.patient?.fullName ?? work.patientName} />
-          <MetricCell label="Tip lucrare" value={work.workType.name} />
+          <MetricCell label="Tip lucrare" value={workTypeSymbols} />
           <MetricCell label="Urgență" value={work.urgency ? urgencyLabel(work.urgency) : (work.priority === "URGENT" ? "Urgent" : "Normal")} />
           <MetricCell label="Firmă" value={executionCompany} />
           <MetricCell label="Start execuție" value={formatOptionalDateTime(work.executionSnapshot.deadline?.startAt ?? work.deadline.startAt)} />
-          <MetricCell label="Termen" value={formatOptionalDateTime(work.executionSnapshot.deadline?.effectiveDueAt ?? work.deadline.effectiveDueAt)} />
+          <MetricCell label="Status" value={toWorkOperationalLabel(work).label} />
+          <div className="works-page__detail-field"><span>Termen {canEditDeadline ? <button aria-label="Editează termenul" className="works-page__inline-icon-button" onClick={() => setEditingDeadline((value) => !value)} type="button">✎</button> : null}</span><strong>{formatOptionalDateTime(work.executionSnapshot.deadline?.effectiveDueAt ?? work.deadline.effectiveDueAt)}</strong>{!work.deadline.timeSet && work.deadline.effectiveDueAt ? <small>Ora nesetată</small> : null}{editingDeadline ? <div className="works-page__inline-deadline-editor"><input aria-label="Data termenului" className="dl-control" onChange={(event) => setDeadlineDate(event.target.value)} type="date" value={deadlineDate} /><input aria-label="Ora termenului" className="dl-control" onChange={(event) => setDeadlineTime(event.target.value)} type="time" value={deadlineTime} /><Button disabled={!deadlineDate || deadlineMutation.isPending || activeProbeDeadlineMutation.isPending} isLoading={deadlineMutation.isPending || activeProbeDeadlineMutation.isPending} onClick={() => { const dueAt = toBucharestIso(deadlineDate, deadlineTime); if (work.activeProbeCycle) { activeProbeDeadlineMutation.mutate({ cycleId: work.activeProbeCycle.id, deadlineAt: dueAt, workOrderId: work.id }, { onSuccess: () => setEditingDeadline(false) }); } else { deadlineMutation.mutate({ dueAt, expectedRevision: work.deadline.revision, manualDueTimeSet: deadlineTime !== "", workOrderId: work.id }, { onSuccess: () => setEditingDeadline(false) }); } }} size="small" type="button">Salvează</Button></div> : null}</div>
           {showLegacyExecution ? <MetricCell label="Tehnician" value={currentTechnician?.displayName ?? "Nerevendicată"} /> : null}
           {showLegacyExecution ? <MetricCell label="Ciclu curent" value={currentCycleLabel} /> : null}
           {showLegacyExecution ? <MetricCell label="Etapă curentă" value={currentStage?.name ?? "Fără etapă curentă"} /> : null}
@@ -1542,6 +1439,26 @@ function ExecutionNowCard({ activeCycleNumber, showLegacyExecution, work }: { re
       </CardContent>
     </Card>
   );
+}
+
+function getWorkTypeSymbols(work: import("@dental-lab/shared").WorkDetail): string {
+  const types = new Map<string, string>();
+  for (const item of work.items ?? []) {
+    const name = item.workType?.name ?? snapshotText(item.customWorkTypeSnapshot);
+    if (!name) continue;
+    const symbol = item.workType?.symbol?.trim();
+    types.set(item.workTypeId ?? `custom:${name}`, symbol || "—");
+  }
+  return [...types.values()].join(" · ") || work.workType.symbol || "—";
+}
+
+function snapshotText(snapshot: Readonly<Record<string, unknown>> | null | undefined): string | null {
+  if (!snapshot) return null;
+  for (const key of ["value", "name", "label", "displayName", "text"]) {
+    const value = snapshot[key];
+    if (typeof value === "string" && value.trim() !== "") return value;
+  }
+  return null;
 }
 
 function toMutableDynamicValues(values: import("@dental-lab/shared").WorkFormValues | null | undefined): WorkFormValues["workFormValues"] {

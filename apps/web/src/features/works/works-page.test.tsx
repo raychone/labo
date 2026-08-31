@@ -990,6 +990,7 @@ describe("WorksPage", () => {
     renderWithProviders(<WorksPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Deschide Probe tehnice" }));
 
     expect(await screen.findByRole("heading", { name: "Cicluri" })).toBeDefined();
     expect((await screen.findAllByText("Ciclul 2")).length).toBeGreaterThan(0);
@@ -1035,7 +1036,9 @@ describe("WorksPage", () => {
 
     renderWithProviders(<WorksPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
-    expect(await screen.findByText("Probă trecută 1 — Lingură istorică")).toBeDefined();
+    expect(screen.queryByText("Proba 1 trecută · Lingură istorică")).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Deschide Probe tehnice" }));
+    expect(await screen.findByText("Proba 1 trecută · Lingură istorică")).toBeDefined();
     expect(screen.getByLabelText("Tip probă")).toBeDefined();
     expect(screen.getByText("Tip probă istoric: Lingură istorică")).toBeDefined();
   });

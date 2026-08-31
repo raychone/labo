@@ -40,10 +40,103 @@
   margin: 0;
 }
 
+.works-page__detail-section-header {
+  align-items: center;
+  display: flex;
+  gap: var(--dl-space-3);
+  justify-content: space-between;
+}
+
 .works-page__detail-section-grid {
   display: grid;
   gap: var(--dl-space-5);
   grid-template-columns: 1fr;
+}
+
+.works-page__probe-accordion {
+  overflow: hidden;
+}
+
+.works-page__accordion-trigger {
+  align-items: center;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.works-page__accordion-copy {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.works-page__accordion-copy .dl-card__title,
+.works-page__accordion-copy .dl-card__description {
+  display: block;
+  margin: 0;
+  text-align: left;
+}
+
+.works-page__accordion-trigger:focus-visible {
+  border-radius: 0.5rem;
+  outline: 3px solid color-mix(in srgb, var(--color-primary, #0f766e) 35%, transparent);
+  outline-offset: 4px;
+}
+
+.works-page__accordion-chevron {
+  align-items: center;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 1.25rem;
+  height: 2rem;
+  justify-content: center;
+  line-height: 1;
+  width: 2rem;
+}
+
+.works-page__inline-icon-button {
+  background: transparent;
+  border: 0;
+  color: var(--dl-color-primary);
+  cursor: pointer;
+  font: inherit;
+  margin-left: 0.35rem;
+  padding: 0 0.2rem;
+}
+
+.works-page__inline-deadline-editor {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-2);
+  margin-top: var(--dl-space-2);
+}
+
+.works-page__composition-groups {
+  display: grid;
+  gap: var(--dl-space-2);
+}
+
+.works-page__composition-groups > div {
+  align-items: center;
+  display: flex;
+  gap: var(--dl-space-3);
+}
+
+.works-page__composition-groups strong {
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-sm);
+  padding: 0.2rem 0.55rem;
 }
 
 .works-page__detail-field {

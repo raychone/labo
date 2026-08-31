@@ -64,14 +64,14 @@ export async function seedTechnicalCatalog(prisma: PrismaClient): Promise<{ read
     const existingWorkType = await prisma.workType.findUnique({ where: { id }, select: { colorHex: true } });
     await prisma.workType.upsert({
       create: {
-        allowedAddOns: item.allowedAddOns.map((addOn) => ({ code: addOn, label: addOn === "GINGIE" ? "Gingie" : "Plăcată", amountMinor: addOn === "GINGIE" ? 20_000 : 5_000 })),
+        allowedAddOns: item.allowedAddOns.map((addOn) => ({ code: addOn, label: addOn === "GINGIE" ? "Gingie" : "Adiacente", amountMinor: addOn === "GINGIE" ? 20_000 : 5_000 })),
         basePriceMinor: item.priceMinor, code, createdByUserId: manager.id, exclusiveGroup: item.exclusiveGroup ?? null, id, isActive: true,
         name: item.displayName, probeFamily: item.probeFamily,
         colorHex: defaultWorkTypeColor(item.displayName, item.probeFamily),
         probeTypeCodes: item.probeFamily === "MC" ? ["MC_METAL", "MC_CERAMICA", "MC_GLAZE"] : item.probeFamily === "ZR" ? ["ZR_ZR", "ZR_MIYO"] : item.probeFamily === "ZRP" ? ["ZRP_METAL", "ZRP_CERAMICA", "ZRP_MIYO", "ZRP_GLAZE"] : item.probeFamily === "PRO" ? ["PRO_LG", "PRO_SO", "PRO_MACHETA", "PRO_GLAZE"] : [],
         symbol: `TECH-${item.symbol}`.slice(0, 40), unit: item.unit, updatedByUserId: manager.id,
       },
-      update: { allowedAddOns: item.allowedAddOns.map((addOn) => ({ code: addOn, label: addOn === "GINGIE" ? "Gingie" : "Plăcată", amountMinor: addOn === "GINGIE" ? 20_000 : 5_000 })), basePriceMinor: item.priceMinor, colorHex: existingWorkType?.colorHex ?? defaultWorkTypeColor(item.displayName, item.probeFamily), isActive: true, name: item.displayName, probeFamily: item.probeFamily, unit: item.unit, updatedByUserId: manager.id },
+      update: { allowedAddOns: item.allowedAddOns.map((addOn) => ({ code: addOn, label: addOn === "GINGIE" ? "Gingie" : "Adiacente", amountMinor: addOn === "GINGIE" ? 20_000 : 5_000 })), basePriceMinor: item.priceMinor, colorHex: existingWorkType?.colorHex ?? defaultWorkTypeColor(item.displayName, item.probeFamily), isActive: true, name: item.displayName, probeFamily: item.probeFamily, unit: item.unit, updatedByUserId: manager.id },
       where: { id },
     });
   }
@@ -180,7 +180,7 @@ export async function seedTechnicalCatalog(prisma: PrismaClient): Promise<{ read
       const allowedAddOns = item.symbol === "EX-11"
         ? [
           { code: "GINGIE", label: "Gingie", amountMinor: 20_000 },
-          { code: "PLACATA", label: "Plăcată", amountMinor: 5_000 },
+          { code: "PLACATA", label: "Adiacente", amountMinor: 5_000 },
         ]
         : [];
       // WorkType.code is VARCHAR(20). Use the canonical Excel symbol, which

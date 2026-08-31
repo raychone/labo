@@ -160,6 +160,11 @@
   gap: var(--dl-space-2);
 }
 
+.multi-item-work-editor__list-header {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .multi-item-work-editor__item {
   align-items: center;
   border: var(--dl-border-width) solid var(--dl-color-border);
@@ -175,6 +180,36 @@
   display: grid;
   gap: 0.2rem;
   min-width: 0;
+}
+
+.multi-item-work-editor__item-summary {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-2) var(--dl-space-4);
+}
+
+.multi-item-work-editor__item-type {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--dl-space-2);
+  font-weight: var(--dl-font-weight-semibold);
+}
+
+.multi-item-work-editor__item-type i {
+  border-radius: 999px;
+  display: inline-block;
+  height: 0.7rem;
+  width: 0.7rem;
+}
+
+.multi-item-work-editor__item-actions button {
+  align-items: center;
+  display: inline-flex;
+  font-size: 1.1rem;
+  justify-content: center;
+  min-width: var(--dl-size-touch-target);
+  padding: 0.35rem;
 }
 
 .multi-item-work-editor__item span,
@@ -194,6 +229,12 @@
     align-items: stretch;
     flex-direction: column;
   }
+
+  .multi-item-work-editor__item-summary {
+    align-items: start;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 /* Keep the clinical selector broad on tablets and ordinary desktop widths.
@@ -201,23 +242,28 @@
    full practical arch track and a readable item editor. */
 @media (min-width: 100rem) {
   .multi-item-work-editor {
-    grid-template-columns: minmax(0, 1fr) minmax(24rem, 30rem);
-    align-items: start;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .multi-item-work-editor__list {
+    grid-column: 1 / -1;
+    grid-row: 1;
   }
 
   .multi-item-work-editor__diagram {
     grid-column: 1;
-    grid-row: 1 / span 4;
+    grid-row: 2;
   }
 
   .multi-item-work-editor__fields {
-    grid-column: 2;
-    grid-row: 1;
+    grid-column: 1;
+    grid-row: 3;
   }
 
   .multi-item-work-editor__error,
   .multi-item-work-editor__actions {
-    grid-column: 2;
+    grid-column: 1;
+    grid-row: 4;
   }
 
   .multi-item-work-editor__list,

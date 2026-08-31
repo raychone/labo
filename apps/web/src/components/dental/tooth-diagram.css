@@ -11,6 +11,10 @@
   gap: var(--dl-space-2);
 }
 
+.tooth-diagram__shortcuts-action {
+  margin-left: auto;
+}
+
 .tooth-diagram__shortcut {
   background: var(--dl-color-surface);
   border: var(--dl-border-width) solid var(--dl-color-border);

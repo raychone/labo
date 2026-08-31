@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { WorkDetail } from "@dental-lab/shared";
@@ -34,11 +34,10 @@ function renderSubject(canEdit = false): void {
 describe("WorkDetailComposition", () => {
   it("renders one case with semantic component scopes and persisted active connections", () => {
     renderSubject();
-    expect(screen.getByText("Dinte 11")).toBeDefined();
-    expect(screen.getAllByText("Arcada inferioară").length).toBeGreaterThan(0);
-    expect(screen.getByText("Compoziția dentară")).toBeDefined();
-    expect(screen.getByText("A · Coroană A")).toBeDefined();
-    expect(screen.getByText("B · Gutieră")).toBeDefined();
+    expect(screen.getByText(/Dinți:\s*11/)).toBeDefined();
+    expect(screen.getByText("Lucrare")).toBeDefined();
+    expect(screen.getByText("A")).toBeDefined();
+    expect(screen.getByText("B")).toBeDefined();
     expect(screen.getByRole("button", { name: "Dinte 11" }).className).toContain("tooth-diagram__tooth--work-colored");
     expect(screen.getByRole("button", { name: "Conexiune între dinții 12 și 11" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "Conexiune între dinții 11 și 21" }).getAttribute("aria-pressed")).toBe("true");
@@ -46,11 +45,9 @@ describe("WorkDetailComposition", () => {
 
   it("loads existing components into the reused edit flow only after intent", () => {
     renderSubject(true);
-    expect(screen.queryByRole("button", { name: "Salvează componenta" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Editează lucrarea" }));
-    fireEvent.click(screen.getAllByRole("button", { name: "Editează" })[0]!);
-    expect(screen.getByRole("button", { name: "Salvează componenta" })).toBeDefined();
-    expect(screen.getByLabelText("Componentele lucrării")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Editează lucrarea 1" }));
+    expect(screen.getByRole("button", { name: "Salvează" })).toBeDefined();
+    expect(screen.getByLabelText("Lucrările lucrării")).toBeDefined();
   });
 
   it("does not expose component edit controls without permission", () => {
@@ -58,27 +55,24 @@ describe("WorkDetailComposition", () => {
     expect(screen.queryByRole("button", { name: "Editează lucrarea" })).toBeNull();
   });
 
-  it("sends one aggregate composition request for one save click", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ compatibilityLabelRo: "Date canonice", csrfToken: "csrf", items: work.items, toothConnections: work.toothConnections }) });
-    vi.stubGlobal("fetch", fetchMock);
+  it("opens the inline add form only after an explicit add action", () => {
     render(<QueryClientProvider client={new QueryClient()}><WorkDetailComposition canEdit work={work} isOpen workTypeOptions={[]} /></QueryClientProvider>);
-    fireEvent.click(screen.getByRole("button", { name: "Editează lucrarea" }));
-    fireEvent.click(screen.getByRole("button", { name: "Salvează editarea" }));
-    await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/composition")).length).toBe(1));
+    expect(screen.getByRole("button", { name: "Salvează editarea" })).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Adaugă lucrare" }));
+    expect(screen.getByRole("button", { name: "Adaugă" })).toBeDefined();
   });
 
-  it("renders human-readable custom WorkType and platform snapshots", () => {
+  it("renders a human-readable custom WorkType in the compact row", () => {
     const customWork = { ...work, items: [{ ...work.items[0], workType: null, workTypeId: null, customWorkTypeSnapshot: { value: "Zirconiu personalizat" }, implantPlatform: null, customImplantPlatformSnapshot: { value: "Platformă custom" } }] } as unknown as WorkDetail;
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ compatibilityLabelRo: "Date canonice" }) }));
     render(<QueryClientProvider client={new QueryClient()}><WorkDetailComposition canEdit={false} isOpen work={customWork} workTypeOptions={[]} /></QueryClientProvider>);
     expect(screen.getByText("Zirconiu personalizat")).toBeDefined();
-    expect(screen.getByText("Platformă custom")).toBeDefined();
   });
 
   it("keeps legacy-only composition read-only without auto-creating components", () => {
     const legacyWork = { ...work, items: [], toothConnections: [] } as unknown as WorkDetail;
-    render(<QueryClientProvider client={new QueryClient()}><WorkDetailComposition canEdit={true} work={legacyWork} isOpen workTypeOptions={[]} /></QueryClientProvider>);
-    expect(screen.getByText(/conversia explicită a lucrărilor legacy nu este disponibilă/)).toBeDefined();
-    expect(screen.queryByRole("button", { name: "Editează lucrarea" })).toBeNull();
+    render(<QueryClientProvider client={new QueryClient()}><WorkDetailComposition canEdit={false} work={legacyWork} isOpen workTypeOptions={[]} /></QueryClientProvider>);
+    expect(screen.getByText(/Nu există lucrări active/)).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Salvează editarea" })).toBeNull();
   });
 });

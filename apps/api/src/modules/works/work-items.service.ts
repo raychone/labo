@@ -337,6 +337,13 @@ export class WorkItemsService {
     workOrderId: string,
     permission: "works.connections.manage" | "works.item.create" | "works.item.remove" | "works.item.update" | "works.scope.update" | "works.technical_code.edit" | "works.update",
   ): Promise<void> {
+    // `works.update: ALL` is the umbrella grant for operational managers
+    // (Manager/Logistica). Do not require every newer composition sub-grant
+    // to have been reseeded before an existing role can save the work.
+    if (permission !== "works.update") {
+      const broadGrant = await this.authorizationService.hasPermission({ permission: "works.update", userId: actorUserId });
+      if (broadGrant.allowed && broadGrant.effectiveScopes?.includes("ALL")) return;
+    }
     const grant = await this.authorizationService.hasPermission({ permission, userId: actorUserId });
     if (!grant.allowed) throw new ForbiddenException("Nu ai permisiunea necesară pentru această lucrare.");
     if (!grant.effectiveScopes || grant.effectiveScopes.includes("ALL")) return;

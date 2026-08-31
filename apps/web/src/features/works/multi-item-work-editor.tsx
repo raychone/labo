@@ -1,14 +1,12 @@
 import {
-  ANATOMICAL_SCOPE_LABELS_RO,
   ADULT_FDI_TEETH,
-  formatWorkTypeCategory,
   isAdjacentAdultFdiPair,
   normalizeConnectionPair,
   type AdultFdiTooth,
   type AnatomicalScopeType,
   type WorkTypeFormOption,
 } from "@dental-lab/shared";
-import { Button, Card, CardContent, CardHeader, CardTitle, Checkbox, FormGrid, FormGridFull, Modal, TextInput, Textarea } from "@dental-lab/ui";
+import { Button, Card, CardContent, CardHeader, CardTitle, Checkbox, ConfirmActionModal, FormGrid, Modal, TextInput } from "@dental-lab/ui";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { SearchablePickerField } from "./work-form.js";
@@ -100,6 +98,7 @@ export function MultiItemWorkEditor({
   onChange,
   workTypeOptions,
   onSaveCustomWorkType,
+  onEditingChange,
   connections,
 }: {
   readonly canSaveCustomWorkType?: boolean;
@@ -109,6 +108,7 @@ export function MultiItemWorkEditor({
   readonly onChange: (items: readonly DraftWorkOrderItem[], connections: readonly DraftToothConnection[]) => void;
   readonly workTypeOptions: readonly WorkTypeFormOption[];
   readonly onSaveCustomWorkType?: (name: string) => Promise<WorkTypeFormOption>;
+  readonly onEditingChange?: (editing: boolean) => void;
   readonly connections: readonly DraftToothConnection[];
 }): ReactNode {
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -130,6 +130,8 @@ export function MultiItemWorkEditor({
   const [error, setError] = useState<string | null>(null);
   const [savingCustomType, setSavingCustomType] = useState(false);
   const [workTypeModalOpen, setWorkTypeModalOpen] = useState(false);
+  const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
 
   const compositionTeeth = useMemo(() => getDraftCompositionTeeth(items), [items]);
   const effectiveConnectionComposition = useMemo(
@@ -204,6 +206,13 @@ export function MultiItemWorkEditor({
     setNotes(null);
     setSelectedAddOns([]);
     setError(null);
+    setFormOpen(false);
+    onEditingChange?.(false);
+  }
+
+  function startAdding(): void {
+    resetDraft();
+    setFormOpen(true);
   }
 
   useEffect(() => {
@@ -214,6 +223,10 @@ export function MultiItemWorkEditor({
       setRestorationType(null);
     }
   }, [isImplantWorkType]);
+
+  useEffect(() => {
+    if (selectedTeeth.length > 0) setFormOpen(true);
+  }, [selectedTeeth]);
 
   function selectShortcut(teeth: readonly AdultFdiTooth[]): void {
     setSelectedTeeth([...teeth]);
@@ -234,7 +247,7 @@ export function MultiItemWorkEditor({
     const selectedWorkType = workTypeOptions.find((option) => option.id === workTypeId);
     const requiredCount = selectedWorkType?.unit === "UNIT" ? 1 : scope === "TOOTH" ? 1 : scope === "TEETH" ? 2 : 0;
     if (workTypeId === "" && customWorkTypeName.trim() === "") {
-      setError("Alege tipul de lucrare pentru componentă.");
+      setError("Alege tipul de lucrare.");
       return;
     }
     if (selectedTeeth.length < requiredCount) {
@@ -294,6 +307,7 @@ export function MultiItemWorkEditor({
   }
 
   function editItem(item: DraftWorkOrderItem): void {
+    setFormOpen(true);
     setEditingId(item.id);
     setScope(item.scope);
     setSelectedTeeth([...item.teeth]);
@@ -311,6 +325,7 @@ export function MultiItemWorkEditor({
     setNotes(item.notes);
     setSelectedAddOns(item.selectedAddOns ?? []);
     setError(null);
+    onEditingChange?.(true);
   }
 
   function removeItem(id: string): void {
@@ -330,6 +345,19 @@ export function MultiItemWorkEditor({
 
   return (
     <div className="multi-item-work-editor">
+      {items.length > 0 ? <div className="multi-item-work-editor__list" aria-label="Lucrările lucrării">
+        {items.map((item, index) => {
+          const option = workTypeOptions.find((candidate) => candidate.id === item.workTypeId);
+          const color = option?.colorHex?.trim() || "#64748b";
+          return <div className="multi-item-work-editor__item" key={item.id}>
+            <div className="multi-item-work-editor__item-summary"><span className="multi-item-work-editor__item-type"><i aria-hidden="true" style={{ background: color }} />{option?.symbol ?? snapshotValue(item.customWorkTypeSnapshot) ?? "—"}</span><span>Dinți: {item.teeth.join(", ") || "Fără dinți"}</span><span>Culoare: {item.shade || "—"}</span></div>
+            <div className="multi-item-work-editor__item-actions">
+              <Button aria-label={`Editează lucrarea ${index + 1}`} disabled={disabled} onClick={() => editItem(item)} type="button" variant="outline">✎</Button>
+              <Button aria-label={`Șterge lucrarea ${index + 1}`} disabled={disabled} onClick={() => setDeleteItemId(item.id)} type="button" variant="outline">🗑</Button>
+            </div>
+          </div>;
+        })}
+      </div> : null}
       <div className="multi-item-work-editor__diagram">
         <ToothDiagram
           availableTeeth={ADULT_FDI_TEETH}
@@ -342,13 +370,14 @@ export function MultiItemWorkEditor({
           onToothToggle={toggleTooth}
           selectedTeeth={selectedTeeth}
           semanticScope={scope === "UPPER_ARCH" || scope === "LOWER_ARCH" || scope === "BOTH_ARCHES" ? scope : null}
+          shortcutsAction={<Button disabled={disabled} onClick={startAdding} type="button" variant="outline">Adaugă lucrare</Button>}
           toothColors={workTypeVisualization.toothColors}
         />
         {workTypeVisualization.legend.length > 0 ? <div className="multi-item-work-editor__legend" aria-label="Legendă tipuri de lucrări">
           {workTypeVisualization.legend.map((entry) => <span key={`${entry.symbol}-${entry.label}`}><i aria-hidden="true" style={{ background: entry.color }} />{entry.symbol} · {entry.label}</span>)}
         </div> : null}
       </div>
-      <div className="multi-item-work-editor__fields">
+      {formOpen ? <div className="multi-item-work-editor__fields">
         <FormGrid className="multi-item-work-editor__selection-grid">
           <div className="multi-item-work-editor__work-type-field">
             <span className="multi-item-work-editor__field-label">Tip lucrare</span>
@@ -395,22 +424,15 @@ export function MultiItemWorkEditor({
             </div>
           </fieldset> : null}
           {canEditTechnicalCode ? <TextInput label="Cod tehnic" value={technicalCodeNotes ?? ""} onChange={(event) => setTechnicalCodeNotes(event.target.value || null)} /> : null}
-          <FormGridFull><Textarea label="Note componentă" rows={2} value={notes ?? ""} onChange={(event) => setNotes(event.target.value || null)} /></FormGridFull>
         </FormGrid>
-      </div>
-      {error ? <p className="multi-item-work-editor__error" role="alert">{error}</p> : null}
-      <div className="multi-item-work-editor__actions">
-        <Button disabled={disabled} onClick={saveItem} type="button" variant="secondary">{editingId ? "Salvează componenta" : "Adaugă componentă"}</Button>
-        {editingId ? <Button disabled={disabled} onClick={resetDraft} type="button" variant="outline">Anulează editarea</Button> : null}
-      </div>
-      {items.length > 0 ? <div className="multi-item-work-editor__list" aria-label="Componentele lucrării">
-        {items.map((item, index) => (
-          <div className="multi-item-work-editor__item" key={item.id}>
-            <div><strong>{index + 1}. {workTypeOptions.find((option) => option.id === item.workTypeId)?.name ?? snapshotValue(item.customWorkTypeSnapshot) ?? "Tip lucrare"}</strong><span>{formatWorkTypeCategory(workTypeOptions.find((option) => option.id === item.workTypeId)?.probeFamily)} · {workTypeOptions.find((option) => option.id === item.workTypeId)?.unit === "ELEMENT" ? `Elemente: ${item.teeth.length || 1}` : workTypeOptions.find((option) => option.id === item.workTypeId)?.unit === "UNIT" ? "Bucată: 1" : ANATOMICAL_SCOPE_LABELS_RO[item.scope]}{item.teeth.length > 0 ? ` · ${item.teeth.join(", ")}` : ""}</span></div>
-            <div><Button disabled={disabled} onClick={() => editItem(item)} type="button" variant="outline">Editează</Button><Button disabled={disabled} onClick={() => removeItem(item.id)} type="button" variant="outline">Elimină</Button></div>
-          </div>
-        ))}
-      </div> : <p className="multi-item-work-editor__empty">Adaugă cel puțin o componentă.</p>}
+      </div> : null}
+      {formOpen && error ? <p className="multi-item-work-editor__error" role="alert">{error}</p> : null}
+      {formOpen ? <div className="multi-item-work-editor__actions">
+        <Button disabled={disabled} onClick={saveItem} type="button" variant="secondary">{editingId ? "Salvează" : "Adaugă"}</Button>
+        <Button disabled={disabled} onClick={resetDraft} type="button" variant="outline">Anulează</Button>
+      </div> : null}
+      {items.length === 0 ? <p className="multi-item-work-editor__empty">Adaugă cel puțin o lucrare.</p> : null}
+      <ConfirmActionModal confirmLabel="Șterge lucrarea" description="Lucrarea selectată va fi eliminată din această lucrare. Acțiunea va fi înregistrată în audit." isLoading={false} isOpen={deleteItemId !== null} onCancel={() => setDeleteItemId(null)} onConfirm={() => { if (deleteItemId) removeItem(deleteItemId); setDeleteItemId(null); }} title="Ștergi lucrarea?" />
       <Modal isOpen={workTypeModalOpen} onOpenChange={setWorkTypeModalOpen} size="lg" title="Alege tipul lucrării">
         <TextInput label="Caută tipul lucrării" value={workTypeSearch} onChange={(event) => setWorkTypeSearch(event.target.value)} />
         <div className="multi-item-work-editor__work-type-cards">

@@ -6,7 +6,7 @@ import {
   type AnatomicalScopeType,
   type ToothConnectionView,
 } from "@dental-lab/shared";
-import type { CSSProperties, MouseEvent } from "react";
+import type { CSSProperties, MouseEvent, ReactNode } from "react";
 
 import "./tooth-diagram.css";
 
@@ -32,6 +32,7 @@ export interface ToothDiagramProps {
   readonly onConnectionToggle?: (connection: { readonly toothA: AdultFdiTooth; readonly toothB: AdultFdiTooth }) => void;
   readonly onShortcut?: (teeth: readonly AdultFdiTooth[]) => void;
   readonly showShortcuts?: boolean;
+  readonly shortcutsAction?: ReactNode;
   readonly className?: string;
   readonly toothColors?: Readonly<Record<number, string>>;
 }
@@ -86,6 +87,7 @@ export function ToothDiagram({
   onConnectionToggle,
   onShortcut,
   showShortcuts = true,
+  shortcutsAction,
   className,
   toothColors = {},
 }: ToothDiagramProps) {
@@ -113,6 +115,7 @@ export function ToothDiagram({
           <ShortcutButton label="Arcada inferioară" teeth={LOWER_TEETH} onShortcut={onShortcut} />
           <ShortcutButton label="Ambele arcade" teeth={ADULT_FDI_TEETH} onShortcut={onShortcut} />
           <ShortcutButton label="Șterge selecția" teeth={[]} onShortcut={onShortcut} />
+          {shortcutsAction ? <span className="tooth-diagram__shortcuts-action">{shortcutsAction}</span> : null}
         </div>
       ) : null}
 

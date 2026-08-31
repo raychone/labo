@@ -18,6 +18,7 @@ export interface OverlayBaseProps {
   readonly closeOnBackdrop?: boolean;
   readonly closeOnEscape?: boolean;
   readonly description?: ReactNode;
+  readonly headerAction?: ReactNode;
   readonly initialFocusRef?: React.RefObject<HTMLElement | null>;
   readonly isOpen: boolean;
   readonly onOpenChange: (isOpen: boolean) => void;
@@ -88,6 +89,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal(
     closeOnBackdrop = true,
     closeOnEscape = true,
     description,
+    headerAction,
     footer,
     initialFocusRef,
     isOpen,
@@ -143,6 +145,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal(
             <h2 id={titleId}>{title}</h2>
             {description ? <p id={descriptionId}>{description}</p> : null}
           </div>
+          {headerAction}
           <button aria-label="Închide dialogul" className="dl-overlay__close" onClick={() => onOpenChange(false)} type="button">
             ×
           </button>
@@ -166,6 +169,7 @@ export const Drawer = forwardRef<HTMLElement, DrawerProps>(function Drawer(
     closeOnBackdrop = true,
     closeOnEscape = true,
     description,
+    headerAction,
     initialFocusRef,
     isOpen,
     onOpenChange,
@@ -220,6 +224,7 @@ export const Drawer = forwardRef<HTMLElement, DrawerProps>(function Drawer(
             <h2 id={titleId}>{title}</h2>
             {description ? <p id={descriptionId}>{description}</p> : null}
           </div>
+          {headerAction}
           <button aria-label="Închide panoul" className="dl-overlay__close" onClick={() => onOpenChange(false)} type="button">
             ×
           </button>
