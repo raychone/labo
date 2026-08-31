@@ -10,6 +10,7 @@ import { AuthorizationService, doesScopeSatisfy } from "../rbac/authorization.se
 export async function getVisibleWorkWhere(
   authorizationService: AuthorizationService,
   userId: string,
+  options: { readonly includeUnclaimed?: boolean } = {},
 ): Promise<Prisma.WorkOrderWhereInput> {
   const [readAll, readAssigned, readAvailable] = await Promise.all([
     authorizationService.hasPermission({ permission: "works.read_all", requiredScope: "ALL", userId }),
@@ -22,12 +23,13 @@ export async function getVisibleWorkWhere(
 
   const canReadAssigned = readAssigned.effectiveScopes.some((scope) => doesScopeSatisfy(scope, "ASSIGNED") || doesScopeSatisfy(scope, "OWN_STAGE"));
   if (!canReadAssigned && !readAvailable.allowed) return { id: "__no_visible_work__" };
+  const includeUnclaimed = options.includeUnclaimed ?? true;
 
   return {
     OR: [
       { assignedTechnicianId: userId },
       { claimedByUserId: userId },
-      ...(readAvailable.allowed ? [{ claimStatus: "UNCLAIMED" as const }] : []),
+      ...(readAvailable.allowed && includeUnclaimed ? [{ claimStatus: "UNCLAIMED" as const }] : []),
       { activeCycle: { is: { workflowExecution: { is: { currentStage: { is: { assignedUserId: userId } } } } } } },
       { activeCycle: { is: { workflowExecution: { is: { stages: { some: { assignedUserId: userId } } } } } } },
     ],

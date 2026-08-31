@@ -676,7 +676,6 @@ function ReceptionDashboard({
               <legend>Tipuri probă</legend>
               <div className="dashboard-page__probe-type-cards">
                 {selectableProbeTypes.map((type) => {
-                  const previousCount = completedProbeHistory.filter((cycle) => cycle.probeTypeNameSnapshot === type.name).length;
                   const isSelected = probeTypeIds.includes(type.id);
                   return (
                     <label className={`dashboard-page__probe-type-card${isSelected ? " dashboard-page__probe-type-card--selected" : ""}`} key={type.id}>
@@ -686,7 +685,6 @@ function ReceptionDashboard({
                         type="checkbox"
                       />
                       <span className="dashboard-page__probe-type-name">{type.name}</span>
-                      {previousCount > 0 ? <span className="dashboard-page__probe-type-history">{previousCount}x în trecut</span> : null}
                     </label>
                   );
                 })}

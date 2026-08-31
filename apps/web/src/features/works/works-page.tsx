@@ -286,13 +286,8 @@ export function WorksPage(): ReactNode {
     if (workId) {
       setSelectedWorkId(workId);
       setReturnToPreviousPage(true);
-      setSearchParams((current) => {
-        const next = new URLSearchParams(current);
-        next.delete("workId");
-        return next;
-      }, { replace: true });
     }
-  }, [searchParams, setSearchParams]);
+  }, [searchParams]);
 
   const columns = useMemo<readonly DataTableColumn<WorkSummary>[]>(() => [
     {
@@ -334,7 +329,15 @@ export function WorksPage(): ReactNode {
       id: "actions",
       renderCell: (work) => (
         <div className="works-page__row-actions">
-          <Button onClick={() => setSelectedWorkId(work.id)} size="small" variant="outline">Deschide</Button>
+          <Button onClick={() => {
+            setSelectedWorkId(work.id);
+            setReturnToPreviousPage(true);
+            setSearchParams((current) => {
+              const next = new URLSearchParams(current);
+              next.set("workId", work.id);
+              return next;
+            });
+          }} size="small" variant="outline">Deschide</Button>
         </div>
       ),
     },
@@ -1245,22 +1248,15 @@ function ProbeCycleSummary({ canSelect, isSaving, onSelect, probeTypes, work }: 
     ...(work.activeProbeCycle ? [work.activeProbeCycle] : []),
     ...(work.completedProbeCycles ?? []),
   ];
-  const configuredProbeCodes = [...new Set((work.items ?? []).flatMap((item) => item.workType?.probeTypeCodes ?? []))];
-  const completedProbeCodes = new Set((work.completedProbeCycles ?? []).flatMap((cycle) => (cycle.probeTypes ?? [cycle.probeType]).map((type) => type.code).filter((code): code is string => Boolean(code))));
-  const completedProbeCounts = getProbeTypeCounts(work.completedProbeCycles ?? []);
-  const completedProbeSummary = [...completedProbeCounts.values()].map(({ count, name }) => `${name} · ${count}x`).join(" · ");
-  const remainingProbeNames = probeTypes.filter((type) => type.code && configuredProbeCodes.includes(type.code) && !completedProbeCodes.has(type.code)).map((type) => type.name);
   return (
     <Card className="works-page__probe-accordion">
       <CardHeader>
-        <button aria-controls="technical-probes-content" aria-expanded={isExpanded} aria-label={isExpanded ? "Închide Probe tehnice" : "Deschide Probe tehnice"} className="works-page__accordion-trigger" onClick={() => setIsExpanded((expanded) => !expanded)} type="button">
-          <span className="works-page__accordion-copy"><span className="dl-card__title" role="heading" aria-level={3}>Probe tehnice</span><span className="dl-card__description">Cicluri la nivelul întregii lucrări; istoricul păstrează denumirea probei.</span></span>
-          <span aria-hidden="true" className="works-page__accordion-chevron">{isExpanded ? "⌃" : "⌄"}</span>
+        <button aria-controls="technical-probes-content" aria-expanded={isExpanded} aria-label={isExpanded ? "Închide Probe" : "Deschide Probe"} className="works-page__accordion-trigger" onClick={() => setIsExpanded((expanded) => !expanded)} type="button">
+          <span className="works-page__accordion-copy"><span className="works-page__section-title" role="heading" aria-level={2}>Probe</span></span>
+          <span aria-hidden="true" className={`works-page__accordion-chevron${isExpanded ? " is-expanded" : ""}`}>⌄</span>
         </button>
       </CardHeader>
       {isExpanded ? <CardContent id="technical-probes-content">
-        {work.activeProbeCycle ? <p className="works-page__cycle-next-stage"><strong>Proba curentă:</strong> {work.activeProbeCycle.sequence === 0 ? "inițială" : work.activeProbeCycle.sequence} · {work.activeProbeCycle.probeTypeNameSnapshot}. {remainingProbeNames.length > 0 ? `Probe rămase după aceasta: ${remainingProbeNames.join(", ")}.` : "Aceasta poate fi ultima probă; după finalizare lucrarea se arhivează."}</p> : null}
-        {completedProbeSummary ? <p className="works-page__muted"><strong>Probe efectuate în trecut:</strong> {completedProbeSummary}</p> : null}
         {cycles.length === 0 ? <p className="works-page__muted">Nu există probe canonice pentru această lucrare.</p> : cycles.map((cycle) => {
           const options = cycle.status === "ACTIVE" && cycle.probeType.isArchived && !probeTypes.some((type) => type.id === cycle.probeType.id)
             ? [cycle.probeType, ...probeTypes]
@@ -1278,7 +1274,7 @@ function ProbeCycleSummary({ canSelect, isSaving, onSelect, probeTypes, work }: 
               <MetricCell label="Introdusă la" value={formatDateTime(cycle.openedAt)} />
               <MetricCell label="Termen" value={formatDateTime(cycle.deadlineAt)} />
             </div>
-            {cycle.status === "ACTIVE" ? <ProbeTypeMultiSelect canSelect={canSelect} cycle={cycle} disabled={isSaving} onSave={(ids) => onSelect(cycle.id, ids)} options={options} probeCounts={completedProbeCounts} /> : <span className="works-page__muted">Tip probă istoric: {cycle.probeTypeNameSnapshot}</span>}
+            {cycle.status === "ACTIVE" ? <ProbeTypeMultiSelect canSelect={canSelect} cycle={cycle} disabled={isSaving} onSave={(ids) => onSelect(cycle.id, ids)} options={options} /> : <span className="works-page__muted">Tip probă istoric: {cycle.probeTypeNameSnapshot}</span>}
           </div>
           );
         })}
@@ -1299,11 +1295,11 @@ function getProbeTypeCounts(cycles: readonly ProbeCycleView[]): ReadonlyMap<stri
   return counts;
 }
 
-function ProbeTypeMultiSelect({ canSelect, cycle, disabled, onSave, options, probeCounts }: { readonly canSelect: boolean; readonly cycle: import("@dental-lab/shared").ProbeCycleView; readonly disabled: boolean; readonly onSave: (ids: readonly string[]) => void; readonly options: readonly import("@dental-lab/shared").ProbeTypeView[]; readonly probeCounts: ReadonlyMap<string, { readonly count: number; readonly name: string }> }): ReactNode {
+function ProbeTypeMultiSelect({ canSelect, cycle, disabled, onSave, options }: { readonly canSelect: boolean; readonly cycle: import("@dental-lab/shared").ProbeCycleView; readonly disabled: boolean; readonly onSave: (ids: readonly string[]) => void; readonly options: readonly import("@dental-lab/shared").ProbeTypeView[] }): ReactNode {
   const currentIds = cycle.probeTypes?.map((type) => type.id) ?? [cycle.probeType.id];
   const [selectedIds, setSelectedIds] = useState<readonly string[]>(currentIds);
   useEffect(() => setSelectedIds(currentIds), [cycle.id, cycle.probeTypeNameSnapshot]);
-  return <fieldset className="works-page__probe-type-options" disabled={!canSelect || disabled}><legend>Tipuri probă</legend><div className="works-page__probe-type-grid">{options.map((type) => { const active = selectedIds.includes(type.id); const previousCount = probeCounts.get(type.id)?.count; return <button aria-pressed={active} className={`works-page__probe-type-card${active ? " works-page__probe-type-card--active" : ""}`} key={type.id} onClick={() => setSelectedIds((current) => current.includes(type.id) ? (current.length === 1 ? current : current.filter((id) => id !== type.id)) : [...current, type.id])} type="button">{type.name}{previousCount ? <span>{previousCount}x în trecut</span> : null}</button>; })}</div><Button disabled={selectedIds.length === 0 || !canSelect || disabled} onClick={() => onSave(selectedIds)} size="small" type="button">Salvează tipurile probei</Button></fieldset>;
+  return <fieldset className="works-page__probe-type-options" disabled={!canSelect || disabled}><legend>Tipuri probă</legend><div className="works-page__probe-type-grid">{options.map((type) => { const active = selectedIds.includes(type.id); return <button aria-pressed={active} className={`works-page__probe-type-card${active ? " works-page__probe-type-card--active" : ""}`} key={type.id} onClick={() => setSelectedIds((current) => current.includes(type.id) ? (current.length === 1 ? current : current.filter((id) => id !== type.id)) : [...current, type.id])} type="button">{type.name}</button>; })}</div><Button disabled={selectedIds.length === 0 || !canSelect || disabled} onClick={() => onSave(selectedIds)} size="small" type="button">Salvează tipurile probei</Button></fieldset>;
 }
 
 function WorkCyclesSection({
@@ -1416,7 +1412,7 @@ function ExecutionNowCard({ activeCycleNumber, canEditDeadline, showLegacyExecut
     <Card>
       <CardHeader>
         <div className="works-page__detail-section-header">
-          <div><CardTitle>Detalii</CardTitle></div>
+          <div><CardTitle className="works-page__section-title">Detalii</CardTitle></div>
         </div>
       </CardHeader>
       <CardContent className="works-page__execution-now">
@@ -1743,7 +1739,7 @@ function CanonicalReceiveProbeModal({
     <FormLayout>
       <p className="works-page__muted">Ultima probă finalizată rămâne în istoric. Alege tipul și termenul explicit pentru următoarea probă.</p>
       {completedProbeSummary ? <div className="works-page__probe-history"><strong>Probe efectuate anterior</strong><span>{completedProbeSummary}</span></div> : null}
-      <fieldset className="works-page__probe-type-options"><legend>Tipuri probă nouă</legend><div className="works-page__probe-type-grid">{selectableProbeTypes.map((type) => { const active = probeTypeIds.includes(type.id); const previousCount = completedProbeCounts.get(type.id)?.count; return <button aria-pressed={active} className={`works-page__probe-type-card${active ? " works-page__probe-type-card--active" : ""}`} key={type.id} onClick={() => setProbeTypeIds((current) => current.includes(type.id) ? current.filter((id) => id !== type.id) : [...current, type.id])} type="button">{type.name}{previousCount ? <span>{previousCount}x în trecut</span> : null}</button>; })}</div></fieldset>
+      <fieldset className="works-page__probe-type-options"><legend>Tipuri probă nouă</legend><div className="works-page__probe-type-grid">{selectableProbeTypes.map((type) => { const active = probeTypeIds.includes(type.id); return <button aria-pressed={active} className={`works-page__probe-type-card${active ? " works-page__probe-type-card--active" : ""}`} key={type.id} onClick={() => setProbeTypeIds((current) => current.includes(type.id) ? current.filter((id) => id !== type.id) : [...current, type.id])} type="button">{type.name}</button>; })}</div></fieldset>
       <label className="works-page__detail-field"><span>Termen nou</span><input aria-label="Termen probă nouă" className="dl-control" onChange={(event) => setDeadlineAt(event.target.value)} type="datetime-local" value={deadlineAt} required /></label>
     </FormLayout>
   </Modal>;

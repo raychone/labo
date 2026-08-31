@@ -184,7 +184,7 @@ function CompatibilitySection({ canEditNotes, isOpen, work }: { readonly canEdit
   useEffect(() => setNotes(work.clinicalNotes ?? ""), [work.clinicalNotes, work.id]);
   return <section aria-labelledby="work-notes-title" className="works-page__compatibility-note">
     <h2 id="work-notes-title">Note lucrare</h2>
-    <Textarea aria-label="Note lucrare" disabled={!canEditNotes} label="Note" onChange={(event) => setNotes(event.target.value)} rows={4} value={notes} />
+    <Textarea aria-label="Note lucrare" disabled={!canEditNotes} onChange={(event) => setNotes(event.target.value)} rows={4} value={notes} />
     {canEditNotes ? <div className="works-page__actions"><Button disabled={updateMutation.isPending} isLoading={updateMutation.isPending} onClick={() => updateMutation.mutate({ input: { clinicalNotes: notes.trim() || null }, workOrderId: work.id })} type="button">Salvează nota</Button></div> : null}
     {updateMutation.isError ? <ErrorState title="Nota nu a fost salvată" description={getErrorMessage(updateMutation.error)} /> : null}
   </section>;

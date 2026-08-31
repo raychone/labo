@@ -106,9 +106,13 @@
   margin: 0;
 }
 
-.works-page__compatibility-note span {
+.works-page__compatibility-note > span {
   color: var(--dl-color-text-muted);
   overflow-wrap: anywhere;
+}
+
+.works-page__compatibility-note .dl-button__content {
+  color: #fff;
 }
 
 @media (min-width: 48rem) {

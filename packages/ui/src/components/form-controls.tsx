@@ -113,7 +113,9 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(function D
   );
 });
 
-export interface TextareaProps extends FieldControlProps, TextareaHTMLAttributes<HTMLTextAreaElement> {}
+export interface TextareaProps extends Omit<FieldControlProps, "label">, TextareaHTMLAttributes<HTMLTextAreaElement> {
+  readonly label?: ReactNode;
+}
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea(
   { className, error, hint, id, label, required, ...props },
@@ -128,9 +130,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
 
   return (
     <Field>
-      <FieldLabel htmlFor={controlId} isRequired={required === true}>
-        {label}
-      </FieldLabel>
+      {label !== undefined ? <FieldLabel htmlFor={controlId} isRequired={required === true}>{label}</FieldLabel> : null}
       {hasHint ? <FieldDescription id={hintId}>{hint}</FieldDescription> : null}
       <textarea
         aria-describedby={createDescribedBy(hintId, errorId, hasHint, hasError)}

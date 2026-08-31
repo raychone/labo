@@ -504,7 +504,7 @@ export class WorksService {
 
   public async listWorks(actorUserId: string, query: ListWorksQueryDto, includePricing: boolean): Promise<PaginatedWorksView> {
     const access = await this.createClaimAccess(actorUserId);
-    return this.listWorksWithWhere(query, includePricing, access, await this.getVisibleWorkWhere(actorUserId), {});
+    return this.listWorksWithWhere(query, includePricing, access, await this.getVisibleWorkWhere(actorUserId, false), {});
   }
 
   public async listAvailableForClaim(actorUserId: string, query: ListClaimWorksQueryDto): Promise<PaginatedWorksView> {
@@ -514,7 +514,7 @@ export class WorksService {
       userId: actorUserId,
     });
     const access = await this.createClaimAccess(actorUserId);
-    return this.listWorksWithWhere(query, false, access, await this.getVisibleWorkWhere(actorUserId), { claimStatus: "UNCLAIMED", technicalReadiness: null });
+    return this.listWorksWithWhere(query, false, access, await this.getVisibleWorkWhere(actorUserId, true), { claimStatus: "UNCLAIMED", technicalReadiness: null });
   }
 
   public async listMyClaimed(actorUserId: string, query: ListClaimWorksQueryDto): Promise<PaginatedWorksView> {
@@ -524,7 +524,7 @@ export class WorksService {
       userId: actorUserId,
     });
     const access = await this.createClaimAccess(actorUserId);
-    return this.listWorksWithWhere(query, false, access, await this.getVisibleWorkWhere(actorUserId), {
+    return this.listWorksWithWhere(query, false, access, await this.getVisibleWorkWhere(actorUserId, false), {
       assignedTechnicianId: actorUserId,
       claimStatus: "CLAIMED",
     });
@@ -622,8 +622,8 @@ export class WorksService {
     }, isCompletedOnTimeInWindow(workOrder, sevenDaysAgo)), createEmptyDeadlineDashboardSummary());
   }
 
-  private async getVisibleWorkWhere(userId: string): Promise<Prisma.WorkOrderWhereInput> {
-    return getVisibleWorkWhere(this.authorizationService, userId);
+  private async getVisibleWorkWhere(userId: string, includeUnclaimed = false): Promise<Prisma.WorkOrderWhereInput> {
+    return getVisibleWorkWhere(this.authorizationService, userId, { includeUnclaimed });
   }
 
   private async findVisibleWorkOrderOrThrow(userId: string, workOrderId: string): Promise<WorkOrderRecord> {
