@@ -60,6 +60,15 @@ export const appRoutes = [
     showInNavigation: true,
   },
   {
+    icon: "TS",
+    label: "Test operațional",
+    navigationGroup: "Operațional",
+    path: "/test",
+    permissionMode: "any",
+    requiredPermissions: ["works.read_all", "logistics.center.read"],
+    showInNavigation: true,
+  },
+  {
     icon: "OS",
     label: "Status TV",
     navigationGroup: "Operațional",
@@ -238,6 +247,7 @@ function shouldShowInNavigation(permissionKeys: readonly string[], route: AppRou
   if (isManagerWorkspace(permissionKeys)) {
     return route.path === "/dashboard"
       || route.path === "/status"
+      || route.path === "/test"
       || route.path === "/billing"
       || route.path === "/billing/archive"
       || route.path === "/work-settings"
@@ -257,6 +267,10 @@ function shouldShowInNavigation(permissionKeys: readonly string[], route: AppRou
     return permissionKeys.includes("logistics.center.read")
       && (permissionKeys.includes("logistics.plan") || permissionKeys.includes("pickup.create"))
       && !permissionKeys.includes("technician.workbench.read");
+  }
+
+  if (route.path === "/test") {
+    return permissionKeys.includes("logistics.center.read") && !permissionKeys.includes("technician.workbench.read");
   }
 
   // CourierRoute is the courier workflow. Keep the legacy delivery page

@@ -8,7 +8,7 @@ export const statusQueryKeys = {
   operational: (params: OperationalStatusQuery) => ["status", "operational", params] as const,
 };
 
-function appendOptional(query: URLSearchParams, key: string, value: number | string | null | undefined): void {
+function appendOptional(query: URLSearchParams, key: string, value: boolean | number | string | null | undefined): void {
   if (value !== undefined && value !== null && value !== "") {
     query.set(key, String(value));
   }
@@ -27,6 +27,9 @@ function toOperationalStatusQuery(params: OperationalStatusQuery): string {
   appendOptional(query, "deadlineState", params.deadlineState);
   appendOptional(query, "deliveryStatus", params.deliveryStatus);
   appendOptional(query, "doctorId", params.doctorId);
+  appendOptional(query, "excludeDemo", params.excludeDemo);
+  appendOptional(query, "transportHorizonDays", params.transportHorizonDays);
+  appendOptional(query, "transportOnly", params.transportOnly);
   appendOptional(query, "executionLegalEntityCode", params.executionLegalEntityCode);
   appendOptional(query, "logisticsStatus", params.logisticsStatus);
   appendOptional(query, "ownerUserId", params.ownerUserId);

@@ -32,6 +32,7 @@ export interface DataTableProps<TRow> {
   readonly getRowKey: (row: TRow) => string;
   readonly isLoading?: boolean;
   readonly onRowAction?: (row: TRow) => void;
+  readonly onRowClick?: (row: TRow) => void;
   readonly onSortChange?: (sort: DataTableSort) => void;
   readonly pagination?: DataTablePagination;
   readonly rowActionLabel?: string;
@@ -46,6 +47,7 @@ export function DataTable<TRow>({
   getRowKey,
   isLoading = false,
   onRowAction,
+  onRowClick,
   onSortChange,
   pagination,
   rowActionLabel = "Deschide",
@@ -99,8 +101,16 @@ export function DataTable<TRow>({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={getRowKey(row)}>
+              {rows.map((row) => (
+              <tr
+                className={onRowClick ? "dl-data-table__clickable-row" : undefined}
+                key={getRowKey(row)}
+                onClick={(event) => {
+                  const target = event.target;
+                  if (target instanceof HTMLElement && target.closest("button, input, select, textarea, a")) return;
+                  onRowClick?.(row);
+                }}
+              >
                 {columns.map((column) => (
                   <td className={clsx(column.align && `dl-table-cell--${column.align}`)} key={column.id}>
                     {column.renderCell(row)}

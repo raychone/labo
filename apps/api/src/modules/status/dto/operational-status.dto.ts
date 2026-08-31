@@ -1,5 +1,5 @@
 import { Transform, Type } from "class-transformer";
-import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
 
 import {
   OPERATIONAL_STATUS_DEADLINE_STATES,
@@ -33,6 +33,21 @@ function trimOptionalString(value: unknown): string | null | undefined {
 }
 
 export class OperationalStatusQueryDto {
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === "true")
+  @IsBoolean()
+  public readonly excludeDemo?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === "true")
+  @IsBoolean()
+  public readonly transportOnly?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsIn([1, 2, 3])
+  public readonly transportHorizonDays?: 1 | 2 | 3;
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()

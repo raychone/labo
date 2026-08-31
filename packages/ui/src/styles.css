@@ -1618,6 +1618,14 @@ th {
   gap: var(--dl-space-3);
 }
 
+.dl-data-table__clickable-row {
+  cursor: pointer;
+}
+
+.dl-data-table__clickable-row:hover {
+  background: color-mix(in srgb, var(--dl-color-primary) 5%, transparent);
+}
+
 .dl-data-table__scroll {
   overflow-x: auto;
 }

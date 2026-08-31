@@ -35,6 +35,11 @@ function trimRequiredString(value: unknown): string {
 
 export class LogisticsCenterQueryDto {
   @IsOptional()
+  @Transform(({ value }) => value === true || value === "true")
+  @IsBoolean()
+  public readonly excludeDemo?: boolean;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)

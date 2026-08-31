@@ -244,6 +244,7 @@ export interface LogisticsCenterQuery {
   readonly dateFrom?: string;
   readonly dateTo?: string;
   readonly doctorId?: string;
+  readonly excludeDemo?: boolean;
   readonly deliveryHorizonDays?: 1 | 2 | 3;
   readonly dueState?: LogisticsDueState;
   readonly exactDate?: string;

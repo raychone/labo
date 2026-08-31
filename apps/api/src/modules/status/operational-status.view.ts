@@ -225,6 +225,8 @@ export interface OperationalStatusRowView {
   readonly logistics: {
     readonly status: WorkLogisticsStatus | null;
   };
+  readonly requiresDelivery: boolean;
+  readonly requiresPickup: boolean;
   readonly hasCompletedPickup: boolean;
   readonly components: readonly {
     readonly colorHex: string | null;
@@ -418,6 +420,8 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
     logistics: {
       status: logisticsState?.status ?? null,
     },
+    requiresDelivery: work.requiresDelivery,
+    requiresPickup: work.requiresPickup,
     hasCompletedPickup: work.courierRouteStops.length > 0 || (work.clinic?.pickupRequests.length ?? 0) > 0,
     operationalStatus: work.status === "REGISTERED" ? "RECEPTIE" : work.status,
     patient: {

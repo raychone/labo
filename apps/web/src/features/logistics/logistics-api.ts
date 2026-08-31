@@ -78,6 +78,7 @@ function toCenterQuery(params: LogisticsCenterQuery): string {
   appendOptional(query, "dateFrom", params.dateFrom);
   appendOptional(query, "dateTo", params.dateTo);
   appendOptional(query, "doctorId", params.doctorId);
+  appendOptional(query, "excludeDemo", params.excludeDemo);
   appendOptional(query, "deliveryHorizonDays", params.deliveryHorizonDays);
   appendOptional(query, "dueState", params.dueState);
   appendOptional(query, "exactDate", params.exactDate);

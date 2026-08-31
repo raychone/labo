@@ -52,6 +52,10 @@ const StatusPage = lazy(async () => {
   const module = await import("../features/status/status-page.js");
   return { default: module.StatusPage };
 });
+const TestStatusPage = lazy(async () => {
+  const module = await import("../features/test-status/test-status-page.js");
+  return { default: module.TestStatusPage };
+});
 const StatusTvPage = lazy(async () => {
   const module = await import("../features/status/status-tv-page.js");
   return { default: module.StatusTvPage };
@@ -173,6 +177,10 @@ const router = createBrowserRouter([
       {
         element: <NonCourierRoute><PermissionRoute requiredPermissions={operationalStatusReadPermissions}><LazyRoute><StatusPage /></LazyRoute></PermissionRoute></NonCourierRoute>,
         path: "status",
+      },
+      {
+        element: <PermissionRoute requiredPermissions={["works.read_all", "logistics.center.read"]}><LazyRoute><TestStatusPage /></LazyRoute></PermissionRoute>,
+        path: "test",
       },
       {
         element: <PermissionRoute requiredPermissions={scanPermissions}><LazyRoute><WorkScanPage /></LazyRoute></PermissionRoute>,

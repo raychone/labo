@@ -1,0 +1,95 @@
+.test-status-page {
+  min-height: 100%;
+  background: var(--dl-color-background);
+}
+
+.test-status-page__layout {
+  display: grid;
+  gap: var(--dl-space-4);
+  padding-block: var(--dl-space-5);
+}
+
+.test-status-page__header {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-4);
+  justify-content: space-between;
+}
+
+.test-status-page__header h1,
+.test-status-page__header p {
+  margin: 0;
+}
+
+.test-status-page__header > div:first-child {
+  display: grid;
+  gap: var(--dl-space-1);
+}
+
+.test-status-page__header p:last-child {
+  color: var(--dl-color-text-muted);
+}
+
+.test-status-page__eyebrow {
+  color: var(--dl-color-primary);
+  font-size: var(--dl-font-size-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.test-status-page__switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-2);
+}
+
+.test-status-page__transport-kpi {
+  align-self: stretch;
+  border: 1px solid color-mix(in srgb, #0891b2 28%, var(--dl-color-border));
+  border-radius: var(--dl-radius-md);
+  background: linear-gradient(180deg, color-mix(in srgb, #0891b2 16%, var(--dl-color-surface)) 0%, color-mix(in srgb, #0891b2 12%, var(--dl-color-surface)) 100%);
+  display: grid;
+  gap: var(--dl-space-1);
+  justify-content: center;
+  min-width: 152px;
+  min-height: 72px;
+  padding: var(--dl-space-2) var(--dl-space-3);
+}
+
+.test-status-page__transport-main,
+.test-status-page__transport-windows button {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--dl-color-text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.test-status-page__transport-main {
+  display: grid;
+  gap: var(--dl-space-1);
+  text-align: center;
+}
+
+.test-status-page__transport-main span { font-weight: 700; }
+.test-status-page__transport-main strong { color: var(--dl-color-primary); font-size: 2rem; }
+
+.test-status-page__transport-windows { display: flex; gap: var(--dl-space-2); }
+.test-status-page__transport-windows button {
+  border: 1px solid var(--dl-color-border);
+  border-radius: var(--dl-radius-sm);
+  min-width: 0;
+  padding: 0.25rem 0.5rem;
+}
+.test-status-page__transport-windows { justify-content: center; }
+.test-status-page__transport-windows button:hover,
+.test-status-page__transport-main:hover { color: var(--dl-color-primary); }
+
+@media (max-width: 719px) {
+  .test-status-page__switcher,
+  .test-status-page__switcher button {
+    width: 100%;
+  }
+}

@@ -10,6 +10,7 @@
     "prisma:db:reset-demo": "dotenv -e ../../.env -- env -u ELECTRON_RUN_AS_NODE ALLOW_DEMO_SEED=true tsx prisma/reset-demo.ts",
     "prisma:db:seed:demo": "dotenv -e ../../.env -- env -u ELECTRON_RUN_AS_NODE ALLOW_DEMO_SEED=true tsx prisma/seed-demo.ts",
     "prisma:db:seed:technical": "dotenv -e ../../.env -- env -u ELECTRON_RUN_AS_NODE tsx prisma/seed-technical.ts",
+    "prisma:db:clean-demo": "dotenv -e ../../.env -- env -u ELECTRON_RUN_AS_NODE tsx prisma/clean-demo-data.ts",
     "prisma:generate": "dotenv -e ../../.env -- prisma generate",
     "prisma:generate:deploy": "prisma generate",
     "prisma:migrate:dev": "dotenv -e ../../.env -- prisma migrate dev",

@@ -22,6 +22,9 @@ export interface OperationalStatusQuery {
   readonly deadlineState?: DeadlineVisualState;
   readonly deliveryStatus?: DeliveryStatus;
   readonly doctorId?: string | null;
+  readonly excludeDemo?: boolean;
+  readonly transportHorizonDays?: 1 | 2 | 3;
+  readonly transportOnly?: boolean;
   readonly executionLegalEntityCode?: LegalEntityCode;
   readonly logisticsStatus?: LogisticsStatus;
   readonly ownerUserId?: string | null;
@@ -101,6 +104,8 @@ export interface OperationalStatusRow {
   readonly logistics: {
     readonly status: LogisticsStatus | null;
   };
+  readonly requiresDelivery?: boolean;
+  readonly requiresPickup?: boolean;
   /** True when a courier pickup stop was completed for this work. */
   readonly hasCompletedPickup?: boolean;
   readonly components: readonly {

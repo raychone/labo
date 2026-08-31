@@ -1124,6 +1124,9 @@ export class LogisticsService {
         : undefined;
     const horizonRange = toHorizonDateRange(horizonDays);
     const and: Prisma.WorkOrderWhereInput[] = [];
+    if (query.excludeDemo) {
+      and.push({ id: { not: { startsWith: "demo_work_" } } });
+    }
     if (query.logisticsStatus) {
       and.push({ activeCycle: { is: { logisticsState: { is: { status: query.logisticsStatus } } } } });
     }

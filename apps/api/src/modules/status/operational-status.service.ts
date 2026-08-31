@@ -18,6 +18,18 @@ import {
   type OperationalStatusRowView,
 } from "./operational-status.view.js";
 
+function isWithinTransportHorizon(value: string | null, days: 1 | 2 | 3): boolean {
+  if (!value) {
+    return false;
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(value);
+  due.setHours(0, 0, 0, 0);
+  const difference = Math.ceil((due.getTime() - today.getTime()) / 86_400_000);
+  return difference >= 0 && difference <= days;
+}
+
 interface WorkAccess {
   readonly canReadAll: boolean;
   readonly readAssignedScopes: readonly PermissionScope[];
@@ -46,10 +58,11 @@ export class OperationalStatusService {
     const rows = scannedRows
       .map((work) => toOperationalStatusRow(work, now))
       .filter((row) => !(row.technicalReadiness === "PROBE_READY" && !row.hasCompletedPickup && (row.logistics.status === "DELIVERED" || row.delivery.status === "DELIVERED")))
+      .filter((row) => !query.transportHorizonDays || isWithinTransportHorizon(row.deadline.effectiveDueAt, query.transportHorizonDays))
       .filter((row) => this.matchesComputedFilters(row, query));
     const counters = createOperationalStatusCounters(rows);
     const tabRows = rows
-      .filter((row) => matchesOperationalStatusTab(row, query.tab))
+      .filter((row) => query.transportOnly || matchesOperationalStatusTab(row, query.tab))
       .sort((left, right) => compareOperationalStatusRows(left, right, query.sortBy, query.sortDirection));
     const total = tabRows.length;
     const page = query.page;
@@ -92,6 +105,8 @@ export class OperationalStatusService {
       AND: [
         this.toVisibilityWhere(actor, access),
         {
+          ...(query.excludeDemo ? { id: { not: { startsWith: "demo_work_" } } } : {}),
+          ...(query.transportOnly ? { OR: [{ requiresDelivery: true }, { requiresPickup: true }, { technicalReadiness: { in: ["PROBE_READY", "FINAL_READY"] } }] } : {}),
           ...(query.clinicId ? { clinicId: query.clinicId } : {}),
           ...(query.doctorId ? { doctorId: query.doctorId } : {}),
           ...(query.patientId ? { patientId: query.patientId } : {}),

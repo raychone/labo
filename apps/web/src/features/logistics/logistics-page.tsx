@@ -158,14 +158,18 @@ function isReadyForLogisticsRoute(item: LogisticsCenterItem): boolean {
     || item.logisticsActionReasons.includes("READY_FOR_FINAL_DELIVERY");
 }
 
-export function LogisticsPage(): ReactNode {
+export function LogisticsPage({ initialRouteQueueWindow, excludeDemo = false }: { readonly initialRouteQueueWindow?: 1 | 2 | 3; readonly excludeDemo?: boolean } = {}): ReactNode {
   const navigate = useNavigate();
   const toast = useToast();
-  const [query, setQuery] = useState<LogisticsCenterQuery>(defaultQuery);
+  const [query, setQuery] = useState<LogisticsCenterQuery>(() => ({
+    ...defaultQuery,
+    ...(initialRouteQueueWindow ? { deliveryHorizonDays: initialRouteQueueWindow, pickupHorizonDays: initialRouteQueueWindow } : {}),
+    ...(excludeDemo ? { excludeDemo: true } : {}),
+  }));
   const [isCreateWorkOpen, setCreateWorkOpen] = useState(false);
   const [isPickupModalOpen, setPickupModalOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [routeQueueOnly, setRouteQueueOnly] = useState(false);
+  const [routeQueueOnly, setRouteQueueOnly] = useState(Boolean(initialRouteQueueWindow));
   const [editingPickup, setEditingPickup] = useState<PickupRequestView | null>(null);
   const [reworkItem, setReworkItem] = useState<LogisticsCenterItem | null>(null);
   const queryClient = useQueryClient();

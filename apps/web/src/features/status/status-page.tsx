@@ -14,6 +14,7 @@ import {
   type DeadlineVisualState,
   type DeliveryStatus,
   type LogisticsStatus,
+  type LogisticsMarker,
   type OperationalStatusQuery,
   type OperationalStatusRow,
   type OperationalStatusSortDirection,
@@ -41,15 +42,18 @@ import {
   type DataTableSort,
   type SelectOption,
 } from "@dental-lab/ui";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState, type ReactNode } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
 import { fetchClinicOptions, fetchDoctorOptions } from "../clinics/clinics-api.js";
 import { fetchPatientOptions } from "../patients/patients-api.js";
 import { useTechnicianOptions } from "../technician-workbench/technician-workbench-api.js";
 import { useWorkTypeOptions } from "../work-types/work-types-api.js";
+import { fetchWork, setManualWorkDeadline, useSetWorkStatus } from "../works/works-api.js";
+import { useUpdateLogisticsWorkActions } from "../logistics/logistics-api.js";
+import { displayWorkTypeSymbolOrName } from "../works/work-type-symbols.js";
 import { hasPermission } from "../users/users-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
 import { useMediaQuery } from "../../lib/use-media-query.js";
@@ -187,8 +191,12 @@ function formatDateTime(value: string | null): string {
   return value ? new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "Fără termen";
 }
 
-function getWorkTypeCompactLabel(workType: OperationalStatusRow["workType"]): string {
-  return workType.symbol.trim() || workType.name;
+function getWorkTypeCompactLabel(workType: OperationalStatusRow["workType"], components?: OperationalStatusRow["components"]): string {
+  const mappedSymbol = displayWorkTypeSymbolOrName(workType.name);
+  if (mappedSymbol !== workType.name) return mappedSymbol;
+  if (workType.symbol.trim() && !workType.symbol.startsWith("DEMO-WT-")) return workType.symbol;
+  const symbols = (components ?? []).map((component) => component.symbol.trim()).filter(Boolean);
+  return symbols.length > 0 ? symbols.join(" · ") : workType.name;
 }
 
 function getClinicDoctorDisplay(row: OperationalStatusRow): string {
@@ -357,24 +365,33 @@ const realLabSheetStatusOptions: readonly SelectOption[] = [
 const sortOptions: readonly SelectOption[] = OPERATIONAL_STATUS_SORT_FIELDS.map((field) => ({ label: sortLabels[field], value: field }));
 const operationalStateOptions: readonly SelectOption[] = OPERATIONAL_STATUS_TABS.map((tab) => ({ label: tabLabels[tab], value: tab }));
 
-export function StatusPage(): ReactNode {
+export function StatusPage({ allowLogisticsRead = false, experimental = false, onTabChange, showTransportKpi = true, transportFilter, transportKpi }: { readonly allowLogisticsRead?: boolean; readonly experimental?: boolean; readonly onTabChange?: (tab: OperationalStatusTab) => void; readonly showTransportKpi?: boolean; readonly transportFilter?: 1 | 2 | 3 | null; readonly transportKpi?: ReactNode } = {}): ReactNode {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const query = useMemo(() => readQuery(searchParams), [searchParams]);
   const currentStageName = searchParams.get("currentStageName") ?? "";
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState<OperationalStatusRow | null>(null);
   const isCompactMobile = useMediaQuery("(max-width: 719px)");
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
-  const canReadStatus = hasPermission(permissionsQuery.data, "works.read_all") || hasPermission(permissionsQuery.data, "works.read_assigned");
+  const canReadStatus = hasPermission(permissionsQuery.data, "works.read_all")
+    || hasPermission(permissionsQuery.data, "works.read_assigned")
+    || (allowLogisticsRead && hasPermission(permissionsQuery.data, "logistics.center.read"));
   const canReadPricingOptions = hasPermission(permissionsQuery.data, "pricing.read");
   const canReadOptions = canReadStatus;
-  const statusQuery = useOperationalStatus(query, canReadStatus, { refetchIntervalMs: 5_000 });
+  const baseStatusQuery = useOperationalStatus(experimental ? { ...query, excludeDemo: true } : query, canReadStatus, { refetchIntervalMs: 5_000 });
+  const transportStatusQuery = useOperationalStatus(
+    { ...query, excludeDemo: true, transportOnly: true, ...(transportFilter === null || transportFilter === undefined ? {} : { transportHorizonDays: transportFilter }) },
+    canReadStatus && experimental && transportFilter !== undefined,
+    { refetchIntervalMs: 5_000 },
+  );
+  const statusQuery = transportFilter !== undefined ? transportStatusQuery : baseStatusQuery;
   const clinicsQuery = useQuery({ enabled: canReadOptions, queryFn: fetchClinicOptions, queryKey: ["clinics", "options"], retry: false });
   const doctorsQuery = useQuery({ enabled: canReadOptions, queryFn: () => fetchDoctorOptions(query.clinicId ?? undefined), queryKey: ["doctors", "options", "status", query.clinicId], retry: false });
   const patientsQuery = useQuery({ enabled: canReadOptions, queryFn: () => fetchPatientOptions(query.search ?? ""), queryKey: ["patients", "options", "status", query.search ?? ""], retry: false });
   const techniciansQuery = useTechnicianOptions(canReadOptions);
   const workTypesQuery = useWorkTypeOptions(canReadOptions && canReadPricingOptions);
-  const rows = statusQuery.data?.items ?? [];
+  const rows = (statusQuery.data?.items ?? []).filter((row) => !experimental || !row.id.startsWith("demo_work_"));
   const stageOptions = useMemo(() => toStageFilterOptions(rows), [rows]);
   const currentRowWorkTypeOptions = useMemo(() => {
     const workTypes = new Map<string, string>();
@@ -402,17 +419,14 @@ export function StatusPage(): ReactNode {
       header: "Pacient",
       id: "patientName",
       isSortable: true,
-      renderCell: (row) => <strong>{row.patient.name}</strong>,
+      renderCell: (row) => experimental
+        ? <Link className="status-page__work-link" to={`/works?workId=${encodeURIComponent(row.id)}`}><strong>{row.patient.name}</strong></Link>
+        : <strong>{row.patient.name}</strong>,
     },
     {
       header: "Tip lucrare",
       id: "workType",
-      renderCell: (row) => <BadgePill label={getWorkTypeCompactLabel(row.workType)} tone="neutral" />,
-    },
-    {
-      header: "Culoare",
-      id: "shade",
-      renderCell: (row) => row.shade ?? "-",
+      renderCell: (row) => <BadgePill label={getWorkTypeCompactLabel(row.workType, row.components)} tone="neutral" />,
     },
     {
       header: "Tehnician",
@@ -433,29 +447,29 @@ export function StatusPage(): ReactNode {
       header: "Termen",
       id: "effectiveDueAt",
       isSortable: true,
-      renderCell: getDeadlineDisplay,
+      renderCell: (row) => experimental ? <TestDeadlineAction row={row} /> : getDeadlineDisplay(row),
     },
     {
       header: "Stare",
       id: "state",
       renderCell: (row) => (
-        <BadgePill
-          label={toOperationalLabel(row)}
-          tone={toStatusVariant(row) === "closed" ? "success" : toStatusVariant(row) === "production" ? "info" : toStatusVariant(row) === "rejected" ? "danger" : toStatusVariant(row) === "awaiting" ? "warning" : "neutral"}
-        />
+        experimental ? <TestStatusAction row={row} /> : <BadgePill
+            label={toOperationalLabel(row)}
+            tone={toStatusVariant(row) === "closed" ? "success" : toStatusVariant(row) === "production" ? "info" : toStatusVariant(row) === "rejected" ? "danger" : toStatusVariant(row) === "awaiting" ? "warning" : "neutral"}
+          />
       ),
     },
     {
       header: "Alerte",
       id: "alerts",
-      renderCell: () => "-",
+      renderCell: (row) => experimental ? <TestLogisticsActions row={row} /> : "-",
     },
     {
       header: "Livrare/Ridicare",
       id: "deliveryPickup",
-      renderCell: getRouteMarker,
+      renderCell: (row) => experimental ? <TestTransportActions row={row} /> : getRouteMarker(row),
     },
-  ], []);
+  ], [experimental, navigate]);
 
   if (permissionsQuery.isLoading) {
     return <PageState><LoadingState text="Se încarcă statusul operațional" /></PageState>;
@@ -478,12 +492,12 @@ export function StatusPage(): ReactNode {
 
         <div className="status-page__tabs" role="list" aria-label="Status lucrări">
           {OPERATIONAL_STATUS_TABS.map((tab) => {
-            const count = statusQuery.data?.counters.find((counter) => counter.tab === tab)?.count ?? 0;
+            const count = baseStatusQuery.data?.counters.find((counter) => counter.tab === tab)?.count ?? 0;
             return (
               <button
                 aria-pressed={query.tab === tab}
                 key={tab}
-                onClick={() => patchQuery({ tab })}
+                onClick={() => { onTabChange?.(tab); patchQuery({ tab }); }}
                 type="button"
               >
                 <span>{tabLabels[tab]}</span>
@@ -491,6 +505,7 @@ export function StatusPage(): ReactNode {
               </button>
             );
           })}
+          {experimental && showTransportKpi ? transportKpi : null}
         </div>
 
         <Card>
@@ -650,6 +665,7 @@ export function StatusPage(): ReactNode {
                   }}
                   rows={visibleRows}
                   sort={toDataSort(query)}
+                  {...(experimental ? { onRowClick: (row: OperationalStatusRow) => navigate(`/works?workId=${encodeURIComponent(row.id)}`) } : {})}
                 />
               </div>
             ) : null}
@@ -764,6 +780,90 @@ function Metric({ label, value }: { readonly label: string; readonly value: Reac
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
+  );
+}
+
+function toLocalDateTimeInput(value: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function TestDeadlineAction({ row }: { readonly row: OperationalStatusRow }): ReactNode {
+  const queryClient = useQueryClient();
+  const [value, setValue] = useState(() => toLocalDateTimeInput(row.deadline.effectiveDueAt));
+  const mutation = useMutation({
+    mutationFn: async (nextValue: string) => {
+      const work = await fetchWork(row.id);
+      return setManualWorkDeadline(row.id, new Date(nextValue).toISOString(), work.deadline.revision, true);
+    },
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["status"] }); },
+  });
+  return (
+    <span className="status-page__test-deadline">
+      <input aria-label={`Termen ${row.workCode}`} disabled={mutation.isPending} onBlur={() => { if (value) mutation.mutate(value); }} onChange={(event) => setValue(event.target.value)} type="datetime-local" value={value} />
+      {mutation.isError ? <small>{getErrorMessage(mutation.error)}</small> : null}
+    </span>
+  );
+}
+
+function TestStatusAction({ row }: { readonly row: OperationalStatusRow }): ReactNode {
+  const update = useSetWorkStatus();
+  return (
+    <select
+      aria-label={`Stare ${row.workCode}`}
+      defaultValue={row.operationalStatus}
+      disabled={update.isPending}
+      onChange={(event) => update.mutate({ workOrderId: row.id, input: { status: event.target.value as Exclude<typeof row.operationalStatus, "REGISTERED"> } })}
+    >
+      <option value="RECEPTIE">Recepție</option>
+      <option value="IN_LUCRU">În lucru</option>
+      <option value="IN_ASTEPTARE">În așteptare</option>
+      <option value="FINALIZATA">Finalizată</option>
+    </select>
+  );
+}
+
+function TestLogisticsActions({ row }: { readonly row: OperationalStatusRow }): ReactNode {
+  const [marker, setMarker] = useState<LogisticsMarker | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const update = useUpdateLogisticsWorkActions();
+  const markers: readonly (LogisticsMarker | null)[] = [null, "MARKER_1", "MARKER_2", "MARKER_3", "MARKER_4", "MARKER_5"];
+  return (
+    <span className="status-page__test-actions">
+      <button
+        aria-expanded={pickerOpen}
+        aria-label={`Alege culoarea alertei pentru ${row.workCode}`}
+        className={`status-page__alert-dot${marker ? ` status-page__alert-dot--${marker.toLowerCase()}` : ""}`}
+        disabled={update.isPending}
+        onClick={() => setPickerOpen((current) => !current)}
+        type="button"
+      />
+      {pickerOpen ? (
+        <span className="status-page__alert-picker" aria-label="Culori alertă">
+          {markers.map((option, index) => (
+            <button
+              aria-label={option === null ? "Deselectează culoarea alertei" : `Alege culoarea ${option.slice(-1)}`}
+              className={`status-page__alert-choice ${option === null ? "status-page__alert-choice--none" : `status-page__alert-choice--${option.toLowerCase()}`}${marker === option ? " is-selected" : ""}`}
+              key={option ?? `none-${index}`}
+              onClick={() => { setMarker(option); setPickerOpen(false); update.mutate({ workOrderId: row.id, input: { marker: option } }); }}
+              type="button"
+            />
+          ))}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function TestTransportActions({ row }: { readonly row: OperationalStatusRow }): ReactNode {
+  const update = useUpdateLogisticsWorkActions();
+  return (
+    <span className="status-page__test-actions">
+      {row.requiresDelivery === true || row.technicalReadiness === "PROBE_READY" || row.operationalStatus === "FINALIZATA" ? <Button disabled={update.isPending} onClick={() => update.mutate({ workOrderId: row.id, input: { requiresDelivery: true } })} size="small" variant="outline">Livrare</Button> : null}
+      {row.requiresPickup === true ? <Button disabled={update.isPending} onClick={() => update.mutate({ workOrderId: row.id, input: { requiresPickup: true } })} size="small" variant="outline">Ridicare</Button> : null}
+    </span>
   );
 }
 
