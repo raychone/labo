@@ -642,6 +642,13 @@ export class WorksService {
   }
 
   public async listWorkTypeFormOptions(actorUserId?: string): Promise<readonly WorkTypeFormOptionView[]> {
+    if (actorUserId !== undefined) {
+      const [canCreate, canUpdate] = await Promise.all([
+        this.authorizationService.hasPermission({ permission: "works.create", requiredScope: "ALL", userId: actorUserId }),
+        this.authorizationService.hasPermission({ permission: "works.update", userId: actorUserId }),
+      ]);
+      if (!canCreate.allowed && !canUpdate.allowed) throw new ForbiddenException("Permission denied.");
+    }
     const workTypes = await this.prisma.workType.findMany({
       orderBy: {
         name: "asc",
@@ -664,7 +671,12 @@ export class WorksService {
         // the older creative/technical work-type catalog.  The latter may be
         // needed for historical records, but must not produce duplicate or
         // invented choices in the reception/logistics work form.
-        id: { startsWith: "technical_pricing_work_type_" },
+        OR: [
+          { id: { startsWith: "technical_pricing_work_type_" } },
+          // Compatibility with local databases seeded before the catalog IDs
+          // became canonical.
+          { symbol: { startsWith: "PRICE-" } },
+        ],
       },
     });
 

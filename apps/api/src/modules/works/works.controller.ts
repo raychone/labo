@@ -157,9 +157,9 @@ export class WorksController {
   }
 
   @Get("work-type-options")
-  // This catalog is also needed when a technician edits an assigned work.
-  // It is read-only; requiring works.create incorrectly returned 403 for technicians.
-  @RequirePermission("works.update", "ASSIGNED")
+  // The read-only catalog is needed both by reception when creating a work and
+  // by technicians when editing an assigned work. The service accepts either
+  // permission without granting the other capability.
   public listWorkTypeFormOptions(@CurrentUser() actor: AuthenticatedUser) {
     return this.worksService.listWorkTypeFormOptions(actor.id);
   }
