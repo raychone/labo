@@ -3,41 +3,52 @@ import { useState, type ReactNode } from "react";
 import type { OperationalStatusQuery } from "@dental-lab/shared";
 import { Button } from "@dental-lab/ui";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router";
 
-import { LogisticsPage } from "../logistics/logistics-page.js";
+import { PickupRequestModal } from "../logistics/logistics-page.js";
 import { fetchPermissions } from "../auth/auth-api.js";
 import { StatusPage } from "../status/status-page.js";
 import { useOperationalStatus } from "../status/status-api.js";
 import { hasPermission } from "../users/users-api.js";
+import { StatusProbeModal } from "./status-probe-modal.js";
 
 import "./test-status-page.css";
 
-type TestView = "status" | "logistics";
-
-/** Experimental workspace; legacy routes remain unchanged and available. */
+/** Operational workspace now used by /status; /test remains a temporary compatibility URL. */
 export function TestStatusPage(): ReactNode {
-  const [view, setView] = useState<TestView>("status");
+  const navigate = useNavigate();
+  const [pickupOpen, setPickupOpen] = useState(false);
+  const [probeOpen, setProbeOpen] = useState(false);
   const [transportFilter, setTransportFilter] = useState<1 | 2 | 3 | null | undefined>();
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   // Logistics has the operational marker permission; manager is identified by audit access.
   // Reception and technicians may still see the work register, but not transport KPI data.
   const canSeeTransportKpi = hasPermission(permissionsQuery.data, "logistics.delivery_marker.update") || hasPermission(permissionsQuery.data, "audit.read");
+  // Technicians keep scan access from their own workbench, but the shared
+  // status header must not expose the scan action to them.
+  const canScanWork = hasPermission(permissionsQuery.data, "scan.use")
+    && !hasPermission(permissionsQuery.data, "technician.workbench.read");
+  const canCreateWork = hasPermission(permissionsQuery.data, "works.create");
+  const canCreatePickup = hasPermission(permissionsQuery.data, "pickup.create");
+  const canCreateProbe = hasPermission(permissionsQuery.data, "cycles.create_next");
 
   return (
     <main className="test-status-page">
       <section className="dl-container test-status-page__layout" aria-labelledby="test-status-title">
         <header className="test-status-page__header">
           <div>
-            <p className="test-status-page__eyebrow">Spațiu experimental</p>
             <h1 id="test-status-title">Centru operațional</h1>
-            <p>Status, termene, alerte și livrare/ridicare într-un singur spațiu. Paginile legacy rămân disponibile separat.</p>
-          </div>
-          <div className="test-status-page__switcher" aria-label="Zona operațională">
-            <Button aria-pressed={view === "status"} onClick={() => { setTransportFilter(undefined); setView("status"); }} variant={view === "status" ? "primary" : "secondary"}>Status</Button>
-            <Button aria-pressed={view === "logistics"} onClick={() => setView("logistics")} variant={view === "logistics" ? "primary" : "secondary"}>Livrare/Ridicare</Button>
           </div>
         </header>
-        {view === "status" ? <StatusPage allowLogisticsRead experimental onTabChange={() => setTransportFilter(undefined)} showTransportKpi={canSeeTransportKpi} {...(transportFilter === undefined ? {} : { transportFilter })} transportKpi={<TestTransportKpi onOpen={(days) => { setTransportFilter(days ?? null); setView("status"); }} />} /> : <LogisticsPage excludeDemo />}
+        <div className="test-status-page__actions" aria-label="Acțiuni rapide">
+          {canScanWork ? <Button onClick={() => navigate("/scan")} variant="outline">Scanează lucrare</Button> : null}
+          {canCreateWork ? <Button onClick={() => navigate("/works?create=1&returnTo=%2Fstatus")} variant="primary">Lucrare nouă</Button> : null}
+          {canCreatePickup ? <Button onClick={() => setPickupOpen(true)} variant="primary">Ridicare nouă</Button> : null}
+          {canCreateProbe ? <Button onClick={() => setProbeOpen(true)} variant="outline">Probe</Button> : null}
+        </div>
+        <StatusPage allowLogisticsRead experimental onTabChange={() => setTransportFilter(undefined)} showTransportKpi={canSeeTransportKpi} {...(transportFilter === undefined ? {} : { transportFilter })} transportKpi={<TestTransportKpi onOpen={(days) => setTransportFilter(days ?? null)} />} />
+        <StatusProbeModal isOpen={probeOpen} onOpenChange={setProbeOpen} />
+        <PickupRequestModal editingPickup={null} isOpen={pickupOpen} onOpenChange={setPickupOpen} />
       </section>
     </main>
   );

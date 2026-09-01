@@ -33,7 +33,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { useEffect, useId, useMemo, useState, type ChangeEvent, type DragEvent, type FormEvent, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
 import { fetchClinic, fetchClinicOptions, fetchDoctorOptions } from "../clinics/clinics-api.js";
@@ -158,8 +158,9 @@ function isReadyForLogisticsRoute(item: LogisticsCenterItem): boolean {
     || item.logisticsActionReasons.includes("READY_FOR_FINAL_DELIVERY");
 }
 
-export function LogisticsPage({ initialRouteQueueWindow, excludeDemo = false }: { readonly initialRouteQueueWindow?: 1 | 2 | 3; readonly excludeDemo?: boolean } = {}): ReactNode {
+export function LogisticsPage({ initialCreatePickup = false, initialRouteQueueWindow, excludeDemo = false, showHeaderActions = true }: { readonly initialCreatePickup?: boolean; readonly initialRouteQueueWindow?: 1 | 2 | 3; readonly excludeDemo?: boolean; readonly showHeaderActions?: boolean } = {}): ReactNode {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToast();
   const [query, setQuery] = useState<LogisticsCenterQuery>(() => ({
     ...defaultQuery,
@@ -182,6 +183,21 @@ export function LogisticsPage({ initialRouteQueueWindow, excludeDemo = false }: 
   const canUpdatePickup = hasPermission(permissionsQuery.data, "pickup.update");
   const canCancelPickup = hasPermission(permissionsQuery.data, "pickup.cancel");
   const canReadRoutes = hasPermission(permissionsQuery.data, "routes.read");
+  useEffect(() => {
+    if (searchParams.get("createPickup") !== "1" || !canCreatePickup) return;
+    setEditingPickup(null);
+    setPickupModalOpen(true);
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("createPickup");
+      return next;
+    }, { replace: true });
+  }, [canCreatePickup, searchParams, setSearchParams]);
+  useEffect(() => {
+    if (!initialCreatePickup || !canCreatePickup) return;
+    setEditingPickup(null);
+    setPickupModalOpen(true);
+  }, [canCreatePickup, initialCreatePickup]);
   // The delivery and pickup KPI cards open the same operational queue. The
   // row itself determines whether its next action is delivery or pickup.
   const centerQuery = useLogisticsCenter(
@@ -295,11 +311,11 @@ export function LogisticsPage({ initialRouteQueueWindow, excludeDemo = false }: 
             <h1 id="logistics-title">Centru operațional</h1>
             <p>{new Intl.DateTimeFormat("ro-RO", { dateStyle: "full" }).format(new Date())}</p>
           </div>
-          <div className="logistics-page__header-actions">
+          {showHeaderActions ? <div className="logistics-page__header-actions">
             <Button onClick={() => navigate("/scan")} variant="outline">Scanează lucrare</Button>
             {canCreateWork ? <Button disabled={!canUploadFiles} onClick={() => setCreateWorkOpen(true)}>Lucrare nouă</Button> : null}
             {canCreatePickup ? <Button onClick={() => { setEditingPickup(null); setPickupModalOpen(true); }}>Ridicare nouă</Button> : null}
-          </div>
+          </div> : null}
         </header>
 
         <div className="logistics-page__summary">
@@ -627,7 +643,7 @@ function PickupRouteRow({
   );
 }
 
-function PickupRequestModal({
+export function PickupRequestModal({
   editingPickup,
   isOpen,
   onOpenChange,

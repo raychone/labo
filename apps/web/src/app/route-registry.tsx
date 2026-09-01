@@ -66,7 +66,7 @@ export const appRoutes = [
     path: "/test",
     permissionMode: "any",
     requiredPermissions: ["works.read_all", "logistics.center.read"],
-    showInNavigation: true,
+    showInNavigation: false,
   },
   {
     icon: "OS",
@@ -247,7 +247,6 @@ function shouldShowInNavigation(permissionKeys: readonly string[], route: AppRou
   if (isManagerWorkspace(permissionKeys)) {
     return route.path === "/dashboard"
       || route.path === "/status"
-      || route.path === "/test"
       || route.path === "/billing"
       || route.path === "/billing/archive"
       || route.path === "/work-settings"
@@ -264,13 +263,10 @@ function shouldShowInNavigation(permissionKeys: readonly string[], route: AppRou
   }
 
   if (route.path === "/logistics") {
-    return permissionKeys.includes("logistics.center.read")
-      && (permissionKeys.includes("logistics.plan") || permissionKeys.includes("pickup.create"))
-      && !permissionKeys.includes("technician.workbench.read");
-  }
-
-  if (route.path === "/test") {
-    return permissionKeys.includes("logistics.center.read") && !permissionKeys.includes("technician.workbench.read");
+    // The operational workspace at /status replaces the legacy logistics
+    // center in the primary navigation. Keep /logistics addressable for
+    // compatibility while the remaining legacy flows are retired.
+    return false;
   }
 
   // CourierRoute is the courier workflow. Keep the legacy delivery page

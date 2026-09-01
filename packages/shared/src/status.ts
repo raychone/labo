@@ -6,7 +6,7 @@ import { FINAL_WORK_STATUSES, type WorkClaimStatus, type WorkPriority } from "./
 import type { RealLabSheetOperationalStatus } from "./work-forms.js";
 import type { WorkflowExecutionStatus, WorkStageExecutionStatus } from "./workflow-execution.js";
 
-export const OPERATIONAL_STATUS_TABS = ["TODAY", "IN_PROGRESS", "AVAILABLE", "LATE", "AT_CLINIC", "RETURNED", "COMPLETED"] as const;
+export const OPERATIONAL_STATUS_TABS = ["ALL", "TODAY", "IN_PROGRESS", "AVAILABLE", "LATE", "AT_CLINIC", "RETURNED", "COMPLETED"] as const;
 export const OPERATIONAL_STATUS_SORT_FIELDS = ["effectiveDueAt", "priority", "createdAt", "updatedAt", "workCode", "clinicName", "patientName"] as const;
 export const OPERATIONAL_STATUS_SORT_DIRECTIONS = ["asc", "desc"] as const;
 export const OPERATIONAL_STATUS_DEFAULT_PAGE_SIZE = 25;

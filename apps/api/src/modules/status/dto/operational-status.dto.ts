@@ -69,7 +69,7 @@ export class OperationalStatusQueryDto {
 
   @IsOptional()
   @IsIn(OPERATIONAL_STATUS_TABS)
-  public readonly tab: OperationalStatusTab = "TODAY";
+  public readonly tab: OperationalStatusTab = "ALL";
 
   @IsOptional()
   @Transform(({ value }) => trimOptionalString(value))

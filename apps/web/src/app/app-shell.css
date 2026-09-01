@@ -240,14 +240,36 @@
 }
 
 .app-shell__nav-icon {
-  border: var(--dl-border-width) solid currentColor;
-  border-radius: var(--dl-radius-sm);
+  align-items: center;
+  background: color-mix(in srgb, currentColor 12%, var(--dl-color-surface));
+  border-radius: .7rem;
   display: inline-grid;
-  font-size: var(--dl-font-size-caption);
-  min-height: 1.75rem;
-  min-width: 1.75rem;
+  height: 1.75rem;
+  width: 1.75rem;
   place-items: center;
 }
+
+.app-shell__nav-svg {
+  height: 1.4rem;
+  width: 1.4rem;
+}
+
+.app-shell__nav-icon:has([data-icon="DB"]),
+.app-shell__nav-icon:has([data-icon="WO"]),
+.app-shell__nav-icon:has([data-icon="OS"]) { color: #0f766e; }
+.app-shell__nav-icon:has([data-icon="QR"]),
+.app-shell__nav-icon:has([data-icon="AT"]),
+.app-shell__nav-icon:has([data-icon="TE"]) { color: #2563eb; }
+.app-shell__nav-icon:has([data-icon="LO"]),
+.app-shell__nav-icon:has([data-icon="TR"]),
+.app-shell__nav-icon:has([data-icon="TM"]),
+.app-shell__nav-icon:has([data-icon="LV"]) { color: #ea580c; }
+.app-shell__nav-icon:has([data-icon="PA"]),
+.app-shell__nav-icon:has([data-icon="CL"]),
+.app-shell__nav-icon:has([data-icon="US"]) { color: #7c3aed; }
+.app-shell__nav-icon:has([data-icon="BI"]),
+.app-shell__nav-icon:has([data-icon="CA"]),
+.app-shell__nav-icon:has([data-icon="SW"]) { color: #0891b2; }
 
 .organization-context {
   border: var(--dl-border-width) solid var(--dl-color-border);

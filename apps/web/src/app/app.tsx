@@ -48,10 +48,6 @@ const WorksPage = lazy(async () => {
   const module = await import("../features/works/works-page.js");
   return { default: module.WorksPage };
 });
-const StatusPage = lazy(async () => {
-  const module = await import("../features/status/status-page.js");
-  return { default: module.StatusPage };
-});
 const TestStatusPage = lazy(async () => {
   const module = await import("../features/test-status/test-status-page.js");
   return { default: module.TestStatusPage };
@@ -175,11 +171,12 @@ const router = createBrowserRouter([
         path: "works",
       },
       {
-        element: <NonCourierRoute><PermissionRoute requiredPermissions={operationalStatusReadPermissions}><LazyRoute><StatusPage /></LazyRoute></PermissionRoute></NonCourierRoute>,
+        element: <NonCourierRoute><PermissionRoute requiredPermissions={operationalStatusReadPermissions}><LazyRoute><TestStatusPage /></LazyRoute></PermissionRoute></NonCourierRoute>,
         path: "status",
       },
       {
-        element: <PermissionRoute requiredPermissions={["works.read_all", "logistics.center.read"]}><LazyRoute><TestStatusPage /></LazyRoute></PermissionRoute>,
+        // Temporary compatibility URL during migration. The new operational workspace lives at /status.
+        element: <Navigate replace to="/status" />,
         path: "test",
       },
       {
@@ -199,7 +196,7 @@ const router = createBrowserRouter([
         path: "technicians",
       },
       {
-        element: <NonTechnicianRoute><PermissionRoute requiredPermissions={["logistics.center.read"]}><LazyRoute><LogisticsPage /></LazyRoute></PermissionRoute></NonTechnicianRoute>,
+        element: <NonTechnicianRoute><PermissionRoute requiredPermissions={["logistics.center.read"]}><LazyRoute><LogisticsPage showHeaderActions={false} /></LazyRoute></PermissionRoute></NonTechnicianRoute>,
         path: "logistics",
       },
       {

@@ -232,6 +232,7 @@ export function WorksPage(): ReactNode {
   const initialPatientId = searchParams.get("patientId");
   const initialClinicId = searchParams.get("clinicId");
   const initialDoctorId = searchParams.get("doctorId");
+  const returnTo = searchParams.get("returnTo");
   const initialCreateOpen = searchParams.get("create") === "1";
   const [isCreateOpen, setIsCreateOpen] = useState(initialCreateOpen || initialPatientId !== null || initialClinicId !== null || initialDoctorId !== null);
   const [qrWorkId, setQrWorkId] = useState<string | null>(null);
@@ -518,7 +519,10 @@ export function WorksPage(): ReactNode {
         initialPatientId={initialPatientId ?? undefined}
         pricingWorkTypeOptions={(pricingWorkTypeOptionsQuery.data ?? []).filter((option) => option.basePriceMinor !== null) as readonly { readonly basePriceMinor: number; readonly id: string }[]}
         isSaving={createMutation.isPending}
-        onOpenChange={setIsCreateOpen}
+        onOpenChange={(isOpen) => {
+          setIsCreateOpen(isOpen);
+          if (!isOpen && returnTo) navigate(returnTo, { replace: true });
+        }}
         onSubmit={handleCreate}
         submitError={createMutation.error}
         currency={currency}

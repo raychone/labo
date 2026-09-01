@@ -1,4 +1,4 @@
-export const OPERATIONAL_STATUS_TABS = ["TODAY", "IN_PROGRESS", "AVAILABLE", "LATE", "AT_CLINIC", "RETURNED", "COMPLETED"] as const;
+export const OPERATIONAL_STATUS_TABS = ["ALL", "TODAY", "IN_PROGRESS", "AVAILABLE", "LATE", "AT_CLINIC", "RETURNED", "COMPLETED"] as const;
 export const OPERATIONAL_STATUS_SORT_FIELDS = ["effectiveDueAt", "priority", "createdAt", "updatedAt", "workCode", "clinicName", "patientName"] as const;
 export const OPERATIONAL_STATUS_SORT_DIRECTIONS = ["asc", "desc"] as const;
 export const OPERATIONAL_STATUS_DEADLINE_STATES = ["UNKNOWN", "UNRESOLVED", "ON_TIME", "DUE_TODAY", "DUE_TOMORROW", "WARNING", "LATE", "MANUAL"] as const;

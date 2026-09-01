@@ -291,6 +291,7 @@ export interface OperationalStatusResponseView {
 }
 
 const tabLabels = {
+  ALL: "Total",
   AT_CLINIC: "Plecate la medic",
   AVAILABLE: "Disponibile",
   COMPLETED: "Finalizate",
@@ -301,7 +302,7 @@ const tabLabels = {
 } as const satisfies Record<OperationalStatusTab, string>;
 
 export function createOperationalStatusCounters(rows: readonly OperationalStatusRowView[]): readonly OperationalStatusTabCounterView[] {
-  const tabs: readonly OperationalStatusTab[] = ["TODAY", "IN_PROGRESS", "AVAILABLE", "LATE", "AT_CLINIC", "RETURNED", "COMPLETED"];
+  const tabs: readonly OperationalStatusTab[] = ["ALL", "TODAY", "IN_PROGRESS", "AVAILABLE", "LATE", "AT_CLINIC", "RETURNED", "COMPLETED"];
   return tabs.map((tab) => ({
     count: rows.filter((row) => matchesOperationalStatusTab(row, tab)).length,
     label: tabLabels[tab],
@@ -310,6 +311,9 @@ export function createOperationalStatusCounters(rows: readonly OperationalStatus
 }
 
 export function matchesOperationalStatusTab(row: OperationalStatusRowView, tab: OperationalStatusTab): boolean {
+  if (tab === "ALL") {
+    return true;
+  }
   if (tab === "TODAY") {
     return row.deadline.state === "DUE_TODAY";
   }
@@ -338,12 +342,16 @@ export function matchesOperationalStatusTab(row: OperationalStatusRowView, tab: 
     // real return only after reception has opened the next cycle for it.
     return row.currentCycle !== null && row.currentCycle.number > 1;
   }
-  return row.operationalStatus === "FINALIZATA"
+  // An explicitly set operational status is authoritative. In particular,
+  // a work that is back in production must not also be counted as completed
+  // merely because an older pickup/workflow record says it was completed.
+  return row.operationalStatus !== "IN_LUCRU"
+    && (row.operationalStatus === "FINALIZATA"
     || row.workflow.status === "COMPLETED"
     || row.hasCompletedPickup
     || row.delivery.status === "PICKED_UP"
     || row.logistics.status === "DELIVERED"
-    || row.delivery.status === "DELIVERED";
+    || row.delivery.status === "DELIVERED");
 }
 
 export function compareOperationalStatusRows(
@@ -422,7 +430,7 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
     },
     requiresDelivery: work.requiresDelivery,
     requiresPickup: work.requiresPickup,
-    hasCompletedPickup: work.courierRouteStops.length > 0 || (work.clinic?.pickupRequests.length ?? 0) > 0,
+    hasCompletedPickup: (work.courierRouteStops?.length ?? 0) > 0 || (work.clinic?.pickupRequests?.length ?? 0) > 0,
     operationalStatus: work.status === "REGISTERED" ? "RECEPTIE" : work.status,
     patient: {
       id: work.patient?.id ?? null,

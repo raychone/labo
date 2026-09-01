@@ -198,6 +198,19 @@ describe("operational status view", () => {
     expect(matchesOperationalStatusTab(row, "IN_PROGRESS")).toBe(false);
   });
 
+  it("does not count an explicitly in-progress work as completed", () => {
+    const row = toOperationalStatusRow(
+      {
+        ...createWorkRecord({ claimStatus: "CLAIMED", deliveryStatus: "DELIVERED", workflowStatus: "COMPLETED" }),
+        status: "IN_LUCRU",
+      },
+      new Date("2026-08-04T08:00:00.000Z"),
+    );
+
+    expect(matchesOperationalStatusTab(row, "IN_PROGRESS")).toBe(true);
+    expect(matchesOperationalStatusTab(row, "COMPLETED")).toBe(false);
+  });
+
   it("keeps returned count at zero when cycle data does not exist", () => {
     const rows = [toOperationalStatusRow(createWorkRecord(), new Date("2026-08-04T08:00:00.000Z"))];
     const returned = createOperationalStatusCounters(rows).find((counter) => counter.tab === "RETURNED");

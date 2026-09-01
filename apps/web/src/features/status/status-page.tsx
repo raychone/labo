@@ -67,6 +67,7 @@ const tabLabels = {
   IN_PROGRESS: "În lucru",
   LATE: "Întârziate",
   RETURNED: "Revenite",
+  ALL: "Total",
   TODAY: "Astăzi",
 } as const satisfies Record<OperationalStatusTab, string>;
 
@@ -96,7 +97,7 @@ const defaultQuery: OperationalStatusQuery = {
   pageSize: OPERATIONAL_STATUS_DEFAULT_PAGE_SIZE,
   sortBy: "effectiveDueAt",
   sortDirection: "asc",
-  tab: "TODAY",
+  tab: "ALL",
 };
 
 type StatusQueryPatch = {
@@ -485,9 +486,7 @@ export function StatusPage({ allowLogisticsRead = false, experimental = false, o
         <header className="status-page__header">
           <div>
             <h1 id="status-title">Status</h1>
-            <p>Workspace operațional pentru lucrări active, termene, responsabilitate și fișa laborator.</p>
           </div>
-          <Link className="status-page__open-link" to="/works">Registru lucrări</Link>
         </header>
 
         <div className="status-page__tabs" role="list" aria-label="Status lucrări">

@@ -44,6 +44,13 @@
   gap: var(--dl-space-2);
 }
 
+.test-status-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-2);
+  justify-content: flex-end;
+}
+
 .test-status-page__transport-kpi {
   align-self: stretch;
   border: 1px solid color-mix(in srgb, #0891b2 28%, var(--dl-color-border));

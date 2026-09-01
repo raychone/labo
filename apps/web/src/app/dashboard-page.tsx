@@ -21,7 +21,7 @@ import {
 } from "@dental-lab/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 
 import { useAuthState } from "./auth-state.js";
 import { fetchOrganizationContext } from "../features/organization-context/organization-context-api.js";
@@ -442,6 +442,7 @@ function ReceptionDashboard({
   readonly todayRows: readonly OperationalStatusRow[];
 }): ReactNode {
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedClinicId, setSelectedClinicId] = useState("");
   const [selectedDoctorId, setSelectedDoctorId] = useState("");
   const [patientSearch, setPatientSearch] = useState("");
@@ -452,6 +453,15 @@ function ReceptionDashboard({
   const [probeTime, setProbeTime] = useState("");
   const [isReturnModalOpen, setReturnModalOpen] = useState(false);
   const [isProbeFormOpen, setProbeFormOpen] = useState(false);
+  useEffect(() => {
+    if (searchParams.get("probe") !== "1" || !canCreateNextCycle) return;
+    setReturnModalOpen(true);
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("probe");
+      return next;
+    }, { replace: true });
+  }, [canCreateNextCycle, searchParams, setSearchParams]);
   const incompleteRows = todayRows.filter((row) => isIncompleteSheet(row.realLabSheet.status)).slice(0, shortListSize);
   const returnQuery = useOperationalStatus({
     page: 1,

@@ -281,7 +281,7 @@ function NavigationList({
               className={({ isActive }) => `app-shell__nav-link${isActive || currentPath.startsWith(`${route.path}/`) ? " app-shell__nav-link--active" : ""}`}
               to={route.path}
             >
-              <span className="app-shell__nav-icon" aria-hidden="true">{route.icon}</span>
+              <span className="app-shell__nav-icon" aria-hidden="true"><NavigationIcon icon={route.icon} /></span>
               <span>{route.label}</span>
             </NavLink>
           </div>
@@ -289,6 +289,29 @@ function NavigationList({
       })}
     </nav>
   );
+}
+
+function NavigationIcon({ icon }: { readonly icon: ReactNode }): ReactNode {
+  const key = typeof icon === "string" ? icon : "";
+  const paths: Record<string, string> = {
+    AT: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0",
+    BI: "M6 3h12v18H6zM9 7h6M9 11h6M9 15h4",
+    CA: "M7 7h10M5 11h14M8 15h8M12 3v18",
+    CL: "M4 21V5h16v16M8 9h2m4 0h2m-8 4h2m4 0h2m-8 4h2m4 0h2",
+    DB: "M3 11.5 12 4l9 7.5V21H3zM9 21v-6h6v6",
+    LO: "m3 7 9-4 9 4-9 4-9-4Zm0 0v10l9 4 9-4V7M12 11v10",
+    LV: "M4 7h16v12H4zM8 7V5h8v2M8 12h8",
+    OS: "M4 18h4v-6h4v4h4V7h4",
+    PA: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0",
+    QR: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zm4 0h2v6h-6v-2h4z",
+    SW: "M4 5h16M4 12h16M4 19h16M8 5v3m8 4v3m-5 4v3",
+    TE: "M5 20a7 7 0 0 1 14 0M8 8a4 4 0 1 0 8 0M17 11h4m-2-2v4",
+    TM: "M4 5h16v14H4zM8 9h8M8 13h5M8 17h3",
+    TR: "M5 5h4v4H5zM15 15h4v4h-4zM9 7h6v10M15 7h4v4h-4z",
+    US: "M5 20a7 7 0 0 1 14 0M8 8a4 4 0 1 0 8 0M4 12h4m8 0h4",
+    WO: "M4 7h16v14H4zM8 7V4h8v3M8 12h8",
+  };
+  return <svg data-icon={key} className="app-shell__nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8"><path d={paths[key] ?? "M5 12h14M12 5v14"} /></svg>;
 }
 
 function UserSummary({ email, name, roleLabel }: { readonly email: string; readonly name: string; readonly roleLabel: string }): ReactNode {
