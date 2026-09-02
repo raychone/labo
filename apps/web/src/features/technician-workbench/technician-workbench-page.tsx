@@ -433,7 +433,7 @@ function OperationsModal({
 }): ReactNode {
   const toast = useToast();
   const detailQuery = useWork(work?.id ?? null, isOpen && work !== null);
-  const operationsQuery = useTechnicianOperationOptions(isOpen && canReadOperations);
+  const operationsQuery = useTechnicianOperationOptions(work?.id ?? null, isOpen && canReadOperations);
   const performedQuery = usePerformedTechnicianOperations(work?.id ?? null, isOpen && canReadOperations && work !== null);
   const performMutation = usePerformTechnicianOperation();
   const removeMutation = useRemovePerformedTechnicianOperation();

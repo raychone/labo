@@ -415,7 +415,7 @@ export type ReassignWorkInput = {
 
 export type SetWorkStatusInput = {
   readonly reason?: string | null;
-  readonly status: Exclude<WorkStatus, "REGISTERED">;
+  readonly status: Exclude<WorkStatus, "REGISTERED"> | "PROBA";
 };
 
 export type UpdateTechnicianWorkDetailsInput = {

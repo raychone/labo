@@ -47,6 +47,33 @@ type PerformedOperationTx = Pick<
   "auditLog" | "technicianOperation" | "technicianOperationRate" | "technicianPerformedOperation" | "technicianPerformedOperationTooth" | "workOrder" | "workOrderItem"
 >;
 
+type WorkTypeFamilySource = { readonly name?: string | null; readonly probeFamily?: string | null; readonly symbol?: string | null } | null;
+
+function inferProbeFamily(workType: WorkTypeFamilySource): string | null {
+  if (!workType) return null;
+  if (workType.probeFamily) return workType.probeFamily;
+  const identity = `${workType.symbol ?? ""} ${workType.name ?? ""}`.toLocaleLowerCase("ro-RO");
+  if (identity.includes("tf") || identity.includes("sf") || identity.includes("metalo") || identity.includes("metaloceramic")) return "MC";
+  if (identity.includes("zrp") || identity.includes("zirconia placat")) return "ZRP";
+  if (identity === "zr" || identity.includes(" zr ") || identity.includes("zircon")) return "ZR";
+  if (identity.includes("protez") || identity.includes("lingură individuală")) return "PRO";
+  return null;
+}
+
+function getAllowedOperationCategories(workTypes: readonly WorkTypeFamilySource[]): readonly string[] | null {
+  const families = [...new Set(workTypes.map(inferProbeFamily).filter((family): family is string => family !== null))];
+  // A legacy/custom work type may not have a probe family. Keep the catalog
+  // usable in that case; known families are filtered strictly below.
+  if (families.length === 0) return null;
+  const categories = new Set<string>();
+  for (const probeFamily of families) {
+    if (probeFamily === "MC") categories.add("Coroană ceramică");
+    if (probeFamily === "ZR" || probeFamily === "ZRP") categories.add("Coroană zirconiu");
+    if (probeFamily === "PRO") categories.add("Altele");
+  }
+  return [...categories];
+}
+
 @Injectable()
 export class TechnicianOperationsService {
   public constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
@@ -87,10 +114,13 @@ export class TechnicianOperationsService {
     };
   }
 
-  public async listOperationOptions(technicianId?: string): Promise<readonly TechnicianOperationOptionView[]> {
+  public async listOperationOptions(technicianId?: string, workOrderId?: string): Promise<readonly TechnicianOperationOptionView[]> {
+    const allowedCategories = await this.getAllowedOperationCategories(workOrderId);
+    const operationWhere: Prisma.TechnicianOperationWhereInput = { isActive: true };
+    if (allowedCategories !== null) operationWhere.category = { in: [...allowedCategories] };
     const operations = await this.prisma.technicianOperation.findMany({
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-      where: { isActive: true },
+      where: operationWhere,
     });
 
     if (!technicianId) return operations.map(toTechnicianOperationOptionView);
@@ -511,16 +541,23 @@ export class TechnicianOperationsService {
 
     const performedOperation = await this.prisma.$transaction(async (tx) => {
       const technicianId = await this.ensureTechnicianOwnsWork(tx, context.actorUserId, dto.workOrderId);
-      const workOrder = await tx.workOrder.findUnique({ select: { activeProbeCycleId: true, status: true }, where: { id: dto.workOrderId } });
+      const workOrder = await tx.workOrder.findUnique({ select: { activeProbeCycleId: true, status: true, workType: { select: { name: true, probeFamily: true, symbol: true } }, items: { select: { workType: { select: { name: true, probeFamily: true, symbol: true } } }, where: { archivedAt: null } } }, where: { id: dto.workOrderId } });
       if (!workOrder || workOrder.status === "FINALIZATA") {
         throw new BadRequestException("Manopera nu poate fi adăugată pentru această stare a lucrării.");
       }
       const operation = await tx.technicianOperation.findFirst({
-        select: { code: true, id: true, name: true },
+        select: { category: true, code: true, id: true, name: true },
         where: { id: dto.operationId, isActive: true },
       });
       if (!operation) {
         throw new BadRequestException("Technician operation not found or inactive.");
+      }
+      const allowedCategories = getAllowedOperationCategories([
+        ...(workOrder.items ?? []).map((item) => item.workType),
+        workOrder.workType,
+      ]);
+      if (allowedCategories !== null && !allowedCategories.includes(operation.category)) {
+        throw new BadRequestException("Manopera nu este disponibilă pentru tipul acestei lucrări.");
       }
 
       const selectedTeeth = [...new Set(dto.selectedTeeth)];
@@ -719,6 +756,22 @@ export class TechnicianOperationsService {
     if (!operation) {
       throw new BadRequestException("Technician operation not found or inactive.");
     }
+  }
+
+  private async getAllowedOperationCategories(workOrderId?: string): Promise<readonly string[] | null> {
+    if (!workOrderId) return null;
+    const workOrder = await this.prisma.workOrder.findUnique({
+      select: {
+        items: { select: { workType: { select: { name: true, probeFamily: true, symbol: true } } }, where: { archivedAt: null } },
+        workType: { select: { name: true, probeFamily: true, symbol: true } },
+      },
+      where: { id: workOrderId },
+    });
+    if (!workOrder) return [];
+    return getAllowedOperationCategories([
+      ...workOrder.items.map((item) => item.workType),
+      workOrder.workType,
+    ]);
   }
 
   private async ensureTechnicianOwnsWork(client: Pick<Prisma.TransactionClient, "workOrder"> | Pick<PrismaService, "workOrder">, actorUserId: string, workOrderId: string): Promise<string> {

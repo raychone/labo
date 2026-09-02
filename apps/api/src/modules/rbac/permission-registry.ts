@@ -630,6 +630,15 @@ export const ROLE_PERMISSION_MATRIX = {
     "works.execution_snapshot.history.read": "ALL",
     "works.read_all": "ALL",
     "works.read_assigned": "ASSIGNED",
+    // Reception owns the intake record and must be able to correct it after
+    // creation (work type, shade, teeth and composition). This does not grant
+    // access to pricing or to the technical execution sheet.
+    "works.update": "ALL",
+    "works.item.create": "ALL",
+    "works.item.remove": "ALL",
+    "works.item.update": "ALL",
+    "works.scope.update": "ALL",
+    "works.connections.manage": "ALL",
     "works.urgency.update": "ALL",
     "works.deadline.current.update": "ALL",
   }),

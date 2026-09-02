@@ -31,11 +31,9 @@ import {
   CardHeader,
   CardTitle,
   DataTable,
-  EmptyState,
   ErrorState,
   Drawer,
   LoadingState,
-  PriorityBadge,
   Select,
   TextInput,
   type DataTableColumn,
@@ -43,7 +41,7 @@ import {
   type SelectOption,
 } from "@dental-lab/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
@@ -56,7 +54,6 @@ import { useUpdateLogisticsWorkActions } from "../logistics/logistics-api.js";
 import { displayWorkTypeSymbolOrName } from "../works/work-type-symbols.js";
 import { hasPermission } from "../users/users-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
-import { useMediaQuery } from "../../lib/use-media-query.js";
 import { useOperationalStatus } from "./status-api.js";
 import "./status-page.css";
 
@@ -214,9 +211,19 @@ function getRouteMarker(row: OperationalStatusRow): string {
 function getDeadlineDisplay(row: OperationalStatusRow): ReactNode {
   return (
     <span className="status-page__metric-inline">
+      <DeadlineAttention row={row} />
       <span>{row.deadline.effectiveDueAt ? formatDateTime(row.deadline.effectiveDueAt) : "-"}</span>
     </span>
   );
+}
+
+function DeadlineAttention({ row }: { readonly row: OperationalStatusRow }): ReactNode {
+  const attention = row.deadline.state === "LATE"
+    ? "Termen depășit"
+    : row.deadline.state === "WARNING" || row.deadline.state === "DUE_TODAY" || row.deadline.state === "DUE_TOMORROW"
+      ? "Termen apropiat"
+      : null;
+  return attention ? <span aria-label={attention} className={`status-page__deadline-attention status-page__deadline-attention--${row.deadline.state.toLowerCase()}`} title={`${attention}: ${row.deadline.tooltip}`}>!</span> : null;
 }
 
 function toDataSort(query: OperationalStatusQuery): DataTableSort {
@@ -366,19 +373,22 @@ const realLabSheetStatusOptions: readonly SelectOption[] = [
 const sortOptions: readonly SelectOption[] = OPERATIONAL_STATUS_SORT_FIELDS.map((field) => ({ label: sortLabels[field], value: field }));
 const operationalStateOptions: readonly SelectOption[] = OPERATIONAL_STATUS_TABS.map((tab) => ({ label: tabLabels[tab], value: tab }));
 
-export function StatusPage({ allowLogisticsRead = false, experimental = false, onTabChange, showTransportKpi = true, transportFilter, transportKpi }: { readonly allowLogisticsRead?: boolean; readonly experimental?: boolean; readonly onTabChange?: (tab: OperationalStatusTab) => void; readonly showTransportKpi?: boolean; readonly transportFilter?: 1 | 2 | 3 | null; readonly transportKpi?: ReactNode } = {}): ReactNode {
+export function StatusPage({ allowLogisticsRead = false, experimental = false, headerActions, onTabChange, showTransportKpi = true, transportFilter, transportKpi }: { readonly allowLogisticsRead?: boolean; readonly experimental?: boolean; readonly headerActions?: ReactNode; readonly onTabChange?: (tab: OperationalStatusTab) => void; readonly showTransportKpi?: boolean; readonly transportFilter?: 1 | 2 | 3 | null; readonly transportKpi?: ReactNode } = {}): ReactNode {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const query = useMemo(() => readQuery(searchParams), [searchParams]);
   const currentStageName = searchParams.get("currentStageName") ?? "";
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState<OperationalStatusRow | null>(null);
-  const isCompactMobile = useMediaQuery("(max-width: 719px)");
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   const canReadStatus = hasPermission(permissionsQuery.data, "works.read_all")
     || hasPermission(permissionsQuery.data, "works.read_assigned")
     || (allowLogisticsRead && hasPermission(permissionsQuery.data, "logistics.center.read"));
   const canReadPricingOptions = hasPermission(permissionsQuery.data, "pricing.read");
+  // Direct deadline/status editing in the shared status register is reserved
+  // for logistics and managers. Reception and technicians keep read access.
+  const canEditOperationalFields = hasPermission(permissionsQuery.data, "logistics.delivery_marker.update")
+    || hasPermission(permissionsQuery.data, "audit.read");
   const canReadOptions = canReadStatus;
   const baseStatusQuery = useOperationalStatus(experimental ? { ...query, excludeDemo: true } : query, canReadStatus, { refetchIntervalMs: 5_000 });
   const transportStatusQuery = useOperationalStatus(
@@ -434,8 +444,10 @@ export function StatusPage({ allowLogisticsRead = false, experimental = false, o
       id: "technician",
       renderCell: (row) => (
         <span className="status-page__metric-inline">
-          {row.workOwner?.preferredColor ? <span className="status-page__color-dot" style={{ backgroundColor: getSafeColor(row.workOwner.preferredColor) ?? "transparent" }} /> : null}
-          <span>{row.workOwner?.displayName ?? "-"}</span>
+          {row.workOwner ? <span
+            className="status-page__technician-name"
+            style={{ "--technician-color": getSafeColor(row.workOwner.preferredColor) ?? "var(--dl-color-surface-muted)" } as CSSProperties}
+          >{row.workOwner.displayName}</span> : "-"}
         </span>
       ),
     },
@@ -448,13 +460,13 @@ export function StatusPage({ allowLogisticsRead = false, experimental = false, o
       header: "Termen",
       id: "effectiveDueAt",
       isSortable: true,
-      renderCell: (row) => experimental ? <TestDeadlineAction row={row} /> : getDeadlineDisplay(row),
+      renderCell: (row) => experimental && canEditOperationalFields ? <TestDeadlineAction row={row} /> : getDeadlineDisplay(row),
     },
     {
       header: "Stare",
       id: "state",
       renderCell: (row) => (
-        experimental ? <TestStatusAction row={row} /> : <BadgePill
+        experimental && canEditOperationalFields ? <TestStatusAction row={row} /> : <BadgePill
             label={toOperationalLabel(row)}
             tone={toStatusVariant(row) === "closed" ? "success" : toStatusVariant(row) === "production" ? "info" : toStatusVariant(row) === "rejected" ? "danger" : toStatusVariant(row) === "awaiting" ? "warning" : "neutral"}
           />
@@ -463,14 +475,14 @@ export function StatusPage({ allowLogisticsRead = false, experimental = false, o
     {
       header: "Alerte",
       id: "alerts",
-      renderCell: (row) => experimental ? <TestLogisticsActions row={row} /> : "-",
+      renderCell: (row) => experimental && canEditOperationalFields ? <TestLogisticsActions row={row} /> : "-",
     },
     {
       header: "Livrare/Ridicare",
       id: "deliveryPickup",
-      renderCell: (row) => experimental ? <TestTransportActions row={row} /> : getRouteMarker(row),
+      renderCell: (row) => experimental && canEditOperationalFields ? <TestTransportActions row={row} /> : getRouteMarker(row),
     },
-  ], [experimental, navigate]);
+  ], [canEditOperationalFields, experimental, navigate]);
 
   if (permissionsQuery.isLoading) {
     return <PageState><LoadingState text="Se încarcă statusul operațional" /></PageState>;
@@ -488,6 +500,8 @@ export function StatusPage({ allowLogisticsRead = false, experimental = false, o
             <h1 id="status-title">Status</h1>
           </div>
         </header>
+
+        {headerActions ? <div className="status-page__header-actions">{headerActions}</div> : null}
 
         <div className="status-page__tabs" role="list" aria-label="Status lucrări">
           {OPERATIONAL_STATUS_TABS.map((tab) => {
@@ -648,81 +662,29 @@ export function StatusPage({ allowLogisticsRead = false, experimental = false, o
               </p>
             ) : null}
 
-            {!isCompactMobile ? (
-              <div className="status-page__desktop-table">
-                <DataTable
-                  columns={columns}
-                  emptyMessage="Nu există lucrări pentru filtrele curente."
-                  error={statusQuery.isError ? getErrorMessage(statusQuery.error) : undefined}
-                  getRowKey={(row) => row.id}
-                  isLoading={statusQuery.isLoading}
-                  onSortChange={(sort) => patchQuery(toApiSort(sort))}
-                  pagination={{
-                    onPageChange: (page) => patchQuery({ page }),
-                    page: statusQuery.data?.meta.page ?? query.page,
-                    pageCount: Math.max(statusQuery.data?.meta.totalPages ?? 1, 1),
-                  }}
-                  rows={visibleRows}
-                  sort={toDataSort(query)}
-                  {...(experimental ? { onRowClick: (row: OperationalStatusRow) => navigate(`/works?workId=${encodeURIComponent(row.id)}`) } : {})}
-                />
-              </div>
-            ) : null}
-
-            <StatusCards
-              onOpenDetails={(row) => setSelectedRow(row)}
-              error={statusQuery.isError ? getErrorMessage(statusQuery.error) : undefined}
-              isLoading={statusQuery.isLoading}
-              rows={visibleRows}
-            />
+            <div className="status-page__desktop-table">
+              <DataTable
+                columns={columns}
+                emptyMessage="Nu există lucrări pentru filtrele curente."
+                error={statusQuery.isError ? getErrorMessage(statusQuery.error) : undefined}
+                getRowKey={(row) => row.id}
+                isLoading={statusQuery.isLoading}
+                onSortChange={(sort) => patchQuery(toApiSort(sort))}
+                pagination={{
+                  onPageChange: (page) => patchQuery({ page }),
+                  page: statusQuery.data?.meta.page ?? query.page,
+                  pageCount: Math.max(statusQuery.data?.meta.totalPages ?? 1, 1),
+                }}
+                rows={visibleRows}
+                sort={toDataSort(query)}
+                {...(experimental ? { onRowClick: (row: OperationalStatusRow) => navigate(`/works?workId=${encodeURIComponent(row.id)}`) } : {})}
+              />
+            </div>
           </CardContent>
         </Card>
         <StatusDetailDrawer onOpenChange={(open) => { if (!open) setSelectedRow(null); }} row={selectedRow} />
       </section>
     </main>
-  );
-}
-
-function StatusCards({ error, isLoading, onOpenDetails, rows }: { readonly error: string | undefined; readonly isLoading: boolean; readonly onOpenDetails: (row: OperationalStatusRow) => void; readonly rows: readonly OperationalStatusRow[] }): ReactNode {
-  if (isLoading) {
-    return <div className="status-page__mobile-cards"><LoadingState text="Se încarcă statusul" /></div>;
-  }
-  if (error) {
-    return <div className="status-page__mobile-cards"><ErrorState title="Statusul nu a putut fi încărcat" description={error} /></div>;
-  }
-  if (rows.length === 0) {
-    return <div className="status-page__mobile-cards"><EmptyState title="Nu există date" description="Nu există lucrări pentru filtrele curente." /></div>;
-  }
-  return (
-    <div className="status-page__mobile-cards" aria-label="Lucrări status">
-      {rows.map((row) => (
-        <article className="status-page__card" key={row.id}>
-          <div className="status-page__card-header">
-            <div>
-              <strong>{row.patient.name}</strong>
-              <span>{getWorkTypeCompactLabel(row.workType)}</span>
-            </div>
-            <PriorityBadge label={toPriorityLabel(row.priority)} variant={row.priority === "URGENT" ? "urgent" : "normal"} />
-          </div>
-          <div className="status-page__card-grid">
-            <Metric
-              label="Tehnician"
-              value={row.workOwner ? <span className="status-page__metric-inline">{row.workOwner.preferredColor ? <span className="status-page__color-dot" style={{ backgroundColor: getSafeColor(row.workOwner.preferredColor) ?? "transparent" }} /> : null}{row.workOwner.displayName}</span> : "-"}
-            />
-            <Metric label="Clinica sau Medic" value={getClinicDoctorDisplay(row)} />
-            <Metric label="Culoare" value={row.shade ?? "-"} />
-            <Metric label="Preluare" value={row.claimedAt ? formatDateTime(row.claimedAt) : "-"} />
-            <Metric label="Termen" value={getDeadlineDisplay(row)} />
-            <Metric label="Stare" value={<BadgePill label={toOperationalLabel(row)} tone={toStatusVariant(row) === "closed" ? "success" : toStatusVariant(row) === "production" ? "info" : toStatusVariant(row) === "rejected" ? "danger" : toStatusVariant(row) === "awaiting" ? "warning" : "neutral"} />} />
-            <Metric label="Livrare/Ridicare" value={getRouteMarker(row)} />
-          </div>
-          <div className="status-page__card-actions">
-            <Button onClick={() => onOpenDetails(row)} variant="outline">Detalii</Button>
-            <Link className="status-page__open-link" to={`/works?workId=${encodeURIComponent(row.id)}`}>Deschide</Link>
-          </div>
-        </article>
-      ))}
-    </div>
   );
 }
 
@@ -801,6 +763,7 @@ function TestDeadlineAction({ row }: { readonly row: OperationalStatusRow }): Re
   });
   return (
     <span className="status-page__test-deadline">
+      <DeadlineAttention row={row} />
       <input aria-label={`Termen ${row.workCode}`} disabled={mutation.isPending} onBlur={() => { if (value) mutation.mutate(value); }} onChange={(event) => setValue(event.target.value)} type="datetime-local" value={value} />
       {mutation.isError ? <small>{getErrorMessage(mutation.error)}</small> : null}
     </span>
@@ -812,13 +775,14 @@ function TestStatusAction({ row }: { readonly row: OperationalStatusRow }): Reac
   return (
     <select
       aria-label={`Stare ${row.workCode}`}
-      defaultValue={row.operationalStatus}
+      value={row.technicalReadiness === "PROBE_READY" ? "PROBA" : row.operationalStatus}
       disabled={update.isPending}
       onChange={(event) => update.mutate({ workOrderId: row.id, input: { status: event.target.value as Exclude<typeof row.operationalStatus, "REGISTERED"> } })}
     >
       <option value="RECEPTIE">Recepție</option>
       <option value="IN_LUCRU">În lucru</option>
       <option value="IN_ASTEPTARE">În așteptare</option>
+      <option value="PROBA">Probă</option>
       <option value="FINALIZATA">Finalizată</option>
     </select>
   );

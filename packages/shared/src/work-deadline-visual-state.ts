@@ -64,10 +64,6 @@ export function resolveDeadlineVisualState(input: DeadlineVisualInput): Deadline
     return createResolution("UNRESOLVED", "Fără termen", "fără termen", "Deadline-ul nu poate fi calculat automat.");
   }
 
-  if (input.mode === "MANUAL") {
-    return createResolution("MANUAL", "Manual", "termen manual", "Termen setat manual de utilizator autorizat.");
-  }
-
   const nowDate = parseDate(input.now);
   const dueDate = parseDate(input.effectiveDueAt);
   const calendarDays = diffLocalCalendarDays(nowDate, dueDate);
@@ -88,6 +84,10 @@ export function resolveDeadlineVisualState(input: DeadlineVisualInput): Deadline
 
   if (businessDays < DEFAULT_DEADLINE_VISUAL_THRESHOLDS.warningBusinessDaysRemaining) {
     return createResolution("WARNING", "Aproape", `${formatDays(calendarDays)}`, "Termen apropiat, cu mai puțin de 2 zile lucrătoare rămase.");
+  }
+
+  if (input.mode === "MANUAL") {
+    return createResolution("MANUAL", "Manual", "termen manual", "Termen setat manual de utilizator autorizat.");
   }
 
   return createResolution("ON_TIME", "În termen", `${formatDays(calendarDays)}`, "Lucrarea este în termen.");

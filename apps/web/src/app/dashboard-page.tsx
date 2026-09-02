@@ -143,21 +143,6 @@ export function DashboardPage(): ReactNode {
   const operationalReturnedQuery = useOperationalStatus(operationalQuery("RETURNED", 8), canReadDashboardOperational);
   const availableWorksQuery = useAvailableWorksForClaim(claimListParams, canReadAvailable);
   const myClaimedWorksQuery = useMyClaimedWorks(claimListParams, canReadOwnClaims);
-  const allWorksQuery = useWorks({
-    clinicId: undefined,
-    dateFrom: undefined,
-    dateTo: undefined,
-    deadlineFilter: undefined,
-    doctorId: undefined,
-    page: 1,
-    pageSize: 1,
-    priority: undefined,
-    search: undefined,
-    sortBy: "createdAt",
-    sortDirection: "desc",
-    status: undefined,
-    workTypeId: undefined,
-  }, showManagerWorkspace);
   const technicianWorkbenchQuery = useTechnicianWorkbench({
     page: 1,
     pageSize: shortListSize,
@@ -165,8 +150,6 @@ export function DashboardPage(): ReactNode {
     sortOrder: "asc",
   }, canReadTechnician);
   const billingOverviewQuery = useBillingOverview(range, canReadBilling);
-  const deadlineDashboard = worksTodayQuery.data?.deadlineDashboard;
-  const operationalCounters = operationalTodayQuery.data?.counters ?? [];
   const activeCompany = organizationQuery.data?.active;
   const activeCompanyLabel = activeCompany ? `${activeCompany.code} · ${activeCompany.displayName}` : "Firma activă";
 
@@ -188,7 +171,6 @@ export function DashboardPage(): ReactNode {
       {showTechnicianWorkspace ? (
         <TechnicianDashboard
           availableWorks={availableWorksQuery.data?.items ?? []}
-          availableTotal={availableWorksQuery.data?.total}
           canScanWork={canScanWork}
           isAvailableError={availableWorksQuery.isError}
           isAvailableLoading={availableWorksQuery.isLoading}
@@ -197,10 +179,7 @@ export function DashboardPage(): ReactNode {
           isWorkbenchError={technicianWorkbenchQuery.isError}
           isWorkbenchLoading={technicianWorkbenchQuery.isLoading}
           myWorks={myClaimedWorksQuery.data?.items ?? []}
-          myWorksTotal={myClaimedWorksQuery.data?.total}
-          returnedCount={getCounter(operationalCounters, "RETURNED")}
           workbenchItems={technicianWorkbenchQuery.data?.items ?? []}
-          workbenchSummary={technicianWorkbenchQuery.data?.summary}
         />
       ) : null}
 
@@ -209,15 +188,6 @@ export function DashboardPage(): ReactNode {
           canCreateWork={canCreateWork}
           canCreateNextCycle={canCreateNextCycle}
           canScanWork={canScanWork}
-          counters={{
-            dueToday: deadlineDashboard?.dueToday,
-            dueTomorrow: deadlineDashboard?.dueTomorrow,
-            incompleteSheets: countIncompleteRows(operationalTodayQuery.data?.items ?? []),
-            registeredToday: worksTodayQuery.data?.total,
-            returned: getCounter(operationalCounters, "RETURNED"),
-            unresolved: deadlineDashboard?.unresolved,
-            verify: getCounter(operationalCounters, "AVAILABLE"),
-          }}
           isRecentError={worksTodayQuery.isError}
           isRecentLoading={worksTodayQuery.isLoading}
           recentWorks={worksTodayQuery.data?.items ?? []}
@@ -229,20 +199,10 @@ export function DashboardPage(): ReactNode {
       {showManagerWorkspace ? (
         <ManagerDashboard
           activeCompanyLabel={activeCompanyLabel}
-          allWorksTotal={allWorksQuery.data?.total}
           billing={billingOverviewQuery.data}
           canReadBilling={canReadBilling}
-          counters={{
-            inProgress: getCounter(operationalCounters, "IN_PROGRESS"),
-            late: getCounter(operationalCounters, "LATE"),
-            registeredToday: worksTodayQuery.data?.total,
-            returned: getCounter(operationalCounters, "RETURNED"),
-            sheets: countIncompleteRows([
-              ...(operationalTodayQuery.data?.items ?? []),
-              ...(operationalLateQuery.data?.items ?? []),
-            ]),
-            unassigned: getCounter(operationalCounters, "AVAILABLE"),
-          }}
+          lateRows={operationalLateQuery.data?.items ?? []}
+          returnedRows={operationalReturnedQuery.data?.items ?? []}
           isBillingError={billingOverviewQuery.isError}
           isBillingLoading={billingOverviewQuery.isLoading}
         />
@@ -259,14 +219,6 @@ export function DashboardPage(): ReactNode {
   );
 }
 
-function getCounter(counters: readonly { readonly count: number; readonly tab: OperationalStatusTab }[], tab: OperationalStatusTab): number | undefined {
-  return counters.find((counter) => counter.tab === tab)?.count;
-}
-
-function countIncompleteRows(rows: readonly OperationalStatusRow[]): number {
-  return rows.filter((row) => isIncompleteSheet(row.realLabSheet.status)).length;
-}
-
 function DashboardSection({ action, children, description, title }: { readonly action?: ReactNode; readonly children: ReactNode; readonly description?: string; readonly title: string }): ReactNode {
   return (
     <Card>
@@ -281,15 +233,6 @@ function DashboardSection({ action, children, description, title }: { readonly a
       </CardHeader>
       <CardContent className="dashboard-page__section-content">{children}</CardContent>
     </Card>
-  );
-}
-
-function SummaryMetricCard({ label, to, value }: { readonly label: string; readonly to: string; readonly value: number | string | undefined }): ReactNode {
-  return (
-    <Link className="dl-kpi dashboard-page__metric dashboard-page__metric--link" to={to}>
-      <span>{label}</span>
-      <strong>{value ?? "..."}</strong>
-    </Link>
   );
 }
 
@@ -330,7 +273,6 @@ function SheetStatusIndicator({ label, status }: { readonly label: string; reado
 }
 
 function TechnicianDashboard({
-  availableTotal,
   availableWorks,
   canScanWork,
   isAvailableError,
@@ -340,12 +282,8 @@ function TechnicianDashboard({
   isWorkbenchError,
   isWorkbenchLoading,
   myWorks,
-  myWorksTotal,
-  returnedCount,
   workbenchItems,
-  workbenchSummary,
 }: {
-  readonly availableTotal: number | undefined;
   readonly availableWorks: readonly WorkSummary[];
   readonly canScanWork: boolean;
   readonly isAvailableError: boolean;
@@ -355,12 +293,8 @@ function TechnicianDashboard({
   readonly isWorkbenchError: boolean;
   readonly isWorkbenchLoading: boolean;
   readonly myWorks: readonly WorkSummary[];
-  readonly myWorksTotal: number | undefined;
-  readonly returnedCount: number | undefined;
   readonly workbenchItems: readonly TechnicianWorkbenchItem[];
-  readonly workbenchSummary: { readonly dueToday: number; readonly inProgress: number; readonly overdue: number; readonly totalActive: number; readonly unstarted: number; readonly urgent: number } | undefined;
 }): ReactNode {
-  const incompleteSheets = workbenchItems.filter((item) => isIncompleteSheet(item.realLabSheet.status)).length;
   const attentionItems = [
     ...workbenchItems.filter((item) => item.categories.includes("OVERDUE") || item.categories.includes("DUE_TODAY") || isIncompleteSheet(item.realLabSheet.status) || item.stage.status === "PENDING"),
   ].slice(0, 6);
@@ -373,14 +307,6 @@ function TechnicianDashboard({
           <p>Ce pot prelua, ce am preluat și care este următoarea acțiune.</p>
         </div>
         <DashboardAction label="Vezi lucrări disponibile" to="/workbench" variant="primary" />
-      </div>
-      <div className="dashboard-page__metrics dashboard-page__metrics--six">
-        <SummaryMetricCard label="Disponibile pentru preluare" to="/workbench" value={availableTotal} />
-        <SummaryMetricCard label="Lucrările mele" to="/workbench" value={myWorksTotal} />
-        <SummaryMetricCard label="În lucru" to="/workbench" value={workbenchSummary?.inProgress} />
-        <SummaryMetricCard label="Întârziate" to="/workbench" value={workbenchSummary?.overdue} />
-        <SummaryMetricCard label="Fișe incomplete" to="/workbench" value={incompleteSheets} />
-        <SummaryMetricCard label="Revenite" to="/status?tab=RETURNED" value={returnedCount} />
       </div>
       <div className="dashboard-page__columns">
         <DashboardSection title="Lucrările mele" description="Primele lucrări după prioritate și termen.">
@@ -416,7 +342,6 @@ function ReceptionDashboard({
   canCreateWork,
   canCreateNextCycle,
   canScanWork,
-  counters,
   isRecentError,
   isRecentLoading,
   recentWorks,
@@ -426,15 +351,6 @@ function ReceptionDashboard({
   readonly canCreateWork: boolean;
   readonly canCreateNextCycle: boolean;
   readonly canScanWork: boolean;
-  readonly counters: {
-    readonly dueToday: number | undefined;
-    readonly dueTomorrow: number | undefined;
-    readonly incompleteSheets: number | undefined;
-    readonly registeredToday: number | undefined;
-    readonly returned: number | undefined;
-    readonly unresolved: number | undefined;
-    readonly verify: number | undefined;
-  };
   readonly isRecentError: boolean;
   readonly isRecentLoading: boolean;
   readonly recentWorks: readonly WorkSummary[];
@@ -527,15 +443,6 @@ function ReceptionDashboard({
           {canCreateNextCycle ? <DashboardAction label="Probe" onClick={() => setReturnModalOpen(true)} /> : null}
           {canScanWork ? <DashboardAction label="Scanează lucrare" to="/scan" /> : null}
         </div>
-      </div>
-      <div className="dashboard-page__metrics dashboard-page__metrics--seven">
-        <SummaryMetricCard label="Înregistrate astăzi" to="/works" value={counters.registeredToday} />
-        <SummaryMetricCard label="Cu termen astăzi" to="/status?tab=TODAY" value={counters.dueToday} />
-        <SummaryMetricCard label="Cu termen mâine" to="/works" value={counters.dueTomorrow} />
-        <SummaryMetricCard label="Fără termen" to="/works" value={counters.unresolved} />
-        <SummaryMetricCard label="Fișe incomplete" to="/status?sheetStatus=IN_PROGRESS" value={counters.incompleteSheets} />
-        <SummaryMetricCard label="Revenite" to="/status?tab=RETURNED" value={counters.returned} />
-        <SummaryMetricCard label="Necesită verificare la recepție" to="/status?tab=AVAILABLE" value={counters.verify} />
       </div>
       <div className="dashboard-page__columns">
         <DashboardSection title="Lucrări recente" description="Ultimele lucrări înregistrate.">
@@ -719,25 +626,18 @@ function ReceptionDashboard({
 
 function ManagerDashboard({
   activeCompanyLabel,
-  allWorksTotal,
   billing,
   canReadBilling,
-  counters,
+  lateRows,
+  returnedRows,
   isBillingError,
   isBillingLoading,
 }: {
   readonly activeCompanyLabel: string;
-  readonly allWorksTotal: number | undefined;
   readonly billing: { readonly currency: string; readonly outstandingMinor: number; readonly overdueInvoiceCount: number; readonly partialInvoiceCount: number; readonly totalIssuedMinor: number; readonly paidMinor: number; readonly uninvoicedWorkCount: number; readonly unpaidInvoiceCount: number } | undefined;
   readonly canReadBilling: boolean;
-  readonly counters: {
-    readonly inProgress: number | undefined;
-    readonly late: number | undefined;
-    readonly registeredToday: number | undefined;
-    readonly returned: number | undefined;
-    readonly sheets: number | undefined;
-    readonly unassigned: number | undefined;
-  };
+  readonly lateRows: readonly OperationalStatusRow[];
+  readonly returnedRows: readonly OperationalStatusRow[];
   readonly isBillingError: boolean;
   readonly isBillingLoading: boolean;
 }): ReactNode {
@@ -754,23 +654,16 @@ function ManagerDashboard({
           {canReadBilling ? <DashboardAction label="Facturare" to="/billing" /> : null}
         </div>
       </div>
-      <div className="dashboard-page__metrics dashboard-page__metrics--seven">
-        <SummaryMetricCard label="Lucrări" to="/status" value={allWorksTotal ?? counters.registeredToday} />
-        <SummaryMetricCard label="În lucru" to="/status?tab=IN_PROGRESS" value={counters.inProgress} />
-        <SummaryMetricCard label="Întârziate" to="/status?tab=LATE" value={counters.late} />
-        <SummaryMetricCard label="Neasignate" to="/status?tab=AVAILABLE" value={counters.unassigned} />
-        <SummaryMetricCard label="Revenite" to="/status?tab=RETURNED" value={counters.returned} />
-        <SummaryMetricCard label="Fișe incomplete" to="/status?sheetStatus=IN_PROGRESS" value={counters.sheets} />
+      <div className="dashboard-page__columns">
+        <DashboardSection title="Lucrări întârziate" description="Lucrări care necesită intervenție.">
+          {lateRows.length === 0 ? <DashboardEmptyState description="Nu există lucrări întârziate." title="Totul este în termen" /> : null}
+          {lateRows.slice(0, shortListSize).map((row) => <OperationalPreviewCard key={row.id} actionLabel="Deschide lucrarea" row={row} />)}
+        </DashboardSection>
+        <DashboardSection title="Lucrări revenite" description="Lucrări care au nevoie de următoarea acțiune.">
+          {returnedRows.length === 0 ? <DashboardEmptyState description="Nu există lucrări revenite." title="Nicio revenire" /> : null}
+          {returnedRows.slice(0, shortListSize).map((row) => <OperationalPreviewCard key={row.id} actionLabel="Deschide lucrarea" row={row} />)}
+        </DashboardSection>
       </div>
-      {canReadBilling ? (
-        <div className="dashboard-page__metrics dashboard-page__metrics--five">
-          <SummaryMetricCard label="Lucrări nefacturate" to="/billing?tab=uninvoiced" value={billing?.uninvoicedWorkCount} />
-          <SummaryMetricCard label="Facturi neachitate" to="/billing?tab=receivables&paymentFilter=UNPAID" value={billing?.unpaidInvoiceCount} />
-          <SummaryMetricCard label="Facturi parțial achitate" to="/billing?tab=receivables&paymentFilter=PARTIALLY_PAID" value={billing?.partialInvoiceCount} />
-          <SummaryMetricCard label="Facturi restante" to="/billing?tab=receivables&paymentFilter=OUTSTANDING" value={billing?.overdueInvoiceCount} />
-          <SummaryMetricCard label="Sold restant" to="/billing?tab=receivables&paymentFilter=OUTSTANDING" value={billing ? formatKpiMoneyMinor(billing.outstandingMinor, currency, "ro-RO") : undefined} />
-        </div>
-      ) : null}
       {canReadBilling ? (
         <DashboardSection title="Situație financiară" description="Date filtrate de firma activă NC/NG.">
           <SectionState error={isBillingError} isLoading={isBillingLoading} text="Se încarcă situația financiară" />

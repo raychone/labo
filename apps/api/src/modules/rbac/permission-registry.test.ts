@@ -319,9 +319,12 @@ describe("PERMISSION_REGISTRY", () => {
     expect(ROLE_PERMISSION_MATRIX.TEHNICIAN["organization_context.switch"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["organization_context.switch"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.CURIER["organization_context.switch"]).toBeNull();
-    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.item.create"]).toBeNull();
-    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.scope.update"]).toBeNull();
-    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.connections.manage"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.update"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.item.create"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.item.update"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.item.remove"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.scope.update"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.connections.manage"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["cycles.probe_type.select"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["cycles.mark_received"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.custom_type.save_to_catalog"]).toBeNull();

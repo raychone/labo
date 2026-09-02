@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ToastProvider } from "@dental-lab/ui";
 import { lazy, Suspense, type ReactNode } from "react";
-import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
+import { createBrowserRouter, Navigate, RouterProvider, useLocation } from "react-router";
 
 import { AuthenticatedAppShell } from "./authenticated-app-shell.js";
 import { useAuthState } from "./auth-state.js";
@@ -129,6 +129,13 @@ function LazyRoute({ children }: { readonly children: ReactNode }): ReactNode {
   return <Suspense fallback={<RouteLoading />}>{children}</Suspense>;
 }
 
+function WorksEntryPage(): ReactNode {
+  const location = useLocation();
+  const query = new URLSearchParams(location.search);
+  const isWorkContext = ["create", "workId", "patientId", "clinicId", "doctorId"].some((key) => query.has(key));
+  return isWorkContext ? <WorksPage /> : <Navigate replace to="/status" />;
+}
+
 const router = createBrowserRouter([
   {
     element: <StylePreviewPage />,
@@ -167,7 +174,7 @@ const router = createBrowserRouter([
         path: "deliveries/:id/proof/print",
       },
       {
-        element: <PermissionRoute requiredPermissions={workReadPermissions}><LazyRoute><WorksPage /></LazyRoute></PermissionRoute>,
+        element: <PermissionRoute requiredPermissions={workReadPermissions}><LazyRoute><WorksEntryPage /></LazyRoute></PermissionRoute>,
         path: "works",
       },
       {

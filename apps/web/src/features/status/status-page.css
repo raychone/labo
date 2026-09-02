@@ -21,6 +21,10 @@
   justify-content: space-between;
 }
 
+.status-page__header-actions {
+  margin-bottom: var(--dl-space-2);
+}
+
 .status-page__header h1 {
   margin: 0;
 }
@@ -136,6 +140,17 @@
   font: inherit;
   min-width: 9rem;
   padding: 0.35rem;
+}
+
+.status-page__deadline-attention {
+  align-items: center;
+  color: var(--dl-color-danger);
+  display: inline-flex;
+  font-size: 1.25rem;
+  font-weight: 800;
+  justify-content: center;
+  line-height: 1;
+  min-width: 0.8rem;
 }
 
 .status-page__alert-dot {
@@ -331,8 +346,7 @@
 }
 
 .status-page__mobile-cards {
-  display: grid;
-  gap: var(--dl-space-3);
+  display: none;
 }
 
 .status-page__card {
@@ -473,7 +487,16 @@
 }
 
 .status-page__desktop-table {
-  display: none;
+  display: block;
+}
+
+.status-page__technician-name {
+  background: color-mix(in srgb, var(--technician-color) 22%, var(--dl-color-surface));
+  border: 1px solid color-mix(in srgb, var(--technician-color) 45%, var(--dl-color-border));
+  border-radius: var(--dl-radius-sm);
+  color: var(--dl-color-text);
+  display: inline-block;
+  padding: 0.2rem 0.45rem;
 }
 
 .status-page__drawer-grid {
@@ -553,11 +576,5 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .status-page__desktop-table {
-    display: block;
-  }
-
-  .status-page__mobile-cards {
-    display: none;
-  }
+  .status-page__desktop-table { display: block; }
 }

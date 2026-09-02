@@ -48,7 +48,7 @@ export const appRoutes = [
     path: "/works",
     permissionMode: "any",
     requiredPermissions: workReadPermissions,
-    showInNavigation: true,
+    showInNavigation: false,
   },
   {
     icon: "OS",
@@ -256,10 +256,6 @@ function shouldShowInNavigation(permissionKeys: readonly string[], route: AppRou
       || route.path === "/users"
       || route.path === "/settings"
       || route.path === "/audit";
-  }
-
-  if (route.path === "/works") {
-    return permissionKeys.includes("works.read_all");
   }
 
   if (route.path === "/logistics") {

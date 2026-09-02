@@ -1,4 +1,5 @@
 import { ForbiddenException } from "@nestjs/common";
+import type { WorkLogisticsStatus } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 
 import { AuthorizationService, doesScopeSatisfy } from "../rbac/authorization.service.js";
@@ -29,7 +30,14 @@ export async function getVisibleWorkWhere(
     OR: [
       { assignedTechnicianId: userId },
       { claimedByUserId: userId },
-      ...(readAvailable.allowed && includeUnclaimed ? [{ claimStatus: "UNCLAIMED" as const }] : []),
+      ...(readAvailable.allowed && includeUnclaimed
+        ? [{
+            claimStatus: "UNCLAIMED" as const,
+            status: { not: "FINALIZATA" as const },
+            technicalReadiness: null,
+            NOT: { activeCycle: { is: { logisticsState: { is: { status: { in: ["HANDED_TO_DELIVERY", "DELIVERED"] as WorkLogisticsStatus[] } } } } } },
+          }]
+        : []),
       { activeCycle: { is: { workflowExecution: { is: { currentStage: { is: { assignedUserId: userId } } } } } } },
       { activeCycle: { is: { workflowExecution: { is: { stages: { some: { assignedUserId: userId } } } } } } },
     ],

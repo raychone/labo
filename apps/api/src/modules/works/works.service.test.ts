@@ -868,7 +868,7 @@ describe("WorksService", () => {
     });
 
     expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { claimRevision: 0, claimStatus: "UNCLAIMED", id: "work_order_1" },
+      where: expect.objectContaining({ claimRevision: 0, claimStatus: "UNCLAIMED", id: "work_order_1", status: { not: "FINALIZATA" }, technicalReadiness: null }),
     }));
     expect(stageUpdate).toHaveBeenCalledWith({
       data: expect.objectContaining({

@@ -55,7 +55,8 @@ describe("route registry", () => {
       "works.create", "works.read_all", "scan.use", "patients.read", "status.read",
       "delivery.read", "logistics.center.read", "workflow.read", "cycles.read",
     ]).map((route) => route.label);
-    expect(reception).toEqual(expect.arrayContaining(["Acasă", "Lucrări", "Status", "Scanare", "Pacienți"]));
+    expect(reception).toEqual(expect.arrayContaining(["Acasă", "Status", "Scanare", "Pacienți"]));
+    expect(reception).not.toContain("Lucrări");
     expect(reception).not.toContain("Facturare");
     expect(reception).not.toContain("Tehnicieni");
     expect(reception).not.toContain("Traseu");
@@ -64,7 +65,8 @@ describe("route registry", () => {
     const logistics = getNavigationRoutes([
       "works.create", "works.read_all", "scan.use", "logistics.center.read", "logistics.plan", "routes.create", "routes.read", "pickup.create", "pickup.read", "delivery.read",
     ]).map((route) => route.label);
-    expect(logistics).toEqual(expect.arrayContaining(["Acasă", "Status", "Scanare", "Centru operațional", "Trasee"]));
+    expect(logistics).toEqual(expect.arrayContaining(["Acasă", "Status", "Scanare", "Trasee"]));
+    expect(logistics).not.toContain("Centru operațional");
     expect(logistics).not.toContain("Livrările mele");
     expect(logistics).not.toContain("Traseul meu");
 

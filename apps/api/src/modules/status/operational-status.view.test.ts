@@ -184,7 +184,7 @@ describe("operational status view", () => {
     expect(matchesOperationalStatusTab(today, "TODAY")).toBe(true);
     expect(matchesOperationalStatusTab(inProgress, "IN_PROGRESS")).toBe(true);
     expect(matchesOperationalStatusTab(delivered, "AT_CLINIC")).toBe(true);
-    expect(matchesOperationalStatusTab(delivered, "COMPLETED")).toBe(true);
+    expect(matchesOperationalStatusTab(delivered, "COMPLETED")).toBe(false);
   });
 
   it("classifies canonical finalized works as completed even when workflow data lags", () => {
@@ -209,6 +209,25 @@ describe("operational status view", () => {
 
     expect(matchesOperationalStatusTab(row, "IN_PROGRESS")).toBe(true);
     expect(matchesOperationalStatusTab(row, "COMPLETED")).toBe(false);
+  });
+
+  it("counts only the current FINALIZATA status as completed", () => {
+    const reception = toOperationalStatusRow(
+      createWorkRecord({ deliveryStatus: "DELIVERED", logisticsStatus: "DELIVERED", workflowStatus: "COMPLETED" }),
+      new Date("2026-08-04T08:00:00.000Z"),
+    );
+    const finalized = toOperationalStatusRow(
+      { ...createWorkRecord({ deliveryStatus: "DELIVERED", logisticsStatus: "DELIVERED", workflowStatus: "COMPLETED" }), status: "FINALIZATA" },
+      new Date("2026-08-04T08:00:00.000Z"),
+    );
+    const probeReady = toOperationalStatusRow(
+      { ...createWorkRecord(), status: "IN_ASTEPTARE", technicalReadiness: "PROBE_READY" },
+      new Date("2026-08-04T08:00:00.000Z"),
+    );
+
+    expect(matchesOperationalStatusTab(reception, "COMPLETED")).toBe(false);
+    expect(matchesOperationalStatusTab(finalized, "COMPLETED")).toBe(true);
+    expect(matchesOperationalStatusTab(probeReady, "COMPLETED")).toBe(true);
   });
 
   it("keeps returned count at zero when cycle data does not exist", () => {

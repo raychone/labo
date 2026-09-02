@@ -1092,7 +1092,13 @@
     flex: 1;
   }
 
-  .app-shell__topbar { display: grid; padding-inline: var(--dl-space-5); }
+  .app-shell__topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-inline: var(--dl-space-5);
+  }
+
+  .app-shell__menu-button { display: none; }
 
   .app-shell__header {
     padding: var(--dl-space-5) var(--dl-space-5) 0;

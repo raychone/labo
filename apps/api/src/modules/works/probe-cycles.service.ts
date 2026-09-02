@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
+import type { Prisma } from "@prisma/client";
 import { B17_LOGISTICS_NOTIFICATION_EVENTS, getB17LogisticsNotificationKey, POSTMEETING_AUDIT_ACTIONS, type ProbeCycleView } from "@dental-lab/shared";
 
 import { AuditService } from "../auth/audit.service.js";
@@ -182,6 +183,7 @@ export class ProbeCyclesService {
       }
       const cycle = await tx.probeCycle.findFirst({ select: { id: true, sequence: true, probeTypeNameSnapshot: true, deadlineAt: true }, where: { id: activeCycleId, status: "ACTIVE", workOrderId: input.workOrderId } });
       if (!cycle) throw new ConflictException("Proba activă a fost deja închisă sau modificată.");
+      await this.ensureHasPerformedOperations(tx, input.workOrderId, cycle.id);
       const cycleUpdate = await tx.probeCycle.updateMany({ data: { completedAt: now, completedByUserId: input.actorUserId, completionOutcome: "PROBE_READY", status: "COMPLETED", version: { increment: 1 } }, where: { id: cycle.id, status: "ACTIVE" } });
       if (cycleUpdate.count !== 1) throw new ConflictException("Proba activă a fost deja închisă de alt utilizator.");
       const workUpdate = await tx.workOrder.updateMany({ data: { activeProbeCycleId: null, claimStatus: "UNCLAIMED", claimedAt: null, claimedByUserId: null, assignedTechnicianId: null, releasedAt: now, releasedByUserId: input.actorUserId, releaseReason: "Probă gata.", status: "IN_ASTEPTARE", statusChangedAt: now, statusChangedByUserId: input.actorUserId, technicalReadiness: "PROBE_READY", probeReadyAt: now, deadlineMode: null, effectiveDueAt: null, manualDueAt: null, deadlineSource: null, waitingStartedAt: now, updatedByUserId: input.actorUserId, version: { increment: 1 } }, where: { id: input.workOrderId, activeProbeCycleId: activeCycleId, status: { not: "FINALIZATA" }, claimStatus: "CLAIMED" } });
@@ -201,6 +203,7 @@ export class ProbeCyclesService {
     if (!work.activeProbeCycleId) {
       const now = new Date();
       const updated = await this.prisma.$transaction(async (tx) => {
+        await this.ensureHasPerformedOperations(tx, input.workOrderId, null);
         await this.worksService?.ensureLateExecutionContext(tx, input.workOrderId, input.actorUserId, input.requestMetadata, now, input.executionLegalEntityCode);
         const workUpdate = await tx.workOrder.updateMany({
           data: {
@@ -241,6 +244,7 @@ export class ProbeCyclesService {
       await this.worksService?.ensureLateExecutionContext(tx, input.workOrderId, input.actorUserId, input.requestMetadata, now, input.executionLegalEntityCode);
       const cycle = await tx.probeCycle.findFirst({ select: { id: true, sequence: true, probeTypeNameSnapshot: true }, where: { id: activeCycleId, status: "ACTIVE", workOrderId: input.workOrderId } });
       if (!cycle) throw new ConflictException("Contextul tehnic a fost deja închis sau modificat.");
+      await this.ensureHasPerformedOperations(tx, input.workOrderId, cycle.id);
       const cycleUpdate = await tx.probeCycle.updateMany({ data: { completedAt: now, completedByUserId: input.actorUserId, completionOutcome: "FINALIZED", status: "COMPLETED", version: { increment: 1 } }, where: { id: cycle.id, status: "ACTIVE" } });
       if (cycleUpdate.count !== 1) throw new ConflictException("Contextul tehnic a fost deja închis de alt utilizator.");
       const workUpdate = await tx.workOrder.updateMany({ data: { activeProbeCycleId: null, claimStatus: "UNCLAIMED", claimedAt: null, claimedByUserId: null, assignedTechnicianId: null, releasedAt: now, releasedByUserId: input.actorUserId, releaseReason: "Finalizată.", status: "FINALIZATA", statusChangedAt: now, statusChangedByUserId: input.actorUserId, technicalReadiness: "FINAL_READY", finalizedAt: now, completedAt: now, completedByUserId: input.actorUserId, deadlineLockedAt: now, deadlineLockedReason: "Lucrare finalizată.", waitingStartedAt: null, updatedByUserId: input.actorUserId, version: { increment: 1 } }, where: { id: input.workOrderId, activeProbeCycleId: activeCycleId, status: { not: "FINALIZATA" }, claimStatus: "CLAIMED" } });
@@ -269,6 +273,17 @@ export class ProbeCyclesService {
 
   private assertTechnicianOwnsWork(work: { readonly claimStatus: string; readonly claimedByUserId: string | null }, actorUserId: string): void {
     if (work.claimStatus !== "CLAIMED" || work.claimedByUserId !== actorUserId) throw new ForbiddenException("Doar tehnicianul responsabil poate executa această acțiune.");
+  }
+
+  private async ensureHasPerformedOperations(
+    tx: Prisma.TransactionClient,
+    workOrderId: string,
+    probeCycleId: string | null,
+  ): Promise<void> {
+    const count = await tx.technicianPerformedOperation.count({
+      where: { probeCycleId, removedAt: null, workOrderId },
+    });
+    if (count === 0) throw new BadRequestException("Adaugă cel puțin o manoperă înainte de finalizarea lucrării sau a probei.");
   }
 }
 

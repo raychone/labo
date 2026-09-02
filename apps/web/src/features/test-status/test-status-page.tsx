@@ -34,19 +34,21 @@ export function TestStatusPage(): ReactNode {
 
   return (
     <main className="test-status-page">
-      <section className="dl-container test-status-page__layout" aria-labelledby="test-status-title">
-        <header className="test-status-page__header">
-          <div>
-            <h1 id="test-status-title">Centru operațional</h1>
-          </div>
-        </header>
-        <div className="test-status-page__actions" aria-label="Acțiuni rapide">
-          {canScanWork ? <Button onClick={() => navigate("/scan")} variant="outline">Scanează lucrare</Button> : null}
-          {canCreateWork ? <Button onClick={() => navigate("/works?create=1&returnTo=%2Fstatus")} variant="primary">Lucrare nouă</Button> : null}
-          {canCreatePickup ? <Button onClick={() => setPickupOpen(true)} variant="primary">Ridicare nouă</Button> : null}
-          {canCreateProbe ? <Button onClick={() => setProbeOpen(true)} variant="outline">Probe</Button> : null}
-        </div>
-        <StatusPage allowLogisticsRead experimental onTabChange={() => setTransportFilter(undefined)} showTransportKpi={canSeeTransportKpi} {...(transportFilter === undefined ? {} : { transportFilter })} transportKpi={<TestTransportKpi onOpen={(days) => setTransportFilter(days ?? null)} />} />
+      <section className="dl-container test-status-page__layout">
+        <StatusPage
+          allowLogisticsRead
+          experimental
+          headerActions={<div className="test-status-page__actions" aria-label="Acțiuni rapide">
+            {canScanWork ? <Button onClick={() => navigate("/scan")} variant="outline">Scanează lucrare</Button> : null}
+            {canCreateWork ? <Button onClick={() => navigate("/works?create=1&returnTo=%2Fstatus")} variant="primary">Lucrare nouă</Button> : null}
+            {canCreatePickup ? <Button onClick={() => setPickupOpen(true)} variant="primary">Ridicare nouă</Button> : null}
+            {canCreateProbe ? <Button onClick={() => setProbeOpen(true)} variant="outline">Probe</Button> : null}
+          </div>}
+          onTabChange={() => setTransportFilter(undefined)}
+          showTransportKpi={canSeeTransportKpi}
+          {...(transportFilter === undefined ? {} : { transportFilter })}
+          transportKpi={<TestTransportKpi onOpen={(days) => setTransportFilter(days ?? null)} />}
+        />
         <StatusProbeModal isOpen={probeOpen} onOpenChange={setProbeOpen} />
         <PickupRequestModal editingPickup={null} isOpen={pickupOpen} onOpenChange={setPickupOpen} />
       </section>

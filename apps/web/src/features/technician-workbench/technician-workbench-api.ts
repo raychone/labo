@@ -77,8 +77,9 @@ export async function fetchTechnicianOptions(): Promise<readonly TechnicianOptio
   return parseApiResponse<readonly TechnicianOption[]>(response);
 }
 
-export async function fetchTechnicianOperationOptions(): Promise<readonly TechnicianOperationOption[]> {
-  const response = await apiFetch("/technician-operations/options");
+export async function fetchTechnicianOperationOptions(workOrderId?: string): Promise<readonly TechnicianOperationOption[]> {
+  const query = workOrderId ? `?${new URLSearchParams({ workOrderId }).toString()}` : "";
+  const response = await apiFetch(`/technician-operations/options${query}`);
   return parseApiResponse<readonly TechnicianOperationOption[]>(response);
 }
 
@@ -130,11 +131,11 @@ export function useTechnicianOptions(enabled: boolean) {
   });
 }
 
-export function useTechnicianOperationOptions(enabled: boolean) {
+export function useTechnicianOperationOptions(workOrderId: string | null, enabled: boolean) {
   return useQuery({
-    enabled,
-    queryFn: fetchTechnicianOperationOptions,
-    queryKey: technicianWorkbenchQueryKeys.operationOptions,
+    enabled: enabled && workOrderId !== null,
+    queryFn: () => fetchTechnicianOperationOptions(workOrderId ?? undefined),
+    queryKey: [...technicianWorkbenchQueryKeys.operationOptions, workOrderId],
     retry: false,
   });
 }

@@ -323,6 +323,7 @@ export function matchesOperationalStatusTab(row: OperationalStatusRowView, tab: 
   }
   if (tab === "AVAILABLE") {
     return row.operationalStatus !== "FINALIZATA"
+      && row.technicalReadiness === null
       && row.claimStatus === "UNCLAIMED"
       && row.delivery.status !== "DELIVERED"
       && row.logistics.status !== "DELIVERED";
@@ -342,16 +343,11 @@ export function matchesOperationalStatusTab(row: OperationalStatusRowView, tab: 
     // real return only after reception has opened the next cycle for it.
     return row.currentCycle !== null && row.currentCycle.number > 1;
   }
-  // An explicitly set operational status is authoritative. In particular,
-  // a work that is back in production must not also be counted as completed
-  // merely because an older pickup/workflow record says it was completed.
-  return row.operationalStatus !== "IN_LUCRU"
-    && (row.operationalStatus === "FINALIZATA"
-    || row.workflow.status === "COMPLETED"
-    || row.hasCompletedPickup
-    || row.delivery.status === "PICKED_UP"
-    || row.logistics.status === "DELIVERED"
-    || row.delivery.status === "DELIVERED");
+  // „Finalizate” is a status bucket, not a delivery/history bucket. A work
+  // must have the current operational status FINALIZATA, or be explicitly
+  // marked PROBE_READY by the technician. Old workflow or transport records
+  // alone must not make other works appear among finalized works.
+  return row.operationalStatus === "FINALIZATA" || row.technicalReadiness === "PROBE_READY";
 }
 
 export function compareOperationalStatusRows(

@@ -176,8 +176,8 @@ export class ReassignWorkDto extends ClaimWorkDto {
 }
 
 export class SetWorkStatusDto {
-  @IsIn(FINAL_WORK_STATUSES)
-  public readonly status!: (typeof FINAL_WORK_STATUSES)[number];
+  @IsIn([...FINAL_WORK_STATUSES, "PROBA"])
+  public readonly status!: (typeof FINAL_WORK_STATUSES)[number] | "PROBA";
 
   @IsOptional()
   @Transform(({ value }) => trimOptionalString(value))

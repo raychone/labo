@@ -21,6 +21,7 @@ function createWorkRecord(id: string, input: {
   readonly claimedByUserId?: string | null;
   readonly deliveryStatus?: "DELIVERED" | null;
   readonly effectiveDueAt?: Date | null;
+  readonly status?: "REGISTERED" | "RECEPTIE" | "IN_LUCRU" | "IN_ASTEPTARE" | "FINALIZATA";
   readonly technicalReadiness?: "PROBE_READY" | "FINAL_READY" | null;
 } = {}): OperationalStatusWorkRecord {
   return {
@@ -56,6 +57,7 @@ function createWorkRecord(id: string, input: {
     patientReference: null,
     priority: "NORMAL",
     technicalReadiness: input.technicalReadiness ?? null,
+    status: input.status ?? "RECEPTIE",
     updatedAt: new Date("2026-08-02T08:00:00.000Z"),
     workflowExecution: {
       currentStage: null,
@@ -107,7 +109,7 @@ describe("OperationalStatusService", () => {
       const rows = [
         createWorkRecord("000001", { effectiveDueAt: new Date("2026-08-07T10:00:00.000Z") }),
         createWorkRecord("000002", { claimStatus: "CLAIMED", claimedByUserId: "tech_1", effectiveDueAt: new Date("2026-08-08T10:00:00.000Z") }),
-        createWorkRecord("000003", { deliveryStatus: "DELIVERED", effectiveDueAt: new Date("2026-08-09T10:00:00.000Z") }),
+        createWorkRecord("000003", { deliveryStatus: "DELIVERED", effectiveDueAt: new Date("2026-08-09T10:00:00.000Z"), status: "FINALIZATA", technicalReadiness: "FINAL_READY" }),
       ];
       const { service } = createService({ findManyRows: rows, readAll: true });
 

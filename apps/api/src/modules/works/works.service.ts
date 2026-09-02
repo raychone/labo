@@ -514,7 +514,14 @@ export class WorksService {
       userId: actorUserId,
     });
     const access = await this.createClaimAccess(actorUserId);
-    return this.listWorksWithWhere(query, false, access, await this.getVisibleWorkWhere(actorUserId, true), { claimStatus: "UNCLAIMED", technicalReadiness: null });
+    return this.listWorksWithWhere(query, false, access, await this.getVisibleWorkWhere(actorUserId, true), {
+      claimStatus: "UNCLAIMED",
+      status: { not: "FINALIZATA" },
+      technicalReadiness: null,
+      NOT: {
+        activeCycle: { is: { logisticsState: { is: { status: { in: ["HANDED_TO_DELIVERY", "DELIVERED"] } } } } },
+      },
+    });
   }
 
   public async listMyClaimed(actorUserId: string, query: ListClaimWorksQueryDto): Promise<PaginatedWorksView> {
@@ -1215,6 +1222,11 @@ export class WorksService {
           claimRevision: dto.expectedClaimRevision,
           claimStatus: "UNCLAIMED",
           id: workOrderId,
+          status: { not: "FINALIZATA" },
+          technicalReadiness: null,
+          NOT: {
+            activeCycle: { is: { logisticsState: { is: { status: { in: ["HANDED_TO_DELIVERY", "DELIVERED"] } } } } },
+          },
         },
       });
       if (result.count !== 1) {
@@ -1571,6 +1583,11 @@ export class WorksService {
     await this.ensureCanChangeStatus(context.actorUserId, before);
     const statusPermission = await this.authorizationService.hasPermission({ permission: "works.change_status", userId: context.actorUserId });
     const isGlobalStatusEditor = statusPermission.effectiveScopes.includes("ALL");
+    const persistedStatus = dto.status === "PROBA" ? "IN_ASTEPTARE" : dto.status;
+    const isProbeReady = dto.status === "PROBA";
+    if (isProbeReady && !isGlobalStatusEditor) {
+      throw new ForbiddenException("Doar logistica și managerul pot seta starea Probă din status.");
+    }
     if (dto.status === "FINALIZATA" && !isGlobalStatusEditor) {
       throw new ConflictException("Folosește acțiunea canonică «Finalizată» pentru a închide ciclul tehnic și a trimite lucrarea la facturare.");
     }
@@ -1594,13 +1611,13 @@ export class WorksService {
           completedAt: dto.status === "FINALIZATA" ? operationNow : null,
           completedByUserId: dto.status === "FINALIZATA" ? context.actorUserId : null,
           finalizedAt: dto.status === "FINALIZATA" ? operationNow : null,
-          status: dto.status,
+          status: persistedStatus,
           statusChangedAt: operationNow,
           statusChangedByUserId: context.actorUserId,
-          technicalReadiness: dto.status === "FINALIZATA" ? "FINAL_READY" : null,
+          technicalReadiness: dto.status === "FINALIZATA" ? "FINAL_READY" : isProbeReady ? "PROBE_READY" : null,
           updatedByUserId: context.actorUserId,
           version: { increment: 1 },
-          waitingStartedAt: dto.status === "IN_ASTEPTARE" ? operationNow : null,
+          waitingStartedAt: dto.status === "IN_ASTEPTARE" || isProbeReady ? operationNow : null,
         },
         include: WORK_ORDER_INCLUDE,
         where: { id: workOrderId },
@@ -1611,7 +1628,7 @@ export class WorksService {
         metadata: {
           completedAt: updated.completedAt?.toISOString() ?? null,
           completedByUserId: updated.completedByUserId,
-          newStatus: updated.status,
+          newStatus: dto.status,
           previousStatus: before.status,
           reason: dto.reason ?? null,
           statusChangedAt: operationNow.toISOString(),
@@ -3193,6 +3210,9 @@ export class WorksService {
     }
     if (workOrder.technicalReadiness === "PROBE_READY" || workOrder.technicalReadiness === "FINAL_READY") {
       throw new ConflictException("Lucrarea nu mai este disponibilă pentru preluare tehnică.");
+    }
+    if (workOrder.status === "FINALIZATA") {
+      throw new ConflictException("Lucrarea finalizată nu mai este disponibilă pentru preluare tehnică.");
     }
     // A returned probe opens a new active probe cycle, while the legacy work
     // cycle can still retain the previous delivery's logistics status. That

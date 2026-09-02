@@ -130,6 +130,7 @@ describe("ProbeCyclesService / B10", () => {
       probeCycle: { findFirst: vi.fn().mockResolvedValue(activeCycle), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       workOrder: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       workAssignmentEvent: { create: vi.fn().mockResolvedValue({}) },
+      technicianPerformedOperation: { count: vi.fn().mockResolvedValue(1) },
     };
     const prisma = {
       workOrder: { findFirst: vi.fn().mockResolvedValue({ id: "wo-1", code: "WO-1", status: "IN_LUCRU", activeProbeCycleId: "cycle-1", claimStatus: "CLAIMED", claimedByUserId: "tech-1", executionLegalEntityId: "entity-1", claimRevision: 3 }) },
@@ -152,6 +153,7 @@ describe("ProbeCyclesService / B10", () => {
       probeCycle: { findFirst: vi.fn().mockResolvedValue(activeCycle), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       workOrder: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       workAssignmentEvent: { create: vi.fn().mockResolvedValue({}) },
+      technicianPerformedOperation: { count: vi.fn().mockResolvedValue(1) },
     };
     const prisma = {
       workOrder: { findFirst: vi.fn().mockResolvedValue({ id: "wo-1", code: "WO-1", status: "IN_LUCRU", activeProbeCycleId: "cycle-1", claimStatus: "CLAIMED", claimedByUserId: "tech-1", executionLegalEntityId: null, claimRevision: 4 }) },
