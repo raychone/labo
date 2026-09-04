@@ -144,13 +144,23 @@
 
 .status-page__deadline-attention {
   align-items: center;
+  animation: status-page-deadline-pulse 1.2s ease-in-out infinite;
+  background: var(--dl-color-danger);
+  border-radius: 50%;
   color: var(--dl-color-danger);
   display: inline-flex;
-  font-size: 1.25rem;
+  color: #fff;
+  font-size: 1.2rem;
   font-weight: 800;
   justify-content: center;
   line-height: 1;
-  min-width: 0.8rem;
+  min-height: 1.65rem;
+  min-width: 1.65rem;
+}
+
+@keyframes status-page-deadline-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--dl-color-danger) 45%, transparent); transform: scale(1); }
+  50% { box-shadow: 0 0 0 0.3rem color-mix(in srgb, var(--dl-color-danger) 0%, transparent); transform: scale(1.12); }
 }
 
 .status-page__alert-dot {

@@ -101,12 +101,12 @@ describe("LogisticsRouteBuilderPage", () => {
 
     renderWithProviders(<LogisticsRouteBuilderPage />);
 
-    expect(await screen.findByRole("heading", { name: "Traseu" })).toBeDefined();
+    expect(await screen.findByRole("heading", { name: "Trasee" })).toBeDefined();
     fireEvent.click(await screen.findByRole("button", { name: "WO-26-0001 · Ion Pop" }));
     fireEvent.click(await screen.findByRole("button", { name: "Clinica Test · 09:30" }));
     fireEvent.focus(screen.getByLabelText("Curier"));
     fireEvent.click(await screen.findByRole("option", { name: "Curier Test" }));
-    fireEvent.click(screen.getByRole("button", { name: "Expediază lista" }));
+    fireEvent.click(screen.getByRole("button", { name: "Creează și trimite curierului" }));
 
     await waitFor(() => expect(posts).toHaveLength(1));
     expect(posts[0]).toMatchObject({
@@ -158,6 +158,6 @@ describe("LogisticsRouteBuilderPage", () => {
     renderWithProviders(<LogisticsRouteBuilderPage />, ["/routes?listId=list_1"]);
 
     expect(await screen.findByText("WO-26-0001 · Ion Pop")).toBeDefined();
-    expect(screen.getByRole("button", { name: "Salvează lista" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Salvează modificările" })).toBeDefined();
   });
 });

@@ -1,5 +1,5 @@
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, DateInput, ErrorState, IconButton, LoadingState, Select, StatusBadge, Textarea, TextInput, Tooltip, useToast } from "@dental-lab/ui";
-import type { CourierRouteStopInput, CourierRouteStopOutcome, CourierRouteStopView, CourierRouteView, LogisticsCenterItem, PickupRequestView } from "@dental-lab/shared";
+import type { CourierOption, CourierRouteStopInput, CourierRouteStopOutcome, CourierRouteStopView, CourierRouteView, LogisticsCenterItem, PickupRequestView } from "@dental-lab/shared";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router";
@@ -26,6 +26,36 @@ function dateParts(value: string): { day: number; month: number; year: number } 
 function composeDate(year: number, month: number, day: number): string {
   const safeDay = Math.min(day, new Date(Date.UTC(year, month + 1, 0)).getUTCDate());
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(safeDay).padStart(2, "0")}`;
+}
+
+function formatRouteDate(value: string): string {
+  const parsed = new Date(`${value}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? value : new Intl.DateTimeFormat("ro-RO", { day: "numeric", month: "long", year: "numeric" }).format(parsed);
+}
+
+function isPreparationList(route: CourierRouteView): boolean {
+  return route.status === "DRAFT" && route.courier === null && route.name === "Lista pentru viitoarele trasee";
+}
+
+function routeStatusLabel(status: CourierRouteView["status"], route?: CourierRouteView): string {
+  switch (status) {
+    case "DRAFT": return route && !isPreparationList(route) ? "Traseu pregătit · neasignat" : "Listă de pregătire";
+    case "ASSIGNED": return "Planificat";
+    case "IN_PROGRESS": return "În desfășurare";
+    case "COMPLETED": return "Finalizat";
+    case "CANCELLED": return "Anulat";
+  }
+}
+
+function routeStopOutcomeLabel(outcome: CourierRouteStopOutcome, type: CourierRouteStopView["type"]): string {
+  if (outcome === "PENDING") return "În așteptare";
+  if (type === "DELIVERY") return outcome === "DELIVERED" ? "Livrat" : "Nelivrat";
+  return outcome === "PICKED_UP" ? "Ridicat" : "Neridicat";
+}
+
+function routeStopOutcomeVariant(outcome: CourierRouteStopOutcome): "awaiting" | "delivered" | "rejected" {
+  if (outcome === "PENDING") return "awaiting";
+  return outcome.includes("NOT") ? "rejected" : "delivered";
 }
 
 export function LogisticsRouteBuilderPage(): ReactNode {
@@ -88,11 +118,22 @@ export function LogisticsRouteBuilderPage(): ReactNode {
     .flatMap((route) => route.stops
     .filter((stop) => stop.outcomeStatus === "PENDING" || stop.outcomeStatus === "DELIVERED" || stop.outcomeStatus === "PICKED_UP")
     .map((stop) => `${stop.type}:${stop.workOrderId ?? stop.pickupRequestId ?? stop.id}`))), [allRoutesQuery.data?.items, editingRouteId]);
+  const availableDeliveryCandidates = deliveryRouteCandidates.filter((work) =>
+    !assignedStopKeys.has(`DELIVERY:${work.id}`) && !selectedKeys.has(`DELIVERY:${work.id}`),
+  );
+  const availablePickupWorkCandidates = deliveryCandidates.filter((work) =>
+    work.requiresPickup && !assignedStopKeys.has(`PICKUP:${work.id}`) && !selectedKeys.has(`PICKUP:${work.id}`),
+  );
+  const availablePickupRequests = pickupCandidates.filter((pickup) =>
+    !assignedStopKeys.has(`PICKUP:${pickup.id}`) && !selectedKeys.has(`PICKUP:${pickup.id}`),
+  );
   const visibleRoutes = useMemo(() => (routesQuery.data?.items ?? []).filter((route) => {
     if (printRouteId && route.id !== printRouteId) return false;
     if (listRouteId && route.id !== listRouteId) return false;
     return !listCourierId || route.courier?.id === listCourierId;
   }), [listCourierId, listRouteId, printRouteId, routesQuery.data?.items]);
+  const preparationLists = useMemo(() => visibleRoutes.filter(isPreparationList), [visibleRoutes]);
+  const plannedRoutes = useMemo(() => visibleRoutes.filter((route) => !isPreparationList(route)), [visibleRoutes]);
   function editRoute(route: CourierRouteView): void {
     setEditingRouteId(route.id);
     setEditingRouteStatus(route.status);
@@ -235,13 +276,18 @@ export function LogisticsRouteBuilderPage(): ReactNode {
     });
   }
 
-  function submit(): void {
+  function submit(asPreparationList = false): void {
     const stops: CourierRouteStopInput[] = selectedStops.map((stop) => stop.type === "DELIVERY"
       ? { addressOverride: stop.addressOverride ?? null, phoneOverride: stop.phoneOverride ?? null, type: "DELIVERY", workOrderId: stop.workOrderId }
       : { addressOverride: stop.addressOverride ?? null, phoneOverride: stop.phoneOverride ?? null, pickupRequestId: stop.pickupRequestId ?? null, stopNotes: stop.stopNotes ?? null, type: "PICKUP", workOrderId: stop.workOrderId ?? null });
+    const normalizedRouteName = routeName.trim();
     const input = {
       courierUserId: courierUserId || null,
-      name: routeName,
+      // The preparation list is explicit. A route without a courier is still
+      // a real route that logistics can execute themselves or assign later.
+      name: asPreparationList
+        ? "Lista pentru viitoarele trasee"
+        : (normalizedRouteName && normalizedRouteName !== "Lista pentru viitoarele trasee" ? normalizedRouteName : "Traseu"),
       routeDate,
       stops,
     };
@@ -252,7 +298,7 @@ export function LogisticsRouteBuilderPage(): ReactNode {
         setEditingRouteId(null);
         setEditingVersion(null);
         setEditingRouteStatus(null);
-        toast.showToast({ message: "Traseul a fost creat.", variant: "success" });
+        toast.showToast({ message: asPreparationList ? "Lista de pregătire a fost salvată." : "Traseul a fost creat.", variant: "success" });
       },
     };
     if (editingRouteId && editingVersion) {
@@ -275,20 +321,27 @@ export function LogisticsRouteBuilderPage(): ReactNode {
       <section className="dl-container logistics-page__layout" aria-labelledby="route-title">
         <header className="logistics-page__header">
           <div>
-            <h1 id="route-title">Traseu</h1>
-            <p>Listele adăugate din Centrul operațional pot fi împărțite ulterior în trasee pentru curieri.</p>
+            <h1 id="route-title">Trasee</h1>
+            <p>Pregătește opririle, creează traseul și urmărește ce s-a livrat sau ridicat.</p>
           </div>
         </header>
+
+        <div className="logistics-page__route-overview" aria-label="Rezumat trasee">
+          <div><strong>{preparationLists.reduce((total, list) => total + list.stops.length, 0)}</strong><span>De pregătit</span></div>
+          <div><strong>{plannedRoutes.filter((route) => route.status === "ASSIGNED").length}</strong><span>Planificate</span></div>
+          <div><strong>{plannedRoutes.filter((route) => route.status === "IN_PROGRESS").length}</strong><span>În desfășurare</span></div>
+          <div><strong>{plannedRoutes.filter((route) => route.status === "COMPLETED").length}</strong><span>Finalizate</span></div>
+        </div>
 
         <div className="logistics-page__print-hide">
         <Card>
           <CardHeader>
-            <CardTitle>Builder traseu</CardTitle>
-            <CardDescription>Fără optimizare geografică automată.</CardDescription>
+            <CardTitle>{editingRouteId ? (editingRouteStatus === "DRAFT" ? "Continuă planificarea" : "Editează traseul") : "Pregătește un traseu"}</CardTitle>
+            <CardDescription>Adaugă opririle în ordinea în care vrei să fie parcurse.</CardDescription>
           </CardHeader>
           <CardContent className="logistics-page__content">
             <div className="logistics-page__filters">
-              <TextInput label="Nume" onChange={(event) => setRouteName(event.target.value)} value={routeName} />
+              <TextInput label="Nume traseu (opțional)" onChange={(event) => setRouteName(event.target.value)} value={routeName} />
               <DateInput label="Data traseului" onChange={(event) => setRouteDate(event.target.value)} value={routeDate} />
               <Select
                 label="Curier"
@@ -300,23 +353,25 @@ export function LogisticsRouteBuilderPage(): ReactNode {
             </div>
 
             <div className="logistics-page__route-grid">
-                <CandidatePanel title="De livrat" loading={deliveryCandidatesQuery.isLoading}>
-                {deliveryRouteCandidates.filter((work) => !assignedStopKeys.has(`DELIVERY:${work.id}`)).map((work) => (
+                <CandidatePanel title={`De livrat · ${availableDeliveryCandidates.length}`} loading={deliveryCandidatesQuery.isLoading}>
+                {availableDeliveryCandidates.map((work) => (
                   <CandidateButton disabled={selectedKeys.has(`DELIVERY:${work.id}`)} key={work.id} label={`${work.workCode} · ${work.patientName}`} onClick={() => addDelivery(work)} />
                 ))}
+                {availableDeliveryCandidates.length === 0 && !deliveryCandidatesQuery.isLoading ? <p className="logistics-page__empty">Nu există livrări disponibile.</p> : null}
               </CandidatePanel>
-              <CandidatePanel title="De ridicat" loading={pickupsQuery.isLoading}>
-                {deliveryCandidates.filter((work) => work.requiresPickup && !assignedStopKeys.has(`PICKUP:${work.id}`)).map((work) => (
+              <CandidatePanel title={`De ridicat · ${availablePickupWorkCandidates.length + availablePickupRequests.length}`} loading={pickupsQuery.isLoading}>
+                {availablePickupWorkCandidates.map((work) => (
                   <CandidateButton disabled={selectedKeys.has(`PICKUP:${work.id}`)} key={`work-${work.id}`} label={`${work.workCode} · ${work.patientName}`} onClick={() => addPickupWork(work)} />
                 ))}
-                {pickupCandidates.filter((pickup) => !assignedStopKeys.has(`PICKUP:${pickup.id}`)).map((pickup) => (
+                {availablePickupRequests.map((pickup) => (
                   <CandidateButton disabled={selectedKeys.has(`PICKUP:${pickup.id}`)} key={pickup.id} label={`${pickup.clinic.name} · ${pickup.scheduleLabel}`} onClick={() => addPickup(pickup)} />
                 ))}
+                {availablePickupWorkCandidates.length + availablePickupRequests.length === 0 && !pickupsQuery.isLoading ? <p className="logistics-page__empty">Nu există ridicări disponibile.</p> : null}
               </CandidatePanel>
               <Card>
                 <CardHeader>
-                  <CardTitle>Stopuri selectate</CardTitle>
-                  <CardDescription>{selectedStops.length} stopuri</CardDescription>
+                  <CardTitle>Traseul în pregătire</CardTitle>
+                  <CardDescription>{selectedStops.length} {selectedStops.length === 1 ? "oprire selectată" : "opriri selectate"}</CardDescription>
                 </CardHeader>
                 <CardContent className="logistics-page__route-stops">
                   {selectedStops.map((stop, index) => (
@@ -336,10 +391,17 @@ export function LogisticsRouteBuilderPage(): ReactNode {
                       <Button onClick={() => removeStop(stop.id)} size="small" type="button" variant="ghost">Scoate</Button>
                     </div>
                   ))}
-                  {selectedStops.length === 0 ? <p className="logistics-page__empty">Selectează lucrări sau ridicări în ordinea dorită.</p> : null}
-                  <Button disabled={!canCreate || selectedStops.length === 0 || createRoute.isPending} onClick={submit} type="button">
-                    {editingRouteId ? (editingRouteStatus === "DRAFT" ? "Creează traseu" : "Salvează lista") : courierUserId ? "Expediază lista" : "Adaugă în draft"}
-                  </Button>
+                  {selectedStops.length === 0 ? <p className="logistics-page__empty">Alege lucrări sau ridicări din stânga. Ele vor apărea aici.</p> : null}
+            {editingRouteId ? <Button disabled={!canCreate || selectedStops.length === 0 || updateRoute.isPending} onClick={() => submit(false)} type="button">
+                    Salvează modificările
+                  </Button> : <>
+                    <Button disabled={!canCreate || selectedStops.length === 0 || createRoute.isPending} onClick={() => submit(false)} type="button">
+                      {courierUserId ? "Creează și trimite curierului" : "Creează traseu pentru logistică"}
+                    </Button>
+                    {!courierUserId ? <Button disabled={!canCreate || selectedStops.length === 0 || createRoute.isPending} onClick={() => submit(true)} type="button" variant="outline">
+                      Salvează lista de pregătire
+                    </Button> : null}
+                  </>}
                 </CardContent>
               </Card>
             </div>
@@ -349,14 +411,13 @@ export function LogisticsRouteBuilderPage(): ReactNode {
 
         <Card>
           <CardHeader>
-            <CardTitle>Liste și trasee în ziua selectată</CardTitle>
-            <CardDescription>{visibleRoutes.length} elemente afișate</CardDescription>
+            <CardTitle>Traseele planificate</CardTitle>
+            <CardDescription>{plannedRoutes.length} {plannedRoutes.length === 1 ? "traseu" : "trasee"} pentru ziua selectată</CardDescription>
           </CardHeader>
           <CardContent className="logistics-page__groups">
             <div className="logistics-page__print-controls">
               <DateWheelPicker label="Data listelor" value={listDate} onChange={(value) => { setListDate(value); setListRouteId(""); setPrintRouteId(null); }} />
               <div className="logistics-page__filter-field">
-                <span className="logistics-page__filter-label">Curier</span>
                 <Select
                   aria-label="Filtrare curier"
                   label=""
@@ -370,7 +431,7 @@ export function LogisticsRouteBuilderPage(): ReactNode {
                   value={listCourierId}
                 />
               </div>
-              <Select label="Listă / traseu" onChange={(event) => { setListRouteId(event.target.value); setPrintRouteId(null); }} options={(routesQuery.data?.items ?? []).map((route) => ({ label: `${route.routeNumber} · ${route.name}`, value: route.id }))} placeholder="Toate" value={listRouteId} />
+              <Select label="Traseu" onChange={(event) => { setListRouteId(event.target.value); setPrintRouteId(null); }} options={plannedRoutes.map((route) => ({ label: `${route.routeNumber} · ${route.name}`, value: route.id }))} placeholder="Toate traseele" value={listRouteId} />
               <div className="logistics-page__print-actions">
                 <Tooltip content="Printează traseele afișate">
                   <IconButton aria-label="Printează ziua" icon="⎙" onClick={() => printRoutes()} size="medium" variant="outline" />
@@ -382,40 +443,71 @@ export function LogisticsRouteBuilderPage(): ReactNode {
             </div>
             {routesQuery.isLoading ? <LoadingState text="Se încarcă traseele" /> : null}
             {routesQuery.isError ? <ErrorState title="Traseele nu au fost încărcate" description={getErrorMessage(routesQuery.error)} /> : null}
-              {visibleRoutes.map((route) => (
-              <div className="logistics-page__group" key={route.id}>
-                <div className="logistics-page__print-route-header">
-                  <strong>{route.status === "DRAFT" ? "Listă" : "Traseu"} · {route.routeNumber} · {route.name}</strong>
-                  <span>Data: {route.routeDate} · Curier: {route.courier?.name ?? "Neasignat"} · {route.stops.length} stopuri</span>
-                </div>
-                <span className="logistics-page__screen-only">{route.status} · versiunea {route.version}</span>
-                <ol className="logistics-page__print-stops">{route.stops.map((stop) => <li key={stop.id}><strong>{stop.type === "DELIVERY" ? "Livrare" : "Ridicare"}</strong><span>{stop.targetLabel}</span><span>Adresă: {stop.addressOverride || "-"}</span><span>Telefon: {stop.phoneOverride || "-"}</span></li>)}</ol>
-                <div className="logistics-page__group-actions">
-                  {route.status === "DRAFT" ? <Button onClick={() => editRoute(route)} size="small" type="button" variant="outline">Creează traseu</Button> : null}
-                  {canExecute && (route.status === "ASSIGNED" || (route.status === "DRAFT" && !route.courier)) ? <Button disabled={startRoute.isPending} onClick={() => startRouteAsLogistics(route.id)} size="small" type="button">{route.courier ? "Începe traseul" : "Începe fără curier"}</Button> : null}
-                  {canAssign ? <Button onClick={() => startAssigning(route)} size="small" type="button" variant="outline">{route.courier ? "Schimbă curierul" : "Expediază curierului"}</Button> : null}
-                  {assigningRouteId === route.id ? (
-                    <>
-                      <Select aria-label={`Curier pentru ${route.routeNumber}`} label="Curier" onChange={(event) => setAssigningCourierId(event.target.value)} options={(couriersQuery.data ?? []).map((courier) => ({ label: courier.displayName, value: courier.id }))} placeholder="Selectează curierul" value={assigningCourierId} />
-                      <Button disabled={updateRoute.isPending} onClick={() => assignRoute(route)} size="small" type="button">Trimite traseul</Button>
-                    </>
-                  ) : null}
-                  {canCancel ? <Button disabled={deleteRoute.isPending} onClick={() => removeRoute(route)} size="small" type="button" variant="secondary">Șterge traseul</Button> : null}
-                  <Tooltip content="Printează traseul">
-                    <IconButton aria-label={`Printează traseul ${route.routeNumber}`} icon="⎙" onClick={() => printRoutes(route.id)} size="medium" variant="outline" />
-                  </Tooltip>
-                  <Tooltip content="Editează traseul">
-                    <IconButton aria-label={`Editează traseul ${route.routeNumber}`} icon="✎" onClick={() => editRoute(route)} size="medium" variant="outline" />
-                  </Tooltip>
-                </div>
-                {canExecute && route.status === "IN_PROGRESS" ? <LogisticsRouteExecution route={route} onRecord={(stop, outcome, notes) => recordRouteStopAsLogistics(route.id, stop.id, outcome, notes)} pending={outcomeRoute.isPending} /> : null}
+            {preparationLists.length > 0 ? <div className="logistics-page__preparation-box">
+              <div>
+                <strong>Lista de pregătire</strong>
+                <p>Opririle de aici nu sunt încă într-un traseu. Deschide lista când vrei să creezi traseul.</p>
               </div>
+              <Button onClick={() => editRoute(preparationLists[0]!)} size="small" type="button" variant="outline">Deschide lista</Button>
+            </div> : null}
+            {plannedRoutes.length === 0 && !routesQuery.isLoading ? <p className="logistics-page__empty">Nu există trasee pentru filtrele selectate.</p> : null}
+            {plannedRoutes.some((route) => !route.courier) ? <h3 className="logistics-page__route-section-title">Trasee pentru logistică</h3> : null}
+            {plannedRoutes.filter((route) => !route.courier).map((route) => (
+              <RouteGroup key={route.id} canAssign={canAssign} canCancel={canCancel} canExecute={canExecute} assigningCourierId={assigningCourierId} assigningRouteId={assigningRouteId} couriers={couriersQuery.data ?? []} deletePending={deleteRoute.isPending} editRoute={editRoute} onAssign={assignRoute} onRecord={recordRouteStopAsLogistics} onRemove={removeRoute} onStart={startRouteAsLogistics} onStartAssigning={startAssigning} outcomePending={outcomeRoute.isPending} route={route} startPending={startRoute.isPending} updatePending={updateRoute.isPending} setAssigningCourierId={setAssigningCourierId} printRoutes={printRoutes} />
+            ))}
+            {plannedRoutes.some((route) => route.courier) ? <h3 className="logistics-page__route-section-title">Trasee pentru curieri</h3> : null}
+            {plannedRoutes.filter((route) => route.courier).map((route) => (
+              <RouteGroup key={route.id} canAssign={canAssign} canCancel={canCancel} canExecute={canExecute} assigningCourierId={assigningCourierId} assigningRouteId={assigningRouteId} couriers={couriersQuery.data ?? []} deletePending={deleteRoute.isPending} editRoute={editRoute} onAssign={assignRoute} onRecord={recordRouteStopAsLogistics} onRemove={removeRoute} onStart={startRouteAsLogistics} onStartAssigning={startAssigning} outcomePending={outcomeRoute.isPending} route={route} startPending={startRoute.isPending} updatePending={updateRoute.isPending} setAssigningCourierId={setAssigningCourierId} printRoutes={printRoutes} />
             ))}
           </CardContent>
         </Card>
       </section>
     </main>
   );
+}
+
+function RouteGroup({ assigningCourierId, assigningRouteId, canAssign, canCancel, canExecute, couriers, deletePending, editRoute, onAssign, onRecord, onRemove, onStart, onStartAssigning, outcomePending, printRoutes, route, setAssigningCourierId, startPending, updatePending }: {
+  readonly assigningCourierId: string;
+  readonly assigningRouteId: string | null;
+  readonly canAssign: boolean;
+  readonly canCancel: boolean;
+  readonly canExecute: boolean;
+  readonly couriers: readonly CourierOption[];
+  readonly deletePending: boolean;
+  readonly editRoute: (route: CourierRouteView) => void;
+  readonly onAssign: (route: CourierRouteView) => void;
+  readonly onRecord: (routeId: string, stopId: string, outcome: CourierRouteStopOutcome, notes: string) => void;
+  readonly onRemove: (route: CourierRouteView) => void;
+  readonly onStart: (routeId: string) => void;
+  readonly onStartAssigning: (route: CourierRouteView) => void;
+  readonly outcomePending: boolean;
+  readonly printRoutes: (routeId?: string) => void;
+  readonly route: CourierRouteView;
+  readonly setAssigningCourierId: (value: string) => void;
+  readonly startPending: boolean;
+  readonly updatePending: boolean;
+}): ReactNode {
+  return <div className="logistics-page__group">
+    <div className="logistics-page__print-route-header">
+      <strong>Traseu · {route.routeNumber} · {route.name}</strong>
+      <span>Data: {formatRouteDate(route.routeDate)} · Curier: {route.courier?.name ?? "Logistică"} · {route.stops.length} {route.stops.length === 1 ? "oprire" : "opriri"}</span>
+    </div>
+    <span className="logistics-page__screen-only">{routeStatusLabel(route.status, route)} · {route.stops.filter((stop) => stop.outcomeStatus !== "PENDING").length} din {route.stops.length} opriri rezolvate</span>
+    <ol className="logistics-page__print-stops">{route.stops.map((stop) => <li key={stop.id}><strong>{stop.type === "DELIVERY" ? "Livrare" : "Ridicare"}</strong><span>{stop.targetLabel}</span><StatusBadge label={routeStopOutcomeLabel(stop.outcomeStatus, stop.type)} variant={routeStopOutcomeVariant(stop.outcomeStatus)} /><span>Adresă: {stop.addressOverride || "-"}</span><span>Telefon: {stop.phoneOverride || "-"}</span></li>)}</ol>
+    <div className="logistics-page__group-actions">
+      {route.status === "DRAFT" ? <Button onClick={() => editRoute(route)} size="small" type="button" variant="outline">{isPreparationList(route) ? "Deschide lista" : "Deschide traseul"}</Button> : null}
+      {canExecute && (route.status === "ASSIGNED" || (route.status === "DRAFT" && !route.courier)) ? <Button disabled={startPending} onClick={() => onStart(route.id)} size="small" type="button">Începe traseul</Button> : null}
+      {canAssign ? <Button onClick={() => onStartAssigning(route)} size="small" type="button" variant="outline">{route.courier ? "Schimbă curierul" : "Trimite curierului"}</Button> : null}
+      {assigningRouteId === route.id ? <div className="logistics-page__assign-controls">
+        <Select aria-label={`Curier pentru ${route.routeNumber}`} label="" onChange={(event) => setAssigningCourierId(event.target.value)} options={couriers.map((courier) => ({ label: courier.displayName, value: courier.id }))} placeholder="Selectează curierul" value={assigningCourierId} />
+        <Button disabled={updatePending} onClick={() => onAssign(route)} size="small" type="button">Trimite traseul</Button>
+      </div> : null}
+      {canCancel && (route.status === "DRAFT" || route.status === "ASSIGNED") ? <Button disabled={deletePending} onClick={() => onRemove(route)} size="small" type="button" variant="secondary">Anulează traseul</Button> : null}
+      <Tooltip content="Printează traseul"><IconButton aria-label={`Printează traseul ${route.routeNumber}`} icon="⎙" onClick={() => printRoutes(route.id)} size="medium" variant="outline" /></Tooltip>
+      <Tooltip content="Editează traseul"><IconButton aria-label={`Editează traseul ${route.routeNumber}`} icon="✎" onClick={() => editRoute(route)} size="medium" variant="outline" /></Tooltip>
+    </div>
+    {canExecute && route.status === "IN_PROGRESS" ? <LogisticsRouteExecution route={route} onRecord={(stop, outcome, notes) => onRecord(route.id, stop.id, outcome, notes)} pending={outcomePending} /> : null}
+  </div>;
 }
 
 function LogisticsRouteExecution({ onRecord, pending, route }: { readonly onRecord: (stop: CourierRouteStopView, outcome: CourierRouteStopOutcome, notes: string) => void; readonly pending: boolean; readonly route: CourierRouteView }): ReactNode {
@@ -449,7 +541,6 @@ function DateWheelPicker({ label, onChange, value }: { readonly label: string; r
   const daysInMonth = new Date(Date.UTC(current.year, current.month + 1, 0)).getUTCDate();
   const days = Array.from({ length: daysInMonth }, (_, index) => index + 1);
   return <div className="logistics-page__date-picker">
-    <span className="logistics-page__filter-label">{label}</span>
     <button aria-label={`Alege ${label}`} className="logistics-page__date-trigger" onClick={() => setIsOpen(true)} type="button">{String(current.day).padStart(2, "0")} {months[current.month]} {current.year}</button>
     {isOpen ? <div className="logistics-page__date-modal-backdrop" onMouseDown={() => setIsOpen(false)}>
       <section aria-label={label} aria-modal="true" className="logistics-page__date-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">

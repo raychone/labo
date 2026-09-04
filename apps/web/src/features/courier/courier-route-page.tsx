@@ -17,6 +17,13 @@ function formatDate(value: string): string {
   return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium" }).format(new Date(`${value}T00:00:00.000Z`));
 }
 
+function routeStatusLabel(status: CourierRouteView["status"]): string {
+  if (status === "ASSIGNED") return "Planificat";
+  if (status === "IN_PROGRESS") return "În desfășurare";
+  if (status === "COMPLETED") return "Finalizat";
+  return status === "CANCELLED" ? "Anulat" : "Planificare neterminată";
+}
+
 export function CourierRoutePage(): ReactNode {
   const toast = useToast();
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
@@ -61,7 +68,7 @@ export function CourierRoutePage(): ReactNode {
         <header className="logistics-page__header">
           <div>
             <h1 id="courier-route-title">Trasee</h1>
-            <p>Alege traseul disponibil și parcurge opririle în ordinea stabilită de logistică.</p>
+        <p>Aici vezi doar traseele trimise ție. Parcurge opririle în ordinea stabilită de logistică.</p>
           </div>
         </header>
         {routesQuery.isLoading ? <LoadingState text="Se încarcă rutele" /> : null}
@@ -80,8 +87,8 @@ function RouteCard({ canExecute, canStart, onRecord, onStart, pending, route }: 
     <Card>
       <CardHeader>
         <CardTitle>{route.routeNumber} · {route.name}</CardTitle>
-        <CardDescription>{formatDate(route.routeDate)} · {route.stops.length} stopuri</CardDescription>
-        <StatusBadge label={route.status === "ASSIGNED" ? "Asignat" : route.status === "IN_PROGRESS" ? "În desfășurare" : route.status === "COMPLETED" ? "Finalizat" : route.status} variant={route.status === "COMPLETED" ? "delivered" : route.status === "IN_PROGRESS" ? "planned" : "awaiting"} />
+        <CardDescription>{formatDate(route.routeDate)} · {route.stops.length} {route.stops.length === 1 ? "oprire" : "opriri"} · {route.stops.filter((stop) => stop.outcomeStatus !== "PENDING").length} rezolvate</CardDescription>
+        <StatusBadge label={routeStatusLabel(route.status)} variant={route.status === "COMPLETED" ? "delivered" : route.status === "IN_PROGRESS" ? "planned" : "awaiting"} />
         {canStart ? <Button disabled={pending} onClick={onStart}>Începe traseul</Button> : null}
         {route.status === "ASSIGNED" && !canStart ? <p className="logistics-page__route-waiting">Disponibil după finalizarea traseului anterior.</p> : null}
       </CardHeader>

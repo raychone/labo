@@ -494,17 +494,32 @@ function OperationsModal({
     const selectedSet = new Set(selectedTeeth);
     const coveredTeeth = new Set(activePerformed.flatMap((performed) => performed.selectedTeeth ?? []).filter((tooth) => selectedSet.has(tooth as AdultFdiTooth)));
     const teethToRemove = selectedTeeth.filter((tooth) => coveredTeeth.has(tooth));
+    const affectedOperations = activePerformed.filter((performed) => (performed.selectedTeeth ?? []).some((tooth) => coveredTeeth.has(tooth as AdultFdiTooth)));
+    const replaceCoverage = (replacementTeeth: readonly AdultFdiTooth[], message: string): void => {
+      if (affectedOperations.length === 0) return;
+      void (async () => {
+        try {
+          for (const performed of affectedOperations) {
+            await removeMutation.mutateAsync({ input: { reason: "Corecție tehnică" }, performedOperationId: performed.id });
+          }
+          if (replacementTeeth.length > 0) {
+            await performMutation.mutateAsync({ operationId, selectedTeeth: replacementTeeth, workOrderId: work.id });
+          }
+          toast.showToast({ message, variant: "success" });
+        } catch (error) {
+          toast.showToast({ message: getErrorMessage(error), title: "Manopera nu a fost actualizată", variant: "error" });
+        }
+      })();
+    };
     if (!isCaseLevel && teethToRemove.length === selectedTeeth.length) {
-      const affectedOperations = activePerformed.filter((performed) => (performed.selectedTeeth ?? []).some((tooth) => coveredTeeth.has(tooth as AdultFdiTooth)));
-      for (const performed of affectedOperations) {
-        const remainingTeeth = (performed.selectedTeeth ?? []).filter((tooth) => !coveredTeeth.has(tooth as AdultFdiTooth)) as AdultFdiTooth[];
-        removeMutation.mutate({ input: { reason: "Corecție tehnică" }, performedOperationId: performed.id, }, {
-          onSuccess: () => {
-            if (remainingTeeth.length > 0) performMutation.mutate({ operationId, selectedTeeth: remainingTeeth, workOrderId: work.id });
-          },
-        });
-      }
-      toast.showToast({ message: `Manopera a fost eliminată de pe ${teethToRemove.length === 1 ? "dinte" : "dinții"} selectat${teethToRemove.length === 1 ? "" : "i"}.`, variant: "success" });
+      const remainingTeeth = [...new Set(affectedOperations.flatMap((performed) => (performed.selectedTeeth ?? []).filter((tooth) => !coveredTeeth.has(tooth as AdultFdiTooth))))] as AdultFdiTooth[];
+      replaceCoverage(remainingTeeth, `Manopera a fost eliminată de pe ${teethToRemove.length === 1 ? "dinte" : "dinții"} selectat${teethToRemove.length === 1 ? "" : "i"}.`);
+      return;
+    }
+    if (!isCaseLevel && teethToRemove.length > 0) {
+      // If only part of an existing operation is selected, rebuild its
+      // coverage so the same operation can be applied to the full selection.
+      replaceCoverage(selectedTeeth, `Manopera a fost reaplicată pentru ${selectedTeeth.length} dinți.`);
       return;
     }
 
@@ -610,7 +625,7 @@ function OperationsModal({
               <span>
                 Proba {performed.probeCycle?.sequence ?? detailQuery.data?.activeProbeCycle?.sequence ?? work?.cycleNumber ?? 1} · {(performed.selectedTeeth ?? []).length > 0 ? `Dinți: ${(performed.selectedTeeth ?? []).join(", ")}` : "Manoperă de caz"} · {performed.quantity ?? "-"} × {performed.rateMinorSnapshot === null || performed.rateMinorSnapshot === undefined ? "-" : formatMoneyMinor(performed.rateMinorSnapshot, performed.currency, "ro-RO")} = {formatMoneyMinor(performed.earningMinor, performed.currency, "ro-RO")}
               </span>
-              {performed.removedAt ? <span>Eliminată · {performed.removalReason ?? "fără motiv"}</span> : null}
+              {performed.removedAt ? <span>Eliminată · {performed.removalReason ?? "fără motiv"}</span> : <Button disabled={!canManageOperations || isMutating} onClick={() => removeMutation.mutate({ input: { reason: "Eliminare din lista de manopere" }, performedOperationId: performed.id })} size="small" variant="secondary">Elimină</Button>}
             </article>
           ))}
         </div>

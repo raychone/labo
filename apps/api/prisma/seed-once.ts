@@ -2,8 +2,6 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 import { seedTechnicalCatalog } from "./technical/technical-seed.js";
-import { seedDemoData } from "./demo/demo-seed.js";
-import { assertDemoSeedAllowed } from "./demo/demo-guard.js";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required.");
@@ -18,11 +16,7 @@ async function main(): Promise<void> {
     return;
   }
   await seedTechnicalCatalog(prisma);
-  if (process.env.SEED_DEMO_ON_FIRST_DEPLOY === "true") {
-    assertDemoSeedAllowed();
-    await seedDemoData(prisma, new Date(), { includeTechnicalCatalog: false });
-  }
-  await prisma.seedRun.create({ data: { key: seedKey, metadata: { demo: process.env.SEED_DEMO_ON_FIRST_DEPLOY === "true", technical: true }, version: "1" } });
+  await prisma.seedRun.create({ data: { key: seedKey, metadata: { demo: false, technical: true }, version: "2" } });
   console.log("Initial deployment seed completed. Future deploys will not reseed.");
 }
 

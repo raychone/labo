@@ -372,6 +372,13 @@ const realLabSheetStatusOptions: readonly SelectOption[] = [
 
 const sortOptions: readonly SelectOption[] = OPERATIONAL_STATUS_SORT_FIELDS.map((field) => ({ label: sortLabels[field], value: field }));
 const operationalStateOptions: readonly SelectOption[] = OPERATIONAL_STATUS_TABS.map((tab) => ({ label: tabLabels[tab], value: tab }));
+const editableOperationalStatusOptions: readonly SelectOption[] = [
+  { label: "Recepție", value: "RECEPTIE" },
+  { label: "În lucru", value: "IN_LUCRU" },
+  { label: "În așteptare", value: "IN_ASTEPTARE" },
+  { label: "Probă", value: "PROBA" },
+  { label: "Finalizată", value: "FINALIZATA" },
+];
 
 export function StatusPage({ allowLogisticsRead = false, experimental = false, headerActions, onTabChange, showTransportKpi = true, transportFilter, transportKpi }: { readonly allowLogisticsRead?: boolean; readonly experimental?: boolean; readonly headerActions?: ReactNode; readonly onTabChange?: (tab: OperationalStatusTab) => void; readonly showTransportKpi?: boolean; readonly transportFilter?: 1 | 2 | 3 | null; readonly transportKpi?: ReactNode } = {}): ReactNode {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -773,18 +780,14 @@ function TestDeadlineAction({ row }: { readonly row: OperationalStatusRow }): Re
 function TestStatusAction({ row }: { readonly row: OperationalStatusRow }): ReactNode {
   const update = useSetWorkStatus();
   return (
-    <select
+    <Select
       aria-label={`Stare ${row.workCode}`}
       value={row.technicalReadiness === "PROBE_READY" ? "PROBA" : row.operationalStatus}
       disabled={update.isPending}
+      label=""
+      options={editableOperationalStatusOptions}
       onChange={(event) => update.mutate({ workOrderId: row.id, input: { status: event.target.value as Exclude<typeof row.operationalStatus, "REGISTERED"> } })}
-    >
-      <option value="RECEPTIE">Recepție</option>
-      <option value="IN_LUCRU">În lucru</option>
-      <option value="IN_ASTEPTARE">În așteptare</option>
-      <option value="PROBA">Probă</option>
-      <option value="FINALIZATA">Finalizată</option>
-    </select>
+    />
   );
 }
 

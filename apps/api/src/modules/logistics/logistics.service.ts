@@ -373,13 +373,22 @@ export class LogisticsService {
       // new delivery. Only a pending stop still owns the item in the route
       // pipeline; failed outcomes are also allowed to re-enter logistics.
       const existing = await this.prisma.courierRouteStop.findFirst({
+        include: {
+          pickupRequest: { select: { clinic: { select: { name: true } } } },
+          workOrder: { select: { code: true, patientName: true } },
+        },
         where: {
           outcomeStatus: "PENDING",
           route: { status: { in: [CourierRouteStatus.DRAFT, CourierRouteStatus.ASSIGNED, CourierRouteStatus.IN_PROGRESS] } },
           OR: [{ workOrderId: { in: workOrderIds } }, { pickupRequestId: { in: pickupRequestIds } }],
         },
       });
-      if (existing) throw new ConflictException("Acest item este deja inclus într-o listă de traseu.");
+      if (existing) {
+        const label = existing.workOrder
+          ? `${existing.workOrder.code} · ${existing.workOrder.patientName}`
+          : existing.pickupRequest?.clinic.name ?? "ridicarea selectată";
+        throw new ConflictException(`${label} este deja inclus(ă) într-un traseu activ.`);
+      }
     }
     const route = await this.prisma.$transaction(async (tx) => {
       const routeNumber = await this.nextRouteNumber(tx, routeDate);
@@ -1136,16 +1145,15 @@ export class LogisticsService {
     if (query.workflowStageKey) {
       and.push({ activeCycle: { is: { workflowExecution: { is: { currentStage: { is: { stageKeySnapshot: query.workflowStageKey } } } } } } });
     }
-    // A work kept in a draft/list is still a candidate for the route builder.
-    // A completed delivery, however, must leave the operational queue until a
-    // later probe/return makes it ready again. Pending stops in assigned or
-    // active routes also remain hidden from the source queue.
+    // Any pending stop already belongs to a route, including a draft logistics
+    // route or the preparation list. It must not be offered a second time.
+    // Completed failed stops are intentionally allowed back into the queue.
     and.push({
       NOT: {
         courierRouteStops: {
           some: {
             outcomeStatus: "PENDING",
-            route: { status: { in: [CourierRouteStatus.ASSIGNED, CourierRouteStatus.IN_PROGRESS] } },
+            route: { status: { in: [CourierRouteStatus.DRAFT, CourierRouteStatus.ASSIGNED, CourierRouteStatus.IN_PROGRESS] } },
           },
         },
       },
@@ -1189,7 +1197,7 @@ export class LogisticsService {
       // A successfully completed pickup is historical and must not be offered
       // again. A failed/uncompleted pickup remains reusable for a new route.
       { routeStops: { none: { outcomeStatus: "PICKED_UP" } } },
-      { routeStops: { none: { outcomeStatus: "PENDING", route: { status: { in: [CourierRouteStatus.ASSIGNED, CourierRouteStatus.IN_PROGRESS] } } } } },
+      { routeStops: { none: { outcomeStatus: "PENDING", route: { status: { in: [CourierRouteStatus.DRAFT, CourierRouteStatus.ASSIGNED, CourierRouteStatus.IN_PROGRESS] } } } } },
     ];
     for (const scheduledDate of dateRanges) {
       and.push({ scheduledDate });

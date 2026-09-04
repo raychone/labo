@@ -567,6 +567,11 @@
   grid-column: 2;
 }
 
+.technician-workbench__performed-row > .dl-button {
+  grid-column: 2;
+  justify-self: end;
+}
+
 .technician-workbench__performed-row--active {
   border-color: var(--dl-color-success, #16803c);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dl-color-success, #16803c) 28%, transparent);
@@ -584,5 +589,10 @@
 
   .technician-workbench__performed-row span:last-child {
     grid-column: auto;
+  }
+
+  .technician-workbench__performed-row > .dl-button {
+    grid-column: auto;
+    justify-self: start;
   }
 }
