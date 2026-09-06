@@ -99,6 +99,11 @@ const BILLABLE_WORK_INCLUDE = {
     },
   },
   clinic: true,
+  courierRouteStops: {
+    select: { outcomeStatus: true, type: true },
+    take: 1,
+    where: { outcomeStatus: "DELIVERED", type: "DELIVERY" },
+  },
   doctor: true,
   workType: true,
 } as const satisfies Prisma.WorkOrderInclude;
@@ -124,6 +129,11 @@ const BILLING_OVERVIEW_WORK_SELECT = {
     },
   },
   clinic: { select: { name: true } },
+  courierRouteStops: {
+    select: { outcomeStatus: true, type: true },
+    take: 1,
+    where: { outcomeStatus: "DELIVERED", type: "DELIVERY" },
+  },
   clinicId: true,
   createdAt: true,
   doctor: { select: { displayName: true } },
@@ -1148,6 +1158,9 @@ export class BillingService {
 
     return Boolean(
       work.technicalReadiness === "FINAL_READY"
+      // Finalization is technical completion. Billing becomes available only
+      // after logistics records a successful delivery for the final work.
+      && (work.courierRouteStops === undefined || work.courierRouteStops.length > 0)
       && cycle?.executionLegalEntityId
       && cycle.executionLegalEntityCodeSnapshot
       && snapshot?.status === "LOCKED"

@@ -518,9 +518,10 @@ export class WorksService {
       claimStatus: "UNCLAIMED",
       status: { not: "FINALIZATA" },
       technicalReadiness: null,
-      NOT: {
-        activeCycle: { is: { logisticsState: { is: { status: { in: ["HANDED_TO_DELIVERY", "DELIVERED"] } } } } },
-      },
+      OR: [
+        { activeProbeCycleId: { not: null } },
+        { NOT: { activeCycle: { is: { logisticsState: { is: { status: { in: ["HANDED_TO_DELIVERY", "DELIVERED"] } } } } } } },
+      ],
     });
   }
 
@@ -1224,9 +1225,10 @@ export class WorksService {
           id: workOrderId,
           status: { not: "FINALIZATA" },
           technicalReadiness: null,
-          NOT: {
-            activeCycle: { is: { logisticsState: { is: { status: { in: ["HANDED_TO_DELIVERY", "DELIVERED"] } } } } },
-          },
+          OR: [
+            { activeProbeCycleId: { not: null } },
+            { NOT: { activeCycle: { is: { logisticsState: { is: { status: { in: ["HANDED_TO_DELIVERY", "DELIVERED"] } } } } } } },
+          ],
         },
       });
       if (result.count !== 1) {

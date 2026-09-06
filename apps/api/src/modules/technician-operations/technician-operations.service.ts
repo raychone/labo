@@ -541,7 +541,7 @@ export class TechnicianOperationsService {
 
     const performedOperation = await this.prisma.$transaction(async (tx) => {
       const technicianId = await this.ensureTechnicianOwnsWork(tx, context.actorUserId, dto.workOrderId);
-      const workOrder = await tx.workOrder.findUnique({ select: { activeProbeCycleId: true, status: true, workType: { select: { name: true, probeFamily: true, symbol: true } }, items: { select: { workType: { select: { name: true, probeFamily: true, symbol: true } } }, where: { archivedAt: null } } }, where: { id: dto.workOrderId } });
+      const workOrder = await tx.workOrder.findUnique({ select: { activeProbeCycleId: true, status: true, workType: { select: { name: true, probeFamily: true, symbol: true } }, items: { select: { teeth: { select: { fdiTooth: true } }, workType: { select: { name: true, probeFamily: true, symbol: true } } }, where: { archivedAt: null } }, probeCycles: { orderBy: { sequence: "desc" }, select: { id: true }, take: 1, where: { status: "ACTIVE" } } }, where: { id: dto.workOrderId } });
       if (!workOrder || workOrder.status === "FINALIZATA") {
         throw new BadRequestException("Manopera nu poate fi adăugată pentru această stare a lucrării.");
       }
@@ -552,6 +552,7 @@ export class TechnicianOperationsService {
       if (!operation) {
         throw new BadRequestException("Technician operation not found or inactive.");
       }
+      const currentProbeCycleId = workOrder.probeCycles?.[0]?.id ?? workOrder.activeProbeCycleId;
       const allowedCategories = getAllowedOperationCategories([
         ...(workOrder.items ?? []).map((item) => item.workType),
         workOrder.workType,
@@ -585,9 +586,35 @@ export class TechnicianOperationsService {
       if (outsideComposition.length > 0) {
         throw new BadRequestException(`Dinții ${outsideComposition.join(", ")} nu fac parte din compoziția activă a lucrării.`);
       }
+      if (!isCaseLevel && operation.category !== "Altele") {
+        const selectedCategories = new Set(
+          (workOrder.items ?? [])
+            .filter((item) => item.teeth?.some((tooth) => validSelectedTeeth.includes(tooth.fdiTooth as AdultFdiTooth)))
+            .flatMap((item) => getAllowedOperationCategories([item.workType] ) ?? []),
+        );
+        if (selectedCategories.size > 0 && !selectedCategories.has(operation.category)) {
+          throw new BadRequestException("Manopera nu corespunde tipului lucrării de pe dintele selectat.");
+        }
+      }
+      // Migrate legacy tooth links lazily as well. Some operations were
+      // created before probe-cycle ownership was enforced and remained marked
+      // as current even though they belong to an older probe.
+      if (tx.technicianPerformedOperationTooth?.updateMany && currentProbeCycleId) {
+        await tx.technicianPerformedOperationTooth.updateMany({
+          data: { releasedAt: new Date() },
+          where: {
+            fdiTooth: { in: validSelectedTeeth },
+            operationId: dto.operationId,
+            releasedAt: null,
+            workOrderId: dto.workOrderId,
+            performedOperation: { probeCycleId: { not: currentProbeCycleId } },
+          },
+        });
+      }
       const conflicts = validSelectedTeeth.length === 0 ? [] : await tx.technicianPerformedOperationTooth.findMany({
         select: { fdiTooth: true },
-        where: { fdiTooth: { in: validSelectedTeeth }, operationId: dto.operationId, releasedAt: null, workOrderId: dto.workOrderId },
+        // Same operation is allowed again on a later probe cycle.
+        where: { fdiTooth: { in: validSelectedTeeth }, operationId: dto.operationId, releasedAt: null, workOrderId: dto.workOrderId, performedOperation: { probeCycleId: currentProbeCycleId } },
       });
       if (conflicts.length > 0) {
         const teeth = conflicts.map((conflict) => conflict.fdiTooth).sort((left, right) => left - right);
@@ -610,7 +637,7 @@ export class TechnicianOperationsService {
             notes: dto.notes ?? null,
             operationId: dto.operationId,
             performedAt: now,
-            probeCycleId: workOrder.activeProbeCycleId,
+            probeCycleId: currentProbeCycleId,
             quantity,
             rateId: rate.id,
             rateMinorSnapshot: rate.rateMinor,

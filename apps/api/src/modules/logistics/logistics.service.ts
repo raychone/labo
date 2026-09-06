@@ -419,6 +419,7 @@ export class LogisticsService {
           where: { id: stop.workOrderId },
         })));
       }
+      await Promise.all(dto.stops.map((stop) => this.persistRouteStopContacts(tx, stop)));
       await this.recordRouteEvent(tx, context, created.id, CourierRouteEventType.ROUTE_CREATED, {
         routeDate: created.routeDate.toISOString().slice(0, 10),
         routeId: created.id,
@@ -498,6 +499,7 @@ export class LogisticsService {
           where: { id: stop.workOrderId },
         })));
       }
+      await Promise.all(dto.stops.map((stop) => this.persistRouteStopContacts(tx, stop)));
       await this.recordAudit(tx, context, LOGISTICS_AUDIT_ACTIONS.routeUpdated, route.id, this.toRouteAuditMetadata(route));
       return route;
     });
@@ -1149,14 +1151,35 @@ export class LogisticsService {
     // route or the preparation list. It must not be offered a second time.
     // Completed failed stops are intentionally allowed back into the queue.
     and.push({
-      NOT: {
-        courierRouteStops: {
-          some: {
-            outcomeStatus: "PENDING",
-            route: { status: { in: [CourierRouteStatus.DRAFT, CourierRouteStatus.ASSIGNED, CourierRouteStatus.IN_PROGRESS] } },
+      OR: [
+        // A new probe cycle starts a new logistics flow. A previous delivery
+        // in route history must not hide that probe, but an active pending
+        // stop still prevents adding it twice.
+        {
+          technicalReadiness: "PROBE_READY",
+          courierRouteStops: {
+            none: {
+              outcomeStatus: "PENDING",
+              route: { status: { in: [CourierRouteStatus.DRAFT, CourierRouteStatus.ASSIGNED, CourierRouteStatus.IN_PROGRESS] } },
+            },
           },
         },
-      },
+        {
+          NOT: {
+            courierRouteStops: {
+              some: {
+                OR: [
+                  { outcomeStatus: "DELIVERED" },
+                  {
+                    outcomeStatus: "PENDING",
+                    route: { status: { in: [CourierRouteStatus.DRAFT, CourierRouteStatus.ASSIGNED, CourierRouteStatus.IN_PROGRESS] } },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      ],
     });
     if (dateRange) {
       // Finalized works belong to the day they were completed; other works remain date-filtered by deadline.
@@ -1490,6 +1513,32 @@ export class LogisticsService {
       return stop.pickupRequestId
         ? { addressOverride: stop.addressOverride ?? null, phoneOverride: stop.phoneOverride ?? null, stopNotes: stop.stopNotes ?? null, pickupRequest: { connect: { id: stop.pickupRequestId } }, stopOrder: index + 1, type: "PICKUP" }
         : { addressOverride: stop.addressOverride ?? null, phoneOverride: stop.phoneOverride ?? null, stopNotes: stop.stopNotes ?? null, workOrder: { connect: { id: stop.workOrderId as string } }, stopOrder: index + 1, type: "PICKUP" };
+    });
+  }
+
+  private async persistRouteStopContacts(tx: LogisticsTx, stop: CreateCourierRouteDto["stops"][number]): Promise<void> {
+    const address = stop.addressOverride?.trim() || null;
+    const phone = stop.phoneOverride?.trim() || null;
+    if (!address && !phone) return;
+    if (stop.pickupRequestId) {
+      await tx.pickupRequest.update({
+        data: {
+          ...(address ? { address } : {}),
+          ...(phone ? { phone } : {}),
+        },
+        where: { id: stop.pickupRequestId },
+      });
+      return;
+    }
+    if (!stop.workOrderId) return;
+    const work = await tx.workOrder.findUnique({ select: { clinicId: true }, where: { id: stop.workOrderId } });
+    if (!work?.clinicId) return;
+    await tx.clinic.update({
+      data: {
+        ...(address ? { addressLine1: address, addressLine2: null, city: null, postalCode: null } : {}),
+        ...(phone ? { phone } : {}),
+      },
+      where: { id: work.clinicId },
     });
   }
 

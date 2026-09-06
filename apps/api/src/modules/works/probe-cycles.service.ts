@@ -123,11 +123,11 @@ export class ProbeCyclesService {
     const created = await this.prisma.$transaction(async (tx) => {
       const current = await tx.workOrder.findUnique({ select: { activeProbeCycleId: true, status: true, technicalReadiness: true }, where: { id: work.id } });
       if (!current) throw new NotFoundException("Lucrarea nu a fost găsită.");
-      if (!input.directRework && (current.status === "FINALIZATA" || current.technicalReadiness === "FINAL_READY")) throw new ConflictException("O lucrare finalizată nu poate fi recepționată pentru o probă nouă.");
       if (current.activeProbeCycleId) throw new ConflictException("Lucrarea are deja o probă activă.");
       const cycles = await tx.probeCycle.findMany({ orderBy: { sequence: "desc" }, select: { completionOutcome: true, id: true, sequence: true, status: true }, where: { workOrderId: work.id } });
       const last = cycles[0];
-      if (input.directRework && current.technicalReadiness !== "PROBE_READY" && current.technicalReadiness !== "FINAL_READY") throw new ConflictException("Doar lucrările Probă gata sau Finalizate pot fi trimise la refacere.");
+      if (current.status === "FINALIZATA" || current.technicalReadiness === "FINAL_READY") throw new ConflictException("O lucrare finalizată rămâne în istoric și nu poate fi recepționată pentru o probă nouă.");
+      if (input.directRework && current.technicalReadiness !== "PROBE_READY") throw new ConflictException("Doar lucrările cu status Probă gata pot fi trimise la refacere.");
       if (!input.directRework && (!last || last.status !== "COMPLETED" || last.completionOutcome !== "PROBE_READY")) throw new ConflictException("Următoarea probă poate fi creată doar după marcarea probei ca Probă gata.");
       // Legacy initial cycles used sequence 1. Normalize that marker to 0 on the first return.
       let nextSequence = last ? last.sequence + 1 : 0;
@@ -139,7 +139,16 @@ export class ProbeCyclesService {
       if (input.directRework && tx.courierRouteStop?.deleteMany) {
         await tx.courierRouteStop.deleteMany({ where: { outcomeStatus: "PENDING", route: { status: { in: ["DRAFT", "ASSIGNED", "IN_PROGRESS"] } }, workOrderId: work.id } });
       }
-      const updated = await tx.workOrder.updateMany({ data: { activeProbeCycleId: cycle.id, claimStatus: "UNCLAIMED", claimedAt: null, claimedByUserId: null, assignedTechnicianId: null, completedAt: null, completedByUserId: null, deadlineMode: "MANUAL", effectiveDueAt: deadlineAt, manualDueAt: deadlineAt, deadlineSource: input.directRework ? "MANUAL_OVERRIDE" : "CREATION", deadlineRevision: { increment: 1 }, probeReceivedAt: new Date(), releaseReason: input.directRework ? `Trimisă la refacere: ${input.reasonNotes ?? "fără motiv"}` : null, status: input.directRework ? "IN_LUCRU" : "RECEPTIE", statusChangedAt: new Date(), statusChangedByUserId: input.actorUserId, technicalReadiness: null, waitingStartedAt: null, finalizedAt: null, version: { increment: 1 }, updatedByUserId: input.actorUserId }, where: { id: work.id, activeProbeCycleId: null, ...(input.directRework ? {} : { status: { not: "FINALIZATA" } }) } });
+      // A tooth link represents current-cycle coverage, not a permanent
+      // uniqueness constraint. Release links from completed/legacy cycles so
+      // the same operation can be entered again for this probe.
+      if (tx.technicianPerformedOperationTooth?.updateMany) {
+        await tx.technicianPerformedOperationTooth.updateMany({
+          data: { releasedAt: new Date() },
+          where: { releasedAt: null, workOrderId: work.id },
+        });
+      }
+      const updated = await tx.workOrder.updateMany({ data: { activeProbeCycleId: cycle.id, claimStatus: "UNCLAIMED", claimedAt: null, claimedByUserId: null, assignedTechnicianId: null, completedAt: null, completedByUserId: null, deadlineMode: "MANUAL", effectiveDueAt: deadlineAt, manualDueAt: deadlineAt, deadlineSource: input.directRework ? "MANUAL_OVERRIDE" : "CREATION", deadlineRevision: { increment: 1 }, probeReceivedAt: new Date(), releaseReason: input.directRework ? `Trimisă la refacere: ${input.reasonNotes ?? "fără motiv"}` : null, status: input.directRework ? "IN_LUCRU" : "RECEPTIE", statusChangedAt: new Date(), statusChangedByUserId: input.actorUserId, technicalReadiness: null, waitingStartedAt: null, finalizedAt: null, version: { increment: 1 }, updatedByUserId: input.actorUserId }, where: { id: work.id, activeProbeCycleId: null } });
       if (updated.count !== 1) throw new ConflictException("Lucrarea a fost modificată simultan. Reîncarcă lucrarea.");
       return cycle;
     });
@@ -180,13 +189,26 @@ export class ProbeCyclesService {
         const created = await tx.probeCycle.create({ data: { createdByUserId: input.actorUserId, deadlineAt: work.effectiveDueAt ?? work.requestedDeliveryDate ?? now, openedAt: now, probeTypeId: probeType.id, probeTypeNameSnapshot: probeType.name, sequence: previous ? previous.sequence + 1 : 0, status: "ACTIVE", workOrderId: input.workOrderId, probeTypes: { create: [{ probeTypeId: probeType.id, probeTypeNameSnapshot: probeType.name, sortOrder: 0 }] } } });
         activeCycleId = created.id;
         await tx.workOrder.updateMany({ data: { activeProbeCycleId: created.id }, where: { id: input.workOrderId, activeProbeCycleId: null } });
+        // Initial operations can be recorded before the implicit first probe
+        // cycle exists. Attach them to that cycle before validating readiness.
+        await tx.technicianPerformedOperation.updateMany({
+          data: { probeCycleId: created.id },
+          where: { probeCycleId: null, removedAt: null, workOrderId: input.workOrderId },
+        });
       }
       const cycle = await tx.probeCycle.findFirst({ select: { id: true, sequence: true, probeTypeNameSnapshot: true, deadlineAt: true }, where: { id: activeCycleId, status: "ACTIVE", workOrderId: input.workOrderId } });
       if (!cycle) throw new ConflictException("Proba activă a fost deja închisă sau modificată.");
       await this.ensureHasPerformedOperations(tx, input.workOrderId, cycle.id);
       const cycleUpdate = await tx.probeCycle.updateMany({ data: { completedAt: now, completedByUserId: input.actorUserId, completionOutcome: "PROBE_READY", status: "COMPLETED", version: { increment: 1 } }, where: { id: cycle.id, status: "ACTIVE" } });
       if (cycleUpdate.count !== 1) throw new ConflictException("Proba activă a fost deja închisă de alt utilizator.");
-      const workUpdate = await tx.workOrder.updateMany({ data: { activeProbeCycleId: null, claimStatus: "UNCLAIMED", claimedAt: null, claimedByUserId: null, assignedTechnicianId: null, releasedAt: now, releasedByUserId: input.actorUserId, releaseReason: "Probă gata.", status: "IN_ASTEPTARE", statusChangedAt: now, statusChangedByUserId: input.actorUserId, technicalReadiness: "PROBE_READY", probeReadyAt: now, deadlineMode: null, effectiveDueAt: null, manualDueAt: null, deadlineSource: null, waitingStartedAt: now, updatedByUserId: input.actorUserId, version: { increment: 1 } }, where: { id: input.workOrderId, activeProbeCycleId: activeCycleId, status: { not: "FINALIZATA" }, claimStatus: "CLAIMED" } });
+      if (tx.technicianPerformedOperationTooth?.updateMany) {
+        await tx.technicianPerformedOperationTooth.updateMany({
+          data: { releasedAt: now },
+          where: { releasedAt: null, performedOperation: { probeCycleId: cycle.id }, workOrderId: input.workOrderId },
+        });
+      }
+      // Keep the deadline visible while logistics is waiting to deliver this probe.
+      const workUpdate = await tx.workOrder.updateMany({ data: { activeProbeCycleId: null, claimStatus: "UNCLAIMED", claimedAt: null, claimedByUserId: null, assignedTechnicianId: null, releasedAt: now, releasedByUserId: input.actorUserId, releaseReason: "Probă gata.", status: "IN_ASTEPTARE", statusChangedAt: now, statusChangedByUserId: input.actorUserId, technicalReadiness: "PROBE_READY", probeReadyAt: now, waitingStartedAt: now, updatedByUserId: input.actorUserId, version: { increment: 1 } }, where: { id: input.workOrderId, activeProbeCycleId: activeCycleId, status: { not: "FINALIZATA" }, claimStatus: "CLAIMED" } });
       if (workUpdate.count !== 1) throw new ConflictException("Lucrarea a fost modificată simultan. Reîncarcă detaliile.");
       await tx.workAssignmentEvent.create({ data: { actorUserId: input.actorUserId, eventType: "RELEASED", previousLegalEntityId: work.executionLegalEntityId, previousTechnicianId: work.claimedByUserId, reason: "Probă gata.", revision: work.claimRevision + 1, workOrderId: input.workOrderId } });
       return cycle;

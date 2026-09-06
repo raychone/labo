@@ -37,7 +37,7 @@ export function StatusProbeModal({ isOpen, onOpenChange }: { readonly isOpen: bo
   const rows = useMemo(() => {
     const byId = new Map<string, OperationalStatusRow>();
     for (const row of [...(returnedQuery.data?.items ?? []), ...(completedQuery.data?.items ?? [])]) {
-      if ((row.technicalReadiness === "PROBE_READY" || row.hasCompletedPickup || row.delivery.status === "PICKED_UP") && (!clinicId || row.clinic?.id === clinicId) && (!doctorId || row.doctor?.id === doctorId) && (!patientId || row.patient.id === patientId)) byId.set(row.id, row);
+      if (row.technicalReadiness === "PROBE_READY" && (!clinicId || row.clinic?.id === clinicId) && (!doctorId || row.doctor?.id === doctorId) && (!patientId || row.patient.id === patientId)) byId.set(row.id, row);
     }
     return Array.from(byId.values());
   }, [clinicId, completedQuery.data?.items, doctorId, patientId, returnedQuery.data?.items]);

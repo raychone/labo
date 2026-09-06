@@ -308,19 +308,67 @@
 }
 
 .logistics-page__route-grid > .dl-card {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 360px;
   min-width: 0;
+  min-height: 0;
 }
 
 .logistics-page__route-candidates,
 .logistics-page__route-stops {
+  align-content: start;
   display: grid;
   gap: var(--space-2);
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .logistics-page__route-candidates button {
+  height: 56px;
   justify-content: flex-start;
   min-height: 56px;
+  overflow: hidden;
   white-space: normal;
+}
+
+.logistics-page__candidate-item {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.logistics-page__candidate-alert,
+.logistics-page__route-contact-alert {
+  color: var(--color-danger, #b42318);
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 600;
+}
+
+.logistics-page__route-contact-input--missing {
+  border-color: var(--color-danger, #b42318);
+  box-shadow: 0 0 0 1px var(--color-danger, #b42318);
+}
+
+.logistics-page__route-contact-alert {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.logistics-page__preparation-stops {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.logistics-page__preparation-stop {
+  align-items: center;
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.logistics-page__preparation-stop span {
+  overflow-wrap: anywhere;
 }
 
 .logistics-page__route-stop {
@@ -1173,6 +1221,10 @@
 
   .logistics-page__route-grid {
     grid-template-columns: 1fr;
+  }
+
+  .logistics-page__route-grid > .dl-card {
+    height: 300px;
   }
 
   .logistics-page__preparation-box {

@@ -2008,7 +2008,7 @@ function QuickClinicModal({
   const form = useForm<QuickClinicValues>({ defaultValues: { legalEntityCode: "", name: "" }, resolver: zodResolver(quickClinicSchema) });
   useEffect(() => { if (!isOpen) form.reset({ legalEntityCode: "", name: "" }); }, [form, isOpen]);
   useEffect(() => { if (submitError) applyApiErrorsToForm(form, submitError); }, [form, submitError]);
-  return <Modal description="Creează clinica și păstrează datele lucrării în formular." footer={<FormActions formId="quick-clinic-form" isSubmitting={isSaving} submitLabel="Creează clinica" />} isOpen={isOpen} onOpenChange={onOpenChange} title="Clinică nouă">
+  return <Modal className="works-page__quick-clinic-modal" description="Creează clinica și păstrează datele lucrării în formular." footer={<FormActions formId="quick-clinic-form" isSubmitting={isSaving} submitLabel="Creează clinica" />} isOpen={isOpen} onOpenChange={onOpenChange} size="lg" title="Clinică nouă">
     <FormLayout id="quick-clinic-form" onSubmit={(event) => void form.handleSubmit((values) => onSubmit(values))(event)}>
       <FormGrid>
         <TextInput error={form.formState.errors.name?.message} id="quickClinicName" label="Nume clinică" required {...form.register("name")} />

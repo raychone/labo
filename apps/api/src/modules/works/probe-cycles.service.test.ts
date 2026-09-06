@@ -80,7 +80,7 @@ describe("ProbeCyclesService / B10", () => {
     };
     const tx = {
       workOrder: {
-        findUnique: vi.fn().mockResolvedValue({ activeProbeCycleId: null, status: "IN_ASTEPTARE", technicalReadiness: "PROBE_READY" }),
+        findUnique: vi.fn().mockResolvedValue({ activeProbeCycleId: null, courierRouteStops: [], status: "IN_ASTEPTARE", technicalReadiness: "PROBE_READY" }),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       probeCycle: {
@@ -98,7 +98,7 @@ describe("ProbeCyclesService / B10", () => {
     await expect(service.createNextActiveAfterReception({ actorUserId: "reception", workOrderId: "wo-1", probeTypeId: "pt-2", deadlineAt: "2026-08-29T08:00:00.000Z", returnedAfterCompletedCycle: true })).resolves.toMatchObject({ id: "cycle-2", sequence: 1 });
     expect(tx.workOrder.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ activeProbeCycleId: "cycle-2", claimStatus: "UNCLAIMED", assignedTechnicianId: null, status: "RECEPTIE", technicalReadiness: null }),
-      where: expect.objectContaining({ activeProbeCycleId: null, status: { not: "FINALIZATA" } }),
+        where: expect.objectContaining({ activeProbeCycleId: null }),
     }));
     expect(notifications.publishProbeAvailable).toHaveBeenCalledWith(expect.objectContaining({ workOrderId: "wo-1", sequence: 1, probeTypeName: "Lingură" }));
     expect(notifications.publishNewProbe).toHaveBeenCalledWith(expect.objectContaining({ workOrderId: "wo-1", sequence: 1, probeTypeName: "Lingură" }));

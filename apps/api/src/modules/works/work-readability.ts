@@ -35,7 +35,10 @@ export async function getVisibleWorkWhere(
             claimStatus: "UNCLAIMED" as const,
             status: { not: "FINALIZATA" as const },
             technicalReadiness: null,
-            NOT: { activeCycle: { is: { logisticsState: { is: { status: { in: ["HANDED_TO_DELIVERY", "DELIVERED"] as WorkLogisticsStatus[] } } } } } },
+            OR: [
+              { activeProbeCycleId: { not: null } },
+              { NOT: { activeCycle: { is: { logisticsState: { is: { status: { in: ["HANDED_TO_DELIVERY", "DELIVERED"] as WorkLogisticsStatus[] } } } } } } },
+            ],
           }]
         : []),
       { activeCycle: { is: { workflowExecution: { is: { currentStage: { is: { assignedUserId: userId } } } } } } },

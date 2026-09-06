@@ -22,6 +22,20 @@ export interface PublishInput {
 }
 type NotificationDb = Pick<PrismaService, "notification" | "user">;
 
+function formatNotificationDeadline(value: string): string {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value;
+  return new Intl.DateTimeFormat("ro-RO", {
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23",
+    minute: "2-digit",
+    month: "2-digit",
+    timeZone: "UTC",
+    year: "numeric",
+  }).format(date);
+}
+
 @Injectable()
 export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   private deadlineTimer: ReturnType<typeof setInterval> | null = null;
@@ -181,7 +195,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   public async publishProbe(input: { readonly workOrderId: string; readonly probeCycleId: string; readonly code: string; readonly patientName: string; readonly sequence: number; readonly probeTypeName: string; readonly deadlineAt: string }): Promise<void> {
-    await this.publish({ dedupeKey: `probe-ready:${input.workOrderId}:${input.probeCycleId}`, deepLink: `/logistics?workId=${encodeURIComponent(input.workOrderId)}`, message: `${input.code} · ${input.patientName} · Proba ${input.sequence} · ${input.probeTypeName} · termen ${input.deadlineAt}`, recipientPermission: "logistics", resourceId: input.workOrderId, resourceType: "probe_cycle", severity: "ACTION", title: B18_NOTIFICATION_LABELS_RO.PROBE_READY, type: B17_LOGISTICS_NOTIFICATION_EVENTS.probeReady });
+    await this.publish({ dedupeKey: `probe-ready:${input.workOrderId}:${input.probeCycleId}`, deepLink: `/logistics?workId=${encodeURIComponent(input.workOrderId)}`, message: `${input.code} · ${input.patientName} · Proba ${input.sequence} · ${input.probeTypeName} · termen ${formatNotificationDeadline(input.deadlineAt)}`, recipientPermission: "logistics", resourceId: input.workOrderId, resourceType: "probe_cycle", severity: "ACTION", title: B18_NOTIFICATION_LABELS_RO.PROBE_READY, type: B17_LOGISTICS_NOTIFICATION_EVENTS.probeReady });
   }
 
   public async publishFinal(input: { readonly workOrderId: string; readonly code: string; readonly patientName: string }): Promise<void> {
@@ -202,7 +216,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   public async publishProbeAvailable(input: { readonly workOrderId: string; readonly probeCycleId: string; readonly code: string; readonly patientName: string; readonly sequence: number; readonly probeTypeName: string; readonly deadlineAt: string }): Promise<void> {
-      await this.publish({ dedupeKey: `technician-probe:${input.workOrderId}:${input.probeCycleId}`, deepLink: `/works?workId=${encodeURIComponent(input.workOrderId)}`, message: `${input.code} · ${input.patientName} · Proba ${input.sequence} · ${input.probeTypeName} · termen ${input.deadlineAt}`, recipientPermission: "technician", resourceId: input.workOrderId, resourceType: "probe_cycle", severity: "ACTION", title: B18_NOTIFICATION_LABELS_RO.NEW_PROBE_AVAILABLE, type: "NEW_PROBE_AVAILABLE" });
+      await this.publish({ dedupeKey: `technician-probe:${input.workOrderId}:${input.probeCycleId}`, deepLink: `/works?workId=${encodeURIComponent(input.workOrderId)}`, message: `${input.code} · ${input.patientName} · Proba ${input.sequence} · ${input.probeTypeName} · termen ${formatNotificationDeadline(input.deadlineAt)}`, recipientPermission: "technician", resourceId: input.workOrderId, resourceType: "probe_cycle", severity: "ACTION", title: B18_NOTIFICATION_LABELS_RO.NEW_PROBE_AVAILABLE, type: "NEW_PROBE_AVAILABLE" });
   }
 
   public async publishNewProbe(input: { readonly workOrderId: string; readonly probeCycleId: string; readonly code: string; readonly patientName: string; readonly sequence: number; readonly probeTypeName: string }): Promise<void> {
@@ -297,7 +311,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
         await this.resolve("DEADLINE_APPROACHING", key);
         await this.publish({ dedupeKey: key, deepLink: `/logistics?workId=${encodeURIComponent(work.id)}`, message: `${work.code} · ${work.patientName}`, recipientPermission: "logistics", resourceId: work.id, resourceType: "work_order", severity: "ERROR", title: B18_NOTIFICATION_LABELS_RO.OVERDUE_WORK, type: "OVERDUE_WORK" });
       } else if (work.effectiveDueAt <= soon) {
-        await this.publish({ dedupeKey: key, deepLink: `/logistics?workId=${encodeURIComponent(work.id)}`, message: `${work.code} · ${work.patientName} · termen ${work.effectiveDueAt.toISOString()}`, recipientPermission: "logistics", resourceId: work.id, resourceType: "work_order", severity: "WARNING", title: B18_NOTIFICATION_LABELS_RO.DEADLINE_APPROACHING, type: "DEADLINE_APPROACHING" });
+        await this.publish({ dedupeKey: key, deepLink: `/logistics?workId=${encodeURIComponent(work.id)}`, message: `${work.code} · ${work.patientName} · termen ${formatNotificationDeadline(work.effectiveDueAt.toISOString())}`, recipientPermission: "logistics", resourceId: work.id, resourceType: "work_order", severity: "WARNING", title: B18_NOTIFICATION_LABELS_RO.DEADLINE_APPROACHING, type: "DEADLINE_APPROACHING" });
       } else {
         await this.resolve("DEADLINE_APPROACHING", key);
         await this.resolve("OVERDUE_WORK", key);

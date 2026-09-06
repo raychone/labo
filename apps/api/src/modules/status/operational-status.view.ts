@@ -146,6 +146,18 @@ export const operationalStatusWorkInclude = {
       },
     },
   },
+  activeProbeCycle: {
+    select: {
+      deadlineAt: true,
+    },
+  },
+  // Keep a completed probe's deadline available for legacy/current records
+  // where the work-level deadline was cleared when the technician released it.
+  probeCycles: {
+    orderBy: { sequence: "desc" },
+    select: { deadlineAt: true },
+    take: 1,
+  },
   patient: {
     select: {
       id: true,
@@ -362,8 +374,9 @@ export function compareOperationalStatusRows(
 
 export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: Date): OperationalStatusRowView {
   const latestDelivery = getLatestDelivery(work);
+  const effectiveDueAt = work.activeProbeCycle?.deadlineAt ?? work.effectiveDueAt ?? work.probeCycles?.[0]?.deadlineAt ?? null;
   const deadline = resolveDeadlineVisualState({
-    effectiveDueAt: work.effectiveDueAt?.toISOString() ?? null,
+    effectiveDueAt: effectiveDueAt?.toISOString() ?? null,
     mode: work.deadlineMode,
     now: now.toISOString(),
   });
@@ -401,7 +414,7 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
     currentStageTechnician: currentStage?.assignedUser ? toPerson(currentStage.assignedUser) : null,
     deadline: {
       badge: deadline.badge,
-      effectiveDueAt: work.effectiveDueAt?.toISOString() ?? null,
+      effectiveDueAt: effectiveDueAt?.toISOString() ?? null,
       state: deadline.state,
       tooltip: deadline.tooltip,
     },

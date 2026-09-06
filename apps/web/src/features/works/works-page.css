@@ -27,6 +27,15 @@
   overscroll-behavior: contain;
 }
 
+.works-page__quick-clinic-modal {
+  min-height: min(26rem, calc(100dvh - 2rem));
+}
+
+.works-page__quick-clinic-modal .dl-overlay__content {
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .works-page__detail-section {
   background: var(--dl-color-surface);
   border: 1px solid var(--dl-color-border);

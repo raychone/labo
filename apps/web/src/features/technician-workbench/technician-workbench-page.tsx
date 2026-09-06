@@ -57,6 +57,16 @@ function formatDate(value: string): string {
   return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium" }).format(new Date(value));
 }
 
+function operationCategoryForWorkType(workType: { readonly name: string; readonly symbol: string; readonly probeFamily?: string | null } | null): string | null {
+  if (!workType) return null;
+  const identity = `${workType.symbol} ${workType.name}`.toLocaleLowerCase("ro-RO");
+  const family = workType.probeFamily ?? (identity.includes("tf") || identity.includes("sf") || identity.includes("metalo") || identity.includes("metaloceramic") ? "MC" : identity.includes("zrp") || identity.includes("zirconia placat") ? "ZRP" : identity === "zr" || identity.includes(" zircon") ? "ZR" : identity.includes("protez") || identity.includes("lingură individuală") ? "PRO" : null);
+  if (family === "MC") return "Coroană ceramică";
+  if (family === "ZR" || family === "ZRP") return "Coroană zirconiu";
+  if (family === "PRO") return "Altele";
+  return null;
+}
+
 export function TechnicianWorkbenchPage(): ReactNode {
   const toast = useToast();
   const navigate = useNavigate();
@@ -111,8 +121,7 @@ export function TechnicianWorkbenchPage(): ReactNode {
   }
 
   function finalizeWork(work: WorkSummary): void {
-    setCompletionCompany(currentCompletionCompany(work));
-    setCompletionTarget({ action: "FINALIZE", work });
+    openCompletion("FINALIZE", work);
   }
 
   function claimWork(work: WorkSummary): void {
@@ -129,18 +138,30 @@ export function TechnicianWorkbenchPage(): ReactNode {
   }
 
   function markProbeReady(work: WorkSummary): void {
-    setCompletionCompany(currentCompletionCompany(work));
-    setCompletionTarget({ action: "PROBE_READY", work });
+    openCompletion("PROBE_READY", work);
+  }
+
+  function executeCompletion(action: CompletionTarget["action"], work: WorkSummary, company: "CDT" | "NG"): void {
+    const mutation = action === "PROBE_READY" ? probeReadyMutation : finalizeMutation;
+    mutation.mutate({ executionLegalEntityCode: company, workOrderId: work.id }, {
+      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: action === "PROBE_READY" ? "Proba nu a fost marcată gata" : "Lucrarea nu a fost finalizată", variant: "error" }),
+      onSuccess: () => setCompletionTarget(null),
+    });
+  }
+
+  function openCompletion(action: CompletionTarget["action"], work: WorkSummary): void {
+    const fixedCompany = currentCompletionCompany(work);
+    if (fixedCompany) {
+      executeCompletion(action, work, fixedCompany);
+      return;
+    }
+    setCompletionCompany("");
+    setCompletionTarget({ action, work });
   }
 
   function confirmCompletion(): void {
     if (!completionTarget || !completionCompany) return;
-    const { action, work } = completionTarget;
-    const mutation = action === "PROBE_READY" ? probeReadyMutation : finalizeMutation;
-    mutation.mutate({ executionLegalEntityCode: completionCompany, workOrderId: work.id }, {
-      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Proba nu a fost marcată gata", variant: "error" }),
-      onSuccess: () => setCompletionTarget(null),
-    });
+    executeCompletion(completionTarget.action, completionTarget.work, completionCompany);
   }
 
   function releaseTechnicianWork(work: WorkSummary): void {
@@ -449,6 +470,21 @@ function OperationsModal({
     teeth: item.teeth.map((tooth) => tooth.fdiTooth),
   }))), [detailQuery.data?.items]);
   const isCaseLevel = allowedTeeth.length === 0 && (detailQuery.data?.items ?? []).some((item) => item.scope === "CASE");
+  const activeProbeCycleId = detailQuery.data?.activeProbeCycle?.id ?? null;
+  const currentCyclePerformed = useMemo(() => (performedQuery.data ?? []).filter((performed) => performed.removedAt === null && (activeProbeCycleId === null || performed.probeCycleId === activeProbeCycleId)), [activeProbeCycleId, performedQuery.data]);
+  const selectedOperationCategories = useMemo(() => {
+    if (selectedTeeth.length === 0) return null;
+    const categories = new Set<string>();
+    for (const tooth of selectedTeeth) {
+      for (const item of detailQuery.data?.items ?? []) {
+        if (item.scope !== "CASE" && item.teeth.some((itemTooth) => itemTooth.fdiTooth === tooth)) {
+          const category = operationCategoryForWorkType(item.workType);
+          if (category) categories.add(category);
+        }
+      }
+    }
+    return categories;
+  }, [detailQuery.data?.items, selectedTeeth]);
   const isMutating = performMutation.isPending || removeMutation.isPending;
   const workTypeVisualization = useMemo(() => {
     const palette = ["#2563eb", "#eab308", "#dc2626", "#7c3aed", "#f97316", "#0891b2", "#db2777", "#65a30d"] as const;
@@ -481,7 +517,7 @@ function OperationsModal({
 
   function toggleOperation(operationId: string): void {
     if (!work || !canManageOperations || (!isCaseLevel && selectedTeeth.length === 0) || isMutating) return;
-    const activePerformed = (performedQuery.data ?? []).filter((performed) => performed.removedAt === null && performed.operation.id === operationId);
+    const activePerformed = currentCyclePerformed.filter((performed) => performed.operation.id === operationId);
     if (isCaseLevel) {
       const caseOperation = activePerformed.find((performed) => (performed.selectedTeeth ?? []).length === 0);
       if (caseOperation) {
@@ -595,7 +631,8 @@ function OperationsModal({
                 <h3 id={`operation-category-${category}`}>{category}</h3>
                 <div className="technician-workbench__operation-grid">
                   {(operations ?? []).map((operation) => {
-                    const active = (isCaseLevel || selectedTeeth.length > 0) && (performedQuery.data ?? []).filter((performed) => performed.removedAt === null && performed.operation.id === operation.id).some((performed) => {
+                    if (selectedOperationCategories && !selectedOperationCategories.has(operation.category)) return null;
+                    const active = (isCaseLevel || selectedTeeth.length > 0) && currentCyclePerformed.filter((performed) => performed.operation.id === operation.id).some((performed) => {
                       if (isCaseLevel) return (performed.selectedTeeth ?? []).length === 0;
                       const performedTeeth = new Set(performed.selectedTeeth ?? []);
                       return selectedTeeth.every((tooth) => performedTeeth.has(tooth));
@@ -623,7 +660,7 @@ function OperationsModal({
             <article className={`technician-workbench__performed-row${performed.removedAt === null ? " technician-workbench__performed-row--active" : ""}`} key={performed.id}>
               <strong>{performed.operationNameSnapshot ?? performed.operation.name}</strong>
               <span>
-                Proba {performed.probeCycle?.sequence ?? detailQuery.data?.activeProbeCycle?.sequence ?? work?.cycleNumber ?? 1} · {(performed.selectedTeeth ?? []).length > 0 ? `Dinți: ${(performed.selectedTeeth ?? []).join(", ")}` : "Manoperă de caz"} · {performed.quantity ?? "-"} × {performed.rateMinorSnapshot === null || performed.rateMinorSnapshot === undefined ? "-" : formatMoneyMinor(performed.rateMinorSnapshot, performed.currency, "ro-RO")} = {formatMoneyMinor(performed.earningMinor, performed.currency, "ro-RO")}
+                {performed.probeCycle?.sequence === 0 || performed.probeCycle === null ? "Proba inițială" : `Proba ${performed.probeCycle.sequence}`} · {(performed.selectedTeeth ?? []).length > 0 ? `Dinți: ${(performed.selectedTeeth ?? []).join(", ")}` : "Manoperă de caz"} · {performed.quantity ?? "-"} × {performed.rateMinorSnapshot === null || performed.rateMinorSnapshot === undefined ? "-" : formatMoneyMinor(performed.rateMinorSnapshot, performed.currency, "ro-RO")} = {formatMoneyMinor(performed.earningMinor, performed.currency, "ro-RO")}
               </span>
               {performed.removedAt ? <span>Eliminată · {performed.removalReason ?? "fără motiv"}</span> : <Button disabled={!canManageOperations || isMutating} onClick={() => removeMutation.mutate({ input: { reason: "Eliminare din lista de manopere" }, performedOperationId: performed.id })} size="small" variant="secondary">Elimină</Button>}
             </article>

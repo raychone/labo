@@ -101,11 +101,15 @@ export class OperationalStatusService {
 
   private toBaseWhere(actor: AuthenticatedUser, query: OperationalStatusQueryDto, access: WorkAccess): Prisma.WorkOrderWhereInput {
     const search = query.search?.trim();
+    const isProbeReturnTab = query.tab === "RETURNED" || query.tab === "COMPLETED";
     return {
       AND: [
         this.toVisibilityWhere(actor, access),
         {
           ...(query.excludeDemo ? { id: { not: { startsWith: "demo_work_" } } } : {}),
+          // Finalization is terminal. Finalized works remain available from
+          // history/detail views, never from the operational status queues.
+          status: { not: "FINALIZATA" },
           ...(query.transportOnly ? { OR: [{ requiresDelivery: true }, { requiresPickup: true }, { technicalReadiness: { in: ["PROBE_READY", "FINAL_READY"] } }] } : {}),
           ...(query.clinicId ? { clinicId: query.clinicId } : {}),
           ...(query.doctorId ? { doctorId: query.doctorId } : {}),
@@ -114,6 +118,33 @@ export class OperationalStatusService {
           ...(query.executionLegalEntityCode ? { executionLegalEntity: { is: { code: query.executionLegalEntityCode } } } : {}),
           ...(query.priority ? { priority: query.priority } : {}),
           ...(query.logisticsStatus ? { activeCycle: { is: { logisticsState: { is: { status: query.logisticsStatus } } } } } : {}),
+          // A successfully delivered work is no longer an active transport/status
+          // item. Check both the logistics state and route history because a
+          // route outcome is the source of truth while the state is being synced.
+          ...(!isProbeReturnTab ? {
+            OR: [
+              // A newly completed probe starts a new transport cycle even if
+              // the previous probe was already delivered. Once the current
+              // delivery is completed, it must leave the operational list;
+              // it can reappear when logistics explicitly enables pickup.
+              {
+                technicalReadiness: "PROBE_READY",
+                OR: [
+                  { requiresDelivery: true },
+                  { requiresPickup: true },
+                  { courierRouteStops: { none: { outcomeStatus: "DELIVERED" } } },
+                ],
+              },
+              {
+                NOT: {
+                  OR: [
+                    { activeCycle: { is: { logisticsState: { is: { status: "DELIVERED" } } } } },
+                    { courierRouteStops: { some: { outcomeStatus: "DELIVERED" } } },
+                  ],
+                },
+              },
+            ],
+          } : {}),
           ...(query.ownerUserId ? { OR: [{ assignedTechnicianId: query.ownerUserId }, { claimedByUserId: query.ownerUserId }] } : {}),
           ...(query.stageTechnicianUserId
             ? { activeCycle: { is: { workflowExecution: { is: { currentStage: { is: { assignedUserId: query.stageTechnicianUserId } } } } } } }
