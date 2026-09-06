@@ -177,7 +177,7 @@ export function AuthenticatedAppShell(): ReactNode {
         <div className="app-shell__mobile-drawer">
           <BrandBlock courierOnly={courierOnly} laboratoryName={laboratoryName} />
           {canSwitchOrganizationContext ? <OrganizationContextSwitch canRead={canReadOrganizationContext} canSwitch compact /> : null}
-          <NavigationList currentPath={location.pathname} routes={routes} />
+          <NavigationList currentPath={location.pathname} onNavigate={() => setIsMobileNavOpen(false)} routes={routes} />
           <div className="app-shell__drawer-user">
             <UserSummary email={auth.user?.email ?? ""} name={auth.user?.displayName ?? ""} roleLabel={roleLabel} />
             <Button fullWidth isLoading={logoutMutation.isPending} onClick={() => setIsLogoutConfirmOpen(true)} variant="secondary">Deconectare</Button>
@@ -260,9 +260,11 @@ function BrandBlock({ courierOnly, laboratoryName }: { readonly courierOnly: boo
 
 function NavigationList({
   currentPath,
+  onNavigate,
   routes,
 }: {
   readonly currentPath: string;
+  readonly onNavigate?: () => void;
   readonly routes: readonly ReturnType<typeof getNavigationRoutes>[number][];
 }): ReactNode {
   let currentGroup = "";
@@ -279,6 +281,7 @@ function NavigationList({
             <NavLink
               aria-current={currentPath === route.path || currentPath.startsWith(`${route.path}/`) ? "page" : undefined}
               className={({ isActive }) => `app-shell__nav-link${isActive || currentPath.startsWith(`${route.path}/`) ? " app-shell__nav-link--active" : ""}`}
+              onClick={onNavigate}
               to={route.path}
             >
               <span className="app-shell__nav-icon" aria-hidden="true"><NavigationIcon icon={route.icon} /></span>

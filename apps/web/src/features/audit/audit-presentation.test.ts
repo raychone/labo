@@ -37,4 +37,11 @@ describe("audit presentation", () => {
       .toBe("A fost selectat tipul de probă Lingură.");
     expect(formatAuditDetails("work_order.case_received", { workOrderId: "opaque-id" })).toBe("Lucrarea a fost recepționată.");
   });
+
+  it("translates status enum values in audit details", () => {
+    expect(formatAuditDetails("work_orders.status_changed", {
+      before: { status: "IN_LUCRU" },
+      after: { status: "FINALIZATA" },
+    })).toBe("Status schimbat din „În lucru” în „Finalizată”.");
+  });
 });

@@ -88,7 +88,7 @@ export const appRoutes = [
   },
   {
     icon: "AT",
-    label: "Lucrările mele",
+    label: "Atelier tehnician",
     navigationGroup: "Tehnician",
     path: "/workbench",
     permissionMode: "any",

@@ -195,6 +195,37 @@
   --dl-z-overlay: 600;
   --dl-z-modal: 700;
   --dl-z-toast: 800;
+
+  /* Compatibility aliases for legacy feature styles. Keep these mapped to
+     UI-002 tokens while those styles are migrated incrementally. */
+  --color-background: var(--dl-color-background);
+  --color-foreground: var(--dl-color-text);
+  --color-muted-foreground: var(--dl-color-text-muted);
+  --color-primary: var(--dl-color-accent);
+  --color-primary-foreground: #ffffff;
+  --color-primary-soft: var(--dl-color-accent-subtle);
+  --color-primary-strong: var(--dl-color-accent-active);
+  --color-danger: var(--dl-color-danger);
+  --color-surface: var(--dl-color-surface);
+  --color-surface-muted: var(--dl-color-surface-muted);
+  --color-border: var(--dl-color-border);
+  --color-text: var(--dl-color-text);
+  --color-text-muted: var(--dl-color-text-muted);
+  --space-1: var(--dl-space-1);
+  --space-2: var(--dl-space-2);
+  --space-3: var(--dl-space-3);
+  --space-4: var(--dl-space-4);
+  --space-5: var(--dl-space-5);
+  --space-6: var(--dl-space-6);
+  --font-size-xs: var(--dl-font-size-caption);
+  --font-size-sm: var(--dl-font-size-small);
+  --font-size-lg: var(--dl-font-size-card-title);
+  --font-size-2xl: var(--dl-font-size-section-title);
+  --font-size-3xl: var(--dl-font-size-page-title);
+  --radius-sm: var(--dl-radius-sm);
+  --radius-md: var(--dl-radius-md);
+  --shadow-md: var(--dl-shadow-md);
+  --shadow-lg: 0 16px 40px rgb(23 32 27 / 12%);
 }
 
 @media (min-width: 48rem) {

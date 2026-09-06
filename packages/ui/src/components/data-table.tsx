@@ -74,7 +74,7 @@ export function DataTable<TRow>({
 
   return (
     <div className="dl-data-table">
-      <div className="dl-data-table__scroll" role="region" aria-label="Data table" tabIndex={0}>
+      <div className="dl-data-table__scroll" role="region" aria-label="Tabel de date" tabIndex={0}>
         <table>
           <thead>
             <tr>

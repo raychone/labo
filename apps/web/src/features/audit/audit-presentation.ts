@@ -74,6 +74,27 @@ function companyLabel(value: unknown): string {
   return code ?? "Firmă necunoscută";
 }
 
+function businessValue(value: unknown): string {
+  const raw = text(value);
+  if (!raw) return "necunoscut";
+  const labels: Record<string, string> = {
+    RECEPTIE: "Recepție",
+    IN_ASTEPTARE: "În așteptare",
+    IN_LUCRU: "În lucru",
+    FINALIZATA: "Finalizată",
+    PROBE_READY: "Probă gata",
+    FINAL_READY: "Gata pentru livrare finală",
+    DELIVERED: "Livrat",
+    NOT_DELIVERED: "Nelivrat",
+    PICKED_UP: "Ridicat",
+    NOT_PICKED_UP: "Neridicat",
+    RECEIVED: "Recepționat",
+    PLANNED: "Planificat",
+    CANCELLED: "Anulat",
+  };
+  return labels[raw] ?? raw;
+}
+
 export function getAuditActionLabel(action: string): string {
   if (ACTION_LABELS[action]) return ACTION_LABELS[action];
   const suffix = action.split(".").pop()?.replaceAll("_", " ") ?? "activitate";
@@ -125,7 +146,7 @@ export function formatAuditDetails(action: string, metadata: Metadata): string {
     const fields = metadata.changedFields.map((field) => FIELD_LABELS[String(field)] ?? "Date generale").join(", ");
     return `Au fost modificate: ${fields}.${metadata.legalEntityCode ? ` Firmă: ${companyLabel(metadata.legalEntityCode)}.` : ""}`;
   }
-  if (action.includes("status_changed") && before && after) return `Status schimbat din „${text(before.status) ?? "necunoscut"}” în „${text(after.status) ?? "necunoscut"}”.`;
+  if (action.includes("status_changed") && before && after) return `Status schimbat din „${businessValue(before.status)}” în „${businessValue(after.status)}”.`;
   if (action === "pricing.catalog_item_updated" && before && after && before.standardPriceMinor !== after.standardPriceMinor) {
     return `Preț modificat de la ${formatMoney(before.standardPriceMinor)} la ${formatMoney(after.standardPriceMinor)}.`;
   }

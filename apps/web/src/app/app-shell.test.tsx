@@ -1,6 +1,6 @@
 import { ToastProvider } from "@dental-lab/ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -158,7 +158,7 @@ describe("AuthenticatedAppShell", () => {
 
     await waitFor(() => expect(screen.getByRole("link", { name: /Status/ })).toBeDefined());
     expect(screen.getByRole("link", { name: /Scanare/ })).toBeDefined();
-    expect(screen.getByRole("link", { name: /Lucrările mele/ })).toBeDefined();
+    expect(screen.getByRole("link", { name: /Atelier tehnician/ })).toBeDefined();
     expect(screen.queryByText("Utilizatori")).toBeNull();
   });
 
@@ -222,6 +222,27 @@ describe("AuthenticatedAppShell", () => {
     expect(await screen.findByRole("dialog", { name: "Navigație" })).toBeDefined();
     fireEvent.keyDown(screen.getByRole("dialog", { name: "Navigație" }), { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Navigație" })).toBeNull());
+  });
+
+  it("closes the mobile drawer after navigating from the sidebar", async () => {
+    vi.stubGlobal("fetch", createFetchMock(["works.read_all", "works.read_assigned"]));
+
+    renderWithProviders(
+      <Routes>
+        <Route element={<AuthenticatedAppShell />} path="/">
+          <Route element={<div>Works content</div>} path="works" />
+          <Route element={<div>Status content</div>} path="status" />
+        </Route>
+      </Routes>,
+    );
+
+    await waitFor(() => expect(screen.getAllByRole("link", { name: "Status" }).length).toBeGreaterThan(0));
+    fireEvent.click(await screen.findByRole("button", { name: "Deschide navigația" }));
+    const drawer = await screen.findByRole("dialog", { name: "Navigație" });
+    fireEvent.click(within(drawer).getByRole("link", { name: "Status" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Navigație" })).toBeNull());
+    expect(await screen.findByText("Status content")).toBeDefined();
   });
 
   it("renders and switches the organization context for managers", async () => {
