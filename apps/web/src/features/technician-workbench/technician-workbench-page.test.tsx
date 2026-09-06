@@ -28,6 +28,7 @@ function renderWithProviders(component: ReactNode): void {
 function createJsonResponse(body: unknown, status = 200): Response {
   return {
     json: async () => body,
+    text: async () => JSON.stringify(body),
     ok: status >= 200 && status < 300,
     status,
   } as Response;
@@ -474,7 +475,7 @@ describe("TechnicianWorkbenchPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Lucrările mele" }));
     expect(await screen.findByText(/WO-2026-000003/)).toBeDefined();
     expect(screen.queryByText("Revendicată")).toBeNull();
-    expect(screen.getByText("Probă")).toBeDefined();
+    expect(screen.getByText("Probă gata")).toBeDefined();
     expect(screen.getByRole("button", { name: "Detalii" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Manopere" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Finalizata" })).toBeDefined();
@@ -487,6 +488,8 @@ describe("TechnicianWorkbenchPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Închide" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Finalizata" }));
+    fireEvent.focus(screen.getByLabelText("Firmă"));
+    fireEvent.click(await screen.findByRole("option", { name: "CDT" }));
     fireEvent.click(screen.getByRole("button", { name: "Finalizează" }));
 
     await waitFor(() => {

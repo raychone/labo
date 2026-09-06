@@ -38,22 +38,35 @@ function createBillableWork(overrides: Record<string, unknown>) {
         pricingQuantity: 1,
         pricingTotalMinor: 10000,
         pricingUnitPriceMinor: 10000,
+        status: "LOCKED",
       },
       id: "cycle_1",
     },
     code: "WO-26-0001",
+    courierRouteStops: [],
     createdAt: new Date("2026-08-20T00:00:00.000Z"),
     doctor: null,
     id: "work_1",
     patientName: "Ion Popescu",
     patientReference: null,
     quantity: 1,
+    technicalReadiness: "FINAL_READY",
     workType: { name: "Zirconia FULL anatomic" },
     ...overrides,
   };
 }
 
 describe("BillingService invoice series", () => {
+  it("requires a persisted successful delivery before billing", () => {
+    const service = new BillingService({} as never, { record: vi.fn() } as never) as unknown as {
+      isWorkCycleBillable: (work: unknown) => boolean;
+    };
+
+    expect(service.isWorkCycleBillable(createBillableWork({ courierRouteStops: [] }))).toBe(false);
+    expect(service.isWorkCycleBillable(createBillableWork({ courierRouteStops: undefined }))).toBe(false);
+    expect(service.isWorkCycleBillable(createBillableWork({ courierRouteStops: [{ outcomeStatus: "DELIVERED", type: "DELIVERY" }] }))).toBe(true);
+  });
+
   it("pushes billing payment filters into the database where clause", () => {
     const service = new BillingService({} as never, { record: vi.fn() } as never) as unknown as {
       createDocumentsListWhere: (legalEntity: Record<string, unknown>, query: Record<string, unknown>) => Record<string, unknown>;

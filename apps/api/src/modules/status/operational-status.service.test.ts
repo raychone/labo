@@ -20,7 +20,9 @@ function createWorkRecord(id: string, input: {
   readonly claimStatus?: "CLAIMED" | "UNCLAIMED";
   readonly claimedByUserId?: string | null;
   readonly deliveryStatus?: "DELIVERED" | null;
+  readonly deliveredAt?: Date | null;
   readonly effectiveDueAt?: Date | null;
+  readonly finalizedAt?: Date | null;
   readonly status?: "REGISTERED" | "RECEPTIE" | "IN_LUCRU" | "IN_ASTEPTARE" | "FINALIZATA";
   readonly technicalReadiness?: "PROBE_READY" | "FINAL_READY" | null;
 } = {}): OperationalStatusWorkRecord {
@@ -47,10 +49,12 @@ function createWorkRecord(id: string, input: {
           },
         }]
       : [],
+    courierRouteStops: input.deliveredAt ? [{ outcomeAt: input.deliveredAt, outcomeStatus: "DELIVERED", type: "DELIVERY" }] : [],
     doctor: { displayName: "Dr. Demo", id: "doctor_1" },
     effectiveDueAt: input.effectiveDueAt ?? null,
     executionLegalEntity: { code: "NC", displayName: "Nicolaie Cristina" },
     id,
+    finalizedAt: input.finalizedAt ?? null,
     logisticsState: null,
     patient: { id: "patient_1" },
     patientName: "Pacient Demo",
@@ -150,13 +154,52 @@ describe("OperationalStatusService", () => {
     expect(response.counters.every((counter) => counter.count === 0)).toBe(true);
   });
 
-  it("marks the response as bounded when base rows exceed the scan cap", async () => {
+  it("keeps a finalized work visible until its current final delivery", async () => {
+    const finalizedAt = new Date("2026-08-08T10:00:00.000Z");
+    const { service } = createService({
+      findManyRows: [
+        createWorkRecord("final-ready", { deliveredAt: new Date("2026-08-08T09:00:00.000Z"), effectiveDueAt: new Date("2026-08-08T12:00:00.000Z"), finalizedAt, status: "FINALIZATA", technicalReadiness: "FINAL_READY" }),
+        createWorkRecord("final-delivered", { deliveredAt: new Date("2026-08-08T11:00:00.000Z"), effectiveDueAt: new Date("2026-08-08T12:00:00.000Z"), finalizedAt, status: "FINALIZATA", technicalReadiness: "FINAL_READY" }),
+      ],
+      readAll: true,
+    });
+
+    const response = await service.getOperationalStatus(actor, {
+      page: 1,
+      pageSize: 25,
+      sortBy: "updatedAt",
+      sortDirection: "desc",
+      tab: "ALL",
+    });
+
+    expect(response.items.map((row) => row.workCode)).toEqual(["WO-2026-final-ready"]);
+  });
+
+  it("does not hide a relevant row beyond the old scan cap", async () => {
     const rows = Array.from({ length: 1_001 }, (_, index) => createWorkRecord(String(index).padStart(6, "0"), { effectiveDueAt: new Date("2026-08-04T10:00:00.000Z") }));
     const { service } = createService({ findManyRows: rows, readAll: true });
 
     const response = await service.getOperationalStatus(actor, { page: 1, pageSize: 25, sortBy: "workCode", sortDirection: "asc", tab: "TODAY" });
 
-    expect(response.meta.scannedRows).toBe(1_000);
-    expect(response.meta.hasMore).toBe(true);
+    expect(response.meta.scannedRows).toBe(1_001);
+    expect(response.meta.hasMore).toBe(false);
+  });
+
+  it("keeps delivery exclusion together with search and owner filters", async () => {
+    const { findMany, service } = createService({ readAll: true });
+
+    await service.getOperationalStatus(actor, {
+      ownerUserId: "tech_1",
+      page: 1,
+      pageSize: 25,
+      search: "0009",
+      sortBy: "updatedAt",
+      sortDirection: "desc",
+      tab: "TODAY",
+    });
+
+    const where = findMany.mock.calls[0]?.[0].where as { AND: readonly Record<string, unknown>[] };
+    const nested = where.AND[1]?.AND as readonly Record<string, unknown>[];
+    expect(nested.filter((condition) => "OR" in condition)).toHaveLength(3);
   });
 });

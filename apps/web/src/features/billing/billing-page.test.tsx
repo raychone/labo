@@ -40,6 +40,7 @@ function renderWithRouter(component: ReactNode, initialEntries: string[]): Retur
 function createJsonResponse(body: unknown, status = 200): Response {
   return {
     json: async () => body,
+    text: async () => JSON.stringify(body),
     ok: status >= 200 && status < 300,
     status,
   } as Response;
@@ -99,10 +100,21 @@ describe("BillingPage", () => {
           currency: "RON",
           dateFrom: "2026-07-01",
           dateTo: "2026-07-31",
-          documents: [],
+          documents: [{
+            balanceMinor: 0,
+            documentId: "invoice_paid_1",
+            documentNumber: "FACT-2026-000099",
+            documentType: "INVOICE",
+            dueDate: "2026-08-10T00:00:00.000Z",
+            issueDate: "2026-07-23T12:00:00.000Z",
+            paidMinor: 35000,
+            status: "PAID",
+            totalMinor: 35000,
+            workCodes: ["WO-2026-000099"],
+          }],
           generatedAt: "2026-08-04T00:00:00.000Z",
-          paidMinor: 0,
-          totalMinor: 0,
+          paidMinor: 35000,
+          totalMinor: 35000,
           uninvoicedMinor: 0,
           uninvoicedWorks: [],
         }));
@@ -291,6 +303,11 @@ describe("BillingPage", () => {
     fireEvent.click(await screen.findByRole("checkbox", { name: "Selectează FACT-2026-000001" }));
     fireEvent.click(screen.getByRole("button", { name: "Înregistrează încasare" }));
     expect(await screen.findByLabelText("Sumă încasată")).toBeDefined();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Note de plată" }));
+    expect(await screen.findByRole("heading", { name: "Clinica Test" })).toBeDefined();
+    expect(screen.getByText("FACT-2026-000099")).toBeDefined();
+    expect(screen.getAllByText("350,00 RON").length).toBeGreaterThan(0);
   }, 30000);
 
   it("keeps the selected historical month stable in the URL when navigating months", async () => {

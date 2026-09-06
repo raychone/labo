@@ -29,6 +29,7 @@ function renderWithProviders(component: ReactNode, entry: string): void {
 function createJsonResponse(body: unknown, status = 200): Response {
   return {
     json: async () => body,
+    text: async () => JSON.stringify(body),
     ok: status >= 200 && status < 300,
     status,
   } as Response;

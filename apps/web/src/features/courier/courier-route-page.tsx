@@ -24,6 +24,16 @@ function routeStatusLabel(status: CourierRouteView["status"]): string {
   return status === "CANCELLED" ? "Anulat" : "Planificare neterminată";
 }
 
+function stopOutcomeLabel(outcome: CourierRouteStopOutcome): string {
+  switch (outcome) {
+    case "PENDING": return "În așteptare";
+    case "DELIVERED": return "Livrat";
+    case "NOT_DELIVERED": return "Nelivrat";
+    case "PICKED_UP": return "Ridicat";
+    case "NOT_PICKED_UP": return "Neridicat";
+  }
+}
+
 export function CourierRoutePage(): ReactNode {
   const toast = useToast();
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
@@ -109,7 +119,7 @@ function RouteStop({ canExecute, onRecord, pending, stop }: { readonly canExecut
       <span>{stop.stopOrder}</span>
       <strong>{stop.type === "DELIVERY" ? "Livrare" : "Ridicare"}</strong>
       <p>{stop.targetLabel}</p>
-      <StatusBadge label={stop.outcomeStatus === "PENDING" ? "În așteptare" : stop.outcomeStatus} variant={stop.outcomeStatus === "PENDING" ? "planned" : stop.outcomeStatus.includes("NOT") ? "rejected" : "delivered"} />
+      <StatusBadge label={stopOutcomeLabel(stop.outcomeStatus)} variant={stop.outcomeStatus === "PENDING" ? "planned" : stop.outcomeStatus.includes("NOT") ? "rejected" : "delivered"} />
       {isPending && canExecute ? (
         <div className="logistics-page__route-stop-actions">
           <Textarea label="Observații" onChange={(event) => setNotes(event.target.value)} value={notes} />

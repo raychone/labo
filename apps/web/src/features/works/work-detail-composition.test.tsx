@@ -36,8 +36,8 @@ describe("WorkDetailComposition", () => {
     renderSubject();
     expect(screen.getByText(/Dinți:\s*11/)).toBeDefined();
     expect(screen.getByText("Lucrare")).toBeDefined();
-    expect(screen.getByText("A")).toBeDefined();
-    expect(screen.getByText("B")).toBeDefined();
+    expect(screen.getByText("Coroană A")).toBeDefined();
+    expect(screen.getByText("Gutieră")).toBeDefined();
     expect(screen.getByRole("button", { name: "Dinte 11" }).className).toContain("tooth-diagram__tooth--work-colored");
     expect(screen.getByRole("button", { name: "Conexiune între dinții 12 și 11" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "Conexiune între dinții 11 și 21" }).getAttribute("aria-pressed")).toBe("true");

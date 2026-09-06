@@ -133,7 +133,9 @@ export function LogisticsRouteBuilderPage(): ReactNode {
   const deliveryCandidates = deliveryCandidatesQuery.data?.items ?? [];
   const deliveryRouteCandidates = deliveryCandidates.filter((work) =>
     work.requiresLogisticsAction
-      && work.requiresDelivery,
+      && (work.requiresDelivery
+        || work.logisticsActionReasons.includes("READY_FOR_PROBE_DELIVERY")
+        || work.logisticsActionReasons.includes("READY_FOR_FINAL_DELIVERY")),
   );
   const pickupCandidates = (pickupsQuery.data ?? []).filter((pickup) => pickup.status === "SCHEDULED");
   const assignedStopKeys = useMemo(() => new Set((allRoutesQuery.data?.items ?? [])

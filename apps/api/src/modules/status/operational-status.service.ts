@@ -6,7 +6,6 @@ import { PrismaService } from "../database/prisma.service.js";
 import { AuthorizationService, doesScopeSatisfy } from "../rbac/authorization.service.js";
 import type { PermissionScope } from "../rbac/permission-registry.js";
 import type { OperationalStatusQueryDto } from "./dto/operational-status.dto.js";
-import { OPERATIONAL_STATUS_MAX_SCANNED_ROWS } from "./status.constants.js";
 import {
   compareOperationalStatusRows,
   createOperationalStatusCounters,
@@ -44,18 +43,24 @@ export class OperationalStatusService {
 
   public async getOperationalStatus(actor: AuthenticatedUser, query: OperationalStatusQueryDto): Promise<OperationalStatusResponseView> {
     const access = await this.getWorkAccess(actor.id);
+    // The database where clause is authoritative for all persisted filters.
+    // Computed deadline/tab filters are applied after hydration because they
+    // depend on the resolved active-cycle view. Do not cap this query before
+    // that step: doing so can hide a valid result from a later page.
     const baseRows = await this.prisma.workOrder.findMany({
       include: operationalStatusWorkInclude,
       orderBy: {
         updatedAt: "desc",
       },
-      take: OPERATIONAL_STATUS_MAX_SCANNED_ROWS + 1,
       where: this.toBaseWhere(actor, query, access),
     });
-    const hasMoreBaseRows = baseRows.length > OPERATIONAL_STATUS_MAX_SCANNED_ROWS;
-    const scannedRows = baseRows.slice(0, OPERATIONAL_STATUS_MAX_SCANNED_ROWS);
+    const scannedRows = baseRows;
     const now = new Date();
     const rows = scannedRows
+      .filter((work) => {
+        const finalizedAt = work.finalizedAt;
+        return !(work.status === "FINALIZATA" && finalizedAt && work.courierRouteStops?.some((stop) => stop.type === "DELIVERY" && stop.outcomeStatus === "DELIVERED" && stop.outcomeAt && stop.outcomeAt >= finalizedAt));
+      })
       .map((work) => toOperationalStatusRow(work, now))
       .filter((row) => !(row.technicalReadiness === "PROBE_READY" && !row.hasCompletedPickup && (row.logistics.status === "DELIVERED" || row.delivery.status === "DELIVERED")))
       .filter((row) => !query.transportHorizonDays || isWithinTransportHorizon(row.deadline.effectiveDueAt, query.transportHorizonDays))
@@ -73,7 +78,7 @@ export class OperationalStatusService {
       counters,
       items: tabRows.slice(offset, offset + pageSize),
       meta: {
-        hasMore: hasMoreBaseRows || offset + pageSize < total,
+        hasMore: offset + pageSize < total,
         page,
         pageSize,
         scannedRows: scannedRows.length,
@@ -102,6 +107,39 @@ export class OperationalStatusService {
   private toBaseWhere(actor: AuthenticatedUser, query: OperationalStatusQueryDto, access: WorkAccess): Prisma.WorkOrderWhereInput {
     const search = query.search?.trim();
     const isProbeReturnTab = query.tab === "RETURNED" || query.tab === "COMPLETED";
+    const nestedConditions: Prisma.WorkOrderWhereInput[] = [];
+    if (query.transportOnly) {
+      nestedConditions.push({ OR: [{ requiresDelivery: true }, { requiresPickup: true }, { technicalReadiness: { in: ["PROBE_READY", "FINAL_READY"] } }] });
+    }
+    if (!isProbeReturnTab) {
+      nestedConditions.push({
+        OR: [
+          { technicalReadiness: "PROBE_READY", OR: [{ requiresDelivery: true }, { requiresPickup: true }, { courierRouteStops: { none: { outcomeStatus: "DELIVERED" } } }] },
+          { technicalReadiness: "FINAL_READY" },
+          { NOT: { OR: [{ activeCycle: { is: { logisticsState: { is: { status: "DELIVERED" } } } } }, { courierRouteStops: { some: { outcomeStatus: "DELIVERED" } } }] } },
+        ],
+      });
+    }
+    if (query.ownerUserId) {
+      nestedConditions.push({ OR: [{ assignedTechnicianId: query.ownerUserId }, { claimedByUserId: query.ownerUserId }] });
+    }
+    if (query.stageTechnicianUserId) {
+      nestedConditions.push({ activeCycle: { is: { workflowExecution: { is: { currentStage: { is: { assignedUserId: query.stageTechnicianUserId } } } } } } });
+    }
+    if (query.deliveryStatus) {
+      nestedConditions.push({ deliveryPreparationItems: { some: { group: { deliveries: { some: { isActive: true, status: query.deliveryStatus } } }, isActive: true } } });
+    }
+    if (search) {
+      nestedConditions.push({ OR: [
+        { code: { contains: search, mode: "insensitive" } },
+        { patientName: { contains: search, mode: "insensitive" } },
+        { patientReference: { contains: search, mode: "insensitive" } },
+        { clinic: { name: { contains: search, mode: "insensitive" } } },
+        { doctor: { displayName: { contains: search, mode: "insensitive" } } },
+        { workType: { name: { contains: search, mode: "insensitive" } } },
+        { workType: { symbol: { contains: search, mode: "insensitive" } } },
+      ] });
+    }
     return {
       AND: [
         this.toVisibilityWhere(actor, access),
@@ -109,8 +147,6 @@ export class OperationalStatusService {
           ...(query.excludeDemo ? { id: { not: { startsWith: "demo_work_" } } } : {}),
           // Finalization is terminal. Finalized works remain available from
           // history/detail views, never from the operational status queues.
-          status: { not: "FINALIZATA" },
-          ...(query.transportOnly ? { OR: [{ requiresDelivery: true }, { requiresPickup: true }, { technicalReadiness: { in: ["PROBE_READY", "FINAL_READY"] } }] } : {}),
           ...(query.clinicId ? { clinicId: query.clinicId } : {}),
           ...(query.doctorId ? { doctorId: query.doctorId } : {}),
           ...(query.patientId ? { patientId: query.patientId } : {}),
@@ -118,67 +154,7 @@ export class OperationalStatusService {
           ...(query.executionLegalEntityCode ? { executionLegalEntity: { is: { code: query.executionLegalEntityCode } } } : {}),
           ...(query.priority ? { priority: query.priority } : {}),
           ...(query.logisticsStatus ? { activeCycle: { is: { logisticsState: { is: { status: query.logisticsStatus } } } } } : {}),
-          // A successfully delivered work is no longer an active transport/status
-          // item. Check both the logistics state and route history because a
-          // route outcome is the source of truth while the state is being synced.
-          ...(!isProbeReturnTab ? {
-            OR: [
-              // A newly completed probe starts a new transport cycle even if
-              // the previous probe was already delivered. Once the current
-              // delivery is completed, it must leave the operational list;
-              // it can reappear when logistics explicitly enables pickup.
-              {
-                technicalReadiness: "PROBE_READY",
-                OR: [
-                  { requiresDelivery: true },
-                  { requiresPickup: true },
-                  { courierRouteStops: { none: { outcomeStatus: "DELIVERED" } } },
-                ],
-              },
-              {
-                NOT: {
-                  OR: [
-                    { activeCycle: { is: { logisticsState: { is: { status: "DELIVERED" } } } } },
-                    { courierRouteStops: { some: { outcomeStatus: "DELIVERED" } } },
-                  ],
-                },
-              },
-            ],
-          } : {}),
-          ...(query.ownerUserId ? { OR: [{ assignedTechnicianId: query.ownerUserId }, { claimedByUserId: query.ownerUserId }] } : {}),
-          ...(query.stageTechnicianUserId
-            ? { activeCycle: { is: { workflowExecution: { is: { currentStage: { is: { assignedUserId: query.stageTechnicianUserId } } } } } } }
-            : {}),
-          ...(query.deliveryStatus
-            ? {
-                deliveryPreparationItems: {
-                  some: {
-                    group: {
-                      deliveries: {
-                        some: {
-                          isActive: true,
-                          status: query.deliveryStatus,
-                        },
-                      },
-                    },
-                    isActive: true,
-                  },
-                },
-              }
-            : {}),
-          ...(search
-            ? {
-                OR: [
-                  { code: { contains: search, mode: "insensitive" } },
-                  { patientName: { contains: search, mode: "insensitive" } },
-                  { patientReference: { contains: search, mode: "insensitive" } },
-                  { clinic: { name: { contains: search, mode: "insensitive" } } },
-                  { doctor: { displayName: { contains: search, mode: "insensitive" } } },
-                  { workType: { name: { contains: search, mode: "insensitive" } } },
-                  { workType: { symbol: { contains: search, mode: "insensitive" } } },
-                ],
-              }
-            : {}),
+          AND: nestedConditions,
         },
       ],
     };

@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useForm } from "react-hook-form";
 
 import { WorkFormFields } from "./work-dynamic-form.js";
@@ -34,6 +34,7 @@ function createJsonResponse(body: unknown, status = 200): Response {
   return {
     arrayBuffer: async () => new ArrayBuffer(0),
     json: async () => body,
+    text: async () => JSON.stringify(body),
     ok: status >= 200 && status < 300,
     status,
     headers: new Headers({ "content-type": "application/json" }),
@@ -457,6 +458,11 @@ const realLabSheetResponse = {
 };
 
 describe("WorksPage", () => {
+  beforeEach(() => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -501,7 +507,7 @@ describe("WorksPage", () => {
     expect(await screen.findByRole("heading", { name: "Lucrări" })).toBeDefined();
     expect(await screen.findByText("Ion Pop")).toBeDefined();
     expect(await screen.findByText("Coroana zirconiu")).toBeDefined();
-    expect(await screen.findByText("În lucru")).toBeDefined();
+    expect(await screen.findByText("Înregistrată")).toBeDefined();
     expect(await screen.findByText("Normal")).toBeDefined();
     expect(screen.getByRole("button", { name: "Deschide" })).toBeDefined();
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/work-types/options"), expect.anything());
@@ -548,9 +554,9 @@ describe("WorksPage", () => {
 
     fireEvent.change(clinicInput, { target: { value: "clinic_1" } });
     fireEvent.focus(doctorInput);
-    await screen.findByRole("option", { name: "Dr. Ana Popescu" });
+    await screen.findByRole("option", { name: "Ana Popescu" });
     fireEvent.change(doctorInput, { target: { value: "doctor_1" } });
-    expect(doctorInput.value).toBe("Dr. Ana Popescu");
+    expect(doctorInput.value).toBe("Ana Popescu");
 
     fireEvent.change(clinicInput, { target: { value: "clinic_2" } });
     await waitFor(() => expect(doctorInput.value).toBe(""));
@@ -593,7 +599,7 @@ describe("WorksPage", () => {
     fireEvent.focus(patientInput);
 
     const patientListbox = await screen.findByRole("listbox");
-    expect(within(patientListbox).getAllByRole("option")).toHaveLength(3);
+    expect(within(patientListbox).getAllByRole("option")).toHaveLength(4);
     expect(within(patientListbox).getByText("Ion Pop")).toBeDefined();
 
     fireEvent.keyDown(patientInput, { key: "ArrowDown" });
@@ -609,15 +615,16 @@ describe("WorksPage", () => {
     fireEvent.click(within(filteredPatientListbox).getByRole("option", { name: /Maria Pop/ }));
     expect((patientInput as HTMLInputElement).value).toBe("Maria Pop");
 
-    const workTypeInput = await screen.findByLabelText("Tip lucrare");
+    fireEvent.click(screen.getByRole("button", { name: "Dinte 11" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Alege tipul lucrării" }));
+    const workTypeInput = await screen.findByLabelText("Caută tipul lucrării");
     fireEvent.focus(workTypeInput);
-    const workTypeListbox = await screen.findByRole("listbox");
-    expect(within(workTypeListbox).getAllByRole("option")).toHaveLength(3);
+    const workTypeList = (await screen.findAllByRole("dialog")).at(-1)!;
+    expect(within(workTypeList).getAllByRole("button")).toHaveLength(5);
 
     fireEvent.change(workTypeInput, { target: { value: "punte" } });
-    await waitFor(() => expect(within(workTypeListbox).getAllByRole("option")).toHaveLength(1));
-    expect(within(workTypeListbox).getByText("Punte zirconiu")).toBeDefined();
-    expect(within(workTypeListbox).getByText("PZr · Bucată")).toBeDefined();
+    await waitFor(() => expect(within(workTypeList).getByRole("button", { name: "Punte zirconiu" })).toBeDefined());
+    expect(within(workTypeList).getByRole("button", { name: "Punte zirconiu" })).toBeDefined();
   });
 
   it("submits canonical reception intake fields from the create form", async () => {
@@ -692,25 +699,22 @@ describe("WorksPage", () => {
     renderWithProviders(<WorksPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Adaugă lucrare" }));
 
-    const patientInput = await screen.findByLabelText("Pacient");
-    fireEvent.focus(patientInput);
-    fireEvent.click(within(await screen.findByRole("listbox")).getByRole("option", { name: /Ion Pop/ }));
-
-    const workTypeInput = await screen.findByLabelText("Tip lucrare");
-    fireEvent.focus(workTypeInput);
-    fireEvent.click(within(await screen.findByRole("listbox")).getByRole("option", { name: /Punte zirconiu/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Dinte 11" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Alege tipul lucrării" }));
+    fireEvent.click(within((await screen.findAllByRole("dialog")).at(-1)!).getByRole("button", { name: "Punte zirconiu" }));
 
     fireEvent.change(screen.getByLabelText("Clinică"), { target: { value: "clinic_1" } });
     fireEvent.change(await screen.findByLabelText("Medic"), { target: { value: "doctor_1" } });
+    const patientInput = await screen.findByLabelText("Pacient");
+    fireEvent.focus(patientInput);
+    fireEvent.click(within(await screen.findByRole("listbox")).getByRole("option", { name: /Ion Pop/ }));
     fireEvent.change(screen.getByLabelText("Culoare"), { target: { value: "A2" } });
-    fireEvent.click(screen.getByRole("button", { name: "Dinte 11" }));
-    fireEvent.click(screen.getByRole("button", { name: "Adaugă componentă" }));
-    expect(await screen.findByText(/1\. Punte zirconiu/)).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Adaugă" }));
+    expect(await screen.findByText("Punte zirconiu")).toBeDefined();
     fireEvent.change(screen.getByLabelText("Data termenului"), { target: { value: "2026-08-20" } });
-    fireEvent.change(screen.getByLabelText("Ora termenului"), { target: { value: "09:30" } });
+    fireEvent.change(screen.getByLabelText("Ora termenului (opțional)"), { target: { value: "09:30" } });
     fireEvent.change(screen.getByLabelText("Note"), { target: { value: "Lucrare prioritară" } });
     fireEvent.submit(document.getElementById("create-work-form")!);
-
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/works"), expect.objectContaining({ method: "POST" })));
     const createCall = fetchMock.mock.calls.find(([input, init]) => String(input).endsWith("/works") && (init as RequestInit | undefined)?.method === "POST");
     expect(createCall).toBeDefined();
@@ -944,7 +948,7 @@ describe("WorksPage", () => {
     renderWithProviders(<WorksPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
-    expect(await screen.findByText("Detaliile lucrării")).toBeDefined();
+    expect(await screen.findByText("Detalii lucrare")).toBeDefined();
     expect(await screen.findByRole("heading", { name: "Flux producție" })).toBeDefined();
     expect(await screen.findByText("Flux zirconiu · versiunea 3")).toBeDefined();
 
@@ -1039,7 +1043,8 @@ describe("WorksPage", () => {
     expect(screen.queryByText("Proba 1 trecută · Lingură istorică")).toBeNull();
     fireEvent.click(await screen.findByRole("button", { name: "Deschide Probe" }));
     expect(await screen.findByText("Proba 1 trecută · Lingură istorică")).toBeDefined();
-    expect(screen.getByLabelText("Tip probă")).toBeDefined();
+    expect(screen.getByText("Tipuri probă")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Salvează tipurile probei" })).toBeDefined();
     expect(screen.getByText("Tip probă istoric: Lingură istorică")).toBeDefined();
   });
 

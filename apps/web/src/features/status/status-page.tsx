@@ -6,7 +6,6 @@ import {
   LOGISTICS_STATUSES,
   OPERATIONAL_STATUS_DEFAULT_PAGE_SIZE,
   OPERATIONAL_STATUS_MAX_PAGE_SIZE,
-  OPERATIONAL_STATUS_MAX_SCANNED_ROWS,
   OPERATIONAL_STATUS_SORT_FIELDS,
   OPERATIONAL_STATUS_TABS,
   REAL_LAB_SHEET_OPERATIONAL_STATUSES,
@@ -535,7 +534,7 @@ export function StatusPage({ allowLogisticsRead = false, experimental = false, h
                 <CardTitle>Registru status</CardTitle>
                 <CardDescription>
                   Total: {statusQuery.data?.meta.total ?? 0}
-                  {statusQuery.data?.meta.hasMore ? ` · rezultate limitate la ${OPERATIONAL_STATUS_MAX_SCANNED_ROWS}` : ""}
+                  {statusQuery.data?.meta.hasMore ? " · există și rezultate pe paginile următoare" : ""}
                   {" · filtrele nu expun date financiare"}
                 </CardDescription>
               </div>
@@ -662,12 +661,6 @@ export function StatusPage({ allowLogisticsRead = false, experimental = false, h
             ) : (
               <p className="status-page__filters-collapsed">Filtrele sunt ascunse. Deschide-le când ai nevoie de rafinare.</p>
             )}
-
-            {statusQuery.data?.meta.hasMore ? (
-              <p className="status-page__bounded-note">
-                Rezultatele sunt plafonate la {OPERATIONAL_STATUS_MAX_SCANNED_ROWS} de lucrări scanate. Rafinează filtrele pentru o listă mai precisă.
-              </p>
-            ) : null}
 
             <div className="status-page__desktop-table">
               <DataTable

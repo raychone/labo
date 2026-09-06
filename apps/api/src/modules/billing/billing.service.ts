@@ -1160,7 +1160,8 @@ export class BillingService {
       work.technicalReadiness === "FINAL_READY"
       // Finalization is technical completion. Billing becomes available only
       // after logistics records a successful delivery for the final work.
-      && (work.courierRouteStops === undefined || work.courierRouteStops.length > 0)
+      && Array.isArray(work.courierRouteStops)
+      && work.courierRouteStops.some((stop) => stop.outcomeStatus === "DELIVERED" && stop.type === "DELIVERY")
       && cycle?.executionLegalEntityId
       && cycle.executionLegalEntityCodeSnapshot
       && snapshot?.status === "LOCKED"

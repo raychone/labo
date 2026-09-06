@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 
 import { LogisticsService, type UploadedAttachmentFile } from "./logistics.service.js";
+import { LogisticsCenterQueryDto } from "./dto/logistics.dto.js";
 
 function createService({ allowUpload = true } = {}) {
   const authorizationService = {
@@ -268,6 +269,25 @@ describe("LogisticsService pickup requests", () => {
     }), include: { clinic: true, doctor: true }, where: { id: "pickup_1" } });
     expect(auditLogCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ action: "pickup.cancelled", resourceType: "pickup_request" }) });
     expect(result.status).toBe("CANCELLED");
+  });
+});
+
+describe("LogisticsService delivery eligibility", () => {
+  it("keeps a finalized work visible after a delivery from an earlier cycle", () => {
+    const { service } = createService();
+    const where = (service as unknown as { toWorkWhere: (query: LogisticsCenterQueryDto) => Record<string, unknown> }).toWorkWhere(
+      Object.assign(new LogisticsCenterQueryDto(), { category: "DE_LIVRAT" }),
+    );
+    const eligibility = (where.AND as Array<Record<string, unknown>>)[0]!;
+    const readinessBranch = (eligibility.OR as Array<Record<string, unknown>>)[0]!;
+
+    expect(readinessBranch.technicalReadiness).toEqual({ in: ["PROBE_READY", "FINAL_READY"] });
+    expect(readinessBranch.courierRouteStops).toEqual({
+      none: {
+        outcomeStatus: "PENDING",
+        route: { status: { in: ["DRAFT", "ASSIGNED", "IN_PROGRESS"] } },
+      },
+    });
   });
 });
 

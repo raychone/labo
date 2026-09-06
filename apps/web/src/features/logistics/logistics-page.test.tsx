@@ -29,6 +29,7 @@ function renderWithProviders(component: ReactNode): RenderResult {
 function createJsonResponse(body: unknown, status = 200): Response {
   return {
     json: async () => body,
+    text: async () => JSON.stringify(body),
     ok: status >= 200 && status < 300,
     status,
   } as Response;
@@ -72,6 +73,7 @@ function createFetchMock(permissionKeys: readonly string[]) {
             dueState: "ON_TRACK",
             id: "log_1",
             logistics: { blockedAt: null, blockedReasonCode: null, blockedReasonLabel: null, blockedReasonNotes: null, locationCode: null, locationLabel: null, packingStartedAt: null, readyForDeliveryAt: null, readyForPackingAt: null, status: "IN_PRODUCTION", statusLabel: "În producție", version: 1 },
+            logisticsActionReasons: [],
             patientName: "Ion Pop",
             patientReference: "P-1",
             preparationGroup: null,
@@ -141,6 +143,7 @@ function createFetchMock(permissionKeys: readonly string[]) {
         formSnapshot: null,
         id: "log_1",
         logistics: { blockedAt: null, blockedReasonCode: null, blockedReasonLabel: null, blockedReasonNotes: null, locationCode: null, locationLabel: null, packingStartedAt: null, readyForDeliveryAt: null, readyForPackingAt: null, status: "IN_PRODUCTION", statusLabel: "În producție", version: 1 },
+        logisticsActionReasons: [],
         patientName: "Ion Pop",
         patientReference: "P-1",
         preparationGroup: null,
@@ -166,16 +169,15 @@ describe("LogisticsPage", () => {
     const result = renderWithProviders(<LogisticsPage />);
 
     expect(await screen.findByRole("heading", { name: "Centru operațional" })).toBeDefined();
-    expect(result.container.querySelectorAll(".logistics-page__summary-card")).toHaveLength(5);
+    expect(result.container.querySelectorAll(".logistics-page__summary-card")).toHaveLength(4);
     expect(screen.getByRole("button", { name: "Toate" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Întârziate" })).toBeDefined();
     expect(screen.getByRole("button", { name: "În așteptare" })).toBeDefined();
-    expect(screen.getByLabelText("De livrat")).toBeDefined();
-    expect(screen.getByLabelText("De ridicat")).toBeDefined();
+    expect(screen.getByLabelText("De livrat / de ridicat")).toBeDefined();
     expect(result.container.querySelector(".logistics-page__table-header")?.textContent).toContain("Clinica sau Medic");
     expect(result.container.querySelector(".logistics-page__table-header")?.textContent).toContain("Livrare/Ridicare");
-    expect(result.container.querySelectorAll(".logistics-page__summary-window")).toHaveLength(2);
-    expect(result.container.querySelectorAll(".logistics-page__summary-window button")).toHaveLength(6);
+    expect(result.container.querySelectorAll(".logistics-page__summary-window")).toHaveLength(1);
+    expect(result.container.querySelectorAll(".logistics-page__summary-window button")).toHaveLength(3);
     expect(screen.queryByRole("button", { name: "Finalizate azi" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Intrări azi" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Gata de livrare" })).toBeNull();
@@ -226,22 +228,20 @@ describe("LogisticsPage", () => {
 
     renderWithProviders(<LogisticsPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "De ridicat" }));
+    fireEvent.click(await screen.findByRole("button", { name: "De livrat / de ridicat" }));
     expect(await screen.findByText("Cerere ridicare")).toBeDefined();
     expect(screen.getByLabelText("Selectează ridicarea de la Clinica Test")).toBeDefined();
-    expect((await screen.findAllByText("Clinica Test")).length).toBeGreaterThanOrEqual(2);
-    expect((await screen.findAllByText("Dr. Ana")).length).toBeGreaterThanOrEqual(2);
+    expect((await screen.findAllByText("Clinica Test")).length).toBeGreaterThanOrEqual(1);
+    expect((await screen.findAllByText("Dr. Ana")).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/09:30/)).toBeDefined();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Ridicare nouă" })[0]!);
     expect(await screen.findByRole("heading", { name: "Ridicare nouă" })).toBeDefined();
     expect(screen.getByLabelText("Clinica")).toBeDefined();
     expect(screen.getByLabelText("Medic")).toBeDefined();
-    expect(screen.getByLabelText("Data")).toBeDefined();
-    expect(screen.getByLabelText("Ora exactă")).toBeDefined();
-
-    fireEvent.change(screen.getByLabelText("Programare"), { target: { value: "RANGE" } });
+    expect(screen.getByLabelText("Data programării")).toBeDefined();
     expect(screen.getByLabelText("De la")).toBeDefined();
     expect(screen.getByLabelText("Până la")).toBeDefined();
+
   });
 });

@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LogisticsRouteBuilderPage } from "./logistics-route-builder-page.js";
 
@@ -19,10 +19,14 @@ function renderWithProviders(component: ReactNode, initialEntries: readonly stri
 }
 
 function createJsonResponse(body: unknown, status = 200): Response {
-  return { json: async () => body, ok: status >= 200 && status < 300, status } as Response;
+  return { json: async () => body, text: async () => JSON.stringify(body), ok: status >= 200 && status < 300, status } as Response;
 }
 
 describe("LogisticsRouteBuilderPage", () => {
+  beforeEach(() => {
+    vi.stubGlobal("scrollTo", vi.fn());
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -51,12 +55,14 @@ describe("LogisticsRouteBuilderPage", () => {
             dueState: "ON_TRACK",
             id: "work_1",
             logistics: { status: "RECEIVED", statusLabel: "Recepționată", version: 1 },
+            logisticsActionReasons: ["READY_FOR_FINAL_DELIVERY"],
+            requiresLogisticsAction: true,
             patientName: "Ion Pop",
             patientReference: null,
             preparationGroup: null,
             priority: "NORMAL",
-            technicalReadiness: "PROBE_READY",
-            requiresDelivery: true,
+            technicalReadiness: "FINAL_READY",
+            requiresDelivery: false,
             requiresPickup: false,
             requestedDeliveryDate: "2026-08-21T00:00:00.000Z",
             workCode: "WO-26-0001",

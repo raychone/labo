@@ -1156,7 +1156,7 @@ export class LogisticsService {
         // in route history must not hide that probe, but an active pending
         // stop still prevents adding it twice.
         {
-          technicalReadiness: "PROBE_READY",
+          technicalReadiness: { in: ["PROBE_READY", "FINAL_READY"] },
           courierRouteStops: {
             none: {
               outcomeStatus: "PENDING",

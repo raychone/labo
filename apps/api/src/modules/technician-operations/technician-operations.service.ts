@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, type Prisma as PrismaTypes } from "@prisma/client";
+import { Prisma, type Prisma as PrismaTypes, type TechnicianOperationRate } from "@prisma/client";
 import { calculateTechnicianManeuverElementQuantity, calculateTechnicianManeuverTotalMinor, getCanonicalWorkOrderCompositionTeeth, isAdultFdiTooth, type AdultFdiTooth } from "@dental-lab/shared";
 
 import type { RequestMetadata } from "../auth/auth.types.js";
@@ -125,13 +125,18 @@ export class TechnicianOperationsService {
 
     if (!technicianId) return operations.map(toTechnicianOperationOptionView);
     const now = new Date();
-    return Promise.all(operations.map(async (operation) => {
-      const rate = await this.prisma.technicianOperationRate.findFirst({
-        orderBy: { effectiveFrom: "desc" },
-        where: { effectiveFrom: { lte: now }, operationId: operation.id, technicianId, OR: [{ validUntil: null }, { validUntil: { gt: now } }] },
-      });
+    const rates = await this.prisma.technicianOperationRate.findMany({
+      orderBy: { effectiveFrom: "desc" },
+      where: { effectiveFrom: { lte: now }, operationId: { in: operations.map((operation) => operation.id) }, technicianId, OR: [{ validUntil: null }, { validUntil: { gt: now } }] },
+    });
+    const rateByOperationId = new Map<string, TechnicianOperationRate>();
+    for (const rate of rates) {
+      if (!rateByOperationId.has(rate.operationId)) rateByOperationId.set(rate.operationId, rate);
+    }
+    return operations.map((operation) => {
+      const rate = rateByOperationId.get(operation.id);
       return { ...toTechnicianOperationOptionView(operation), currency: rate?.currency ?? null, rateMinor: rate?.rateMinor ?? null };
-    }));
+    });
   }
 
   public async getOperation(operationId: string): Promise<TechnicianOperationDetailView> {
@@ -587,12 +592,15 @@ export class TechnicianOperationsService {
         throw new BadRequestException(`Dinții ${outsideComposition.join(", ")} nu fac parte din compoziția activă a lucrării.`);
       }
       if (!isCaseLevel && operation.category !== "Altele") {
-        const selectedCategories = new Set(
-          (workOrder.items ?? [])
-            .filter((item) => item.teeth?.some((tooth) => validSelectedTeeth.includes(tooth.fdiTooth as AdultFdiTooth)))
-            .flatMap((item) => getAllowedOperationCategories([item.workType] ) ?? []),
-        );
-        if (selectedCategories.size > 0 && !selectedCategories.has(operation.category)) {
+        const incompatibleTooth = validSelectedTeeth.find((tooth) => {
+          const toothCategories = new Set(
+            (workOrder.items ?? [])
+              .filter((item) => item.teeth?.some((itemTooth) => itemTooth.fdiTooth === tooth))
+              .flatMap((item) => getAllowedOperationCategories([item.workType] ) ?? []),
+          );
+          return toothCategories.size > 0 && !toothCategories.has(operation.category);
+        });
+        if (incompatibleTooth !== undefined) {
           throw new BadRequestException("Manopera nu corespunde tipului lucrării de pe dintele selectat.");
         }
       }

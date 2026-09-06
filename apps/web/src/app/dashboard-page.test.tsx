@@ -28,6 +28,7 @@ function renderWithProviders(component: ReactNode): void {
 function createJsonResponse(body: unknown, status = 200): Response {
   return {
     json: async () => body,
+    text: async () => JSON.stringify(body),
     ok: status >= 200 && status < 300,
     status,
   } as Response;
@@ -299,8 +300,8 @@ describe("DashboardPage", () => {
     expect(await screen.findByRole("heading", { name: "Manager" })).toBeDefined();
     expect(await screen.findByText(/NC · Nicolaie Cristina/)).toBeDefined();
     expect(await screen.findByText("Situație financiară")).toBeDefined();
-    expect(await screen.findByText("Lucrări")).toBeDefined();
-    expect(screen.getAllByText("Lucrări nefacturate").length).toBeGreaterThan(0);
+    expect(await screen.findByText("Lucrări întârziate")).toBeDefined();
+    expect(screen.getByRole("link", { name: "Deschide facturarea" })).toBeDefined();
     expect(screen.queryByRole("heading", { name: "Recepție" })).toBeNull();
     expect(screen.queryByText("Activitate operațională")).toBeNull();
   });

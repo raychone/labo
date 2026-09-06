@@ -91,6 +91,24 @@ function createService(prisma: unknown): TechnicianOperationsService {
 }
 
 describe("TechnicianOperationsService", () => {
+  it("loads operation rates with one query for the options list", async () => {
+    const findManyRates = vi.fn().mockResolvedValue([
+      rate({ id: "rate_2", operationId: "operation_2", rateMinor: 4500 }),
+      rate({ id: "rate_1", operationId: "operation_1", rateMinor: 3000 }),
+    ]);
+    const service = createService({
+      technicianOperation: {
+        findMany: vi.fn().mockResolvedValue([operation(), operation({ id: "operation_2", code: "MODELARE", name: "Modelare" })]),
+      },
+      technicianOperationRate: { findMany: findManyRates },
+    });
+
+    const result = await service.listOperationOptions("tech_1");
+
+    expect(findManyRates).toHaveBeenCalledTimes(1);
+    expect(result.map((item) => item.rateMinor)).toEqual([3000, 4500]);
+  });
+
   it("creates a technician operation separately from work types and audits it", async () => {
     const auditCreate = vi.fn().mockResolvedValue({});
     const create = vi.fn().mockResolvedValue(operation({ code: "GLAZE", name: "Glazurare" }));
@@ -335,6 +353,39 @@ describe("TechnicianOperationsService", () => {
       { actorUserId: "tech_1", requestMetadata: {} },
       { operationId: "operation_1", selectedTeeth: [12], workOrderId: "work_1" },
     )).rejects.toThrow("nu fac parte din compoziția activă");
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("validates a maneuver against each selected tooth component, not the union of the case", async () => {
+    const create = vi.fn();
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        technicianOperation: { findFirst: vi.fn().mockResolvedValue({ category: "Coroană ceramică", code: "PRESS", id: "operation_1", name: "Presare" }) },
+        technicianPerformedOperation: { create, findFirst: vi.fn().mockResolvedValue(null) },
+        technicianPerformedOperationTooth: { findMany: vi.fn().mockResolvedValue([]) },
+        workOrderItem: { findMany: vi.fn().mockResolvedValue([
+          { archivedAt: null, scope: "TEETH", teeth: [{ fdiTooth: 11 }] },
+          { archivedAt: null, scope: "TEETH", teeth: [{ fdiTooth: 13 }] },
+        ]) },
+        workOrder: { findUnique: vi.fn().mockResolvedValue({
+          activeProbeCycleId: "cycle_1",
+          assignedTechnicianId: "tech_1",
+          claimedByUserId: "tech_1",
+          id: "work_1",
+          status: "IN_LUCRU",
+          workType: { name: "Coroană metalo-ceramică", probeFamily: "MC", symbol: "TF" },
+          items: [
+            { teeth: [{ fdiTooth: 11 }], workType: { name: "Coroană metalo-ceramică", probeFamily: "MC", symbol: "TF" } },
+            { teeth: [{ fdiTooth: 13 }], workType: { name: "Coroană zirconia", probeFamily: "ZR", symbol: "ZR" } },
+          ],
+        }) },
+      })),
+    });
+
+    await expect(service.performOperation(
+      { actorUserId: "tech_1", requestMetadata: {} },
+      { operationId: "operation_1", selectedTeeth: [11, 13], workOrderId: "work_1" },
+    )).rejects.toThrow("nu corespunde tipului lucrării");
     expect(create).not.toHaveBeenCalled();
   });
 

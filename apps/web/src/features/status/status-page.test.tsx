@@ -34,6 +34,7 @@ function renderWithProviders(component: ReactNode, initialEntries = ["/status"])
 function createJsonResponse(body: unknown, status = 200): Response {
   return {
     json: async () => body,
+    text: async () => JSON.stringify(body),
     ok: status >= 200 && status < 300,
     status,
   } as Response;
@@ -141,7 +142,7 @@ describe("StatusPage", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders STATUS-001A counters, rows and bounded-result state without financial data", async () => {
+  it("renders STATUS-001A counters and rows without financial data", async () => {
     vi.stubGlobal("fetch", createFetchMock());
 
     renderWithProviders(<StatusPage />);
@@ -151,16 +152,16 @@ describe("StatusPage", () => {
     expect(screen.getByRole("columnheader", { name: "Clinica sau Medic" })).toBeDefined();
     expect(screen.getByRole("columnheader", { name: "Pacient" })).toBeDefined();
     expect(screen.getByRole("columnheader", { name: "Tip lucrare" })).toBeDefined();
-    expect(screen.getByRole("columnheader", { name: "Culoare" })).toBeDefined();
+    expect(screen.queryByText(/Rezultatele sunt plafonate/)).toBeNull();
     expect(screen.getByRole("columnheader", { name: "Tehnician" })).toBeDefined();
     expect(screen.getByRole("columnheader", { name: "Preluare" })).toBeDefined();
     expect(screen.getByRole("columnheader", { name: "Termen" })).toBeDefined();
     expect(screen.getByRole("columnheader", { name: "Stare" })).toBeDefined();
     expect(screen.getByRole("columnheader", { name: "Alerte" })).toBeDefined();
     expect(screen.getByRole("columnheader", { name: "Livrare/Ridicare" })).toBeDefined();
-    expect(screen.getAllByText("A2").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("CZr").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Tehnician Ana").length).toBeGreaterThan(0);
-    expect(screen.getByText(/rezultate limitate la 1000/)).toBeDefined();
+    expect(screen.queryByText(/rezultate limitate la 1000/)).toBeNull();
     expect(screen.queryByText(/120,00|RON|factură|preț/i)).toBeNull();
   });
 
@@ -188,9 +189,9 @@ describe("StatusPage", () => {
   it("opens the existing works detail flow from a status row", async () => {
     vi.stubGlobal("fetch", createFetchMock());
 
-    renderWithProviders(<StatusPage />);
+    renderWithProviders(<StatusPage experimental />);
 
-    const openLink = (await screen.findAllByRole("link", { name: "Deschide" }))[0];
+    const openLink = await screen.findByRole("link", { name: "Maria Ionescu" });
     fireEvent.click(openLink!);
     expect(await screen.findByText("Works detail route")).toBeDefined();
   });

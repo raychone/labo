@@ -536,6 +536,7 @@ export function BillingPage(): ReactNode {
   const monthCloseDoctorOverviewQuery = useBillingOverview({ ...monthRegistryParams, groupBy: "doctor" }, canReadReports && activeTab === "month-close");
   const billableWorksQuery = useBillableWorks(billableParams, (canCreateInvoice || canReadReports) && (activeTab === "uninvoiced" || activeTab === "statements"));
   const invoicesQuery = useBillingDocuments(invoiceParams, canReadInvoices && activeTab === "invoices");
+  const statementInvoicesQuery = useBillingDocuments({ ...invoiceParams, pageSize: 100, paymentFilter: "ALL" }, canReadInvoices && activeTab === "statements");
   const stornoQuery = useBillingDocuments(stornoParams, canReadInvoices && activeTab === "storno");
   const paymentsQuery = usePayments(canReadFinance && activeTab === "payments");
   const receivablesQuery = useReceivables(receivablesParams, canReadReports && activeTab === "receivables");
@@ -579,16 +580,23 @@ export function BillingPage(): ReactNode {
     }
     return Array.from(doctors.entries()).map(([value, label]) => ({ label, value }));
   }, [billableWorksQuery.data?.items]);
+  const statementItemClinics = useMemo(() => {
+    const clinics = new Map(billableItemClinics.map((option) => [option.value, option.label]));
+    for (const document of statementInvoicesQuery.data?.items ?? []) {
+      clinics.set(document.clinicId, document.clinicName);
+    }
+    return Array.from(clinics.entries()).map(([value, label]) => ({ label, value }));
+  }, [billableItemClinics, statementInvoicesQuery.data?.items]);
   useEffect(() => {
     if (statementScope === "clinic") {
-      if (billableItemClinics.length === 0) {
+      if (statementItemClinics.length === 0) {
         if (clinicStatementId !== "") {
           setClinicStatementId("");
         }
         return;
       }
-      const firstClinic = billableItemClinics[0];
-      if (firstClinic && (clinicStatementId === "" || !billableItemClinics.some((clinic) => clinic.value === clinicStatementId))) {
+      const firstClinic = statementItemClinics[0];
+      if (firstClinic && (clinicStatementId === "" || !statementItemClinics.some((clinic) => clinic.value === clinicStatementId))) {
         setClinicStatementId(firstClinic.value);
       }
     }
@@ -604,7 +612,7 @@ export function BillingPage(): ReactNode {
         setDoctorStatementId(firstDoctor.value);
       }
     }
-  }, [billableItemClinics, billableItemDoctors, clinicStatementId, doctorStatementId, statementScope]);
+  }, [billableItemDoctors, clinicStatementId, doctorStatementId, statementItemClinics, statementScope]);
   useEffect(() => {
     setSelectedStatementDocumentIds([]);
   }, [clinicStatementId, doctorStatementId, range.dateFrom, range.dateTo, statementScope]);
@@ -941,7 +949,7 @@ export function BillingPage(): ReactNode {
             label: "Note de plată",
             content: (
               <StatementsTab
-                clinicOptions={billableItemClinics}
+                clinicOptions={statementItemClinics}
                 clinicStatement={clinicStatementQuery.data}
                 doctorOptions={billableItemDoctors}
                 doctorStatement={doctorStatementQuery.data}
@@ -1262,7 +1270,7 @@ function StatementsTab({
       <div className="billing-page__toolbar billing-page__toolbar--actions">
         <Button onClick={() => setScope("clinic")} variant={scope === "clinic" ? "primary" : "secondary"}>Clinică</Button>
         <Button onClick={() => setScope("doctor")} variant={scope === "doctor" ? "primary" : "secondary"}>Medic</Button>
-        <Button onClick={() => setSource("documents")} variant={activeSource === "documents" ? "primary" : "secondary"}>Documente restante</Button>
+        <Button onClick={() => setSource("documents")} variant={activeSource === "documents" ? "primary" : "secondary"}>Documente emise</Button>
         <Button disabled={!hasWorks} onClick={() => setSource("works")} variant={activeSource === "works" ? "primary" : "secondary"}>Lucrări nefacturate</Button>
         <Button disabled={!statement} onClick={() => onOpenPrint(scope, activeSource)} variant="outline">
           {activeSource === "documents" && hasSelection ? "Exportă selecția PDF" : "Export PDF"}
@@ -1708,7 +1716,7 @@ function PaymentsTab({ currency, isLoading, locale, onExport, payments }: { read
 
   return (
     <section className="billing-page__tab">
-      <p className="billing-page__readonly">Evidența manuală a încasărilor efectuate în afara aplicației.</p>
+      <p className="billing-page__readonly">Evidența încasărilor înregistrate în aplicație.</p>
       <div className="billing-page__toolbar"><Button onClick={onExport} variant="outline">Export CSV</Button></div>
       <DataTable columns={columns} emptyMessage="Nu există încasări." getRowKey={(payment) => payment.id} isLoading={isLoading} rows={payments} />
     </section>
