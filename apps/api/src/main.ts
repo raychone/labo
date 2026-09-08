@@ -45,6 +45,8 @@ const bootstrapLogger = new Logger("Bootstrap");
 
 void bootstrap().catch((error: unknown) => {
   const errorName = error instanceof Error ? error.name : "UnknownError";
-  bootstrapLogger.error(`API startup failed (${errorName}).`);
+  const errorMessage = error instanceof Error ? error.message : "Unknown startup error.";
+  const errorStack = error instanceof Error ? error.stack : undefined;
+  bootstrapLogger.error(`API startup failed (${errorName}): ${errorMessage}`, errorStack);
   process.exitCode = 1;
 });
