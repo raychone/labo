@@ -18,6 +18,7 @@ export class RealtimeMutationInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const actorUserId = request.auth?.user.id;
     const descriptor = describeRealtimeMutation({
+      body: request.body as unknown,
       method: request.method,
       path: request.originalUrl,
       ...(actorUserId ? { actorUserId } : {}),

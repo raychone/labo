@@ -53,6 +53,26 @@ describe("describeRealtimeMutation", () => {
     });
   });
 
+  it("targets technician earnings invalidation by the affected technician, not the manager actor", () => {
+    expect(describeRealtimeMutation({
+      actorUserId: "manager-1",
+      body: { amountMinor: 10_000, technicianId: "tech-1" },
+      method: "POST",
+      path: "/technician-operations/payments",
+    })).toMatchObject({
+      technicianSubjectUserId: "tech-1",
+      topics: expect.arrayContaining(["technician-earnings"]),
+      type: "TECHNICIAN_CHANGED",
+    });
+
+    expect(describeRealtimeMutation({
+      actorUserId: "tech-1",
+      body: { operationId: "operation-1", workOrderId: "work-1" },
+      method: "POST",
+      path: "/technician-operations/performed",
+    })).toMatchObject({ technicianSubjectUserId: "tech-1" });
+  });
+
   it("does not throw while classifying a malformed encoded user ID", () => {
     expect(() => describeRealtimeMutation({ actorUserId: "manager-1", method: "PATCH", path: "/users/%E0%A4%A" })).not.toThrow();
     expect(describeRealtimeMutation({ actorUserId: "manager-1", method: "PATCH", path: "/users/%E0%A4%A" })).not.toHaveProperty("authTargetUserId");

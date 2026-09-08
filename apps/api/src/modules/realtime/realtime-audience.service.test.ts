@@ -38,7 +38,7 @@ describe("RealtimeAudienceService", () => {
   });
 
   it("enforces user-targeted events and own earnings", () => {
-    const targeted = event({ actorUserId: "tech-1", audienceUserId: "tech-1", topics: ["technician-earnings"], type: "TECHNICIAN_CHANGED" });
+    const targeted = event({ actorUserId: "manager-1", audienceUserId: "tech-1", technicianSubjectUserId: "tech-1", topics: ["technician-earnings"], type: "TECHNICIAN_CHANGED" });
     expect(service.allowedTopics(targeted, {
       permissionKeys: new Set(["technician.earnings.read_own"]),
       userId: "tech-1",
@@ -46,6 +46,28 @@ describe("RealtimeAudienceService", () => {
     expect(service.allowedTopics(targeted, {
       permissionKeys: new Set(["technician.earnings.read_all"]),
       userId: "manager-1",
+    })).toStrictEqual([]);
+  });
+
+  it("updates the affected technician and authorized managers after a manager records payment", () => {
+    const payment = event({
+      actorUserId: "manager-1",
+      technicianSubjectUserId: "tech-1",
+      topics: ["technician-earnings"],
+      type: "TECHNICIAN_CHANGED",
+    });
+
+    expect(service.allowedTopics(payment, {
+      permissionKeys: new Set(["technician.earnings.read_own"]),
+      userId: "tech-1",
+    })).toStrictEqual(["technician-earnings"]);
+    expect(service.allowedTopics(payment, {
+      permissionKeys: new Set(["technician.earnings.read_all"]),
+      userId: "manager-2",
+    })).toStrictEqual(["technician-earnings"]);
+    expect(service.allowedTopics(payment, {
+      permissionKeys: new Set(["technician.earnings.read_own"]),
+      userId: "tech-2",
     })).toStrictEqual([]);
   });
 });

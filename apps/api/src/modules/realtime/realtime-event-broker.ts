@@ -7,6 +7,8 @@ export interface InternalRealtimeEvent extends RealtimeEventEnvelope {
   readonly audienceUserId?: string;
   /** Makes only the `auth` topic visible to the affected user. */
   readonly authTargetUserId?: string;
+  /** Identifies the affected technician without exposing it to the browser. */
+  readonly technicianSubjectUserId?: string;
 }
 
 export type RealtimeEventListener = (event: InternalRealtimeEvent) => void;

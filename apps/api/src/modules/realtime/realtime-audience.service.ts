@@ -51,7 +51,7 @@ export class RealtimeAudienceService {
 
     if (topic === "technician-earnings") {
       return hasAnyPermission(input.permissionKeys, ["technician.earnings.read_all"])
-        || (event.actorUserId === input.userId && hasAnyPermission(input.permissionKeys, ["technician.earnings.read_own"]));
+        || (event.technicianSubjectUserId === input.userId && hasAnyPermission(input.permissionKeys, ["technician.earnings.read_own"]));
     }
 
     return hasAnyPermission(input.permissionKeys, TOPIC_PERMISSION_RULES[topic] ?? []);

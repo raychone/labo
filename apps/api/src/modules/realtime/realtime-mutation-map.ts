@@ -3,12 +3,14 @@ import type { RealtimeEventType, RealtimeTopic } from "@dental-lab/shared";
 export interface RealtimeMutationDescriptor {
   readonly audienceUserId?: string;
   readonly authTargetUserId?: string;
+  readonly technicianSubjectUserId?: string;
   readonly topics: readonly RealtimeTopic[];
   readonly type: RealtimeEventType;
 }
 
 export interface RealtimeMutationRequest {
   readonly actorUserId?: string;
+  readonly body?: unknown;
   readonly method: string;
   readonly path: string;
 }
@@ -65,7 +67,13 @@ export function describeRealtimeMutation(request: RealtimeMutationRequest): Real
 
   if (root === "technician-operations") {
     const performed = path.includes("/performed");
+    const technicianSubjectUserId = performed
+      ? request.actorUserId
+      : path === "/technician-operations/payments" || path === "/technician-operations/rates"
+        ? getStringProperty(request.body, "technicianId")
+        : undefined;
     return {
+      ...(technicianSubjectUserId ? { technicianSubjectUserId } : {}),
       topics: performed
         ? ["technician-operations", "technician-earnings", "technician-workbench", "works", "status", "audit"]
         : ["technician-operations", "technician-earnings", "pricing", "audit"],
@@ -119,4 +127,12 @@ function safeDecodePathSegment(value: string): string | undefined {
     if (error instanceof URIError) return undefined;
     throw error;
   }
+}
+
+function getStringProperty(value: unknown, property: string): string | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const candidate = (value as Record<string, unknown>)[property];
+  if (typeof candidate !== "string") return undefined;
+  const normalized = candidate.trim();
+  return normalized.length > 0 ? normalized : undefined;
 }

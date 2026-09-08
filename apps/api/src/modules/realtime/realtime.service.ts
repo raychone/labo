@@ -120,6 +120,7 @@ export class RealtimeService implements OnApplicationShutdown {
       ...(context.actorUserId ? { actorUserId: context.actorUserId } : {}),
       ...(descriptor.audienceUserId ? { audienceUserId: descriptor.audienceUserId } : {}),
       ...(descriptor.authTargetUserId ? { authTargetUserId: descriptor.authTargetUserId } : {}),
+      ...(descriptor.technicianSubjectUserId ? { technicianSubjectUserId: descriptor.technicianSubjectUserId } : {}),
     });
   }
 
