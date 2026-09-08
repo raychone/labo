@@ -20,19 +20,33 @@ function createWorkRecord(id: string, input: {
   readonly claimStatus?: "CLAIMED" | "UNCLAIMED";
   readonly claimedByUserId?: string | null;
   readonly deliveryStatus?: "DELIVERED" | null;
+  readonly deliveryCompletedAt?: Date;
   readonly deliveredAt?: Date | null;
   readonly effectiveDueAt?: Date | null;
   readonly finalizedAt?: Date | null;
+  readonly probeReadyAt?: Date | null;
+  readonly pickupAt?: Date | null;
   readonly status?: "REGISTERED" | "RECEPTIE" | "IN_LUCRU" | "IN_ASTEPTARE" | "FINALIZATA";
   readonly technicalReadiness?: "PROBE_READY" | "FINAL_READY" | null;
 } = {}): OperationalStatusWorkRecord {
+  const deliveryCompletedAt = input.deliveryCompletedAt ?? new Date("2026-08-04T09:00:00.000Z");
   return {
     assignedTechnician: null,
     assignedTechnicianId: null,
     claimStatus: input.claimStatus ?? "UNCLAIMED",
     claimedBy: input.claimedByUserId ? { displayName: "Tehnician", id: input.claimedByUserId, preferredColor: null } : null,
     claimedByUserId: input.claimedByUserId ?? null,
-    clinic: { id: "clinic_1", name: "Clinica Demo" },
+    activeCycleId: "work-cycle-1",
+    clinic: {
+      id: "clinic_1",
+      name: "Clinica Demo",
+      pickupRequests: input.pickupAt ? [{
+        doctorId: "doctor_1",
+        id: "pickup_1",
+        routeStops: [{ outcomeAt: input.pickupAt, outcomeStatus: "PICKED_UP", type: "PICKUP" }],
+      }] : [],
+    },
+    clinicId: "clinic_1",
     code: `WO-2026-${id}`,
     createdAt: new Date("2026-08-01T08:00:00.000Z"),
     deadlineMode: input.effectiveDueAt === null ? null : "CALCULATED",
@@ -41,16 +55,22 @@ function createWorkRecord(id: string, input: {
           group: {
             deliveries: [{
               code: "DL-1",
+              createdAt: new Date(deliveryCompletedAt.getTime() - 60 * 60 * 1000),
+              deliveredAt: deliveryCompletedAt,
               id: "delivery_1",
               plannedDate: new Date("2026-08-04T08:00:00.000Z"),
               status: input.deliveryStatus,
-              updatedAt: new Date("2026-08-04T09:00:00.000Z"),
+              updatedAt: deliveryCompletedAt,
             }],
           },
+          addedAt: new Date(deliveryCompletedAt.getTime() - 2 * 60 * 60 * 1000),
+          removedAt: deliveryCompletedAt,
+          workCycleId: "work-cycle-1",
         }]
       : [],
     courierRouteStops: input.deliveredAt ? [{ outcomeAt: input.deliveredAt, outcomeStatus: "DELIVERED", type: "DELIVERY" }] : [],
     doctor: { displayName: "Dr. Demo", id: "doctor_1" },
+    doctorId: "doctor_1",
     effectiveDueAt: input.effectiveDueAt ?? null,
     executionLegalEntity: { code: "NC", displayName: "Nicolaie Cristina" },
     id,
@@ -60,6 +80,7 @@ function createWorkRecord(id: string, input: {
     patientName: "Pacient Demo",
     patientReference: null,
     priority: "NORMAL",
+    probeReadyAt: input.probeReadyAt ?? (input.technicalReadiness === "PROBE_READY" ? new Date("2026-08-04T07:30:00.000Z") : null),
     technicalReadiness: input.technicalReadiness ?? null,
     status: input.status ?? "RECEPTIE",
     updatedAt: new Date("2026-08-02T08:00:00.000Z"),
@@ -154,12 +175,35 @@ describe("OperationalStatusService", () => {
     expect(response.counters.every((counter) => counter.count === 0)).toBe(true);
   });
 
+  it("shows a delivered probe only after a pickup later than that delivery", async () => {
+    const deliveryCompletedAt = new Date("2026-08-04T09:00:00.000Z");
+    const { service } = createService({
+      findManyRows: [
+        createWorkRecord("pickup-before", { deliveryCompletedAt, deliveryStatus: "DELIVERED", pickupAt: new Date("2026-08-04T08:30:00.000Z"), technicalReadiness: "PROBE_READY" }),
+        createWorkRecord("pickup-after", { deliveryCompletedAt, deliveryStatus: "DELIVERED", pickupAt: new Date("2026-08-04T10:00:00.000Z"), technicalReadiness: "PROBE_READY" }),
+      ],
+      readAll: true,
+    });
+
+    const response = await service.getOperationalStatus(actor, {
+      page: 1,
+      pageSize: 25,
+      sortBy: "workCode",
+      sortDirection: "asc",
+      tab: "ALL",
+    });
+
+    expect(response.items.map((row) => row.workCode)).toEqual(["WO-2026-pickup-after"]);
+    expect(response.items[0]?.hasCompletedPickup).toBe(true);
+  });
+
   it("keeps a finalized work visible until its current final delivery", async () => {
     const finalizedAt = new Date("2026-08-08T10:00:00.000Z");
     const { service } = createService({
       findManyRows: [
         createWorkRecord("final-ready", { deliveredAt: new Date("2026-08-08T09:00:00.000Z"), effectiveDueAt: new Date("2026-08-08T12:00:00.000Z"), finalizedAt, status: "FINALIZATA", technicalReadiness: "FINAL_READY" }),
         createWorkRecord("final-delivered", { deliveredAt: new Date("2026-08-08T11:00:00.000Z"), effectiveDueAt: new Date("2026-08-08T12:00:00.000Z"), finalizedAt, status: "FINALIZATA", technicalReadiness: "FINAL_READY" }),
+        createWorkRecord("final-modern-delivered", { deliveryCompletedAt: new Date("2026-08-08T11:30:00.000Z"), deliveryStatus: "DELIVERED", effectiveDueAt: new Date("2026-08-08T12:00:00.000Z"), finalizedAt, status: "FINALIZATA", technicalReadiness: "FINAL_READY" }),
       ],
       readAll: true,
     });

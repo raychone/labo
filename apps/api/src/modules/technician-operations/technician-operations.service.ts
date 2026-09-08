@@ -414,16 +414,14 @@ export class TechnicianOperationsService {
       try {
         const payment = await this.prisma.$transaction(async (tx) => {
           await this.validateTechnician(tx, dto.technicianId);
-          const [earned, alreadyPaid] = await Promise.all([
-            tx.technicianPerformedOperation.aggregate({
-              _sum: { earningMinor: true },
-              where: { currency, performedAt: { lte: paidAt }, removedAt: null, technicianId: dto.technicianId },
-            }),
-            tx.technicianPayment.aggregate({
-              _sum: { amountMinor: true },
-              where: { currency, paidAt: { lte: paidAt }, technicianId: dto.technicianId },
-            }),
-          ]);
+          const earned = await tx.technicianPerformedOperation.aggregate({
+            _sum: { earningMinor: true },
+            where: { currency, performedAt: { lte: paidAt }, removedAt: null, technicianId: dto.technicianId },
+          });
+          const alreadyPaid = await tx.technicianPayment.aggregate({
+            _sum: { amountMinor: true },
+            where: { currency, paidAt: { lte: paidAt }, technicianId: dto.technicianId },
+          });
           const earnedMinor = earned._sum.earningMinor ?? 0;
           const alreadyPaidMinor = alreadyPaid._sum.amountMinor ?? 0;
           const availableMinor = earnedMinor - alreadyPaidMinor;
@@ -437,10 +435,8 @@ export class TechnicianOperationsService {
           const performedFindMany = (tx.technicianPerformedOperation as unknown as { findMany?: (args: unknown) => Promise<readonly { earningMinor: number; performedAt: Date }[]> }).findMany;
           const paymentFindMany = (tx.technicianPayment as unknown as { findMany?: (args: unknown) => Promise<readonly { amountMinor: number; paidAt: Date }[]> }).findMany;
           if (performedFindMany && paymentFindMany) {
-            const [timelineEarnings, timelinePayments] = await Promise.all([
-              performedFindMany({ where: { currency, removedAt: null, technicianId: dto.technicianId }, select: { earningMinor: true, performedAt: true } }),
-              paymentFindMany({ where: { currency, technicianId: dto.technicianId }, select: { amountMinor: true, paidAt: true } }),
-            ]);
+            const timelineEarnings = await performedFindMany({ where: { currency, removedAt: null, technicianId: dto.technicianId }, select: { earningMinor: true, performedAt: true } });
+            const timelinePayments = await paymentFindMany({ where: { currency, technicianId: dto.technicianId }, select: { amountMinor: true, paidAt: true } });
             const events = [
               ...timelineEarnings.map((entry) => ({ amount: entry.earningMinor, at: entry.performedAt, kind: "earning" as const })),
               ...timelinePayments.map((entry) => ({ amount: entry.amountMinor, at: entry.paidAt, kind: "payment" as const })),

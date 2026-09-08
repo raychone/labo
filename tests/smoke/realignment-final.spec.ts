@@ -48,7 +48,7 @@ test("final realignment cross-role acceptance path", async ({ page }) => {
   const claimed = await postJson<{ readonly claim: { readonly revision: number; readonly status: string }; readonly status: string }>(
     page,
     `/works/${createdWork.id}/claim`,
-    { executionLegalEntityCode: "NC", expectedClaimRevision: createdDetail.claim.revision },
+    { executionLegalEntityCode: "CDT", expectedClaimRevision: createdDetail.claim.revision },
   );
   expect(claimed.claim.status).toBe("CLAIMED");
   expect(claimed.status).toBe("IN_LUCRU");
@@ -56,25 +56,61 @@ test("final realignment cross-role acceptance path", async ({ page }) => {
   const operations = await browserJson<readonly { readonly id: string }[]>(page, "/technician-operations/options");
   const operation = operations[0];
   expect(operation).toBeTruthy();
-  await postJson(page, "/technician-operations/performed", { operationId: operation!.id, workOrderId: createdWork.id });
+  await postJson(page, "/technician-operations/performed", {
+    operationId: operation!.id,
+    selectedTeeth: [11],
+    workOrderId: createdWork.id,
+  });
 
   await postJson(page, `/works/${createdWork.id}/status`, { reason: "Smoke: verificare stare de așteptare.", status: "IN_ASTEPTARE" });
   const backInProgress = await postJson<{ readonly status: string }>(page, `/works/${createdWork.id}/status`, { reason: "Smoke: reluare execuție.", status: "IN_LUCRU" });
   expect(backInProgress.status).toBe("IN_LUCRU");
 
   await loginAs(page, "LOGISTICA");
+  const logisticsWork = await browserJson<{
+    readonly clinic: { readonly id: string };
+    readonly doctor: { readonly id: string } | null;
+  }>(page, `/works/${createdWork.id}`);
+  const pickupDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const exactPickup = await postJson<{ readonly id: string; readonly scheduleType: string }>(page, "/pickup-requests", {
+    clinicId: logisticsWork.clinic.id,
+    doctorId: logisticsWork.doctor?.id ?? null,
+    exactTime: "09:30",
+    scheduleType: "EXACT",
+    scheduledDate: pickupDate,
+  });
+  const rangePickup = await postJson<{ readonly id: string; readonly scheduleType: string }>(page, "/pickup-requests", {
+    clinicId: logisticsWork.clinic.id,
+    doctorId: logisticsWork.doctor?.id ?? null,
+    scheduleType: "RANGE",
+    scheduledDate: pickupDate,
+    windowEndTime: "12:00",
+    windowStartTime: "10:00",
+  });
   const pickups = await browserJson<readonly { readonly id: string; readonly scheduleType: string }[]>(page, "/pickup-requests");
-  expect(pickups.some((pickup) => pickup.scheduleType === "EXACT")).toBe(true);
-  expect(pickups.some((pickup) => pickup.scheduleType === "RANGE")).toBe(true);
-  const routes = await browserJson<{ readonly items: readonly { readonly routeNumber: string; readonly stops: readonly unknown[] }[] }>(
+  expect(pickups).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: exactPickup.id, scheduleType: "EXACT" }),
+    expect.objectContaining({ id: rangePickup.id, scheduleType: "RANGE" }),
+  ]));
+  const createdRoute = await postJson<{ readonly id: string; readonly stops: readonly unknown[] }>(page, "/routes", {
+    courierUserId: "demo_user_curier",
+    name: `Smoke cross-role ${createdWork.code}`,
+    routeDate: pickupDate,
+    stops: [
+      { pickupRequestId: exactPickup.id, type: "PICKUP" },
+      { pickupRequestId: rangePickup.id, type: "PICKUP" },
+    ],
+  });
+  expect(createdRoute.stops).toHaveLength(2);
+  const routes = await browserJson<{ readonly items: readonly { readonly id: string; readonly routeNumber: string; readonly stops: readonly unknown[] }[] }>(
     page,
     "/routes?page=1&pageSize=100",
   );
-  expect(routes.items.some((route) => route.stops.length >= 2)).toBe(true);
+  expect(routes.items.some((route) => route.id === createdRoute.id && route.stops.length === 2)).toBe(true);
 
   await loginAs(page, "CURIER");
-  const courierRoutes = await browserJson<{ readonly items: readonly { readonly stops: readonly unknown[] }[] }>(page, "/routes?page=1&pageSize=100");
-  expect(courierRoutes.items.some((route) => route.stops.length >= 2)).toBe(true);
+  const courierRoutes = await browserJson<{ readonly items: readonly { readonly id: string; readonly stops: readonly unknown[] }[] }>(page, "/routes?page=1&pageSize=100");
+  expect(courierRoutes.items.some((route) => route.id === createdRoute.id && route.stops.length === 2)).toBe(true);
 
   await loginAs(page, "MANAGER");
   const documents = await browserJson<{ readonly items: readonly unknown[] }>(page, "/billing-documents?page=1&pageSize=100");

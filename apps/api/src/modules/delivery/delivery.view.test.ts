@@ -88,7 +88,7 @@ function createDeliveryRecord(includeProof = false): DeliveryRecord {
       deliveries: [],
       items: [
         {
-          addedAt: new Date("2026-08-01T09:00:00.000Z"),
+          addedAt: new Date("2026-08-01T07:30:00.000Z"),
           addedBy: null,
           addedByUserId: null,
           group: null,
@@ -217,5 +217,32 @@ describe("delivery cycle visibility", () => {
         workCode: "WO-2026-000001",
       }),
     ]);
+  });
+
+  it("keeps completed-delivery items visible after their preparation slot is released", () => {
+    const delivery = createDeliveryRecord();
+    const item = delivery.preparationGroup.items[0]!;
+    item.isActive = false;
+    item.removedAt = new Date("2026-08-03T08:00:00.000Z");
+
+    const detail = toDeliveryDetail(delivery, {
+      canAssign: false,
+      canCancel: false,
+      canComplete: false,
+      canFail: false,
+      canPickup: false,
+      canPrintProof: false,
+      canReadBilling: false,
+      canReadProof: false,
+      canReschedule: false,
+      canSignatureOverride: false,
+      canStartTransit: false,
+      canUpdatePlan: false,
+      canUnassign: false,
+      userId: "user_1",
+    }, new Date("2026-08-03T10:00:00.000Z"));
+
+    expect(detail.workCount).toBe(1);
+    expect(detail.works).toEqual([expect.objectContaining({ workCode: "WO-2026-000001" })]);
   });
 });

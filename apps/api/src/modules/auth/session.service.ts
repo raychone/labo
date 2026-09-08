@@ -146,6 +146,21 @@ export class SessionService {
     });
   }
 
+  public async isSessionActive(sessionId: string, userId: string): Promise<boolean> {
+    const session = await this.prisma.session.findFirst({
+      select: { id: true },
+      where: {
+        expiresAt: { gt: new Date() },
+        id: sessionId,
+        revokedAt: null,
+        user: { isActive: true },
+        userId,
+      },
+    });
+
+    return session !== null;
+  }
+
   private isSessionUsable(session: SessionWithUser): boolean {
     return session.revokedAt === null && session.expiresAt.getTime() > Date.now() && session.user.isActive;
   }

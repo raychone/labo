@@ -143,6 +143,17 @@ describe("AuthController", () => {
     expect(getSetCookieHeader(response)).toContain(environment.csrfCookieName);
   });
 
+  it("returns the existing valid CSRF cookie without rotating it", async () => {
+    const existingToken = new CsrfService().createToken();
+    const response = await request(app.getHttpServer() as App)
+      .get("/auth/csrf")
+      .set("Cookie", [`dl_csrf=${existingToken}`])
+      .expect(200);
+
+    expect(response.body).toStrictEqual({ csrfToken: existingToken });
+    expect(getSetCookieHeader(response)).toBe("");
+  });
+
   it("logs in and sets the httpOnly session cookie", async () => {
     const response = await request(app.getHttpServer() as App)
       .post("/auth/login")

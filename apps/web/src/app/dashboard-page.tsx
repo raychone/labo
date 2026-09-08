@@ -425,12 +425,22 @@ function ReceptionDashboard({
   // catalog. Do not leave reception with an empty selector in that case; the
   // returned work can still be registered with any active probe type.
   const selectableProbeTypes = configuredSelectableProbeTypes.length > 0 ? configuredSelectableProbeTypes : allProbeTypes;
+  const selectableProbeTypeIdsKey = selectableProbeTypes.map((type) => type.id).join("|");
   const completedProbeHistory = selectedReturnedWorkDetail?.completedProbeCycles ?? [];
   useEffect(() => {
-    setProbeTypeIds(selectableProbeTypes[0]?.id ? [selectableProbeTypes[0].id] : []);
+    setProbeTypeIds([]);
     setProbeDate("");
     setProbeTime("");
-  }, [probeTypesQuery.data, selectedReturnedWorkDetail, selectedReturnedWorkId]);
+  }, [selectedReturnedWorkId]);
+  useEffect(() => {
+    if (!selectedReturnedWorkId) return;
+    const selectableIds = new Set(selectableProbeTypes.map((type) => type.id));
+    setProbeTypeIds((current) => {
+      const retained = current.filter((id) => selectableIds.has(id));
+      if (retained.length > 0) return retained;
+      return selectableProbeTypes[0]?.id ? [selectableProbeTypes[0].id] : [];
+    });
+  }, [selectableProbeTypeIdsKey, selectedReturnedWorkId]);
   return (
     <div className="dashboard-page__workspace" aria-labelledby="reception-dashboard-title">
       <div className="dashboard-page__workspace-header">

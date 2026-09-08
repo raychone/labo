@@ -17,10 +17,11 @@ export class HealthService {
   ) {}
 
   public async getHealth(): Promise<HealthCheckResponse> {
+    const database = await this.databaseHealthService.getStatus();
     return {
       applicationName: "Dental Lab Management",
-      database: await this.databaseHealthService.getStatus(),
-      status: "ok",
+      database,
+      status: database === "ok" ? "ok" : "unavailable",
     };
   }
 }

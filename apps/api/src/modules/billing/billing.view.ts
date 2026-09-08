@@ -195,6 +195,20 @@ export type BillableWorkRecord = Prisma.WorkOrderGetPayload<{
       take: 1;
       where: { outcomeStatus: "DELIVERED", type: "DELIVERY" };
     };
+    deliveryPreparationItems: {
+      select: {
+        group: {
+          select: {
+            deliveries: {
+              select: { status: true };
+              take: 1;
+              where: { status: "DELIVERED" };
+            };
+          };
+        };
+        workCycleId: true;
+      };
+    };
     doctor: true;
     workType: true;
   };

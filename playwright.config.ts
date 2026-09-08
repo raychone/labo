@@ -9,6 +9,9 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   testDir: "./tests/smoke",
   timeout: 180_000,
+  // Smoke files share one explicitly configured development database and
+  // exercise global resources such as billing series and month archives.
+  workers: 1,
   use: {
     baseURL: webBaseUrl,
     trace: "retain-on-failure",

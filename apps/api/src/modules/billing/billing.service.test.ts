@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { BadRequestException } from "@nestjs/common";
+import { BadRequestException, ConflictException } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 
 import { BillingService } from "./billing.service.js";
 
 function createService() {
   return new BillingService({} as never, { record: vi.fn() } as never) as unknown as {
-    assignDocumentNumber: (tx: unknown, document: Record<string, unknown>, actorUserId: string) => Promise<Record<string, unknown>>;
+    assignDocumentNumber: (tx: unknown, document: Record<string, unknown>, actorUserId: string, issueGuard?: { readonly expectedStatus: "DRAFT"; readonly expectedVersion: number }) => Promise<Record<string, unknown>>;
     createAndIssueInvoice: (context: Record<string, unknown>, legalEntity: Record<string, unknown>, dto: Record<string, unknown>) => Promise<Record<string, unknown>>;
     createInvoice: ReturnType<typeof vi.fn>;
     issueDocument: ReturnType<typeof vi.fn>;
@@ -45,6 +46,7 @@ function createBillableWork(overrides: Record<string, unknown>) {
     code: "WO-26-0001",
     courierRouteStops: [],
     createdAt: new Date("2026-08-20T00:00:00.000Z"),
+    deliveryPreparationItems: [],
     doctor: null,
     id: "work_1",
     patientName: "Ion Popescu",
@@ -65,6 +67,31 @@ describe("BillingService invoice series", () => {
     expect(service.isWorkCycleBillable(createBillableWork({ courierRouteStops: [] }))).toBe(false);
     expect(service.isWorkCycleBillable(createBillableWork({ courierRouteStops: undefined }))).toBe(false);
     expect(service.isWorkCycleBillable(createBillableWork({ courierRouteStops: [{ outcomeStatus: "DELIVERED", type: "DELIVERY" }] }))).toBe(true);
+    expect(service.isWorkCycleBillable(createBillableWork({
+      deliveryPreparationItems: [{
+        group: { deliveries: [{ status: "DELIVERED" }] },
+        workCycleId: "cycle_1",
+      }],
+    }))).toBe(true);
+  });
+
+  it("does not reuse modern delivery evidence from another work cycle", () => {
+    const service = new BillingService({} as never, { record: vi.fn() } as never) as unknown as {
+      isWorkCycleBillable: (work: unknown) => boolean;
+    };
+
+    expect(service.isWorkCycleBillable(createBillableWork({
+      deliveryPreparationItems: [{
+        group: { deliveries: [{ status: "DELIVERED" }] },
+        workCycleId: "cycle_previous",
+      }],
+    }))).toBe(false);
+    expect(service.isWorkCycleBillable(createBillableWork({
+      deliveryPreparationItems: [{
+        group: { deliveries: [] },
+        workCycleId: "cycle_1",
+      }],
+    }))).toBe(false);
   });
 
   it("pushes billing payment filters into the database where clause", () => {
@@ -127,6 +154,26 @@ describe("BillingService invoice series", () => {
     expect(billingDocumentUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ formattedNumber: "NG 260001", number: 1, series: "NG" }) }));
   });
 
+  it("keeps the draft status and version predicates on an issuance write", async () => {
+    const service = createService();
+    const { billingDocumentUpdate, tx } = createTx("CD");
+
+    await service.assignDocumentNumber(tx, {
+      id: "doc_guarded",
+      issueDate: new Date("2026-08-20T00:00:00.000Z"),
+      legalEntityCodeSnapshot: "NC",
+      legalEntityId: "legal_nc",
+      lines: [],
+      totalMinor: 10000,
+      type: "INVOICE",
+      version: 4,
+    }, "user_1", { expectedStatus: "DRAFT", expectedVersion: 4 });
+
+    expect(billingDocumentUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "doc_guarded", status: "DRAFT", version: 4 },
+    }));
+  });
+
   it("applies percentage and fixed adjustments without mutating base pricing", () => {
     const service = createService() as unknown as BillingService;
     const works = [
@@ -186,5 +233,23 @@ describe("BillingService invoice series", () => {
     ]);
 
     expect(pricing.totalMinor).toBe(10935);
+  });
+
+  it("returns a retryable conflict after repeated concurrent payment serialization failures", async () => {
+    const serializationError = new Prisma.PrismaClientKnownRequestError("concurrent write", {
+      clientVersion: "test",
+      code: "P2034",
+    });
+    const transaction = vi.fn().mockRejectedValue(serializationError);
+    const service = new BillingService({ $transaction: transaction } as never, { record: vi.fn() } as never);
+
+    await expect(service.recordPayment(
+      { code: "CDT", displayName: "CDT", id: "legal_cdt" },
+      { actorUserId: "manager_1", requestMetadata: {} },
+      "document_1",
+      { amountMinor: 1000, method: "CARD", paymentDate: "2026-09-07" },
+    )).rejects.toBeInstanceOf(ConflictException);
+
+    expect(transaction).toHaveBeenCalledTimes(3);
   });
 });

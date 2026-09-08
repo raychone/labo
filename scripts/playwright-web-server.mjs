@@ -1,7 +1,10 @@
 import { spawn } from "node:child_process";
 
 const webUrl = new URL(process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000/login");
-const apiUrl = new URL(process.env.PLAYWRIGHT_API_BASE_URL ?? "http://127.0.0.1:3010/health");
+const configuredApiUrl = new URL(process.env.PLAYWRIGHT_API_BASE_URL ?? "http://127.0.0.1:3010");
+const apiUrl = configuredApiUrl.pathname === "/"
+  ? new URL("/health", configuredApiUrl)
+  : configuredApiUrl;
 
 async function isReachable(url) {
   try {

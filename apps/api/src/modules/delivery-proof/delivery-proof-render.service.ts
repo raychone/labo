@@ -62,7 +62,10 @@ export class DeliveryProofRenderService {
       plannedDate: delivery.plannedDate,
       proof: delivery.proof,
       statusLabel: statusLabels[delivery.status],
-      works: delivery.preparationGroup.items.map((item) => ({
+      works: delivery.preparationGroup.items.filter((item) => (
+        item.addedAt.getTime() <= delivery.createdAt.getTime()
+        && (item.isActive || item.removedAt === null || item.removedAt.getTime() >= delivery.createdAt.getTime())
+      )).map((item) => ({
         doctorName: item.workOrder.doctor?.displayName ?? "-",
         cycleNumber: item.workCycle?.cycleNumber ?? null,
         patientName: item.workOrder.patientName,

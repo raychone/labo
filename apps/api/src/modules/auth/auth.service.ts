@@ -57,9 +57,9 @@ export class AuthService {
         email,
       },
     });
-    const isPasswordValid = user
-      ? await this.passwordService.verify(user.passwordHash, input.password)
-      : false;
+    // Always execute an Argon2 verification so unknown e-mail addresses do not
+    // have a materially faster response path that can enumerate accounts.
+    const isPasswordValid = await this.passwordService.verifyForLogin(user?.passwordHash, input.password);
 
     if (!user || !user.isActive || !isPasswordValid) {
       await this.auditService.record({

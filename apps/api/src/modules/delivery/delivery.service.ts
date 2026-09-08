@@ -8,7 +8,7 @@ import type { PermissionKey } from "../rbac/permission-registry.js";
 import { DeliveryCodeService } from "./delivery-code.service.js";
 import { DELIVERY_AUDIT_ACTIONS, DELIVERY_RESOURCE_TYPE } from "./delivery.constants.js";
 import type { AssignCourierDto, CreateDeliveryDto, ListDeliveriesQueryDto, UpdateDeliveryDto } from "./dto/delivery.dto.js";
-import { deliveryInclude, type DeliveryAccessContext, type DeliveryDetail, type DeliveryRecord, type DeliverySummary, toDeliveryDetail, toDeliverySummary } from "./delivery.view.js";
+import { deliveryHistoryInclude, deliveryInclude, type DeliveryAccessContext, type DeliveryDetail, type DeliveryRecord, type DeliverySummary, toDeliveryDetail, toDeliverySummary } from "./delivery.view.js";
 
 export interface ActorContext {
   readonly actor: AuthenticatedUser;
@@ -46,7 +46,7 @@ export class DeliveryService {
     const [total, deliveries] = await this.prisma.$transaction([
       this.prisma.delivery.count({ where }),
       this.prisma.delivery.findMany({
-        include: deliveryInclude,
+        include: deliveryHistoryInclude,
         orderBy: [{ [query.sortBy]: query.sortDirection }, { code: "asc" }],
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -74,7 +74,7 @@ export class DeliveryService {
   public async createDelivery(context: ActorContext, groupId: string, dto: CreateDeliveryDto): Promise<DeliveryDetail> {
     await this.assertPermission(context.actor.id, "delivery.create", "ALL");
     const plannedDate = parseIsoDate(dto.plannedDate);
-    const delivery = await this.prisma.$transaction(async (tx) => {
+    const delivery = await this.runSerializableCreationTransaction(async (tx) => {
       const group = await tx.deliveryPreparationGroup.findUnique({
         include: {
           clinic: true,
@@ -161,7 +161,7 @@ export class DeliveryService {
 
   public async updateDelivery(context: ActorContext, deliveryId: string, dto: UpdateDeliveryDto): Promise<DeliveryDetail> {
     await this.assertPermission(context.actor.id, "delivery.assign", "ALL");
-    const delivery = await this.prisma.$transaction(async (tx) => {
+    const delivery = await this.runVersionedTransaction(async (tx) => {
       const current = await this.findDeliveryInTx(tx, deliveryId);
       this.assertVersion(current.version, dto.version);
       if (current.status !== DeliveryStatus.PLANNED && current.status !== DeliveryStatus.ASSIGNED) {
@@ -180,7 +180,7 @@ export class DeliveryService {
       const updated = await tx.delivery.update({
         data,
         include: deliveryInclude,
-        where: { id: deliveryId },
+        where: { id: deliveryId, version: dto.version },
       });
       await this.recordAudit(tx, context, DELIVERY_AUDIT_ACTIONS.updated, updated.id, {
         deliveryCode: updated.code,
@@ -194,7 +194,7 @@ export class DeliveryService {
 
   public async assignCourier(context: ActorContext, deliveryId: string, dto: AssignCourierDto): Promise<DeliveryDetail> {
     await this.assertPermission(context.actor.id, "delivery.assign", "ALL");
-    const delivery = await this.prisma.$transaction(async (tx) => {
+    const delivery = await this.runVersionedTransaction(async (tx) => {
       const current = await this.findDeliveryInTx(tx, deliveryId);
       this.assertVersion(current.version, dto.version);
       if (current.status !== DeliveryStatus.PLANNED && current.status !== DeliveryStatus.ASSIGNED) {
@@ -212,7 +212,7 @@ export class DeliveryService {
           version: { increment: 1 },
         },
         include: deliveryInclude,
-        where: { id: deliveryId },
+        where: { id: deliveryId, version: dto.version },
       });
       await this.recordEvent(tx, updated.id, eventType, context.actor.id, {
         actorUserId: context.actor.id,
@@ -234,7 +234,7 @@ export class DeliveryService {
 
   public async unassignCourier(context: ActorContext, deliveryId: string, dto: { readonly version: number }): Promise<DeliveryDetail> {
     await this.assertPermission(context.actor.id, "delivery.assign", "ALL");
-    const delivery = await this.prisma.$transaction(async (tx) => {
+    const delivery = await this.runVersionedTransaction(async (tx) => {
       const current = await this.findDeliveryInTx(tx, deliveryId);
       this.assertVersion(current.version, dto.version);
       if (current.status !== DeliveryStatus.PLANNED && current.status !== DeliveryStatus.ASSIGNED) {
@@ -250,7 +250,7 @@ export class DeliveryService {
           version: { increment: 1 },
         },
         include: deliveryInclude,
-        where: { id: deliveryId },
+        where: { id: deliveryId, version: dto.version },
       });
       await this.recordEvent(tx, updated.id, DeliveryEventType.COURIER_UNASSIGNED, context.actor.id, {
         actorUserId: context.actor.id,
@@ -265,7 +265,7 @@ export class DeliveryService {
 
   public async cancelDelivery(context: ActorContext, deliveryId: string, dto: { readonly version: number }): Promise<DeliveryDetail> {
     await this.assertPermission(context.actor.id, "delivery.cancel", "ALL");
-    const delivery = await this.prisma.$transaction(async (tx) => {
+    const delivery = await this.runVersionedTransaction(async (tx) => {
       const current = await this.findDeliveryInTx(tx, deliveryId);
       this.assertVersion(current.version, dto.version);
       if (current.status !== DeliveryStatus.PLANNED && current.status !== DeliveryStatus.ASSIGNED && current.status !== DeliveryStatus.FAILED) {
@@ -281,7 +281,7 @@ export class DeliveryService {
           version: { increment: 1 },
         },
         include: deliveryInclude,
-        where: { id: deliveryId },
+        where: { id: deliveryId, version: dto.version },
       });
       await this.recordEvent(tx, updated.id, DeliveryEventType.DELIVERY_CANCELLED, context.actor.id, {
         actorUserId: context.actor.id,
@@ -353,6 +353,34 @@ export class DeliveryService {
     return (await this.authorizationService.hasPermission({ permission, requiredScope: "ALL", userId })).allowed;
   }
 
+  private async runVersionedTransaction<T>(operation: (tx: DeliveryTx) => Promise<T>): Promise<T> {
+    try {
+      return await this.prisma.$transaction(operation);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+        throw new ConflictException("Livrarea a fost modificată între timp. Reîncarcă datele.");
+      }
+      throw error;
+    }
+  }
+
+  private async runSerializableCreationTransaction<T>(operation: (tx: DeliveryTx) => Promise<T>): Promise<T> {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(operation, { isolationLevel: "Serializable" });
+      } catch (error) {
+        if (isSerializationConflict(error) && attempt < 2) {
+          continue;
+        }
+        if (isSerializationConflict(error)) {
+          throw new ConflictException("Livrarea nu a putut fi creată din cauza unei modificări concurente. Reîncarcă datele.");
+        }
+        throw error;
+      }
+    }
+    throw new ConflictException("Livrarea nu a putut fi creată din cauza unei modificări concurente. Reîncarcă datele.");
+  }
+
   private toDeliveryWhere(query: ListDeliveriesQueryDto, actorUserId: string, access: DeliveryAccessContext): Prisma.DeliveryWhereInput {
     const search = query.search?.trim();
     const today = startOfUtcDay(new Date());
@@ -417,7 +445,7 @@ export class DeliveryService {
   }
 
   private async findDeliveryOrThrow(deliveryId: string): Promise<DeliveryRecord> {
-    const delivery = await this.prisma.delivery.findUnique({ include: deliveryInclude, where: { id: deliveryId } });
+    const delivery = await this.prisma.delivery.findUnique({ include: deliveryHistoryInclude, where: { id: deliveryId } });
     if (!delivery) {
       throw new NotFoundException("Livrarea nu a fost găsită.");
     }
@@ -474,4 +502,8 @@ function parseIsoDate(value: string): Date {
 
 function startOfUtcDay(value: Date): Date {
   return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
+}
+
+function isSerializationConflict(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034";
 }

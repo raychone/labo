@@ -39,6 +39,7 @@ import { fetchPatientOptions } from "../patients/patients-api.js";
 import { useTechnicianOptions } from "../technician-workbench/technician-workbench-api.js";
 import { useWorkTypeOptions } from "../work-types/work-types-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
+import { REALTIME_FALLBACK_REFETCH_MS } from "../../lib/realtime-config.js";
 import { useOperationalStatus } from "./status-api.js";
 import "./status-tv-page.css";
 
@@ -292,7 +293,7 @@ export function StatusTvPage(): ReactNode {
   const query = useMemo(() => readQuery(searchParams), [searchParams]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [clock, setClock] = useState(() => new Date());
-  const statusQuery = useOperationalStatus(query, true, { refetchIntervalMs: 10_000 });
+  const statusQuery = useOperationalStatus(query, true, { refetchIntervalMs: REALTIME_FALLBACK_REFETCH_MS });
   const clinicsQuery = useQuery({ queryFn: fetchClinicOptions, queryKey: ["clinics", "options", "status-tv"], retry: false });
   const doctorsQuery = useQuery({ queryFn: () => fetchDoctorOptions(query.clinicId ?? undefined), queryKey: ["doctors", "options", "status-tv", query.clinicId], retry: false });
   const patientsQuery = useQuery({ queryFn: () => fetchPatientOptions(query.search ?? ""), queryKey: ["patients", "options", "status-tv", query.search ?? ""], retry: false });

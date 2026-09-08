@@ -6,7 +6,7 @@ services:
     region: frankfurt
     buildCommand: pnpm install --frozen-lockfile && PLAYWRIGHT_BROWSERS_PATH=0 pnpm exec playwright install chromium && pnpm --filter @dental-lab/shared build && pnpm --filter @dental-lab/api prisma:generate:deploy && pnpm --filter @dental-lab/api prisma:migrate:deploy:retry && pnpm --filter @dental-lab/api build
     startCommand: pnpm --filter @dental-lab/api start
-    healthCheckPath: /health
+    healthCheckPath: /health/ready
     envVars:
       - key: PLAYWRIGHT_BROWSERS_PATH
         value: "0"
@@ -14,6 +14,8 @@ services:
         value: "22.14.0"
       - key: NODE_ENV
         value: production
+      - key: APP_DEPLOYMENT_PROFILE
+        value: demo
       - key: DATABASE_URL
         sync: false
       - key: DIRECT_URL
@@ -36,6 +38,10 @@ services:
         value: "60"
       - key: LOGIN_RATE_LIMIT_MAX_ATTEMPTS
         value: "5"
+      - key: RATE_LIMIT_MAX_BUCKETS
+        value: "10000"
+      - key: TRUST_PROXY_HOPS
+        value: "1"
 
   - type: web
     name: dental-lab-web
@@ -47,6 +53,8 @@ services:
         sync: false
       - key: VITE_DEMO_MODE
         value: "true"
+      - key: VITE_STYLE_PREVIEW_ENABLED
+        value: "false"
     routes:
       - type: rewrite
         source: /*

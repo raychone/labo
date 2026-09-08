@@ -22,6 +22,8 @@ Root documents such as `README.md`, `MVP-IMPLEMENTATION-PLAN.md`, `IMPLEMENTATIO
 | arhitectura | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | model de domeniu | [DOMAIN_MODEL.md](DOMAIN_MODEL.md) |
 | securitate | [SECURITY.md](SECURITY.md) |
+| producție și operare | [PRODUCTION-RUNBOOK.md](PRODUCTION-RUNBOOK.md) |
+| backup și restore | [BACKUP-RESTORE.md](BACKUP-RESTORE.md) |
 | testare | [TESTING.md](TESTING.md) |
 | UI | [UI_GUIDELINES.md](UI_GUIDELINES.md) |
 | Git | [GIT_WORKFLOW.md](GIT_WORKFLOW.md) |

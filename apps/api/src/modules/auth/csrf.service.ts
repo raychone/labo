@@ -7,6 +7,12 @@ export class CsrfService {
     return randomBytes(32).toString("base64url");
   }
 
+  public reuseOrCreateToken(existingToken: string | undefined): string {
+    return existingToken && /^[A-Za-z0-9_-]{43}$/.test(existingToken)
+      ? existingToken
+      : this.createToken();
+  }
+
   public assertValid(cookieToken: string | undefined, headerToken: string | undefined): void {
     if (!cookieToken || !headerToken || !this.isSameToken(cookieToken, headerToken)) {
       throw new ForbiddenException("Invalid CSRF token.");

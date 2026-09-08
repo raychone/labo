@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
-import type { BillingDocumentType, Prisma, WorkStatus } from "@prisma/client";
+import { Prisma, type BillingDocumentType, type WorkStatus } from "@prisma/client";
 import { calculateUrgencySurchargeMinor, type UrgencyLevel } from "@dental-lab/shared";
 
 import { AuditService } from "../auth/audit.service.js";
@@ -104,6 +104,20 @@ const BILLABLE_WORK_INCLUDE = {
     take: 1,
     where: { outcomeStatus: "DELIVERED", type: "DELIVERY" },
   },
+  deliveryPreparationItems: {
+    select: {
+      group: {
+        select: {
+          deliveries: {
+            select: { status: true },
+            take: 1,
+            where: { status: "DELIVERED" },
+          },
+        },
+      },
+      workCycleId: true,
+    },
+  },
   doctor: true,
   workType: true,
 } as const satisfies Prisma.WorkOrderInclude;
@@ -123,6 +137,7 @@ const BILLING_OVERVIEW_WORK_SELECT = {
       },
       executionLegalEntityCodeSnapshot: true,
       executionLegalEntityId: true,
+      id: true,
       executionSnapshot: {
         select: { pricingTotalMinor: true, pricingUnitPriceMinor: true, status: true },
       },
@@ -134,12 +149,27 @@ const BILLING_OVERVIEW_WORK_SELECT = {
     take: 1,
     where: { outcomeStatus: "DELIVERED", type: "DELIVERY" },
   },
+  deliveryPreparationItems: {
+    select: {
+      group: {
+        select: {
+          deliveries: {
+            select: { status: true },
+            take: 1,
+            where: { status: "DELIVERED" },
+          },
+        },
+      },
+      workCycleId: true,
+    },
+  },
   clinicId: true,
   createdAt: true,
   doctor: { select: { displayName: true } },
   doctorId: true,
   id: true,
   patientName: true,
+  technicalReadiness: true,
   workType: { select: { name: true } },
   workTypeId: true,
 } as const satisfies Prisma.WorkOrderSelect;
@@ -465,27 +495,38 @@ export class BillingService {
   }
 
   public async issueDocument(legalEntity: LegalEntityContext, context: ActorContext, documentId: string) {
-    const document = await this.prisma.$transaction(async (tx) => {
-      const draft = await tx.billingDocument.findUnique({
-        include: BILLING_DOCUMENT_INCLUDE,
-        where: { id: documentId, legalEntityId: legalEntity.id },
+    let document: BillingDocumentRecord;
+    try {
+      document = await this.prisma.$transaction(async (tx) => {
+        const draft = await tx.billingDocument.findUnique({
+          include: BILLING_DOCUMENT_INCLUDE,
+          where: { id: documentId, legalEntityId: legalEntity.id },
+        });
+        if (!draft) {
+          throw new NotFoundException("Billing document was not found.");
+        }
+        this.assertDraft(draft);
+        if (draft.lines.length === 0) {
+          throw new BadRequestException("Documentul nu are linii.");
+        }
+
+        const numbered = await this.assignDocumentNumber(tx, draft, context.actorUserId, {
+          expectedStatus: "DRAFT",
+          expectedVersion: draft.version,
+        });
+        if (numbered.type === "INVOICE") {
+          await this.assertCyclesNotInvoiced(tx, numbered.lines.map((line) => line.workCycleId).filter((id): id is string => id !== null), numbered.id);
+          await this.attachInvoiceToWorks(tx, numbered.id, numbered.lines.map((line) => line.workOrderId));
+        }
+
+        return numbered;
       });
-      if (!draft) {
-        throw new NotFoundException("Billing document was not found.");
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+        throw new ConflictException("Documentul a fost modificat între timp. Reîncarcă datele.");
       }
-      this.assertDraft(draft);
-      if (draft.lines.length === 0) {
-        throw new BadRequestException("Documentul nu are linii.");
-      }
-
-      const numbered = await this.assignDocumentNumber(tx, draft, context.actorUserId);
-      if (numbered.type === "INVOICE") {
-        await this.assertCyclesNotInvoiced(tx, numbered.lines.map((line) => line.workCycleId).filter((id): id is string => id !== null), numbered.id);
-        await this.attachInvoiceToWorks(tx, numbered.id, numbered.lines.map((line) => line.workOrderId));
-      }
-
-      return numbered;
-    });
+      throw error;
+    }
 
     await this.recordDocumentAudit(
       context,
@@ -686,42 +727,59 @@ export class BillingService {
   }
 
   public async recordPayment(legalEntity: LegalEntityContext, context: ActorContext, documentId: string, dto: RecordPaymentDto) {
-    const document = await this.prisma.$transaction(async (tx) => {
-      const invoice = await tx.billingDocument.findUnique({
-        include: BILLING_DOCUMENT_INCLUDE,
-        where: { id: documentId, legalEntityId: legalEntity.id },
-      });
-      if (!invoice) {
-        throw new NotFoundException("Invoice was not found.");
-      }
-      if (invoice.type !== "INVOICE" || !["ISSUED", "PARTIALLY_PAID"].includes(invoice.status)) {
-        throw new BadRequestException("Platile pot fi inregistrate doar pe facturi emise active.");
-      }
+    let document: BillingDocumentRecord | null = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        document = await this.prisma.$transaction(async (tx) => {
+          const invoice = await tx.billingDocument.findUnique({
+            include: BILLING_DOCUMENT_INCLUDE,
+            where: { id: documentId, legalEntityId: legalEntity.id },
+          });
+          if (!invoice) {
+            throw new NotFoundException("Invoice was not found.");
+          }
+          if (invoice.type !== "INVOICE" || !["ISSUED", "PARTIALLY_PAID"].includes(invoice.status)) {
+            throw new BadRequestException("Platile pot fi inregistrate doar pe facturi emise active.");
+          }
 
-      const amounts = calculateBillingAmounts(invoice);
-      if (dto.amountMinor > amounts.balanceMinor) {
-        throw new ConflictException("Plata depaseste soldul ramas.");
+          const amounts = calculateBillingAmounts(invoice);
+          if (dto.amountMinor > amounts.balanceMinor) {
+            throw new ConflictException("Plata depaseste soldul ramas.");
+          }
+
+          await tx.payment.create({
+            data: {
+              amountMinor: dto.amountMinor,
+              billingDocumentId: invoice.id,
+              clinicId: invoice.clinicId,
+              createdByUserId: context.actorUserId,
+              currency: invoice.currency,
+              legalEntityId: invoice.legalEntityId,
+              method: dto.method,
+              notes: dto.notes ?? null,
+              paymentDate: parseDateOnly(dto.paymentDate, "paymentDate"),
+              receiptDate: dto.receiptDate ? parseDateOnly(dto.receiptDate, "receiptDate") : dto.method === "CASH" ? parseDateOnly(dto.paymentDate, "paymentDate") : null,
+              receiptNumber: dto.receiptNumber ?? null,
+              reference: dto.reference ?? null,
+            },
+          });
+
+          return this.updateDocumentPaymentStatus(tx, invoice.id, context.actorUserId);
+        }, { isolationLevel: "Serializable" });
+        break;
+      } catch (error) {
+        if (isSerializationConflict(error) && attempt < 2) {
+          continue;
+        }
+        if (isSerializationConflict(error)) {
+          throw new ConflictException("Plata nu a putut fi înregistrată din cauza unei alte plăți simultane. Reîncearcă.");
+        }
+        throw error;
       }
-
-      await tx.payment.create({
-        data: {
-          amountMinor: dto.amountMinor,
-          billingDocumentId: invoice.id,
-          clinicId: invoice.clinicId,
-          createdByUserId: context.actorUserId,
-          currency: invoice.currency,
-          legalEntityId: invoice.legalEntityId,
-          method: dto.method,
-          notes: dto.notes ?? null,
-          paymentDate: parseDateOnly(dto.paymentDate, "paymentDate"),
-          receiptDate: dto.receiptDate ? parseDateOnly(dto.receiptDate, "receiptDate") : dto.method === "CASH" ? parseDateOnly(dto.paymentDate, "paymentDate") : null,
-          receiptNumber: dto.receiptNumber ?? null,
-          reference: dto.reference ?? null,
-        },
-      });
-
-      return this.updateDocumentPaymentStatus(tx, invoice.id, context.actorUserId);
-    }, { isolationLevel: "Serializable" });
+    }
+    if (!document) {
+      throw new ConflictException("Plata nu a putut fi înregistrată. Reîncearcă.");
+    }
 
     await this.recordDocumentAudit(context, BILLING_AUDIT_ACTIONS.paymentRecorded, document);
     return toBillingDocumentDetail(document);
@@ -1155,13 +1213,23 @@ export class BillingService {
   private isWorkCycleBillable(work: BillableWorkRecord): boolean {
     const cycle = this.getBillableCycle(work);
     const snapshot = cycle?.executionSnapshot ?? null;
+    const hasSuccessfulLegacyDelivery = Array.isArray(work.courierRouteStops)
+      && work.courierRouteStops.some((stop) => stop.outcomeStatus === "DELIVERED" && stop.type === "DELIVERY");
+    const hasSuccessfulDelivery = hasSuccessfulLegacyDelivery || Boolean(
+      cycle
+      && Array.isArray(work.deliveryPreparationItems)
+      && work.deliveryPreparationItems.some((item) => (
+        item.workCycleId === cycle.id
+        && item.group.deliveries.some((delivery) => delivery.status === "DELIVERED")
+      )),
+    );
 
     return Boolean(
       work.technicalReadiness === "FINAL_READY"
       // Finalization is technical completion. Billing becomes available only
-      // after logistics records a successful delivery for the final work.
-      && Array.isArray(work.courierRouteStops)
-      && work.courierRouteStops.some((stop) => stop.outcomeStatus === "DELIVERED" && stop.type === "DELIVERY")
+      // after either logistics implementation records a successful delivery
+      // for this exact work cycle.
+      && hasSuccessfulDelivery
       && cycle?.executionLegalEntityId
       && cycle.executionLegalEntityCodeSnapshot
       && snapshot?.status === "LOCKED"
@@ -1212,7 +1280,12 @@ export class BillingService {
     return doctorIds.size === 1 ? works[0]?.doctorId ?? null : null;
   }
 
-  private async assignDocumentNumber(tx: Prisma.TransactionClient, document: BillingDocumentRecord, actorUserId: string): Promise<BillingDocumentRecord> {
+  private async assignDocumentNumber(
+    tx: Prisma.TransactionClient,
+    document: BillingDocumentRecord,
+    actorUserId: string,
+    issueGuard?: { readonly expectedStatus: "DRAFT"; readonly expectedVersion: number },
+  ): Promise<BillingDocumentRecord> {
     const year = document.issueDate.getUTCFullYear();
     const series = document.type === "INVOICE" && document.legalEntityId
       ? await this.ensureAutomaticInvoiceSeries(tx, document.legalEntityId, document.legalEntityCodeSnapshot, year)
@@ -1263,7 +1336,10 @@ export class BillingService {
         version: { increment: 1 },
       },
       include: BILLING_DOCUMENT_INCLUDE,
-      where: { id: document.id },
+      where: {
+        id: document.id,
+        ...(issueGuard ? { status: issueGuard.expectedStatus, version: issueGuard.expectedVersion } : {}),
+      },
     });
   }
 
@@ -1668,4 +1744,8 @@ function calculatePercentageMinor(amountMinor: number, percentage: number): numb
     throw new BadRequestException("Procentul reducerii nu este valid.");
   }
   return Math.floor((amountMinor * numerator + (100 * scale) / 2) / (100 * scale));
+}
+
+function isSerializationConflict(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034";
 }

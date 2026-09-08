@@ -104,7 +104,6 @@ export class DeliveryProofService {
                   },
                 },
               },
-              where: { isActive: true },
             },
           },
         },

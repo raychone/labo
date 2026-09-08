@@ -17,6 +17,14 @@ describe("CsrfService", () => {
     expect(() => service.assertValid(token, token)).not.toThrow();
   });
 
+  it("reuses a well-formed cookie token so concurrent mutations cannot invalidate each other", () => {
+    const service = new CsrfService();
+    const existing = service.createToken();
+
+    expect(service.reuseOrCreateToken(existing)).toBe(existing);
+    expect(service.reuseOrCreateToken("invalid-token")).not.toBe("invalid-token");
+  });
+
   it("rejects missing or mismatched tokens", () => {
     const service = new CsrfService();
 

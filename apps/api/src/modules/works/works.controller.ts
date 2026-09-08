@@ -292,9 +292,12 @@ export class WorksController {
     const fileName = attachment.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
     response
       .status(200)
+      .setHeader("Cache-Control", "private, no-store")
       .setHeader("Content-Type", attachment.mimeType)
       .setHeader("Content-Length", String(attachment.content.length))
       .setHeader("Content-Disposition", `${attachment.mimeType.startsWith("image/") ? "inline" : "attachment"}; filename="${fileName}"`)
+      .setHeader("Content-Security-Policy", "default-src 'none'; sandbox")
+      .setHeader("X-Content-Type-Options", "nosniff")
       .send(Buffer.from(attachment.content));
   }
 

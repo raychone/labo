@@ -1,5 +1,6 @@
 interface ApiBaseUrlLocation {
   readonly hostname: string;
+  readonly origin?: string;
   readonly protocol: string;
 }
 
@@ -21,7 +22,10 @@ export function resolveApiBaseUrl(
     return `${options.location.protocol}//${options.location.hostname}:3010`;
   }
 
-  return "http://localhost:3010";
+  // A production build without a separate API URL remains safe and portable
+  // behind a same-origin reverse proxy. Never make an end user's browser call
+  // its own localhost as a production fallback.
+  return options.location?.origin ?? "";
 }
 
 export const API_BASE_URL = resolveApiBaseUrl({
@@ -36,8 +40,9 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly fieldErrors: ApiFieldErrors = {},
     public readonly code: string | undefined = undefined,
+    options?: ErrorOptions,
   ) {
-    super(message);
+    super(message, options);
     this.name = "ApiError";
   }
 }
@@ -104,13 +109,21 @@ function getMessageFromBody(body: ApiErrorBody | undefined, status: number): str
 }
 
 async function getResponseError(response: Response): Promise<ApiError> {
-  const body = await response.json().catch(() => undefined) as ApiErrorBody | undefined;
+  let body: ApiErrorBody | undefined;
+  let parsingError: Error | undefined;
+
+  try {
+    body = await response.json() as ApiErrorBody;
+  } catch (error) {
+    parsingError = error instanceof Error ? error : new Error("API error response could not be parsed.");
+  }
 
   return new ApiError(
     getMessageFromBody(body, response.status),
     response.status,
     normalizeFieldErrors(body?.fieldErrors),
     body?.code,
+    parsingError ? { cause: parsingError } : undefined,
   );
 }
 

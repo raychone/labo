@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiFetch, parseApiResponse } from "../../lib/api-client.js";
+import { REALTIME_FALLBACK_REFETCH_MS } from "../../lib/realtime-config.js";
 import { fetchCsrfToken } from "../auth/auth-api.js";
 
 export interface NotificationView {
@@ -45,7 +46,7 @@ async function dismissAllNotifications(): Promise<void> {
 }
 
 export function useNotifications(enabled: boolean) {
-  return useQuery({ enabled, queryFn: fetchNotifications, queryKey: ["notifications", "list"], refetchInterval: 5_000, refetchOnWindowFocus: true, retry: false });
+  return useQuery({ enabled, queryFn: fetchNotifications, queryKey: ["notifications", "list"], refetchInterval: REALTIME_FALLBACK_REFETCH_MS, refetchOnWindowFocus: true, retry: false });
 }
 
 export function useMarkNotificationRead() {

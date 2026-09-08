@@ -6,12 +6,14 @@ import { PrismaService } from "../database/prisma.service.js";
 import { AuthorizationService, doesScopeSatisfy } from "../rbac/authorization.service.js";
 import type { PermissionScope } from "../rbac/permission-registry.js";
 import type { OperationalStatusQueryDto } from "./dto/operational-status.dto.js";
+import { latestSuccessfulDeliveryAt, latestSuccessfulPickupAt } from "../works/probe-return-evidence.js";
 import {
   compareOperationalStatusRows,
   createOperationalStatusCounters,
   matchesDeadlineState,
   matchesOperationalStatusTab,
   operationalStatusWorkInclude,
+  toOperationalProbeReturnEvidence,
   toOperationalStatusRow,
   type OperationalStatusResponseView,
   type OperationalStatusRowView,
@@ -58,11 +60,15 @@ export class OperationalStatusService {
     const now = new Date();
     const rows = scannedRows
       .filter((work) => {
-        const finalizedAt = work.finalizedAt;
-        return !(work.status === "FINALIZATA" && finalizedAt && work.courierRouteStops?.some((stop) => stop.type === "DELIVERY" && stop.outcomeStatus === "DELIVERED" && stop.outcomeAt && stop.outcomeAt >= finalizedAt));
+        const readyAt = work.technicalReadiness === "FINAL_READY" ? work.finalizedAt : work.probeReadyAt;
+        if (!readyAt) return true;
+        const evidence = toOperationalProbeReturnEvidence(work);
+        const deliveredAt = latestSuccessfulDeliveryAt(evidence, readyAt);
+        if (!deliveredAt) return true;
+        if (work.status === "FINALIZATA") return false;
+        return work.technicalReadiness !== "PROBE_READY" || latestSuccessfulPickupAt(evidence, deliveredAt) !== null;
       })
       .map((work) => toOperationalStatusRow(work, now))
-      .filter((row) => !(row.technicalReadiness === "PROBE_READY" && !row.hasCompletedPickup && (row.logistics.status === "DELIVERED" || row.delivery.status === "DELIVERED")))
       .filter((row) => !query.transportHorizonDays || isWithinTransportHorizon(row.deadline.effectiveDueAt, query.transportHorizonDays))
       .filter((row) => this.matchesComputedFilters(row, query));
     const counters = createOperationalStatusCounters(rows);
@@ -127,7 +133,7 @@ export class OperationalStatusService {
       nestedConditions.push({ activeCycle: { is: { workflowExecution: { is: { currentStage: { is: { assignedUserId: query.stageTechnicianUserId } } } } } } });
     }
     if (query.deliveryStatus) {
-      nestedConditions.push({ deliveryPreparationItems: { some: { group: { deliveries: { some: { isActive: true, status: query.deliveryStatus } } }, isActive: true } } });
+      nestedConditions.push({ deliveryPreparationItems: { some: { group: { deliveries: { some: { status: query.deliveryStatus } } } } } });
     }
     if (search) {
       nestedConditions.push({ OR: [

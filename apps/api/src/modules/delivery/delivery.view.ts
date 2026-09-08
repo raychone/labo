@@ -149,7 +149,18 @@ export const deliveryInclude = {
   },
 } as const satisfies Prisma.DeliveryInclude;
 
-export type DeliveryRecord = Prisma.DeliveryGetPayload<{ include: typeof deliveryInclude }>;
+export const deliveryHistoryInclude = {
+  ...deliveryInclude,
+  preparationGroup: {
+    include: {
+      items: {
+        include: deliveryInclude.preparationGroup.include.items.include,
+      },
+    },
+  },
+} as const satisfies Prisma.DeliveryInclude;
+
+export type DeliveryRecord = Prisma.DeliveryGetPayload<{ include: typeof deliveryHistoryInclude }>;
 
 const statusLabels = {
   ASSIGNED: "Atribuită",
@@ -171,6 +182,7 @@ const failureLabels = {
 } as const satisfies Record<DeliveryFailureReasonCode, string>;
 
 export function toDeliverySummary(delivery: DeliveryRecord, context: DeliveryAccessContext, now: Date): DeliverySummary {
+  const visibleItems = deliveryItemsAtCreation(delivery);
   return {
     actions: toActions(delivery, context),
     assignedAt: delivery.assignedAt?.toISOString() ?? null,
@@ -202,11 +214,12 @@ export function toDeliverySummary(delivery: DeliveryRecord, context: DeliveryAcc
     statusLabel: statusLabels[delivery.status],
     updatedAt: delivery.updatedAt.toISOString(),
     version: delivery.version,
-    workCount: delivery.preparationGroup.items.length,
+    workCount: visibleItems.length,
   };
 }
 
 export function toDeliveryDetail(delivery: DeliveryRecord, context: DeliveryAccessContext, now: Date): DeliveryDetail {
+  const visibleItems = deliveryItemsAtCreation(delivery);
   return {
     ...toDeliverySummary(delivery, context, now),
     deliveryNotes: delivery.deliveryNotes,
@@ -221,7 +234,7 @@ export function toDeliveryDetail(delivery: DeliveryRecord, context: DeliveryAcce
     inTransitAt: delivery.inTransitAt?.toISOString() ?? null,
     recipientRole: delivery.recipientRole,
     rescheduledFor: delivery.rescheduledFor?.toISOString() ?? null,
-    works: delivery.preparationGroup.items.map((item) => ({
+    works: visibleItems.map((item) => ({
       doctorName: item.workOrder.doctor?.displayName ?? "-",
       cycleNumber: item.workCycle?.cycleNumber ?? null,
       id: item.workOrder.id,
@@ -233,6 +246,13 @@ export function toDeliveryDetail(delivery: DeliveryRecord, context: DeliveryAcce
       workTypeName: item.workOrder.workType.name,
     })),
   };
+}
+
+function deliveryItemsAtCreation(delivery: DeliveryRecord): DeliveryRecord["preparationGroup"]["items"] {
+  return delivery.preparationGroup.items.filter((item) => (
+    item.addedAt.getTime() <= delivery.createdAt.getTime()
+    && (item.isActive || item.removedAt === null || item.removedAt.getTime() >= delivery.createdAt.getTime())
+  ));
 }
 
 function toActions(delivery: DeliveryRecord, context: DeliveryAccessContext): DeliveryActionAvailability {

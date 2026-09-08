@@ -9,6 +9,7 @@ import { PrismaService } from "../database/prisma.service.js";
 import { AuthorizationService } from "../rbac/authorization.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import { getVisibleWorkWhere } from "./work-readability.js";
+import { resolveProbeReturnEvidence, type ProbeReturnEvidence } from "./probe-return-evidence.js";
 import { ProbeTypesService } from "./probe-types.service.js";
 import { WorksService } from "./works.service.js";
 import type { SelectProbeTypeDto } from "./dto/probe-cycles.dto.js";
@@ -121,14 +122,45 @@ export class ProbeCyclesService {
       throw new BadRequestException("Tipul probei nu este compatibil cu tipurile de lucrări ale acestei reveniri.");
     }
     const created = await this.prisma.$transaction(async (tx) => {
-      const current = await tx.workOrder.findUnique({ select: { activeProbeCycleId: true, status: true, technicalReadiness: true }, where: { id: work.id } });
+      const current = await tx.workOrder.findUnique({
+        select: {
+          activeCycleId: true,
+          activeProbeCycleId: true,
+          clinicId: true,
+          doctorId: true,
+          status: true,
+          technicalReadiness: true,
+        },
+        where: { id: work.id },
+      });
       if (!current) throw new NotFoundException("Lucrarea nu a fost găsită.");
       if (current.activeProbeCycleId) throw new ConflictException("Lucrarea are deja o probă activă.");
-      const cycles = await tx.probeCycle.findMany({ orderBy: { sequence: "desc" }, select: { completionOutcome: true, id: true, sequence: true, status: true }, where: { workOrderId: work.id } });
+      const cycles = await tx.probeCycle.findMany({ orderBy: { sequence: "desc" }, select: { completedAt: true, completionOutcome: true, id: true, sequence: true, status: true }, where: { workOrderId: work.id } });
       const last = cycles[0];
       if (current.status === "FINALIZATA" || current.technicalReadiness === "FINAL_READY") throw new ConflictException("O lucrare finalizată rămâne în istoric și nu poate fi recepționată pentru o probă nouă.");
       if (input.directRework && current.technicalReadiness !== "PROBE_READY") throw new ConflictException("Doar lucrările cu status Probă gata pot fi trimise la refacere.");
       if (!input.directRework && (!last || last.status !== "COMPLETED" || last.completionOutcome !== "PROBE_READY")) throw new ConflictException("Următoarea probă poate fi creată doar după marcarea probei ca Probă gata.");
+      if (!input.directRework) {
+        if (current.technicalReadiness !== "PROBE_READY" || !last?.completedAt) {
+          throw new ConflictException("Următoarea probă poate fi creată doar după marcarea probei ca Probă gata.");
+        }
+        const returnEvidence = resolveProbeReturnEvidence(
+          await this.loadProbeReturnEvidence(tx, {
+            activeWorkCycleId: current.activeCycleId,
+            clinicId: current.clinicId,
+            doctorId: current.doctorId,
+            readyAt: last.completedAt,
+            workOrderId: work.id,
+          }),
+          last.completedAt,
+        );
+        if (!returnEvidence.deliveredAt) {
+          throw new ConflictException("Proba poate fi recepționată doar după o livrare reușită înregistrată pentru ciclul curent.");
+        }
+        if (!returnEvidence.pickedUpAt) {
+          throw new ConflictException("Proba poate fi recepționată doar după o ridicare reușită ulterioară livrării.");
+        }
+      }
       // Legacy initial cycles used sequence 1. Normalize that marker to 0 on the first return.
       let nextSequence = last ? last.sequence + 1 : 0;
       if (last && last.sequence === 1 && !cycles.some((cycle) => cycle.sequence === 0)) {
@@ -284,6 +316,82 @@ export class ProbeCyclesService {
     const work = await this.prisma.workOrder.findFirst({ select: { code: true, id: true, patientName: true, items: { select: { workType: { select: { probeTypeCodes: true } } }, where: { archivedAt: null } } }, where: { AND: [{ id: workOrderId }, visibleWhere, ...(legalEntity ? [{ executionLegalEntityId: legalEntity.id }] : [])] } });
     if (!work) throw new NotFoundException("Lucrarea nu a fost găsită.");
     return work;
+  }
+
+  private async loadProbeReturnEvidence(
+    tx: Prisma.TransactionClient,
+    input: {
+      readonly activeWorkCycleId: string | null;
+      readonly clinicId: string | null;
+      readonly doctorId: string | null;
+      readonly readyAt: Date;
+      readonly workOrderId: string;
+    },
+  ): Promise<ProbeReturnEvidence> {
+    const pickupRequestWhere: Prisma.PickupRequestWhereInput | null = input.clinicId ? {
+      clinicId: input.clinicId,
+      ...(input.doctorId ? { OR: [{ doctorId: input.doctorId }, { doctorId: null }] } : { doctorId: null }),
+      routeStops: {
+        some: {
+          outcomeAt: { gte: input.readyAt },
+          outcomeStatus: "PICKED_UP",
+          type: "PICKUP",
+        },
+      },
+    } : null;
+    // Interactive Prisma transactions share one PostgreSQL connection. Keep
+    // these reads sequential so the pg adapter never receives overlapping
+    // queries on that connection.
+    const directRouteStops = await tx.courierRouteStop.findMany({
+      select: { outcomeAt: true, outcomeStatus: true, type: true },
+      where: {
+        outcomeAt: { gte: input.readyAt },
+        outcomeStatus: { in: ["DELIVERED", "PICKED_UP"] },
+        type: { in: ["DELIVERY", "PICKUP"] },
+        workOrderId: input.workOrderId,
+      },
+    });
+    const preparationItems = await tx.deliveryPreparationItem.findMany({
+      select: {
+        addedAt: true,
+        group: {
+          select: {
+            deliveries: {
+              select: { createdAt: true, deliveredAt: true, status: true },
+              where: { deliveredAt: { gte: input.readyAt }, status: "DELIVERED" },
+            },
+          },
+        },
+        removedAt: true,
+        workCycleId: true,
+      },
+      where: {
+        ...(input.activeWorkCycleId ? { OR: [{ workCycleId: input.activeWorkCycleId }, { workCycleId: null }] } : {}),
+        workOrderId: input.workOrderId,
+      },
+    });
+    const pickupRequests = pickupRequestWhere ? await tx.pickupRequest.findMany({
+      select: {
+        doctorId: true,
+        routeStops: {
+          select: { outcomeAt: true, outcomeStatus: true, type: true },
+          where: { outcomeAt: { gte: input.readyAt }, outcomeStatus: "PICKED_UP", type: "PICKUP" },
+        },
+      },
+      where: pickupRequestWhere,
+    }) : [];
+    return {
+      activeWorkCycleId: input.activeWorkCycleId,
+      directRouteStops,
+      doctorId: input.doctorId,
+      pickupRequests,
+      preparationItems: preparationItems.map((item) => ({
+        addedAt: item.addedAt,
+        deliveries: item.group.deliveries,
+        removedAt: item.removedAt,
+        workCycleId: item.workCycleId,
+      })),
+    };
   }
 
   private async findTransitionWork(actorUserId: string, workOrderId: string, legalEntity?: LegalEntityContext): Promise<{ readonly id: string; readonly code: string; readonly patientName: string; readonly status: string; readonly activeProbeCycleId: string | null; readonly claimStatus: string; readonly claimedByUserId: string | null; readonly executionLegalEntityId: string | null; readonly claimRevision: number; readonly effectiveDueAt: Date | null; readonly requestedDeliveryDate: Date | null; readonly workType: { readonly probeTypeCodes: unknown } }> {

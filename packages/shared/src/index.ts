@@ -1,5 +1,11 @@
 export { APPLICATION_NAME, WORKSPACE_SCOPE } from "./workspace.constants.js";
 export {
+  REALTIME_EVENT_TYPES,
+  REALTIME_TOPICS,
+  isRealtimeEventEnvelope,
+} from "./realtime.js";
+export type { RealtimeEventEnvelope, RealtimeEventType, RealtimeTopic } from "./realtime.js";
+export {
   POSTMEETING_AUDIT_ACTIONS,
   POSTMEETING_AUDIT_ACTION_LABELS_RO,
   POSTMEETING_RESOLVED_DECISIONS,

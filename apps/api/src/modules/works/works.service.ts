@@ -4,6 +4,7 @@ import { Buffer } from "node:buffer";
 
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
+import { hasMatchingFileSignature } from "../files/file-signature.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import type { LegalEntityContext } from "../organization-context/organization-context.view.js";
 import { normalizePatientName, PatientsService } from "../patients/patients.service.js";
@@ -87,6 +88,14 @@ interface PricingSnapshot {
   readonly baseUnitPriceMinor: number | null;
   readonly currency: string;
   readonly totalPriceMinor: number | null;
+}
+
+interface ValidatedWorkType {
+  readonly allowedAddOns: Prisma.JsonValue | null;
+  readonly basePriceMinor: number | null;
+  readonly exclusiveGroup: string | null;
+  readonly id: string;
+  readonly unit: string;
 }
 
 type WorkDeadlinePrismaUpdate = ReturnType<typeof deadlineDataToPrisma>;
@@ -388,6 +397,12 @@ type RealLabSheetCycleRecord = RealLabSheetWorkRecord["cycles"][number];
 
 type WorkFormValue = boolean | number | readonly string[] | string | null;
 type WorkFormValues = Readonly<Record<string, WorkFormValue>>;
+
+function selectRealLabSheetDerivedValues(snapshot: RealLabSheetSnapshot, values: WorkFormValues): WorkFormValues {
+  const fieldKeys = new Set(snapshot.fields.map((field) => field.key));
+  return Object.fromEntries(Object.entries(values).filter(([key]) => fieldKeys.has(key)));
+}
+
 export interface RealLabSheetView {
   readonly canEdit: boolean;
   readonly canFinalize: boolean;
@@ -707,7 +722,7 @@ export class WorksService {
       throw new BadRequestException("Fișierele nu respectă limitele permise.");
     }
     for (const file of files) {
-      if (!file.originalname.trim() || file.size <= 0 || file.size > LOGISTICS_ATTACHMENT_LIMITS.maxFileBytes || !LOGISTICS_ATTACHMENT_LIMITS.allowedMimeTypes.includes(file.mimetype as (typeof LOGISTICS_ATTACHMENT_LIMITS.allowedMimeTypes)[number])) {
+      if (!file.originalname.trim() || file.originalname.trim().length > 255 || file.size <= 0 || file.size > LOGISTICS_ATTACHMENT_LIMITS.maxFileBytes || file.buffer.length !== file.size || !LOGISTICS_ATTACHMENT_LIMITS.allowedMimeTypes.includes(file.mimetype as (typeof LOGISTICS_ATTACHMENT_LIMITS.allowedMimeTypes)[number]) || !hasMatchingFileSignature(file.mimetype, file.buffer)) {
         throw new BadRequestException("Fișierul nu este valid sau nu este permis.");
       }
     }
@@ -794,7 +809,7 @@ export class WorksService {
     const saveMode = dto.saveMode ?? "DRAFT";
     const values = this.workFormSubmissionValidationService.validateValues(snapshot, {
       ...dto.values,
-      ...this.getRealLabSheetDerivedValues(workOrder, cycle),
+      ...selectRealLabSheetDerivedValues(snapshot, this.getRealLabSheetDerivedValues(workOrder, cycle)),
     }, { enforceRequired: saveMode === "COMPLETE" });
     const existing = cycle.workFormSubmissions[0] ?? null;
     await this.assertExpectedRealLabSheetRevision(context, workOrder, cycle, existing, dto.expectedRevision);
@@ -1774,7 +1789,10 @@ export class WorksService {
         if (item.customWorkTypeSnapshot) await this.authorizationService.requirePermission({ permission: "works.custom_type.use", requiredScope: "ALL", userId: context.actorUserId });
         if (item.customImplantPlatformSnapshot) await this.authorizationService.requirePermission({ permission: "works.custom_platform.use", requiredScope: "ALL", userId: context.actorUserId });
       }
-      const itemConfigs = await Promise.all(itemInputs.map((item) => this.validateWorkType(tx, item.workTypeId ?? legacyWorkTypeId, true)));
+      const itemConfigs: ValidatedWorkType[] = [];
+      for (const item of itemInputs) {
+        itemConfigs.push(await this.validateWorkType(tx, item.workTypeId ?? legacyWorkTypeId, true));
+      }
       validateAggregateCatalogRules(itemInputs, itemConfigs);
       const primaryConfig = itemConfigs[0];
       if (!primaryConfig) throw new BadRequestException("Compoziția lucrării nu are o configurație validă.");
@@ -2468,7 +2486,10 @@ export class WorksService {
       : {};
     const values = {
       ...baseValues,
-      ...this.getRealLabSheetDerivedValues(workOrder, cycle),
+      ...selectRealLabSheetDerivedValues(
+        { fields: snapshot.fields ?? [] } as RealLabSheetSnapshot,
+        this.getRealLabSheetDerivedValues(workOrder, cycle),
+      ),
     };
     const isFinalized = Boolean(submission?.finalizedAt);
     const status = isFinalized ? "FINALIZED" : submission?.realLabSheetStatus ?? "NOT_STARTED";
@@ -2692,7 +2713,7 @@ export class WorksService {
     client: Prisma.TransactionClient | PrismaService,
     workTypeId: string,
     requireActive: boolean,
-  ): Promise<{ readonly allowedAddOns: Prisma.JsonValue | null; readonly basePriceMinor: number | null; readonly exclusiveGroup: string | null; readonly id: string; readonly unit: string }> {
+  ): Promise<ValidatedWorkType> {
     const workType = await client.workType.findUnique({
       select: {
         allowedAddOns: true,

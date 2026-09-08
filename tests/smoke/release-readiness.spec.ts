@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { browserJson, deliverSmokeCycle, loginAs, saveSmokeRealLabSheet, seedSmokeWork } from "./release-readiness.helpers.js";
+import { browserJson, deliverSmokeCycle, loginAs, saveSmokeRealLabSheet, seedSmokeWork, switchToWorkExecutionCompany } from "./release-readiness.helpers.js";
 
 test.describe.configure({ mode: "serial" });
 
@@ -10,14 +10,22 @@ test("release readiness smoke path", async ({ page }) => {
 
   const createdWork = await seedSmokeWork(page);
 
+  const createdWorkDetail = await browserJson<{
+    readonly items: readonly { readonly shade: string | null; readonly teeth: readonly { readonly fdiTooth: number }[] }[];
+    readonly patient: { readonly sex: string | null };
+    readonly workForm: { readonly values: Readonly<Record<string, unknown>> } | null;
+  }>(page, `/works/${createdWork.id}`);
+  expect(createdWorkDetail.patient.sex).toBe("MALE");
+  expect(createdWorkDetail.workForm?.values).toMatchObject({ shade: "A2", teeth: ["11"] });
+  expect(createdWorkDetail.items.some((item) => item.shade === "A2" && item.teeth.some((tooth) => tooth.fdiTooth === 11))).toBe(true);
+
   await page.goto(`/works?workId=${createdWork.id}`);
-  await expect(page.getByRole("heading", { name: "Flux producție" })).toBeVisible();
-  await expect(page.locator("strong", { hasText: "Masculin" }).first()).toBeVisible();
-  const snapshot = page.locator('section[aria-labelledby="work-form-snapshot-title"]');
-  await expect(snapshot).toContainText("Dinți");
-  await expect(snapshot).toContainText("11");
-  await expect(snapshot).toContainText(/Culoare|Nuanță/);
-  await expect(snapshot).toContainText("A2");
+  const workDialog = page.getByRole("dialog", { name: "Detalii lucrare" });
+  await expect(workDialog).toBeVisible({ timeout: 20_000 });
+  await expect(workDialog).toContainText(createdWork.patientName, { timeout: 20_000 });
+  await expect(workDialog.getByRole("button", { name: "Dinte 11" })).toHaveClass(/tooth-diagram__tooth--configured/, {
+    timeout: 20_000,
+  });
 
   await page.getByRole("button", { name: "Vezi QR" }).click();
   await expect(page.getByRole("dialog", { name: "QR lucrare" })).toBeVisible();
@@ -40,6 +48,7 @@ test("release readiness smoke path", async ({ page }) => {
   await deliverSmokeCycle(page, createdWork, "Ana Ionescu", "Recepție");
 
   await loginAs(page, "MANAGER");
+  await switchToWorkExecutionCompany(page, createdWork.id);
   await page.goto("/billing");
   await expect(page.getByRole("heading", { name: /Facturare/i })).toBeVisible();
 
@@ -70,11 +79,11 @@ test("release readiness smoke path", async ({ page }) => {
   expect(issuedInvoice.status).toBe("ISSUED");
   expect(issuedInvoice.totalMinor).toBeGreaterThan(0);
 
-  const statementBeforePayment = await browserJson<{ readonly rows: readonly { readonly workCodes: readonly string[] }[] }>(
+  const statementBeforePayment = await browserJson<{ readonly documents: readonly { readonly workCodes: readonly string[] }[] }>(
     page,
     `/billing/statements/clinic?clinicId=${encodeURIComponent(workDetail.clinic.id)}&dateFrom=2026-08-01&dateTo=2026-08-31`,
   );
-  expect(statementBeforePayment.rows.some((row) => row.workCodes.includes(createdWork.code))).toBe(true);
+  expect(statementBeforePayment.documents.some((document) => document.workCodes.includes(createdWork.code))).toBe(true);
 
   const paidInvoice = await browserJson<{ readonly status: string; readonly payments: readonly unknown[] }>(page, `/billing-documents/${issuedInvoice.id}/payments`, {
     body: JSON.stringify({

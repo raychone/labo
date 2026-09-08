@@ -104,10 +104,10 @@ Start the API after PostgreSQL is healthy:
 ```bash
 pnpm seed:demo
 pnpm dev:api
-curl http://localhost:3010/health
+curl http://localhost:3010/health/ready
 ```
 
-The health response includes `database: "ok"` when the API can connect to PostgreSQL.
+Readiness includes `database: "ok"` when the API can connect to PostgreSQL and returns HTTP 503 otherwise. `/health/live` reports process liveness only.
 
 The default host PostgreSQL port is `55439` to avoid conflicts with an existing local PostgreSQL installation. Inside Docker, PostgreSQL still listens on `5432`.
 
@@ -139,7 +139,7 @@ Cookie defaults for development:
 - CSRF cookie: `dl_csrf`, readable by the browser, SameSite=Lax, 8 hour TTL.
 - Cookies become `secure` automatically when `NODE_ENV=production`.
 
-Login rate limiting is currently in-memory and keyed by IP address plus normalized email. This is acceptable for local MVP development but must move to shared storage before multi-instance deployment.
+Login and QR rate limiting use bounded in-memory stores and fail closed at bucket capacity. This supports the documented single-API deployment; use shared or edge/WAF limits before multi-instance deployment.
 
 The automated API tests use service fakes for database-facing auth tests. Real database verification for AUTH-001 is covered by running Docker PostgreSQL, Prisma migrate/seed, and manual API requests against the running backend.
 
@@ -525,13 +525,13 @@ The layout is mobile-first: mobile gets a top bar and drawer navigation; desktop
 
 Design tokens and base styles live in `packages/ui/src/styles.css` and are imported by the web app through `@dental-lab/ui/styles.css`.
 
-The internal style preview is available at:
+The internal style preview is available in development (or an explicitly enabled private review build) at:
 
 ```text
 http://localhost:3000/style-preview
 ```
 
-The preview demonstrates semantic colors, operational status colors, typography, spacing, native control states, focus behavior, and elevation tokens. It is not the reusable component library; that is reserved for `UI-002`.
+The preview demonstrates semantic colors, operational status colors, typography, spacing, native control states, focus behavior, and elevation tokens. Production builds hide it unless `VITE_STYLE_PREVIEW_ENABLED=true`; the real-data production profile must keep that flag false. It is not the reusable component library; that is reserved for `UI-002`.
 
 ## UI Components
 
@@ -548,7 +548,7 @@ import {
 
 Component styles use the design tokens in `packages/ui/src/styles.css`. Components are generic, accessible where implemented, and contain no business logic.
 
-The internal preview at `http://localhost:3000/style-preview` now demonstrates the core UI components.
+The internal development preview at `http://localhost:3000/style-preview` demonstrates the core UI components.
 
 Current UI-002 limits:
 

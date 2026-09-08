@@ -173,9 +173,14 @@ export function WorkScanPage(): ReactNode {
       await refreshScanContext();
       toast.showToast({ message: "Contextul scanării a fost actualizat.", variant: "success" });
     } catch (error) {
-      await refreshScanContext().catch(() => undefined);
+      let refreshWarning = "";
+      try {
+        await refreshScanContext();
+      } catch (refreshError) {
+        refreshWarning = ` Contextul scanării nu a putut fi reîmprospătat: ${getErrorMessage(refreshError)}`;
+      }
       toast.showToast({
-        message: getErrorMessage(error),
+        message: `${getErrorMessage(error)}${refreshWarning}`,
         title: "Acțiunea nu a putut fi finalizată",
         variant: "error",
       });
@@ -186,7 +191,15 @@ export function WorkScanPage(): ReactNode {
     if (!scanContext) {
       return;
     }
-    await openedMutation.mutateAsync(scanContext.work.id).catch(() => undefined);
+    try {
+      await openedMutation.mutateAsync(scanContext.work.id);
+    } catch (error) {
+      toast.showToast({
+        message: getErrorMessage(error),
+        title: "Deschiderea nu a putut fi înregistrată",
+        variant: "warning",
+      });
+    }
     navigate(`/works?workId=${scanContext.work.id}`);
   }
 

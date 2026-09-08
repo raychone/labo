@@ -36,6 +36,7 @@ import type {
 import { fetchCsrfToken } from "../auth/auth-api.js";
 import { statusQueryKeys } from "../status/status-api.js";
 import { apiFetch, parseApiResponse } from "../../lib/api-client.js";
+import { REALTIME_FALLBACK_REFETCH_MS } from "../../lib/realtime-config.js";
 
 export const worksQueryKeys = {
   all: ["works"] as const,
@@ -349,7 +350,7 @@ export function useWorks(params: WorksListParams, enabled: boolean, poll = false
     queryFn: () => fetchWorks(params),
     queryKey: worksQueryKeys.list(params),
     placeholderData: keepPreviousData,
-    ...(poll ? { refetchInterval: 10_000, refetchIntervalInBackground: false } : {}),
+    ...(poll ? { refetchInterval: REALTIME_FALLBACK_REFETCH_MS, refetchIntervalInBackground: false } : {}),
     retry: false,
   });
 }
@@ -360,7 +361,7 @@ export function useAvailableWorksForClaim(params: ClaimWorksListParams, enabled:
     queryFn: () => fetchAvailableWorksForClaim(params),
     queryKey: worksQueryKeys.availableForClaim(params),
     placeholderData: keepPreviousData,
-    refetchInterval: 10_000,
+    refetchInterval: REALTIME_FALLBACK_REFETCH_MS,
     refetchIntervalInBackground: false,
     retry: false,
   });

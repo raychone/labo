@@ -42,9 +42,20 @@ describe("ProbeCyclesService / B10", () => {
   it("rolls back the created candidate when the active-pointer compare-and-set loses", async () => {
     const created: string[] = [];
     const tx = {
-      workOrder: { findUnique: vi.fn().mockResolvedValue({ activeProbeCycleId: null, status: "IN_ASTEPTARE", technicalReadiness: "PROBE_READY" }) },
+      courierRouteStop: { findMany: vi.fn().mockResolvedValue([]) },
+      deliveryPreparationItem: { findMany: vi.fn().mockResolvedValue([{
+        addedAt: new Date("2026-08-26T08:30:00.000Z"),
+        group: { deliveries: [{ createdAt: new Date("2026-08-26T09:00:00.000Z"), deliveredAt: new Date("2026-08-26T10:00:00.000Z"), status: "DELIVERED" }] },
+        removedAt: new Date("2026-08-26T10:00:00.000Z"),
+        workCycleId: "work-cycle-1",
+      }]) },
+      pickupRequest: { findMany: vi.fn().mockResolvedValue([{
+        doctorId: "doctor-1",
+        routeStops: [{ outcomeAt: new Date("2026-08-26T11:00:00.000Z"), outcomeStatus: "PICKED_UP", type: "PICKUP" }],
+      }]) },
+      workOrder: { findUnique: vi.fn().mockResolvedValue({ activeCycleId: "work-cycle-1", activeProbeCycleId: null, clinicId: "clinic-1", doctorId: "doctor-1", status: "IN_ASTEPTARE", technicalReadiness: "PROBE_READY" }) },
       probeCycle: {
-        findMany: vi.fn().mockResolvedValue([{ id: "cycle-1", completionOutcome: "PROBE_READY", sequence: 0, status: "COMPLETED" }]),
+        findMany: vi.fn().mockResolvedValue([{ completedAt: new Date("2026-08-26T08:00:00.000Z"), id: "cycle-1", completionOutcome: "PROBE_READY", sequence: 0, status: "COMPLETED" }]),
         create: vi.fn().mockImplementation(async () => { created.push("candidate"); return { id: "cycle-2", sequence: 1, status: "ACTIVE", probeTypeNameSnapshot: "Biscuit", openedAt: new Date(), completedAt: null, deadlineAt: new Date(), probeType: { id: "pt-1", name: "Biscuit", sortOrder: 0, isArchived: false } }; }),
       },
       workOrderUpdateCount: 0,
@@ -53,7 +64,7 @@ describe("ProbeCyclesService / B10", () => {
     const prisma = {
       workOrder: { findFirst: vi.fn().mockResolvedValue({ id: "wo-1", code: "WO-1" }) },
       $transaction: vi.fn(async (callback: (value: unknown) => Promise<unknown>) => {
-        try { return await callback({ workOrder: { ...tx.workOrder, updateMany: tx.workOrderUpdateMany }, probeCycle: tx.probeCycle }); } catch (error) { created.length = 0; throw error; }
+        try { return await callback({ ...tx, workOrder: { ...tx.workOrder, updateMany: tx.workOrderUpdateMany } }); } catch (error) { created.length = 0; throw error; }
       }),
     } as never;
     const service = new ProbeCyclesService(createAuthorization(), { record: vi.fn() } as never, prisma, { requireSelectable: vi.fn().mockResolvedValue({ id: "pt-1", name: "Biscuit" }) } as never);
@@ -61,6 +72,60 @@ describe("ProbeCyclesService / B10", () => {
     await expect(service.createNextActiveAfterReception({ actorUserId: "reception", workOrderId: "wo-1", probeTypeId: "pt-1", deadlineAt: "2026-08-25T10:00:00.000Z", returnedAfterCompletedCycle: true })).rejects.toThrow("modificată simultan");
     expect(tx.workOrderUpdateMany).toHaveBeenCalled();
     expect(created).toEqual([]);
+  });
+
+  it("rejects a probe return when no successful delivery and pickup were recorded", async () => {
+    const tx = {
+      courierRouteStop: { findMany: vi.fn().mockResolvedValue([]) },
+      deliveryPreparationItem: { findMany: vi.fn().mockResolvedValue([]) },
+      pickupRequest: { findMany: vi.fn().mockResolvedValue([]) },
+      workOrder: {
+        findUnique: vi.fn().mockResolvedValue({
+          activeCycleId: "work-cycle-1",
+          activeProbeCycleId: null,
+          clinicId: "clinic-1",
+          doctorId: "doctor-1",
+          status: "IN_ASTEPTARE",
+          technicalReadiness: "PROBE_READY",
+        }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      probeCycle: {
+        findMany: vi.fn().mockResolvedValue([{
+          completedAt: new Date("2026-08-26T08:00:00.000Z"),
+          completionOutcome: "PROBE_READY",
+          id: "cycle-1",
+          sequence: 0,
+          status: "COMPLETED",
+        }]),
+        create: vi.fn().mockResolvedValue({
+          completedAt: null,
+          deadlineAt: new Date("2026-08-29T08:00:00.000Z"),
+          id: "cycle-2",
+          openedAt: new Date("2026-08-27T08:00:00.000Z"),
+          probeType: { id: "pt-1", isArchived: false, name: "Biscuit", sortOrder: 0 },
+          probeTypeNameSnapshot: "Biscuit",
+          sequence: 1,
+          status: "ACTIVE",
+        }),
+      },
+    };
+    const prisma = {
+      workOrder: { findFirst: vi.fn().mockResolvedValue({ id: "wo-1", code: "WO-1", patientName: "Pacient Test", items: [] }) },
+      $transaction: vi.fn(async (callback: (value: unknown) => unknown) => callback(tx)),
+    } as never;
+    const service = new ProbeCyclesService(createAuthorization(), { record: vi.fn() } as never, prisma, {
+      requireSelectable: vi.fn().mockResolvedValue({ code: "BISCUIT", id: "pt-1", isArchived: false, name: "Biscuit", sortOrder: 0 }),
+    } as never);
+
+    await expect(service.createNextActiveAfterReception({
+      actorUserId: "reception",
+      deadlineAt: "2026-08-29T08:00:00.000Z",
+      probeTypeId: "pt-1",
+      returnedAfterCompletedCycle: true,
+      workOrderId: "wo-1",
+    })).rejects.toThrow("livrare reușită");
+    expect(tx.probeCycle.create).not.toHaveBeenCalled();
   });
 
   it("releases a received return to the technician queue and publishes the probe notification", async () => {
@@ -79,12 +144,23 @@ describe("ProbeCyclesService / B10", () => {
       deadlineAt: new Date("2026-08-29T08:00:00.000Z"),
     };
     const tx = {
+      courierRouteStop: { findMany: vi.fn().mockResolvedValue([]) },
+      deliveryPreparationItem: { findMany: vi.fn().mockResolvedValue([{
+        addedAt: new Date("2026-08-26T08:30:00.000Z"),
+        group: { deliveries: [{ createdAt: new Date("2026-08-26T09:00:00.000Z"), deliveredAt: new Date("2026-08-26T10:00:00.000Z"), status: "DELIVERED" }] },
+        removedAt: new Date("2026-08-26T10:00:00.000Z"),
+        workCycleId: "work-cycle-1",
+      }]) },
+      pickupRequest: { findMany: vi.fn().mockResolvedValue([{
+        doctorId: "doctor-1",
+        routeStops: [{ outcomeAt: new Date("2026-08-26T11:00:00.000Z"), outcomeStatus: "PICKED_UP", type: "PICKUP" }],
+      }]) },
       workOrder: {
-        findUnique: vi.fn().mockResolvedValue({ activeProbeCycleId: null, courierRouteStops: [], status: "IN_ASTEPTARE", technicalReadiness: "PROBE_READY" }),
+        findUnique: vi.fn().mockResolvedValue({ activeCycleId: "work-cycle-1", activeProbeCycleId: null, clinicId: "clinic-1", courierRouteStops: [], doctorId: "doctor-1", status: "IN_ASTEPTARE", technicalReadiness: "PROBE_READY" }),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       probeCycle: {
-        findMany: vi.fn().mockResolvedValue([{ id: "cycle-1", completionOutcome: "PROBE_READY", sequence: 0, status: "COMPLETED" }]),
+        findMany: vi.fn().mockResolvedValue([{ completedAt: new Date("2026-08-26T08:00:00.000Z"), id: "cycle-1", completionOutcome: "PROBE_READY", sequence: 0, status: "COMPLETED" }]),
         create: vi.fn().mockResolvedValue({ ...cycle, sequence: 1 }),
         update: vi.fn(),
       },

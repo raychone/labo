@@ -1,6 +1,6 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, HttpException, HttpStatus } from "@nestjs/common";
 
-import type { HealthCheckResponse } from "./health.types.js";
+import type { HealthCheckResponse, LivenessResponse } from "./health.types.js";
 import { HealthService } from "./health.service.js";
 
 @Controller("health")
@@ -9,6 +9,20 @@ export class HealthController {
 
   @Get()
   public async getHealth(): Promise<HealthCheckResponse> {
-    return this.healthService.getHealth();
+    const health = await this.healthService.getHealth();
+    if (health.status !== "ok") {
+      throw new HttpException(health, HttpStatus.SERVICE_UNAVAILABLE);
+    }
+    return health;
+  }
+
+  @Get("live")
+  public getLiveness(): LivenessResponse {
+    return { applicationName: "Dental Lab Management", status: "ok" };
+  }
+
+  @Get("ready")
+  public getReadiness(): Promise<HealthCheckResponse> {
+    return this.getHealth();
   }
 }

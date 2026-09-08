@@ -10,6 +10,7 @@ import {
 } from "@prisma/client";
 
 import { resolveDeadlineVisualState, type DeadlineVisualState } from "../works/work-deadline-visual.js";
+import { latestSuccessfulDeliveryAt, latestSuccessfulPickupAt, type ProbeReturnEvidence } from "../works/probe-return-evidence.js";
 import { type OperationalStatusSortDirection, type OperationalStatusSortField, type OperationalStatusTab } from "./status.constants.js";
 
 export const operationalStatusWorkInclude = {
@@ -31,7 +32,19 @@ export const operationalStatusWorkInclude = {
     include: {
       pickupRequests: {
         select: {
+          doctorId: true,
           id: true,
+          routeStops: {
+            select: {
+              outcomeAt: true,
+              outcomeStatus: true,
+              type: true,
+            },
+            where: {
+              outcomeStatus: "PICKED_UP",
+              type: "PICKUP",
+            },
+          },
         },
         where: {
           routeStops: {
@@ -66,14 +79,12 @@ export const operationalStatusWorkInclude = {
             },
             select: {
               code: true,
+              createdAt: true,
+              deliveredAt: true,
               id: true,
               plannedDate: true,
               status: true,
               updatedAt: true,
-            },
-            take: 1,
-            where: {
-              isActive: true,
             },
           },
         },
@@ -81,9 +92,6 @@ export const operationalStatusWorkInclude = {
     },
     orderBy: {
       addedAt: "desc",
-    },
-    where: {
-      isActive: true,
     },
   },
   doctor: {
@@ -437,7 +445,13 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
     },
     requiresDelivery: work.requiresDelivery,
     requiresPickup: work.requiresPickup,
-    hasCompletedPickup: work.courierRouteStops?.some((stop) => stop.type === "PICKUP") === true || (work.clinic?.pickupRequests?.length ?? 0) > 0,
+    hasCompletedPickup: work.probeReadyAt
+      ? (() => {
+          const evidence = toOperationalProbeReturnEvidence(work);
+          const deliveredAt = latestSuccessfulDeliveryAt(evidence, work.probeReadyAt!);
+          return deliveredAt ? latestSuccessfulPickupAt(evidence, deliveredAt) !== null : false;
+        })()
+      : false,
     operationalStatus: work.status === "REGISTERED" ? "RECEPTIE" : work.status,
     patient: {
       id: work.patient?.id ?? null,
@@ -491,8 +505,27 @@ function toRealLabSheetSummary(cycle: OperationalStatusWorkRecord["activeCycle"]
 
 function getLatestDelivery(work: OperationalStatusWorkRecord) {
   return work.deliveryPreparationItems
-    .flatMap((item) => item.group.deliveries)
+    .flatMap((item) => item.group.deliveries.filter((delivery) => (
+      (!work.activeCycleId || !item.workCycleId || item.workCycleId === work.activeCycleId)
+      && item.addedAt <= delivery.createdAt
+      && (item.removedAt === null || item.removedAt >= delivery.createdAt)
+    )))
     .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())[0] ?? null;
+}
+
+export function toOperationalProbeReturnEvidence(work: OperationalStatusWorkRecord): ProbeReturnEvidence {
+  return {
+    activeWorkCycleId: work.activeCycleId,
+    directRouteStops: work.courierRouteStops,
+    doctorId: work.doctorId,
+    pickupRequests: work.clinic?.pickupRequests ?? [],
+    preparationItems: work.deliveryPreparationItems.map((item) => ({
+      addedAt: item.addedAt,
+      deliveries: item.group.deliveries,
+      removedAt: item.removedAt,
+      workCycleId: item.workCycleId,
+    })),
+  };
 }
 
 function toPerson(user: { readonly displayName: string; readonly id: string; readonly preferredColor: string | null }): OperationalStatusPersonView {

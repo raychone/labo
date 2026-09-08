@@ -34,7 +34,7 @@ STATUS-001A adds `GET /status/operational` as a separate read-only aggregate ove
 
 ## UI
 
-`/works` registry with reception-oriented deadline counters, quick filters, compact filters, create modal, detail/edit drawer, QR modal, workflow section, `Cicluri` history section, `Fișă laborator` cycle sheet section with draft/complete/finalize UX, `Înregistrează revenirea` modal, deadline and execution context cards. The reception create modal uses searchable patient and work-type pickers with capped empty-focus suggestions, keyboard navigation, quick patient creation, optional clinic/doctor, `Elemente`, `Culoare`, delivery deadline date/time, notes, four-quadrant adult FDI tooth selection, and controlled dynamic checkbox/radio fields. `/workbench` now centers on `Lucrări de preluat` with `Preia` and `Lucrările mele` with `Detalii`, `Manopere`, and `Finalizata`; `Detalii` opens the technician-editable modal for notes and `Cod`, while `Finalizata` writes the persisted operational status. `/scan` and `/status` surface sheet status and link into the existing `/works?workId=...` detail flow instead of duplicating work detail UI. `/status` keeps filters collapsed by default and shows compact rows with only the technician color badge, patient name, work type, flux/current stage, state, priority, and stacked `Detalii`/`Deschide` actions. `/status/tv` reuses the same read model in a fullscreen read-only layout for wall monitors, keeps the filters hidden by default, polls periodically, avoids shell chrome and mutation actions, and is now being refined into compact operational slices with automatic page rotation for TV readability. Returned works are registered through the receptionist flow, and the same work can reappear in the patient record after a new cycle is opened. Technicians may open visible work detail flows directly from the shared routes even when `/works` is not present in their primary navigation. The technician execution drawer now leads with the live execution summary card before the historical sections so the active stage and company context are visible immediately.
+`/works` registry includes reception deadline counters, filters, create/detail/edit/QR flows, workflow, `Cicluri`, cycle-scoped `Fișă laborator`, return registration, and execution context. The reception flow supports patient/work-type search, quick patient creation, optional clinic/doctor, deadline, notes, and adult FDI tooth selection. `/workbench` centers on available and owned work. `/scan` and `/status` link into the same work-detail flow. Authenticated SSE invalidates the relevant authoritative works/status/workbench/logistics query families after successful mutations; 120-second polling remains a recovery fallback. `/status/tv` uses the same read model without shell chrome or mutations. Returned works retain their historical cycles and work identifier.
 
 ## Audit
 
@@ -58,7 +58,7 @@ Materials/inventory integration.
 
 ## Deferred
 
-Files and quality control.
+Quality control workflow and external object-storage abstraction. Existing private work attachments are persisted in PostgreSQL.
 
 ## Open Decisions
 

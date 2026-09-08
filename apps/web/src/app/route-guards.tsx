@@ -5,6 +5,7 @@ import { Navigate, useLocation, useSearchParams } from "react-router";
 import { useAuthState } from "./auth-state.js";
 import { getDefaultAuthorizedRoute, getFirstAuthorizedRoute, getRouteByPath, getSafeReturnTo, hasRouteAccess, type PermissionMode } from "./route-registry.js";
 import { GlobalAuthLoading } from "./route-loading.js";
+import { RealtimeSync } from "../lib/realtime-sync.js";
 
 function getLoginPath(pathname: string, search: string): string {
   const returnTo = `${pathname}${search}`;
@@ -35,7 +36,7 @@ export function AuthenticatedRoute({ children }: { readonly children: ReactNode 
     return <Navigate replace to={getLoginPath(location.pathname, location.search)} />;
   }
 
-  return children;
+  return <><RealtimeSync enabled />{children}</>;
 }
 
 export function PublicOnlyRoute({ children }: { readonly children: ReactNode }): ReactNode {

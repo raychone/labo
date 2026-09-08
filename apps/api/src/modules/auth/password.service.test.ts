@@ -21,4 +21,10 @@ describe("PasswordService", () => {
       timeCost: 2,
     });
   });
+
+  it("performs a safe dummy verification for unknown login accounts", async () => {
+    const service = new PasswordService();
+
+    await expect(service.verifyForLogin(undefined, "candidate-password")).resolves.toBe(false);
+  });
 });

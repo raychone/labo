@@ -16,6 +16,7 @@ import {
 
 import type { AuthenticatedUser, RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
+import { hasMatchingFileSignature } from "../files/file-signature.js";
 import type { LegalEntityContext } from "../organization-context/organization-context.view.js";
 import { AuthorizationService } from "../rbac/authorization.service.js";
 import { CreateWorkDto } from "../works/dto/works.dto.js";
@@ -410,16 +411,20 @@ export class LogisticsService {
         include: courierRouteInclude,
       });
       if (!isFutureRoutesList) {
-        await Promise.all(dto.stops.filter((stop): stop is typeof dto.stops[number] & { readonly workOrderId: string } => Boolean(stop.workOrderId)).map((stop) => tx.workOrder.update({
-          data: {
-            ...(stop.type === "DELIVERY" ? { requiresDelivery: false } : { requiresPickup: false }),
-            updatedByUserId: context.actor.id,
-            version: { increment: 1 },
-          },
-          where: { id: stop.workOrderId },
-        })));
+        for (const stop of dto.stops.filter((candidate): candidate is typeof dto.stops[number] & { readonly workOrderId: string } => Boolean(candidate.workOrderId))) {
+          await tx.workOrder.update({
+            data: {
+              ...(stop.type === "DELIVERY" ? { requiresDelivery: false } : { requiresPickup: false }),
+              updatedByUserId: context.actor.id,
+              version: { increment: 1 },
+            },
+            where: { id: stop.workOrderId },
+          });
+        }
       }
-      await Promise.all(dto.stops.map((stop) => this.persistRouteStopContacts(tx, stop)));
+      for (const stop of dto.stops) {
+        await this.persistRouteStopContacts(tx, stop);
+      }
       await this.recordRouteEvent(tx, context, created.id, CourierRouteEventType.ROUTE_CREATED, {
         routeDate: created.routeDate.toISOString().slice(0, 10),
         routeId: created.id,
@@ -490,16 +495,20 @@ export class LogisticsService {
       });
       const isFutureRoutesList = !dto.courierUserId && dto.name === "Lista pentru viitoarele trasee";
       if (!isFutureRoutesList) {
-        await Promise.all(dto.stops.filter((stop): stop is typeof dto.stops[number] & { readonly workOrderId: string } => Boolean(stop.workOrderId)).map((stop) => tx.workOrder.update({
-          data: {
-            ...(stop.type === "DELIVERY" ? { requiresDelivery: false } : { requiresPickup: false }),
-            updatedByUserId: context.actor.id,
-            version: { increment: 1 },
-          },
-          where: { id: stop.workOrderId },
-        })));
+        for (const stop of dto.stops.filter((candidate): candidate is typeof dto.stops[number] & { readonly workOrderId: string } => Boolean(candidate.workOrderId))) {
+          await tx.workOrder.update({
+            data: {
+              ...(stop.type === "DELIVERY" ? { requiresDelivery: false } : { requiresPickup: false }),
+              updatedByUserId: context.actor.id,
+              version: { increment: 1 },
+            },
+            where: { id: stop.workOrderId },
+          });
+        }
       }
-      await Promise.all(dto.stops.map((stop) => this.persistRouteStopContacts(tx, stop)));
+      for (const stop of dto.stops) {
+        await this.persistRouteStopContacts(tx, stop);
+      }
       await this.recordAudit(tx, context, LOGISTICS_AUDIT_ACTIONS.routeUpdated, route.id, this.toRouteAuditMetadata(route));
       return route;
     });
@@ -518,14 +527,16 @@ export class LogisticsService {
       if (route.status !== CourierRouteStatus.DRAFT && route.status !== CourierRouteStatus.ASSIGNED) {
         throw new ConflictException("Traseul nu mai poate fi șters după începerea execuției.");
       }
-      await Promise.all(route.stops.filter((stop) => stop.workOrderId).map((stop) => tx.workOrder.update({
-        data: {
-          ...(stop.type === "DELIVERY" ? { requiresDelivery: true } : { requiresPickup: true }),
-          updatedByUserId: context.actor.id,
-          version: { increment: 1 },
-        },
-        where: { id: stop.workOrderId as string },
-      })));
+      for (const stop of route.stops.filter((candidate) => candidate.workOrderId)) {
+        await tx.workOrder.update({
+          data: {
+            ...(stop.type === "DELIVERY" ? { requiresDelivery: true } : { requiresPickup: true }),
+            updatedByUserId: context.actor.id,
+            version: { increment: 1 },
+          },
+          where: { id: stop.workOrderId as string },
+        });
+      }
       await this.recordRouteEvent(tx, context, route.id, CourierRouteEventType.ROUTE_CANCELLED, {
         routeId: route.id,
         routeNumber: route.routeNumber,
@@ -928,16 +939,14 @@ export class LogisticsService {
   public async addWorkToGroup(context: ActorContext, groupId: string, workOrderId: string): Promise<DeliveryPreparationGroupDetail> {
     await this.ensurePermission(context.actor.id, "logistics.manage_groups");
     const group = await this.prisma.$transaction(async (tx) => {
-      const [groupRecord, work] = await Promise.all([
-        tx.deliveryPreparationGroup.findUnique({ include: { items: true }, where: { id: groupId } }),
-        tx.workOrder.findUnique({
-          include: {
-            activeCycle: { include: { logisticsState: true } },
-            deliveryPreparationItems: { where: { isActive: true } },
-          },
-          where: { id: workOrderId },
-        }),
-      ]);
+      const groupRecord = await tx.deliveryPreparationGroup.findUnique({ include: { items: true }, where: { id: groupId } });
+      const work = await tx.workOrder.findUnique({
+        include: {
+          activeCycle: { include: { logisticsState: true } },
+          deliveryPreparationItems: { where: { isActive: true } },
+        },
+        where: { id: workOrderId },
+      });
       if (!groupRecord || !work) {
         throw new NotFoundException("Grupul sau lucrarea nu a fost găsită.");
       }
@@ -1321,6 +1330,9 @@ export class LogisticsService {
       }
       if (!LOGISTICS_ATTACHMENT_LIMITS.allowedMimeTypes.includes(file.mimetype as (typeof LOGISTICS_ATTACHMENT_LIMITS.allowedMimeTypes)[number])) {
         throw new BadRequestException("Tipul fișierului nu este permis.");
+      }
+      if (!hasMatchingFileSignature(file.mimetype, file.buffer)) {
+        throw new BadRequestException("Conținutul fișierului nu corespunde tipului declarat.");
       }
     }
   }

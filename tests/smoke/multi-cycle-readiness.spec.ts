@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import {
   deliverSmokeCycle,
+  getProbeCycleState,
   getWorkCycles,
   loginAs,
   registerReturnFromDashboard,
@@ -17,23 +18,27 @@ test("multi-cycle readiness smoke path", async ({ page }) => {
   const createdWork = await seedSmokeWork(page);
   await saveSmokeRealLabSheet(page, createdWork.id);
 
-  await deliverSmokeCycle(page, createdWork, "Ana Ionescu", "Recepție");
+  await deliverSmokeCycle(page, createdWork, "Ana Ionescu", "Recepție", "PROBE_READY");
   await registerReturnFromDashboard(page, createdWork);
 
-  const afterFirstReturn = await getWorkCycles(page, createdWork.id);
-  expect(afterFirstReturn.cycles).toHaveLength(2);
-  expect(afterFirstReturn.activeCycleId).toBeTruthy();
-  expect(afterFirstReturn.cycles.find((cycle) => cycle.id === afterFirstReturn.activeCycleId)?.cycleNumber).toBe(2);
+  const afterFirstReturn = await getProbeCycleState(page, createdWork.id);
+  expect(afterFirstReturn.completedProbeCycles).toHaveLength(1);
+  expect(afterFirstReturn.activeProbeCycle?.sequence).toBe(1);
+  const workCyclesAfterFirstReturn = await getWorkCycles(page, createdWork.id);
+  expect(workCyclesAfterFirstReturn.cycles).toHaveLength(1);
+  expect(workCyclesAfterFirstReturn.activeCycleId).toBe(workCyclesAfterFirstReturn.cycles[0]?.id);
 
   await page.goto(`/works?workId=${createdWork.id}`);
   await expect(page.getByRole("button", { name: "Vezi QR" })).toBeVisible();
-  await expect(page.getByRole("dialog", { name: "Detalii lucrare" }).getByText(createdWork.code, { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Detalii lucrare" }).locator("p").filter({ hasText: createdWork.code }).first()).toBeVisible();
 
-  await deliverSmokeCycle(page, createdWork, "Mihai Ionescu", "Recepție");
+  await deliverSmokeCycle(page, createdWork, "Mihai Ionescu", "Recepție", "PROBE_READY");
   await registerReturnFromDashboard(page, createdWork);
 
-  const afterSecondReturn = await getWorkCycles(page, createdWork.id);
-  expect(afterSecondReturn.cycles).toHaveLength(3);
-  expect(afterSecondReturn.activeCycleId).toBeTruthy();
-  expect(afterSecondReturn.cycles.find((cycle) => cycle.id === afterSecondReturn.activeCycleId)?.cycleNumber).toBe(3);
+  const afterSecondReturn = await getProbeCycleState(page, createdWork.id);
+  expect(afterSecondReturn.completedProbeCycles).toHaveLength(2);
+  expect(afterSecondReturn.activeProbeCycle?.sequence).toBe(2);
+  const workCyclesAfterSecondReturn = await getWorkCycles(page, createdWork.id);
+  expect(workCyclesAfterSecondReturn.cycles).toHaveLength(1);
+  expect(workCyclesAfterSecondReturn.activeCycleId).toBe(workCyclesAfterSecondReturn.cycles[0]?.id);
 });

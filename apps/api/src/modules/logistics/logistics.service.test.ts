@@ -146,7 +146,7 @@ function createService({ allowUpload = true } = {}) {
 }
 
 function upload(overrides: Partial<UploadedAttachmentFile> = {}): UploadedAttachmentFile {
-  const buffer = Buffer.from("file");
+  const buffer = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   return {
     buffer,
     mimetype: "image/png",
@@ -193,7 +193,7 @@ describe("LogisticsService.createWorkWithAttachments", () => {
     );
     expect(workAttachmentCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ fileName: "photo.png", mimeType: "image/png", uploadedByUserId: "user_1", workOrderId: "work_1" }) });
     expect(auditLogCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ action: "logistics.attachment_uploaded", resourceType: "work_attachment" }) });
-    expect(result.attachments).toEqual([{ fileName: "photo.png", id: "att_photo.png", mimeType: "image/png", sizeBytes: 4, uploadedAt: "2026-08-20T10:00:00.000Z" }]);
+    expect(result.attachments).toEqual([{ fileName: "photo.png", id: "att_photo.png", mimeType: "image/png", sizeBytes: 8, uploadedAt: "2026-08-20T10:00:00.000Z" }]);
     expect(result.work).toEqual({ code: "WO-26-0001", id: "work_1" });
   });
 
@@ -205,6 +205,19 @@ describe("LogisticsService.createWorkWithAttachments", () => {
       { code: "NC", id: "legal_1" } as never,
       workBody,
       [upload({ mimetype: "application/x-msdownload", originalname: "bad.exe" })],
+    )).rejects.toBeInstanceOf(BadRequestException);
+    expect(worksService.createWork).not.toHaveBeenCalled();
+  });
+
+  it("rejects content that spoofs an allowed MIME type before creating the work", async () => {
+    const { service, worksService } = createService();
+    const buffer = Buffer.from("<script>alert(1)</script>");
+
+    await expect(service.createWorkWithAttachments(
+      { actor: { id: "user_1" } as never, requestMetadata: {} },
+      { code: "NC", id: "legal_1" } as never,
+      workBody,
+      [upload({ buffer, size: buffer.length })],
     )).rejects.toBeInstanceOf(BadRequestException);
     expect(worksService.createWork).not.toHaveBeenCalled();
   });

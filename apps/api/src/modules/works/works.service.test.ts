@@ -615,6 +615,113 @@ describe("WorksService", () => {
     expect(result.workForm?.values).toEqual(intakeValues);
   });
 
+  it("injects real-lab-sheet derived values only when the active template defines those fields", async () => {
+    const now = new Date("2026-08-01T10:00:00.000Z");
+    const sheetField = {
+      copyToNextCyclePolicy: "NEVER",
+      cycleScope: "CYCLE",
+      defaultValue: null,
+      editableUntil: "CYCLE_FINALIZED",
+      helpText: null,
+      key: "observatie_tehnica",
+      label: "Observație tehnică",
+      options: [],
+      placeholder: null,
+      printable: true,
+      required: false,
+      roleOwner: "TECHNICIAN",
+      sectionKey: null,
+      sectionLabel: null,
+      sortOrder: 1,
+      sourceKind: "USER_ENTERED",
+      type: "TEXT",
+      validation: {},
+    } as const;
+    const snapshot = { fields: [sheetField] };
+    const submittedValues = { observatie_tehnica: "Control final" };
+    const submission = {
+      finalizedAt: null,
+      finalizedBy: null,
+      id: "real_sheet_1",
+      realLabSheetStatus: "IN_PROGRESS",
+      revision: 1,
+      schemaSnapshot: snapshot,
+      submittedAt: now,
+      templateId: "real_template_1",
+      templateKind: "REAL_LAB_SHEET",
+      templateNameSnapshot: "Fișă minimă",
+      templateVersion: 1,
+      updatedAt: now,
+      updatedBy: { displayName: "Tehnician", id: "actor_1" },
+      values: submittedValues,
+      workCycleId: "cycle_1",
+      workOrderId: "work_order_1",
+    };
+    const cycle = {
+      cycleNumber: 1,
+      doctor: { displayName: "Dr. Ana Popescu", id: "doctor_1" },
+      id: "cycle_1",
+      status: "ACTIVE",
+      workFormSubmissions: [],
+    };
+    const activeTemplate = {
+      fields: [sheetField],
+      id: "real_template_1",
+      kind: "REAL_LAB_SHEET",
+      name: "Fișă minimă",
+      status: "ACTIVE",
+      version: 1,
+      workTypeId: "work_type_1",
+    };
+    const validateValues = vi.fn().mockImplementation((_schema: unknown, values: unknown) => values);
+    const submissionValidationService = {
+      createSnapshot: vi.fn().mockReturnValue(snapshot),
+      ensureActiveTemplateMatches: vi.fn(),
+      validateValues,
+    };
+    const authorizationService = {
+      hasPermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ALL"], permission: "work_forms.real.read" }),
+      requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ALL"], permission: "work_forms.real.update" }),
+    };
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+        workFormSubmission: { create: vi.fn().mockResolvedValue(submission) },
+      })),
+      workFormTemplate: { findFirst: vi.fn().mockResolvedValue(activeTemplate) },
+      workOrder: {
+        findUnique: vi.fn().mockResolvedValue({
+          activeCycleId: "cycle_1",
+          assignedTechnicianId: "actor_1",
+          code: "WO-2026-000001",
+          cycles: [cycle],
+          doctor: { displayName: "Dr. Ana Popescu", id: "doctor_1" },
+          id: "work_order_1",
+          patient: patient(),
+          patientName: "Ion Pop",
+          workType: { id: "work_type_1", name: "Coroană zirconiu" },
+          workTypeId: "work_type_1",
+        }),
+      },
+    }, authorizationService, undefined, undefined, undefined, submissionValidationService);
+
+    const result = await service.upsertRealLabSheet(
+      { actorUserId: "actor_1", requestMetadata: {} },
+      "work_order_1",
+      "cycle_1",
+      {
+        expectedRevision: 0,
+        saveMode: "DRAFT",
+        templateId: "real_template_1",
+        templateVersion: 1,
+        values: submittedValues,
+      },
+    );
+
+    expect(validateValues).toHaveBeenCalledWith(snapshot, submittedValues, { enforceRequired: false });
+    expect(result.values).toEqual(submittedValues);
+  });
+
   it("rejects a doctor from another clinic", async () => {
     const service = createService({
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>

@@ -7,9 +7,12 @@ The project is a modular TypeScript monorepo managed with pnpm.
 ```mermaid
 flowchart LR
   Browser[React/Vite Browser App] -->|cookie + CSRF + JSON REST| API[NestJS API]
+  API -->|authenticated, permission-filtered SSE| Browser
   API --> Services[Module Services]
   Services --> Prisma[Prisma Client]
-  Prisma --> DB[(PostgreSQL)]
+  Prisma --> DB[(Cloud PostgreSQL - authoritative)]
+  Backup[Independent backup runner] -->|direct pg_dump| DB
+  Backup -->|age-encrypted archive| Secondary[(NAS or off-site storage)]
   Browser --> UI[packages/ui]
   Browser --> Shared[packages/shared]
   API --> Shared
@@ -31,7 +34,7 @@ Requests enter NestJS controllers. Protected routes use auth, CSRF for mutating 
 
 ## Frontend Flow
 
-React Router defines public and authenticated routes. `AuthenticatedRoute` loads auth state. `PermissionRoute` checks current permission keys for navigation and route access. Feature API files call `apiFetch`, TanStack Query owns cache, and mutations invalidate related query keys.
+React Router defines public and authenticated routes. `AuthenticatedRoute` loads auth state. `PermissionRoute` checks current permission keys for navigation and route access. Feature API files call `apiFetch`, TanStack Query owns cache, and mutations invalidate related query keys. `RealtimeSync` receives safe semantic events and invalidates only mapped query prefixes; the refetched API response remains authoritative.
 
 ## Auth And Context
 
@@ -48,6 +51,27 @@ Modules are organized under `apps/api/src/modules`. Cross-cutting modules includ
 ## Audit
 
 Critical mutations use `AuditService` and resource-specific constants. Audit entries are implemented in the database, while an audit UI is planned.
+
+## Realtime Synchronization
+
+Authenticated browsers connect to `GET /realtime/events` with cookie credentials. The Nest interceptor describes only successful mutating responses after service/transaction completion. It publishes a small envelope containing event ID, timestamp, semantic type, and authorized topics, never a database row or financial/patient payload.
+
+`RealtimeAudienceService` filters every topic against current server-side permissions before delivery. Financial events require a financial permission even when the mutation also affects a generic query family. Targeted auth and own-earnings events additionally enforce user identity. Sessions are periodically revalidated; expiration, deactivation, or access changes close the stream.
+
+The browser uses native EventSource reconnection, deduplicates recent event IDs, coalesces short bursts, and maps topics to TanStack Query prefixes. A `ready` event refreshes active queries to cover events missed during connection or reconnection. Conservative polling remains only as a 120-second recovery fallback.
+
+The current broker is intentionally in-memory for one API replica. Its interface is replaceable. More than one API replica requires a shared pub/sub adapter and distributed/WAF rate limiting before rollout; otherwise cross-replica events can be missed.
+
+## Deployment Profiles And Source Of Truth
+
+Both supported profiles have one writable cloud PostgreSQL database:
+
+- Hybrid Cloud + NAS: cloud database is live; NAS receives encrypted backups only.
+- Cloud only: cloud database is live; provider recovery plus an independent encrypted cloud copy replaces the NAS layer.
+
+There are no customer-name branches, dual writes, or live NAS requirements in domain code. Uploaded attachments are stored in PostgreSQL, so they follow the same transactional and backup boundary. Generated invoices/statements/exports are derived from persisted snapshots on demand.
+
+See [PRODUCTION-RUNBOOK.md](PRODUCTION-RUNBOOK.md) and [BACKUP-RESTORE.md](BACKUP-RESTORE.md).
 
 ## QR
 
@@ -66,4 +90,4 @@ Demo seed is deterministic and idempotent. It creates local users, clinics, doct
 
 ## Deferred Infrastructure
 
-No Kubernetes, microservices, Elasticsearch, queue infrastructure, or external payment/POS integration exists. Do not document or implement those unless explicitly approved.
+No Kubernetes, microservices, Elasticsearch, queue infrastructure, shared realtime broker, distributed rate limiter, malware scanner, or external payment/POS integration exists. Do not present any of these as deployed. Add them only from measured need and an approved design.

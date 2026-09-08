@@ -3,12 +3,21 @@ import { randomUUID } from "node:crypto";
 
 const clinicName = "Clinica Dentară Aurora Demo SRL";
 const doctorName = "Dr. Ioana Pavel";
-const apiBaseUrl = "http://127.0.0.1:3010";
+export const smokeApiBaseUrl = (process.env.PLAYWRIGHT_API_BASE_URL ?? "http://127.0.0.1:3010")
+  .replace(/\/health(?:\/ready|\/live)?\/?$/, "")
+  .replace(/\/$/, "");
+export const smokeWebBaseUrl = (process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000").replace(/\/$/, "");
 const patientSexValue = "MALE";
 const shadeValue = "A2";
 const smokeDateValue = "2026-08-15";
 const toothValue = "11";
-const workTypeName = "Bont implant demo";
+const preferredSmokeWorkTypeCode = "TECH-EX-09";
+
+function futureDateValue(daysFromNow: number): string {
+  return new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+let realLabSheetPreparedForWorkTypeId: string | null = null;
 
 const loginLabels: Record<"MANAGER" | "RECEPTIE" | "TEHNICIAN" | "LOGISTICA" | "CURIER", string> = {
   CURIER: "Intră ca curier",
@@ -31,24 +40,23 @@ export async function loginAs(page: Page, role: keyof typeof loginLabels): Promi
   await page.goto("/login");
   await page.getByRole("button", { name: loginLabels[role] }).click();
   await expect(page).not.toHaveURL(/\/login(?:\?.*)?$/);
+  // Keep the authenticated browser context while stopping dashboard queries
+  // from competing with the API-driven fixture setup between UI assertions.
+  await page.goto("about:blank");
 }
 
 export async function logout(page: Page): Promise<void> {
-  try {
-    const csrf = await browserJson<{ readonly csrfToken: string }>(page, "/auth/csrf");
-    await browserJson(page, "/auth/logout", {
-      headers: {
-        "x-csrf-token": csrf.csrfToken,
-      },
-      method: "POST",
-    });
-  } catch {
-    // Ignore anonymous sessions or transient logout failures in smoke setup.
-  }
+  const csrf = await browserJson<{ readonly csrfToken: string }>(page, "/auth/csrf");
+  await browserJson(page, "/auth/logout", {
+    headers: {
+      "x-csrf-token": csrf.csrfToken,
+    },
+    method: "POST",
+  });
 }
 
 export async function browserJson<T>(page: Page, path: string, init?: RequestInit): Promise<ApiResponse<T>> {
-  const response = await page.request.fetch(`${apiBaseUrl}${path}`, {
+  const response = await page.request.fetch(`${smokeApiBaseUrl}${path}`, {
     data: typeof init?.body === "string" && init.body.length > 0 ? JSON.parse(init.body) : undefined,
     headers: {
       ...(init?.headers ?? {}),
@@ -64,39 +72,147 @@ export async function browserJson<T>(page: Page, path: string, init?: RequestIni
   return text.length > 0 ? JSON.parse(text) as T : null;
 }
 
+async function mutateJson<T>(page: Page, path: string, method: "PATCH" | "POST" | "PUT", body?: unknown): Promise<T> {
+  const csrfToken = (await browserJson<{ readonly csrfToken: string }>(page, "/auth/csrf")).csrfToken;
+  return browserJson<T>(page, path, {
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    headers: {
+      "Content-Type": "application/json",
+      "x-csrf-token": csrfToken,
+    },
+    method,
+  });
+}
+
+async function ensureSmokeWorkTypeConfiguration(page: Page): Promise<{
+  readonly template: { readonly fields: readonly { readonly key: string }[]; readonly id: string; readonly version: number };
+  readonly workType: { readonly code: string; readonly id: string; readonly name: string };
+}> {
+  await loginAs(page, "MANAGER");
+  const workTypes = await browserJson<readonly { readonly code: string; readonly id: string; readonly name: string }[]>(page, "/works/work-type-options");
+  const workType = workTypes.find((candidate) => candidate.code === preferredSmokeWorkTypeCode) ?? workTypes[0];
+  if (!workType) {
+    throw new Error("Smoke setup requires at least one active work type.");
+  }
+
+  let template = await browserJson<{
+    readonly fields: readonly { readonly key: string }[];
+    readonly id: string;
+    readonly version: number;
+  } | null>(page, `/work-types/${workType.id}/form-template`);
+  const fieldKeys = new Set((template?.fields ?? []).map((field) => field.key));
+  if (!template || !fieldKeys.has("teeth") || !fieldKeys.has("shade")) {
+    const draft = await mutateJson<{ readonly id: string }>(page, `/work-types/${workType.id}/form-templates`, "POST", {
+      description: "Fixture Playwright pentru recepție.",
+      kind: "GENERIC",
+      name: "Formular smoke E2E",
+    });
+    await mutateJson(page, `/work-form-templates/${draft.id}/fields`, "PUT", {
+      fields: [
+        { key: "teeth", label: "Dinți", required: true, sortOrder: 1, type: "TOOTH" },
+        {
+          key: "shade",
+          label: "Nuanță",
+          options: [
+            { label: "A1", value: "A1" },
+            { label: "A2", value: "A2" },
+            { label: "A3", value: "A3" },
+            { label: "B1", value: "B1" },
+          ],
+          required: true,
+          sortOrder: 2,
+          type: "SHADE",
+        },
+      ],
+    });
+    template = await mutateJson(page, `/work-form-templates/${draft.id}/activate`, "POST");
+  }
+
+  const workflow = await browserJson<{
+    readonly id: string;
+    readonly stages: readonly { readonly allowedRoleCodes: readonly string[] }[];
+  } | null>(page, `/work-types/${workType.id}/workflow-template`);
+  const hasReceptionStage = (workflow?.stages ?? []).some((stage) => stage.allowedRoleCodes.includes("RECEPTIE"));
+  const hasTechnicianStage = (workflow?.stages ?? []).some((stage) => stage.allowedRoleCodes.includes("TEHNICIAN"));
+  if (!workflow || !hasReceptionStage || !hasTechnicianStage) {
+    const draft = await mutateJson<{ readonly id: string }>(page, `/work-types/${workType.id}/workflow-templates`, "POST", {
+      description: "Fixture Playwright pentru fluxul recepție–tehnician.",
+      name: "Flux smoke E2E",
+    });
+    await mutateJson(page, `/workflow-templates/${draft.id}/stages`, "PUT", {
+      stages: [
+        {
+          allowedRoleCodes: ["RECEPTIE", "MANAGER"],
+          isFinal: false,
+          isInitial: true,
+          key: "receptie_smoke",
+          name: "Recepție",
+          sortOrder: 1,
+        },
+        {
+          allowedRoleCodes: ["TEHNICIAN", "MANAGER"],
+          isFinal: true,
+          isInitial: false,
+          key: "productie_smoke",
+          name: "Producție",
+          sortOrder: 2,
+        },
+      ],
+    });
+    await mutateJson(page, `/workflow-templates/${draft.id}/activate`, "POST");
+  }
+
+  if (realLabSheetPreparedForWorkTypeId !== workType.id) {
+    const draft = await mutateJson<{ readonly id: string }>(page, `/work-types/${workType.id}/form-templates`, "POST", {
+      description: "Fixture Playwright pentru fișa pe ciclu.",
+      kind: "REAL_LAB_SHEET",
+      name: "Fișă laborator smoke E2E",
+    });
+    await mutateJson(page, `/work-form-templates/${draft.id}/fields`, "PUT", {
+      fields: [
+        {
+          copyToNextCyclePolicy: "NEVER",
+          cycleScope: "CYCLE",
+          editableUntil: "CYCLE_FINALIZED",
+          key: "observatie_tehnica",
+          label: "Observație tehnică",
+          printable: true,
+          required: false,
+          roleOwner: "TECHNICIAN",
+          sortOrder: 1,
+          sourceKind: "USER_ENTERED",
+          type: "TEXT",
+        },
+      ],
+    });
+    await mutateJson(page, `/work-form-templates/${draft.id}/activate`, "POST");
+    realLabSheetPreparedForWorkTypeId = workType.id;
+  }
+
+  await loginAs(page, "RECEPTIE");
+  return { template, workType };
+}
+
 export async function seedSmokeWork(page: Page): Promise<SmokeWork> {
   const clinics = await browserJson<readonly { readonly id: string; readonly name: string }[]>(page, "/clinics/options");
-  const clinic = clinics[0];
-  expect(clinic, "Missing clinic options").toBeTruthy();
-
-  const doctors = await browserJson<readonly { readonly id: string; readonly displayName: string }[]>(page, `/doctors/options?clinicId=${encodeURIComponent(clinic!.id)}`);
-  const doctor = doctors[0];
-  expect(doctor, "Missing doctor options").toBeTruthy();
-
-  const workTypes = await browserJson<readonly { readonly code: string; readonly id: string; readonly name: string }[]>(page, "/works/work-type-options");
-  let workType: { readonly code: string; readonly id: string; readonly name: string } | undefined;
-  let template: { readonly fields: readonly { readonly key: string }[]; readonly id: string; readonly version: number } | null = null;
-  for (const candidate of workTypes) {
-    const candidateTemplate = await browserJson<{ readonly fields: readonly { readonly key: string }[]; readonly id: string; readonly version: number } | null>(page, `/work-types/${candidate.id}/form-template`);
-    const candidateFieldKeys = new Set((candidateTemplate?.fields ?? []).map((field) => field.key));
-    const candidateWorkflow = await browserJson<{
-      readonly id: string;
-      readonly stages: readonly {
-        readonly allowedRoleCodes: readonly string[];
-        readonly sortOrder: number;
-      }[];
-    } | null>(page, `/work-types/${candidate.id}/workflow-template`);
-    const hasReceptionStage = (candidateWorkflow?.stages ?? []).some((stage) => stage.allowedRoleCodes.includes("RECEPTIE"));
-    const hasTechnicianStage = (candidateWorkflow?.stages ?? []).some((stage) => stage.allowedRoleCodes.includes("TEHNICIAN"));
-    if (candidateTemplate && candidateFieldKeys.has("teeth") && candidateFieldKeys.has("shade") && hasReceptionStage && hasTechnicianStage) {
-      workType = candidate;
-      template = candidateTemplate;
+  let clinic: { readonly id: string; readonly name: string } | undefined;
+  let doctor: { readonly id: string; readonly displayName: string } | undefined;
+  for (const candidateClinic of clinics) {
+    const candidateDoctors = await browserJson<readonly { readonly id: string; readonly displayName: string }[]>(
+      page,
+      `/doctors/options?clinicId=${encodeURIComponent(candidateClinic.id)}`,
+    );
+    if (candidateDoctors[0]) {
+      clinic = candidateClinic;
+      doctor = candidateDoctors[0];
       break;
     }
   }
-  if (!workType || !template) {
-    throw new Error(`workTypes=${JSON.stringify(workTypes.map((item) => ({ code: item.code, id: item.id, name: item.name })), null, 2)}`);
+  if (!clinic || !doctor) {
+    throw new Error("Smoke setup requires at least one clinic with an available doctor.");
   }
+
+  const { template, workType } = await ensureSmokeWorkTypeConfiguration(page);
 
   const uniqueSuffix = `${Date.now()}-${randomUUID().slice(0, 8)}`;
   const patient = await browserJson<{
@@ -125,7 +241,17 @@ export async function seedSmokeWork(page: Page): Promise<SmokeWork> {
       patientId: patient.overview.id,
       priority: "NORMAL",
       quantity: 1,
-      requestedDeliveryDate: "2026-08-20",
+      requestedDeliveryDate: futureDateValue(14),
+      items: [{
+        implantPlatform: null,
+        notes: null,
+        restorationType: null,
+        scope: "TOOTH",
+        shade: shadeValue,
+        technicalCodeNotes: null,
+        teeth: [Number(toothValue)],
+        workTypeId: workType!.id,
+      }],
       workFormSubmission: {
         templateId: template!.id,
         templateVersion: template!.version,
@@ -217,7 +343,8 @@ function resolveWorkflowRoleLogin(allowedRoleLabels: readonly string[]): keyof t
   return null;
 }
 
-export async function completeWorkflowUntilDone(page: Page, workId: string): Promise<void> {
+export async function completeWorkflowUntilDone(page: Page, work: SmokeWork): Promise<void> {
+  const workId = work.id;
   for (let iteration = 0; iteration < 24; iteration += 1) {
     const workflow = await browserJson<{
       readonly currentStage: null | {
@@ -241,41 +368,18 @@ export async function completeWorkflowUntilDone(page: Page, workId: string): Pro
     await loginAs(page, usesTechnicianRole ? "TEHNICIAN" : "MANAGER");
     if (workflow.currentStage.status === "PENDING") {
       if (usesTechnicianRole && !workflow.currentStage.assignment.assignedUser) {
-        const workClaim = await browserJson<{
-          readonly claim: {
-            readonly revision: number;
-            readonly status: "CLAIMED" | "UNCLAIMED";
-          };
-        }>(page, `/works/${workId}`);
-        const csrfToken = (await browserJson<{ readonly csrfToken: string }>(page, "/auth/csrf")).csrfToken;
-        if (workClaim.claim.status === "CLAIMED") {
-          await browserJson(page, `/works/${workId}/release`, {
-            body: JSON.stringify({
-              expectedClaimRevision: workClaim.claim.revision,
-              reason: "Smoke handoff",
-            }),
-            headers: {
-              "Content-Type": "application/json",
-              "x-csrf-token": csrfToken,
-            },
-            method: "POST",
-          });
+        const available = await browserJson<{
+          readonly items: readonly {
+            readonly claim: { readonly revision: number };
+            readonly id: string;
+          }[];
+        }>(page, `/works/available-for-claim?page=1&pageSize=100&search=${encodeURIComponent(work.code)}`);
+        const claimBefore = available.items.find((candidate) => candidate.id === workId);
+        if (!claimBefore) {
+          throw new Error(`Work ${work.code} is not available for technician claim.`);
         }
-        const claimBefore = await browserJson<{
-          readonly claim: {
-            readonly revision: number;
-          };
-        }>(page, `/works/${workId}`);
-        await browserJson(page, `/works/${workId}/claim`, {
-          body: JSON.stringify({
-            executionLegalEntityCode: "NC",
-            expectedClaimRevision: claimBefore.claim.revision,
-          }),
-          headers: {
-            "Content-Type": "application/json",
-            "x-csrf-token": csrfToken,
-          },
-          method: "POST",
+        await mutateJson(page, `/works/${workId}/claim`, "POST", {
+          expectedClaimRevision: claimBefore.claim.revision,
         });
       }
       await startCurrentWorkflowStage(page, workId);
@@ -383,183 +487,116 @@ export async function saveSmokeRealLabSheet(page: Page, workId: string): Promise
     }[];
   }>(page, `/works/${workId}/cycles/${cycleId}/real-lab-sheet`);
   const values = createSmokeRealLabSheetValues(sheet.fields ?? []);
-  const csrfToken = (await browserJson<{ readonly csrfToken: string }>(page, "/auth/csrf")).csrfToken;
-  const draft = await browserJson<{
+  const draft = await mutateJson<{
     readonly revision: number;
-  }>(page, `/works/${workId}/cycles/${cycleId}/real-lab-sheet`, {
-    body: JSON.stringify({
+  }>(page, `/works/${workId}/cycles/${cycleId}/real-lab-sheet`, "PATCH", {
       expectedRevision: sheet.revision,
       saveMode: "DRAFT",
       templateId: sheet.templateId ?? "",
       templateVersion: sheet.templateVersion,
       values,
-    }),
-    headers: {
-      "Content-Type": "application/json",
-      "x-csrf-token": csrfToken,
-    },
-    method: "PATCH",
   });
-  const completed = await browserJson<{
+  const completed = await mutateJson<{
     readonly revision: number;
-  }>(page, `/works/${workId}/cycles/${cycleId}/real-lab-sheet`, {
-    body: JSON.stringify({
+  }>(page, `/works/${workId}/cycles/${cycleId}/real-lab-sheet`, "PATCH", {
       expectedRevision: draft.revision,
       saveMode: "COMPLETE",
       templateId: sheet.templateId ?? "",
       templateVersion: sheet.templateVersion,
       values,
-    }),
-    headers: {
-      "Content-Type": "application/json",
-      "x-csrf-token": csrfToken,
-    },
-    method: "PATCH",
   });
-  await browserJson(page, `/works/${workId}/cycles/${cycleId}/real-lab-sheet/finalize`, {
-    body: JSON.stringify({
+  await mutateJson(page, `/works/${workId}/cycles/${cycleId}/real-lab-sheet/finalize`, "POST", {
       expectedRevision: completed.revision,
-    }),
-    headers: {
-      "Content-Type": "application/json",
-      "x-csrf-token": csrfToken,
-    },
-    method: "POST",
   });
 }
 
-export async function deliverSmokeCycle(page: Page, work: SmokeWork, recipientName: string, recipientRole: string): Promise<{ readonly deliveryId: string }> {
+export async function deliverSmokeCycle(
+  page: Page,
+  work: SmokeWork,
+  recipientName: string,
+  recipientRole: string,
+  technicalOutcome: "FINALIZED" | "PROBE_READY" = "FINALIZED",
+  executionLegalEntityCode?: "CDT" | "NG",
+): Promise<{ readonly deliveryId: string }> {
   await loginAs(page, "RECEPTIE");
   await completeWorkflowStagesForRole(page, work.id, "Recepție");
 
   await loginAs(page, "TEHNICIAN");
   await page.goto("/workbench");
-  await expect(page.getByRole("heading", { name: "Atelier tehnician" })).toBeVisible();
-  await page.getByRole("button", { name: "Lucrările mele" }).click();
+  await expect(page.getByRole("heading", { name: "Atelier tehnician" })).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("button", { name: "Lucrări de preluat", exact: true }).click();
+  await page.getByRole("searchbox", { name: "Căutare" }).fill(work.code);
+  await expect(page.getByRole("article").filter({ hasText: work.code })).toBeVisible({ timeout: 20_000 });
 
-  const workBeforeClaim = await browserJson<{
-    readonly claim: {
-      readonly revision: number;
-      readonly status: "CLAIMED" | "UNCLAIMED";
-    };
-  }>(page, `/works/${work.id}`);
-  await browserJson(page, `/works/${work.id}/claim`, {
-    body: JSON.stringify({
-      executionLegalEntityCode: "NC",
-      expectedClaimRevision: workBeforeClaim.claim.revision,
-    }),
-    headers: {
-      "Content-Type": "application/json",
-      "x-csrf-token": (await browserJson<{ readonly csrfToken: string }>(page, "/auth/csrf")).csrfToken,
-    },
-    method: "POST",
+  const available = await browserJson<{
+    readonly items: readonly {
+      readonly claim: { readonly revision: number };
+      readonly id: string;
+    }[];
+  }>(page, `/works/available-for-claim?page=1&pageSize=100&search=${encodeURIComponent(work.code)}`);
+  const workBeforeClaim = available.items.find((candidate) => candidate.id === work.id);
+  if (!workBeforeClaim) {
+    throw new Error(`Work ${work.code} is not available for technician claim.`);
+  }
+  await mutateJson(page, `/works/${work.id}/claim`, "POST", {
+    ...(executionLegalEntityCode ? { executionLegalEntityCode } : {}),
+    expectedClaimRevision: workBeforeClaim.claim.revision,
   });
+
+  const operations = await browserJson<readonly {
+    readonly id: string;
+    readonly rateMinor?: number | null;
+  }[]>(page, `/technician-operations/options?workOrderId=${encodeURIComponent(work.id)}`);
+  const operation = operations.find((candidate) => candidate.rateMinor !== null && candidate.rateMinor !== undefined);
+  if (!operation) {
+    throw new Error(`Work ${work.code} has no compatible technician operation with an active rate.`);
+  }
+  await mutateJson(page, "/technician-operations/performed", "POST", {
+    operationId: operation.id,
+    selectedTeeth: [Number(toothValue)],
+    workOrderId: work.id,
+  });
+
   await loginAs(page, "TEHNICIAN");
-  await completeWorkflowUntilDone(page, work.id);
+  await completeWorkflowUntilDone(page, work);
+  await loginAs(page, "TEHNICIAN");
+  await mutateJson(
+    page,
+    technicalOutcome === "PROBE_READY" ? `/works/${work.id}/probe-ready` : `/works/${work.id}/finalize`,
+    "POST",
+    {},
+  );
 
   await loginAs(page, "LOGISTICA");
   await page.goto("/logistics");
-  const workLogistics = await browserJson<{
-    readonly logistics: {
-      readonly status: string;
-      readonly version: number;
-    };
-  }>(page, `/works/${work.id}/logistics`);
-  await browserJson(page, `/works/${work.id}/logistics/ready-for-packing`, {
-    body: JSON.stringify({ version: workLogistics.logistics.version }),
-    headers: {
-      "Content-Type": "application/json",
-      "x-csrf-token": (await browserJson<{ readonly csrfToken: string }>(page, "/auth/csrf")).csrfToken,
-    },
-    method: "POST",
-  });
-  const workLogisticsReady = await browserJson<{
-    readonly logistics: {
-      readonly version: number;
-    };
-  }>(page, `/works/${work.id}/logistics`);
-  await browserJson(page, `/works/${work.id}/logistics/start-packing`, {
-    body: JSON.stringify({ version: workLogisticsReady.logistics.version }),
-    headers: {
-      "Content-Type": "application/json",
-      "x-csrf-token": (await browserJson<{ readonly csrfToken: string }>(page, "/auth/csrf")).csrfToken,
-    },
-    method: "POST",
-  });
-  const workLogisticsPacking = await browserJson<{
-    readonly logistics: {
-      readonly version: number;
-    };
-  }>(page, `/works/${work.id}/logistics`);
-  await browserJson(page, `/works/${work.id}/logistics/complete-packing`, {
-    body: JSON.stringify({ version: workLogisticsPacking.logistics.version }),
-    headers: {
-      "Content-Type": "application/json",
-      "x-csrf-token": (await browserJson<{ readonly csrfToken: string }>(page, "/auth/csrf")).csrfToken,
-    },
-    method: "POST",
-  });
   const workForDelivery = await browserJson<{
     readonly clinic: { readonly id: string };
   }>(page, `/works/${work.id}`);
-  const logisticsView = await browserJson<{
-    readonly preparationGroup: null | {
-      readonly id: string;
-      readonly status: "DRAFT" | "READY" | "CANCELLED";
-    };
-  }>(page, `/works/${work.id}/logistics`);
-  const logisticsToken = (await browserJson<{ readonly csrfToken: string }>(page, "/auth/csrf")).csrfToken;
-  const preparationGroup = logisticsView.preparationGroup ?? await browserJson<{
+  const preparationGroup = await mutateJson<{
+    readonly delivery: null | { readonly id: string };
     readonly id: string;
     readonly plannedDate: string | null;
-  }>(page, "/delivery-preparation-groups", {
-    body: JSON.stringify({
-      clinicId: workForDelivery.clinic.id,
-    }),
-    headers: {
-      "Content-Type": "application/json",
-      "x-csrf-token": logisticsToken,
-    },
-    method: "POST",
+    readonly status: "DRAFT" | "READY" | "CANCELLED";
+  }>(page, "/delivery-preparation-groups", "POST", {
+    clinicId: workForDelivery.clinic.id,
   });
-  if (!logisticsView.preparationGroup) {
-    await browserJson(page, `/delivery-preparation-groups/${preparationGroup.id}/works`, {
-      body: JSON.stringify({ workOrderId: work.id }),
-      headers: {
-        "Content-Type": "application/json",
-        "x-csrf-token": logisticsToken,
-      },
-      method: "POST",
-    });
-  }
+  await mutateJson(page, `/delivery-preparation-groups/${preparationGroup.id}/works`, "POST", {
+    workOrderId: work.id,
+  });
   if (preparationGroup.status === "DRAFT") {
-    await browserJson(page, `/delivery-preparation-groups/${preparationGroup.id}/mark-ready`, {
-      body: "{}",
-      headers: {
-        "Content-Type": "application/json",
-        "x-csrf-token": logisticsToken,
-      },
-      method: "POST",
-    });
+    await mutateJson(page, `/delivery-preparation-groups/${preparationGroup.id}/mark-ready`, "POST", {});
   }
   const delivery = preparationGroup.delivery
     ? await browserJson<{
         readonly id: string;
         readonly version: number;
       }>(page, `/deliveries/${preparationGroup.delivery.id}`)
-    : await browserJson<{
+    : await mutateJson<{
         readonly id: string;
         readonly version: number;
-      }>(page, `/delivery-preparation-groups/${preparationGroup.id}/delivery`, {
-        body: JSON.stringify({
-          courierUserId: "demo_user_curier",
-          plannedDate: preparationGroup.plannedDate ?? new Date().toISOString(),
-        }),
-        headers: {
-          "Content-Type": "application/json",
-          "x-csrf-token": logisticsToken,
-        },
-        method: "POST",
+      }>(page, `/delivery-preparation-groups/${preparationGroup.id}/delivery`, "POST", {
+        courierUserId: "demo_user_curier",
+        plannedDate: preparationGroup.plannedDate ?? new Date().toISOString(),
       });
 
   await loginAs(page, "CURIER");
@@ -589,7 +626,8 @@ export async function deliverSmokeCycle(page: Page, work: SmokeWork, recipientNa
   await page.getByLabel("Nume primitor").fill(recipientName);
   await page.getByLabel("Rol primitor").fill(recipientRole);
   await page.getByRole("button", { name: "Confirmă livrarea" }).click();
-  const signaturePad = page.getByLabel(/Semnătura destinatarului/i);
+  const confirmationDialog = page.getByRole("dialog", { name: "Confirmare internă de primire", exact: true });
+  const signaturePad = confirmationDialog.getByLabel(/Semnătura destinatarului/i);
   await expect(signaturePad).toBeVisible();
   const signatureBox = await signaturePad.boundingBox();
   expect(signatureBox, "Missing signature canvas bounds").toBeTruthy();
@@ -604,34 +642,105 @@ export async function deliverSmokeCycle(page: Page, work: SmokeWork, recipientNa
     await page.mouse.move(signatureBox.x + signatureBox.width * 0.9, signatureBox.y + signatureBox.height * 0.4, { steps: 8 });
     await page.mouse.up();
   }
-  await page.getByLabel("Confirm că lucrările afișate au fost predate persoanei menționate.").check();
-  await page.getByRole("button", { name: "Confirmă predarea" }).click();
+  const handoverConfirmationLabel = "Confirm că lucrările afișate au fost predate persoanei menționate.";
+  const handoverConfirmation = confirmationDialog.getByLabel(handoverConfirmationLabel);
+  await confirmationDialog.getByText(handoverConfirmationLabel, { exact: true }).click();
+  await expect(handoverConfirmation).toBeChecked();
+  const completedResponsePromise = page.waitForResponse((response) => (
+    response.request().method() === "POST"
+    && new URL(response.url()).pathname === `/deliveries/${delivery.id}/complete`
+  ));
+  await confirmationDialog.getByRole("button", { name: "Confirmă predarea" }).click();
+  const completedResponse = await completedResponsePromise;
+  expect(completedResponse.ok(), `Delivery completion failed with HTTP ${completedResponse.status()}`).toBe(true);
 
-  await loginAs(page, "MANAGER");
-  const closeGroupToken = (await browserJson<{ readonly csrfToken: string }>(page, "/auth/csrf")).csrfToken;
-  await browserJson(page, `/delivery-preparation-groups/${preparationGroup.id}/cancel`, {
-    body: "{}",
-    headers: {
-      "Content-Type": "application/json",
-      "x-csrf-token": closeGroupToken,
-    },
-    method: "POST",
-  });
+  if (technicalOutcome === "PROBE_READY") {
+    await completePickupAfterProbeDelivery(page, work);
+  }
 
   return { deliveryId: delivery.id };
+}
+
+async function completePickupAfterProbeDelivery(page: Page, work: SmokeWork): Promise<void> {
+  await loginAs(page, "LOGISTICA");
+  const workDetail = await browserJson<{
+    readonly clinic: { readonly id: string };
+    readonly doctor: { readonly id: string } | null;
+  }>(page, `/works/${work.id}`);
+  const pickup = await mutateJson<{ readonly id: string }>(page, "/pickup-requests", "POST", {
+    clinicId: workDetail.clinic.id,
+    doctorId: workDetail.doctor?.id ?? null,
+    exactTime: "12:00",
+    scheduleType: "EXACT",
+    scheduledDate: futureDateValue(0),
+  });
+  const route = await mutateJson<{
+    readonly id: string;
+    readonly status: string;
+    readonly stops: readonly { readonly id: string; readonly pickupRequestId: string | null }[];
+  }>(page, "/routes", "POST", {
+    name: `Smoke pickup ${work.code}`,
+    routeDate: futureDateValue(0),
+    stops: [{ pickupRequestId: pickup.id, type: "PICKUP" }],
+  });
+  expect(route.status).toBe("DRAFT");
+  const stop = route.stops.find((candidate) => candidate.pickupRequestId === pickup.id);
+  expect(stop, `Missing pickup stop for ${work.code}`).toBeTruthy();
+  const started = await mutateJson<{ readonly status: string }>(page, `/routes/${route.id}/start`, "POST");
+  expect(started.status).toBe("IN_PROGRESS");
+  const completed = await mutateJson<{
+    readonly status: string;
+    readonly stops: readonly { readonly id: string; readonly outcomeStatus: string }[];
+  }>(page, `/routes/${route.id}/stops/${stop!.id}/outcome`, "POST", {
+    outcomeStatus: "PICKED_UP",
+  });
+  expect(completed.status).toBe("COMPLETED");
+  expect(completed.stops.find((candidate) => candidate.id === stop!.id)?.outcomeStatus).toBe("PICKED_UP");
+}
+
+export async function switchToWorkExecutionCompany(page: Page, workId: string): Promise<"CDT" | "NG"> {
+  const history = await browserJson<{
+    readonly activeCycleId: string | null;
+    readonly cycles: readonly {
+      readonly executionCompany: { readonly code: string } | null;
+      readonly id: string;
+    }[];
+  }>(page, `/works/${workId}/cycles`);
+  const activeCycle = history.cycles.find((cycle) => cycle.id === history.activeCycleId);
+  const code = activeCycle?.executionCompany?.code;
+  if (code !== "CDT" && code !== "NG") {
+    throw new Error(`Work ${workId} has no supported execution company on its active cycle.`);
+  }
+
+  await mutateJson(page, "/organization-context", "PUT", { code });
+  return code;
 }
 
 export async function registerReturnFromDashboard(page: Page, work: SmokeWork): Promise<void> {
   await loginAs(page, "RECEPTIE");
   await page.goto("/dashboard");
-  await page.getByRole("button", { name: "Înregistrează revenirea" }).click();
-  const dialog = page.getByRole("dialog", { name: "Înregistrează revenirea" });
-  await expect(dialog).toBeVisible();
-  await dialog.getByLabel("Caută lucrare finalizată").fill(work.code);
-  const workButton = dialog.getByRole("button", { name: new RegExp(work.code) }).first();
-  await expect(workButton).toBeVisible();
+  const workDetail = await browserJson<{ readonly clinic: { readonly id: string } }>(page, `/works/${work.id}`);
+  await page.getByRole("button", { name: "Probe", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Înregistrează revenirea", exact: true });
+  await expect(dialog).toBeVisible({ timeout: 20_000 });
+  await dialog.getByLabel(/^Clinică/).selectOption(workDetail.clinic.id);
+  const workButton = dialog.getByRole("button").filter({ hasText: work.code }).first();
+  await expect(workButton).toBeVisible({ timeout: 20_000 });
   await workButton.click();
-  await dialog.getByRole("button", { name: "Marchează revenită" }).click();
+  await expect(dialog).toContainText(work.code, { timeout: 20_000 });
+  const firstProbeType = dialog.getByRole("group", { name: "Tipuri probă" }).getByRole("checkbox").first();
+  await expect(firstProbeType).toBeVisible({ timeout: 20_000 });
+  await firstProbeType.check();
+  await dialog.getByLabel(/^Data termenului probei/).fill(futureDateValue(7));
+  const submit = dialog.getByRole("button", { name: "Înregistrează proba", exact: true });
+  await expect(submit).toBeEnabled({ timeout: 20_000 });
+  const responsePromise = page.waitForResponse((response) => (
+    response.request().method() === "POST"
+    && new URL(response.url()).pathname === `/works/${work.id}/probe-cycles/receive`
+  ));
+  await submit.click();
+  const response = await responsePromise;
+  expect(response.ok(), `Probe return failed with HTTP ${response.status()}`).toBe(true);
   await expect(dialog).toBeHidden({ timeout: 30_000 });
 }
 
@@ -640,4 +749,11 @@ export async function getWorkCycles(page: Page, workId: string): Promise<{
   readonly cycles: readonly { readonly cycleNumber: number; readonly id: string }[];
 }> {
   return await browserJson(page, `/works/${workId}/cycles`);
+}
+
+export async function getProbeCycleState(page: Page, workId: string): Promise<{
+  readonly activeProbeCycle: { readonly id: string; readonly sequence: number } | null;
+  readonly completedProbeCycles: readonly { readonly id: string; readonly sequence: number }[];
+}> {
+  return await browserJson(page, `/works/${workId}`);
 }

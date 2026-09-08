@@ -32,7 +32,7 @@ Existing module endpoints plus `GET /status/operational` from STATUS-001A.
 
 ## UI
 
-`/dashboard` shows permission-aware Manager, Recepție and Tehnician panels, primary actions, compact counters and links into `/works`, `/status`, `/workbench`, `/billing`, `/pricing` and `/scan` where allowed. Technician content is never blank when technician permissions exist. `/status` is the implemented operational status workspace with tabs, counters, filters, real laboratory sheet status, sorting, bounded pagination UX, desktop table, and mobile cards. `/status/tv` is the large-screen readonly TV mode with no shell chrome, no mutations, polling refresh, compact operational slices, and automatic page rotation.
+`/dashboard` shows permission-aware Manager, Recepție and Tehnician panels, primary actions, compact counters and links into `/works`, `/status`, `/workbench`, `/billing`, `/pricing` and `/scan` where allowed. Technician content is never blank when technician permissions exist. `/status` is the implemented operational status workspace with tabs, counters, filters, real laboratory sheet status, sorting, bounded pagination UX, desktop table, and mobile cards. `/status/tv` is the large-screen readonly TV mode with no shell chrome, no mutations, authenticated SSE synchronization plus conservative recovery polling, compact operational slices, and automatic page rotation.
 
 ## Audit
 

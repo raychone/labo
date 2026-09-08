@@ -44,9 +44,13 @@ export class AuthController {
   @Get("csrf")
   public async createCsrfToken(@Req() request: Request, @Res({ passthrough: true }) response: Response): Promise<CsrfResponse> {
     const environment = loadServerEnvironment();
-    const csrfToken = this.csrfService.createToken();
+    const cookies = request.cookies as Record<string, string | undefined> | undefined;
+    const existingToken = cookies?.[environment.csrfCookieName];
+    const csrfToken = this.csrfService.reuseOrCreateToken(existingToken);
 
-    setCsrfCookie(response, environment, csrfToken);
+    if (csrfToken !== existingToken) {
+      setCsrfCookie(response, environment, csrfToken);
+    }
     await this.auditService.record({
       action: AUTH_AUDIT_ACTIONS.csrfIssued,
       requestMetadata: getRequestMetadata(request),

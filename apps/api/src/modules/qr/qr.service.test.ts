@@ -74,6 +74,16 @@ describe("QrRateLimitService", () => {
 
     expect(() => service.assertAllowed("user_1:127.0.0.1")).toThrow(HttpException);
   });
+
+  it("fails closed instead of allocating unbounded QR buckets", () => {
+    process.env.RATE_LIMIT_MAX_BUCKETS = "1";
+    const service = new QrRateLimitService();
+
+    service.assertAllowed("user_1:127.0.0.1");
+
+    expect(() => service.assertAllowed("user_2:127.0.0.2")).toThrow(HttpException);
+    delete process.env.RATE_LIMIT_MAX_BUCKETS;
+  });
 });
 
 describe("QrService", () => {

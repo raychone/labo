@@ -28,7 +28,7 @@ export class DeliveryTransitionService {
   ) {}
 
   public async pickup(context: ActorContext, deliveryId: string, version: number): Promise<DeliveryDetail> {
-    const delivery = await this.prisma.$transaction(async (tx) => {
+    const delivery = await this.runVersionedTransaction(async (tx) => {
       const current = await this.findDelivery(tx, deliveryId);
       await this.assertAction(context, current.courierUserId, "pickup");
       assertVersion(current.version, version);
@@ -48,7 +48,7 @@ export class DeliveryTransitionService {
       const updated = await tx.delivery.update({
         data: { pickedUpAt: now, pickedUpByUserId: context.actor.id, status: DeliveryStatus.PICKED_UP, updatedByUserId: context.actor.id, version: { increment: 1 } },
         include: deliveryInclude,
-        where: { id: deliveryId },
+        where: { id: deliveryId, version },
       });
       await this.record(tx, context, updated.id, DeliveryEventType.DELIVERY_PICKED_UP, DELIVERY_AUDIT_ACTIONS.pickedUp, current.status, updated.status);
       return updated;
@@ -57,7 +57,7 @@ export class DeliveryTransitionService {
   }
 
   public async startTransit(context: ActorContext, deliveryId: string, version: number): Promise<DeliveryDetail> {
-    const delivery = await this.prisma.$transaction(async (tx) => {
+    const delivery = await this.runVersionedTransaction(async (tx) => {
       const current = await this.findDelivery(tx, deliveryId);
       await this.assertAction(context, current.courierUserId, "start_transit");
       assertVersion(current.version, version);
@@ -67,7 +67,7 @@ export class DeliveryTransitionService {
       const updated = await tx.delivery.update({
         data: { inTransitAt: new Date(), status: DeliveryStatus.IN_TRANSIT, updatedByUserId: context.actor.id, version: { increment: 1 } },
         include: deliveryInclude,
-        where: { id: deliveryId },
+        where: { id: deliveryId, version },
       });
       await this.record(tx, context, updated.id, DeliveryEventType.DELIVERY_IN_TRANSIT, DELIVERY_AUDIT_ACTIONS.startedTransit, current.status, updated.status);
       return updated;
@@ -76,7 +76,7 @@ export class DeliveryTransitionService {
   }
 
   public async complete(context: ActorContext, deliveryId: string, dto: CompleteDeliveryDto): Promise<DeliveryDetail> {
-    const delivery = await this.prisma.$transaction(async (tx) => {
+    const delivery = await this.runVersionedTransaction(async (tx) => {
       const current = await this.findDelivery(tx, deliveryId);
       await this.assertAction(context, current.courierUserId, "complete");
       assertVersion(current.version, dto.version);
@@ -101,7 +101,7 @@ export class DeliveryTransitionService {
           version: { increment: 1 },
         },
         include: deliveryInclude,
-        where: { id: deliveryId },
+        where: { id: deliveryId, version: dto.version },
       });
       await this.recordProof(tx, context, updated.id, proofResult.eventType, proofResult.auditAction, {
         ...proofResult.metadata,
@@ -110,13 +110,27 @@ export class DeliveryTransitionService {
       });
       await this.record(tx, context, updated.id, DeliveryEventType.DELIVERY_COMPLETED, DELIVERY_AUDIT_ACTIONS.completed, current.status, updated.status);
       for (const item of updated.preparationGroup.items) await this.notificationsService.publishDeliveryInTransaction(tx, { deliveryId: updated.id, workOrderId: item.workOrderId, code: item.workOrder.code, patientName: item.workOrder.patientName, failed: false });
+      // A completed delivery remains immutable history, but it must release
+      // the preparation slot so the same work can be delivered again after a
+      // later probe. The item row is retained for proofs and billing.
+      await tx.deliveryPreparationItem.updateMany({
+        data: {
+          isActive: false,
+          removedAt: now,
+          removedByUserId: context.actor.id,
+        },
+        where: {
+          groupId: current.preparationGroupId,
+          isActive: true,
+        },
+      });
       return updated;
     });
     return toDeliveryDetail(delivery, await this.deliveryService.createAccessContext(context.actor.id), new Date());
   }
 
   public async fail(context: ActorContext, deliveryId: string, dto: FailDeliveryDto): Promise<DeliveryDetail> {
-    const delivery = await this.prisma.$transaction(async (tx) => {
+    const delivery = await this.runVersionedTransaction(async (tx) => {
       const current = await this.findDelivery(tx, deliveryId);
       await this.assertAction(context, current.courierUserId, "fail");
       assertVersion(current.version, dto.version);
@@ -136,7 +150,7 @@ export class DeliveryTransitionService {
           version: { increment: 1 },
         },
         include: deliveryInclude,
-        where: { id: deliveryId },
+        where: { id: deliveryId, version: dto.version },
       });
       await tx.workOrder.updateMany({
         data: { requiresDelivery: true, updatedByUserId: context.actor.id, version: { increment: 1 } },
@@ -154,7 +168,7 @@ export class DeliveryTransitionService {
     if (Number.isNaN(plannedDate.getTime()) || plannedDate.getTime() <= Date.now()) {
       throw new BadRequestException("Replanificarea trebuie să fie în viitor.");
     }
-    const delivery = await this.prisma.$transaction(async (tx) => {
+    const delivery = await this.runVersionedTransaction(async (tx) => {
       const current = await this.findDelivery(tx, deliveryId);
       await this.assertAll(context, "delivery.reschedule");
       assertVersion(current.version, dto.version);
@@ -171,7 +185,7 @@ export class DeliveryTransitionService {
           version: { increment: 1 },
         },
         include: deliveryInclude,
-        where: { id: deliveryId },
+        where: { id: deliveryId, version: dto.version },
       });
       const code = await this.deliveryCodeService.generate(tx, now);
       const retry = await tx.delivery.create({
@@ -208,6 +222,17 @@ export class DeliveryTransitionService {
       return;
     }
     throw new ForbiddenException("Nu ai acces la această livrare.");
+  }
+
+  private async runVersionedTransaction<T>(operation: (tx: DeliveryTx) => Promise<T>): Promise<T> {
+    try {
+      return await this.prisma.$transaction(operation);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+        throw new ConflictException(STALE_DELIVERY_MESSAGE);
+      }
+      throw error;
+    }
   }
 
   private async assertAll(context: ActorContext, permission: "delivery.reschedule"): Promise<void> {

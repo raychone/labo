@@ -29,6 +29,7 @@ import type {
 
 import { fetchCsrfToken } from "../auth/auth-api.js";
 import { apiFetch, parseApiResponse } from "../../lib/api-client.js";
+import { REALTIME_FALLBACK_REFETCH_MS } from "../../lib/realtime-config.js";
 import { worksQueryKeys } from "../works/works-api.js";
 
 export const logisticsQueryKeys = {
@@ -238,11 +239,11 @@ export async function createLogisticsWork(input: CreateWorkInput, attachments: r
 }
 
 export function useLogisticsCenter(params: LogisticsCenterQuery, enabled: boolean) {
-  return useQuery({ enabled, queryFn: () => fetchLogisticsCenter(params), queryKey: logisticsQueryKeys.center(params), refetchInterval: 10_000, refetchIntervalInBackground: false, retry: false });
+  return useQuery({ enabled, queryFn: () => fetchLogisticsCenter(params), queryKey: logisticsQueryKeys.center(params), refetchInterval: REALTIME_FALLBACK_REFETCH_MS, refetchIntervalInBackground: false, retry: false });
 }
 
 export function useLogisticsSummary(params: LogisticsCenterQuery, enabled: boolean) {
-  return useQuery({ enabled, queryFn: () => fetchLogisticsSummary(params), queryKey: logisticsQueryKeys.summary(params), refetchInterval: 10_000, refetchIntervalInBackground: false, retry: false });
+  return useQuery({ enabled, queryFn: () => fetchLogisticsSummary(params), queryKey: logisticsQueryKeys.summary(params), refetchInterval: REALTIME_FALLBACK_REFETCH_MS, refetchIntervalInBackground: false, retry: false });
 }
 
 export function useWorkLogistics(workOrderId: string | null, enabled: boolean) {

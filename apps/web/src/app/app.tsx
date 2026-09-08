@@ -6,12 +6,12 @@ import { createBrowserRouter, Navigate, RouterProvider, useLocation } from "reac
 import { AuthenticatedAppShell } from "./authenticated-app-shell.js";
 import { useAuthState } from "./auth-state.js";
 import { DashboardPage } from "./dashboard-page.js";
+import { isStylePreviewEnabled } from "./deployment-policy.js";
 import { ForbiddenPage, NotFoundPage } from "./error-pages.js";
 import { PublicOnlyRoute, AuthenticatedRoute, PermissionRoute } from "./route-guards.js";
 import { RouteLoading } from "./route-loading.js";
 import { deliveryReadPermissions, operationalStatusReadPermissions, scanPermissions, workReadPermissions } from "./route-registry.js";
 import { LoginPage } from "../features/auth/login-page.js";
-import { StylePreviewPage } from "../features/style-preview/style-preview-page.js";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,6 +23,14 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
     },
   },
+});
+const stylePreviewEnabled = isStylePreviewEnabled({
+  configuredValue: import.meta.env.VITE_STYLE_PREVIEW_ENABLED,
+  isDevelopment: import.meta.env.DEV,
+});
+const StylePreviewPage = lazy(async () => {
+  const module = await import("../features/style-preview/style-preview-page.js");
+  return { default: module.StylePreviewPage };
 });
 const ClinicsPage = lazy(async () => {
   const module = await import("../features/clinics/clinics-page.js");
@@ -138,7 +146,9 @@ function WorksEntryPage(): ReactNode {
 
 const router = createBrowserRouter([
   {
-    element: <StylePreviewPage />,
+    element: stylePreviewEnabled
+      ? <LazyRoute><StylePreviewPage /></LazyRoute>
+      : <Navigate replace to="/login" />,
     path: "/style-preview",
   },
   {

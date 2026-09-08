@@ -53,6 +53,7 @@ import { useUpdateLogisticsWorkActions } from "../logistics/logistics-api.js";
 import { displayWorkTypeSymbolOrName } from "../works/work-type-symbols.js";
 import { hasPermission } from "../users/users-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
+import { REALTIME_FALLBACK_REFETCH_MS } from "../../lib/realtime-config.js";
 import { useOperationalStatus } from "./status-api.js";
 import "./status-page.css";
 
@@ -396,11 +397,11 @@ export function StatusPage({ allowLogisticsRead = false, experimental = false, h
   const canEditOperationalFields = hasPermission(permissionsQuery.data, "logistics.delivery_marker.update")
     || hasPermission(permissionsQuery.data, "audit.read");
   const canReadOptions = canReadStatus;
-  const baseStatusQuery = useOperationalStatus(experimental ? { ...query, excludeDemo: true } : query, canReadStatus, { refetchIntervalMs: 5_000 });
+  const baseStatusQuery = useOperationalStatus(experimental ? { ...query, excludeDemo: true } : query, canReadStatus, { refetchIntervalMs: REALTIME_FALLBACK_REFETCH_MS });
   const transportStatusQuery = useOperationalStatus(
     { ...query, excludeDemo: true, transportOnly: true, ...(transportFilter === null || transportFilter === undefined ? {} : { transportHorizonDays: transportFilter }) },
     canReadStatus && experimental && transportFilter !== undefined,
-    { refetchIntervalMs: 5_000 },
+    { refetchIntervalMs: REALTIME_FALLBACK_REFETCH_MS },
   );
   const statusQuery = transportFilter !== undefined ? transportStatusQuery : baseStatusQuery;
   const clinicsQuery = useQuery({ enabled: canReadOptions, queryFn: fetchClinicOptions, queryKey: ["clinics", "options"], retry: false });
