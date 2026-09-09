@@ -281,6 +281,7 @@ export class TechnicianOperationsService {
       where: {
         ...(query.technicianId ? { technicianId: query.technicianId } : {}),
         ...(query.operationId ? { operationId: query.operationId } : {}),
+        operation: { isActive: true },
         ...(asOf
           ? {
               effectiveFrom: { lte: asOf },
@@ -504,6 +505,7 @@ export class TechnicianOperationsService {
       }),
       this.prisma.technicianPayment
         ? this.prisma.technicianPayment.findMany({
+            include: { createdBy: { select: { displayName: true } } },
             orderBy: { paidAt: "desc" },
             where: {
               paidAt: { gte: periodStart, lt: periodEnd },
@@ -518,6 +520,7 @@ export class TechnicianOperationsService {
       }),
       this.prisma.technicianPayment
         ? this.prisma.technicianPayment.findMany({
+            include: { createdBy: { select: { displayName: true } } },
             orderBy: { paidAt: "asc" },
             where: { ...(technicianId ? { technicianId } : {}) },
           })
@@ -879,8 +882,8 @@ export class TechnicianOperationsService {
   }
 }
 
-function toPaymentView(payment: Prisma.TechnicianPaymentGetPayload<object>): TechnicianPaymentView {
-  return { amountMinor: payment.amountMinor, createdAt: payment.createdAt.toISOString(), createdByUserId: payment.createdByUserId, currency: payment.currency, id: payment.id, notes: payment.notes, paidAt: payment.paidAt.toISOString(), technicianId: payment.technicianId };
+function toPaymentView(payment: Prisma.TechnicianPaymentGetPayload<object> & { readonly createdBy?: { readonly displayName: string } | null }): TechnicianPaymentView {
+  return { amountMinor: payment.amountMinor, createdAt: payment.createdAt.toISOString(), createdByDisplayName: payment.createdBy?.displayName ?? null, createdByUserId: payment.createdByUserId, currency: payment.currency, id: payment.id, notes: payment.notes, paidAt: payment.paidAt.toISOString(), technicianId: payment.technicianId };
 }
 
 function normalizeText(value: string): string {

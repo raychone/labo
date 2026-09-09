@@ -109,6 +109,16 @@ describe("TechnicianOperationsService", () => {
     expect(result.map((item) => item.rateMinor)).toEqual([3000, 4500]);
   });
 
+  it("lists rates only for active canonical operations while retaining historical rows in storage", async () => {
+    const findMany = vi.fn().mockResolvedValue([rate({ id: "canonical_rate", operationId: "technical_operation_design" })]);
+    const service = createService({ technicianOperationRate: { findMany } });
+
+    await expect(service.listRates({ technicianId: "tech_1" })).resolves.toHaveLength(1);
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ operation: { isActive: true }, technicianId: "tech_1", validUntil: null }),
+    }));
+  });
+
   it("creates a technician operation separately from work types and audits it", async () => {
     const auditCreate = vi.fn().mockResolvedValue({});
     const create = vi.fn().mockResolvedValue(operation({ code: "GLAZE", name: "Glazurare" }));
@@ -574,16 +584,17 @@ describe("TechnicianOperationsService", () => {
   });
 
   it("shows only payments from the selected earnings period", async () => {
-    const paymentFindMany = vi.fn().mockResolvedValue([]);
+    const paymentFindMany = vi.fn().mockResolvedValue([{ amountMinor: 1200, createdAt: new Date("2026-09-02T08:00:00.000Z"), createdBy: { displayName: "Demo Manager" }, createdByUserId: "manager_1", currency: "RON", id: "payment_1", notes: "Achitare", paidAt: new Date("2026-09-02T08:00:00.000Z"), technicianId: "tech_1" }]);
     const service = createService({
       technicianPerformedOperation: { findMany: vi.fn().mockResolvedValue([]) },
       technicianPayment: { findMany: paymentFindMany },
       user: { findUnique: vi.fn().mockResolvedValue({ displayName: "Tehnician A", id: "tech_1" }) },
     });
 
-    await service.listManagerEarnings({ month: "2026-09", period: "MONTH", technicianId: "tech_1" });
+    const result = await service.listManagerEarnings({ month: "2026-09", period: "MONTH", technicianId: "tech_1" });
 
     expect(paymentFindMany).toHaveBeenCalledWith({
+      include: { createdBy: { select: { displayName: true } } },
       orderBy: { paidAt: "desc" },
       where: {
         paidAt: {
@@ -593,6 +604,7 @@ describe("TechnicianOperationsService", () => {
         technicianId: "tech_1",
       },
     });
+    expect(result.payments).toEqual([expect.objectContaining({ createdByDisplayName: "Demo Manager", id: "payment_1" })]);
   });
 
   it("separates period activity from cumulative balance and preserves overpayment", () => {

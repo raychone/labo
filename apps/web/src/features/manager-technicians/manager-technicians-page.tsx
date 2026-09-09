@@ -1,298 +1,231 @@
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, DateInput, ErrorState, LoadingState, Modal, NumberInput, Select, Textarea, TextInput, useToast } from "@dental-lab/ui";
-import { decimalStringToMinor, formatMoneyMinor, type TechnicianEarningsParams, type TechnicianOperationInput } from "@dental-lab/shared";
+import { decimalStringToMinor, formatMoneyMinor, type TechnicianEarningsParams, type TechnicianEarningsSummary, type TechnicianOperationInput } from "@dental-lab/shared";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 
-import { fetchPermissions } from "../auth/auth-api.js";
-import {
-  useManagerTechnicianEarnings,
-  useCreateTechnicianPayment,
-  useCreateTechnicianOperation,
-  useSetTechnicianRate,
-  useTechnicianOperations,
-  useTechnicianRates,
-  useUpdateTechnicianOperation,
-} from "../pricing/technician-operations-api.js";
-import { fetchUsers, hasPermission } from "../users/users-api.js";
-import { EarningsContent, EarningsFilters } from "../technician-earnings/technician-earnings-page.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
-import { NextStep } from "../../components/next-step.js";
+import { fetchPermissions } from "../auth/auth-api.js";
+import { useCreateTechnicianOperation, useCreateTechnicianPayment, useManagerTechnicianEarnings, useSetTechnicianRate, useTechnicianOperations, useTechnicianRates, useUpdateTechnicianOperation } from "../pricing/technician-operations-api.js";
+import { EarningsFilters } from "../technician-earnings/technician-earnings-page.js";
+import { fetchUsers, hasPermission } from "../users/users-api.js";
 import "./manager-technicians-page.css";
 
-type EarningsPeriod = "DAY" | "MONTH" | "YEAR";
+type Period = "DAY" | "MONTH" | "YEAR";
+type Tab = "RATES" | "VALUE" | "PAYMENTS" | "HISTORY";
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function currentMonth(): string {
-  return new Date().toISOString().slice(0, 7);
-}
+const today = () => new Date().toISOString().slice(0, 10);
+const month = () => new Date().toISOString().slice(0, 7);
+const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "T";
+const dateTime = (value: string) => new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+const dateOnly = (value: string) => new Intl.DateTimeFormat("ro-RO", { dateStyle: "long" }).format(new Date(value));
 
 export function ManagerTechniciansPage(): ReactNode {
   const toast = useToast();
-  const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
-  const canReadAllEarnings = hasPermission(permissionsQuery.data, "technician.earnings.read_all");
-  const canReadRates = hasPermission(permissionsQuery.data, "technician.rates.read");
-  const canManageRates = hasPermission(permissionsQuery.data, "technician.rates.manage");
-  const canCreatePayments = hasPermission(permissionsQuery.data, "technician.payments.create");
-  const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>("");
-  const [includeRemoved, setIncludeRemoved] = useState(false);
-  const [period, setPeriod] = useState<EarningsPeriod>("DAY");
+  const permissions = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
+  const canEarnings = hasPermission(permissions.data, "technician.earnings.read_all");
+  const canRates = hasPermission(permissions.data, "technician.rates.read");
+  const canManageRates = hasPermission(permissions.data, "technician.rates.manage");
+  const canPay = hasPermission(permissions.data, "technician.payments.create");
+  const [technicianId, setTechnicianId] = useState("");
+  const [search, setSearch] = useState("");
+  const [tab, setTab] = useState<Tab>("VALUE");
+  const [period, setPeriod] = useState<Period>("MONTH");
   const [date, setDate] = useState(today());
-  const [month, setMonth] = useState(currentMonth());
-  const [operationId, setOperationId] = useState("");
-  const [rateDecimal, setRateDecimal] = useState("");
-  const [effectiveFrom, setEffectiveFrom] = useState(today());
-  const [paymentDecimal, setPaymentDecimal] = useState("");
-  const [paymentNotes, setPaymentNotes] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState(month());
+  const [includeRemoved, setIncludeRemoved] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentDate, setPaymentDate] = useState(today());
-  const [paymentCurrency, setPaymentCurrency] = useState("RON");
+  const [paymentNotes, setPaymentNotes] = useState("");
+  const [rateOpen, setRateOpen] = useState(false);
+  const [operationId, setOperationId] = useState("");
+  const [rateAmount, setRateAmount] = useState("");
+  const [effectiveFrom, setEffectiveFrom] = useState(today());
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [operationCode, setOperationCode] = useState("");
   const [operationName, setOperationName] = useState("");
   const [operationDescription, setOperationDescription] = useState("");
-  const [operationPriceDecimal, setOperationPriceDecimal] = useState("");
-  const [editingOperationId, setEditingOperationId] = useState<string | null>(null);
-  const [isOperationModalOpen, setIsOperationModalOpen] = useState(false);
   const [operationSearch, setOperationSearch] = useState("");
+
   const techniciansQuery = useQuery({
-    enabled: canReadAllEarnings || canReadRates,
-    queryFn: () => fetchUsers({ isActive: true, page: 1, pageSize: 100, roleKey: "TEHNICIAN", search: undefined, sortBy: "displayName", sortDirection: "asc" }),
-    queryKey: ["users", "technicians", "active"],
+    enabled: canEarnings || canRates,
+    queryFn: () => fetchUsers({ isActive: undefined, page: 1, pageSize: 100, roleKey: "TEHNICIAN", search: undefined, sortBy: "displayName", sortDirection: "asc" }),
+    queryKey: ["users", "technicians", "all"],
     retry: false,
   });
-  const operationsQuery = useTechnicianOperations({ isActive: true, page: 1, pageSize: 100, sortBy: "name", sortDirection: "asc" }, canReadRates);
-  const ratesQuery = useTechnicianRates(selectedTechnicianId || undefined, canReadRates && selectedTechnicianId !== "");
-  const earningsParams = useMemo<TechnicianEarningsParams>(() => ({
+  const technicians = techniciansQuery.data?.items ?? [];
+  const selected = technicians.find((item) => item.id === technicianId) ?? null;
+  const matchingTechnicians = technicians.filter((item) => `${item.displayName} ${item.email}`.toLocaleLowerCase("ro-RO").includes(search.trim().toLocaleLowerCase("ro-RO")));
+
+  useEffect(() => {
+    if (!technicianId && technicians.length) setTechnicianId(technicians[0]!.id);
+  }, [technicianId, technicians]);
+
+  const params = useMemo<TechnicianEarningsParams>(() => ({
     date: period === "DAY" ? date : undefined,
-    month: period === "MONTH" ? month : undefined,
-    period,
-    technicianId: selectedTechnicianId || undefined,
     includeRemoved: includeRemoved || undefined,
-  }), [date, includeRemoved, month, period, selectedTechnicianId]);
-  const earningsQuery = useManagerTechnicianEarnings(earningsParams, canReadAllEarnings);
-  const setRateMutation = useSetTechnicianRate();
+    month: period === "MONTH" ? selectedMonth : period === "YEAR" ? `${selectedMonth.slice(0, 4)}-01` : undefined,
+    period,
+    technicianId: technicianId || undefined,
+  }), [date, includeRemoved, period, selectedMonth, technicianId]);
+  const earnings = useManagerTechnicianEarnings(params, canEarnings && !!technicianId);
+  const rates = useTechnicianRates(technicianId || undefined, canRates && !!technicianId);
+  const operations = useTechnicianOperations({ isActive: true, page: 1, pageSize: 100, sortBy: "name", sortDirection: "asc" }, canRates);
   const paymentMutation = useCreateTechnicianPayment();
-  const createOperationMutation = useCreateTechnicianOperation();
-  const updateOperationMutation = useUpdateTechnicianOperation();
+  const rateMutation = useSetTechnicianRate();
+  const createOperation = useCreateTechnicianOperation();
+  const updateOperation = useUpdateTechnicianOperation();
+  const matchingOperations = (operations.data?.items ?? []).filter((item) => `${item.name} ${item.description ?? ""}`.toLocaleLowerCase("ro-RO").includes(operationSearch.trim().toLocaleLowerCase("ro-RO")));
+  const fail = (title: string) => (error: unknown) => toast.showToast({ message: getErrorMessage(error), title, variant: "error" });
 
-  function submitRate(event: FormEvent<HTMLFormElement>): void {
+  function savePayment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const parsedRate = decimalStringToMinor(rateDecimal);
-    if (!parsedRate.ok) {
-      toast.showToast({ message: "Folosește o sumă cu maximum 2 zecimale.", title: "Rata nu a fost salvată", variant: "error" });
+    const parsed = decimalStringToMinor(paymentAmount);
+    if (!parsed.ok || parsed.value <= 0 || !technicianId) {
+      toast.showToast({ message: "Introdu o sumă pozitivă cu maximum 2 zecimale.", title: "Plata nu a fost salvată", variant: "error" });
       return;
     }
-    if (!selectedTechnicianId || !operationId) {
-      toast.showToast({ message: "Alege tehnicianul și manopera.", title: "Rata nu a fost salvată", variant: "error" });
-      return;
-    }
-
-    setRateMutation.mutate({
-      currency: "RON",
-      ...(effectiveFrom ? { effectiveFrom: `${effectiveFrom}T00:00:00.000Z` } : {}),
-      operationId,
-      rateMinor: parsedRate.value,
-      technicianId: selectedTechnicianId,
-    }, {
-      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Rata nu a fost salvată", variant: "error" }),
+    paymentMutation.mutate({ amountMinor: parsed.value, currency: "RON", notes: paymentNotes.trim() || null, paidAt: `${paymentDate}T12:00:00.000Z`, technicianId }, {
+      onError: fail("Plata nu a fost salvată"),
       onSuccess: () => {
-        setRateDecimal("");
-        toast.showToast({ message: "Rata viitoare a fost salvată.", variant: "success" });
+        setPaymentOpen(false);
+        toast.showToast({ message: "Plata a fost înregistrată.", variant: "success" });
       },
     });
   }
 
-  function submitPayment(event: FormEvent<HTMLFormElement>): void {
+  function saveRate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const parsed = decimalStringToMinor(paymentDecimal);
-    if (!selectedTechnicianId || !parsed.ok || parsed.value <= 0) {
-      toast.showToast({ message: "Alege tehnicianul și introdu o sumă validă.", title: "Plata nu a fost salvată", variant: "error" });
+    const parsed = decimalStringToMinor(rateAmount);
+    if (!parsed.ok || parsed.value < 0 || !operationId || !technicianId) {
+      toast.showToast({ message: "Alege manopera și introdu o rată validă.", title: "Rata nu a fost salvată", variant: "error" });
       return;
     }
-    paymentMutation.mutate({ amountMinor: parsed.value, currency: paymentCurrency, notes: paymentNotes || null, ...(paymentDate ? { paidAt: `${paymentDate}T12:00:00.000Z` } : {}), technicianId: selectedTechnicianId }, {
-      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Plata nu a fost salvată", variant: "error" }),
-      onSuccess: () => { setPaymentDecimal(""); setPaymentNotes(""); toast.showToast({ message: "Plata tehnicianului a fost înregistrată.", variant: "success" }); },
+    rateMutation.mutate({ currency: "RON", effectiveFrom: `${effectiveFrom}T00:00:00.000Z`, operationId, rateMinor: parsed.value, technicianId }, {
+      onError: fail("Rata nu a fost salvată"),
+      onSuccess: () => {
+        setRateOpen(false);
+        toast.showToast({ message: "Rata viitoare a fost salvată. Valorile deja realizate rămân neschimbate.", variant: "success" });
+      },
     });
   }
 
-  function resetOperationForm(): void {
-    setEditingOperationId(null);
+  function resetOperation() {
+    setEditingId(null);
     setOperationCode("");
     setOperationName("");
     setOperationDescription("");
-    setOperationPriceDecimal("");
   }
 
-  function submitOperation(event: FormEvent<HTMLFormElement>): void {
+  function editOperation(item?: { id: string; code: string; name: string; description: string | null }) {
+    setEditingId(item?.id ?? "new");
+    setOperationCode(item?.code ?? "");
+    setOperationName(item?.name ?? "");
+    setOperationDescription(item?.description ?? "");
+  }
+
+  function saveOperation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const input: TechnicianOperationInput = { category: "Altele", code: operationCode.trim(), description: operationDescription.trim() || null, name: operationName.trim() };
-    if (input.code.length === 0 || input.name.length < 2) {
+    if (!input.code || input.name.length < 2) {
       toast.showToast({ message: "Completează codul și denumirea manoperei.", title: "Manopera nu a fost salvată", variant: "error" });
       return;
     }
-    const parsedPrice = operationPriceDecimal.trim() === "" ? null : decimalStringToMinor(operationPriceDecimal);
-    if (parsedPrice && !parsedPrice.ok) {
-      toast.showToast({ message: "Prețul trebuie să fie o sumă validă cu maximum 2 zecimale.", title: "Manopera nu a fost salvată", variant: "error" });
-      return;
-    }
     const callbacks = {
-      onError: (error: unknown) => toast.showToast({ message: getErrorMessage(error), title: "Manopera nu a fost salvată", variant: "error" }),
-      onSuccess: (operation: { id: string }) => {
-        if (parsedPrice?.ok && selectedTechnicianId) {
-          setRateMutation.mutate({ currency: "RON", effectiveFrom: `${effectiveFrom}T00:00:00.000Z`, operationId: operation.id, rateMinor: parsedPrice.value, technicianId: selectedTechnicianId }, {
-            onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Manopera a fost salvată, dar prețul nu a fost salvat", variant: "error" }),
-            onSuccess: () => toast.showToast({ message: "Manopera și prețul tehnicianului au fost salvate.", variant: "success" }),
-          });
-        } else {
-          toast.showToast({ message: editingOperationId ? "Manopera a fost modificată." : "Manopera a fost adăugată.", variant: "success" });
-        }
-        resetOperationForm();
-        setIsOperationModalOpen(false);
+      onError: fail("Manopera nu a fost salvată"),
+      onSuccess: () => {
+        resetOperation();
+        toast.showToast({ message: "Manopera a fost salvată.", variant: "success" });
       },
     };
-    if (editingOperationId) {
-      updateOperationMutation.mutate({ id: editingOperationId, input }, callbacks);
-    } else {
-      createOperationMutation.mutate(input, callbacks);
-    }
+    if (editingId && editingId !== "new") updateOperation.mutate({ id: editingId, input }, callbacks);
+    else createOperation.mutate(input, callbacks);
   }
 
-  if (permissionsQuery.isLoading) {
-    return <PageFrame><LoadingState text="Se încarcă tehnicienii" /></PageFrame>;
-  }
-
-  if (!canReadAllEarnings) {
-    return <PageFrame><ErrorState title="Acces refuzat" description="Contul curent nu are permisiunea technician.earnings.read_all." /></PageFrame>;
-  }
-
-  const technicians = techniciansQuery.data?.items ?? [];
-  const operations = operationsQuery.data?.items ?? [];
-  const visibleOperations = operations.filter((operation) => `${operation.code} ${operation.name} ${operation.description ?? ""}`.toLocaleLowerCase().includes(operationSearch.trim().toLocaleLowerCase()));
+  if (permissions.isLoading) return <Frame><LoadingState text="Se încarcă tehnicienii" /></Frame>;
+  if (!canEarnings) return <Frame><ErrorState description="Contul curent nu are acces la valoarea realizată de tehnicieni." title="Acces refuzat" /></Frame>;
 
   return (
     <main className="manager-technicians">
-      <section className="dl-container manager-technicians__layout" aria-labelledby="manager-technicians-title">
+      <section className="dl-container manager-technicians__layout">
         <header className="manager-technicians__header">
           <div>
-            <h1 id="manager-technicians-title">Tehnicieni</h1>
-            <p>Câștiguri realizate, rate pe manoperă și achitări către tehnicieni.</p>
+            <p className="manager-technicians__eyebrow">Management echipă</p>
+            <h1>Tehnicieni</h1>
+            <p>Administrează ratele, valoarea realizată și plățile echipei tehnice.</p>
           </div>
-          {canManageRates ? <Button onClick={() => { resetOperationForm(); setIsOperationModalOpen(true); }} type="button">Adaugă manoperă</Button> : null}
+          {canManageRates ? <Button onClick={() => setCatalogOpen(true)} type="button" variant="outline">Gestionează catalogul</Button> : null}
         </header>
-
-        <NextStep description={selectedTechnicianId ? "Verifică valoarea realizată, apoi actualizează ratele viitoare sau înregistrează achitarea." : "Selectează un tehnician pentru a vedea valoarea, ratele și achitările relevante."} />
-
-        <nav className="manager-technicians__workspace-nav" aria-label="Zone configurare tehnicieni">
-          <a href="#valoare">Valoare</a>
-          <a href="#catalog-manopere">Catalog manopere</a>
-          <a href="#rate-plati">Rate și plăți</a>
-        </nav>
-
-        <Card>
-          <CardContent className="manager-technicians__filters">
-            <Select
-              label="Tehnician"
-              onChange={(event) => setSelectedTechnicianId(event.target.value)}
-              options={[{ label: "Toți tehnicienii", value: "" }, ...technicians.map((technician) => ({ label: technician.displayName, value: technician.id }))]}
-              value={selectedTechnicianId}
-            />
-            <label className="manager-technicians__muted"><input checked={includeRemoved} onChange={(event) => setIncludeRemoved(event.target.checked)} type="checkbox" /> Include manopere eliminate</label>
-          </CardContent>
-        </Card>
-
-        <EarningsFilters date={date} month={month} onDateChange={setDate} onMonthChange={setMonth} onPeriodChange={(value) => setPeriod(value)} period={period} />
-        <section id="valoare" aria-labelledby="valoare-title"><h2 className="manager-technicians__section-title" id="valoare-title">Valoare realizată</h2><EarningsContent data={earningsQuery.data} error={earningsQuery.isError ? getErrorMessage(earningsQuery.error) : undefined} isLoading={earningsQuery.isLoading} paymentPerspective="manager" /></section>
-
-        {canReadRates ? (
-          <Card id="catalog-manopere">
-            <CardHeader>
-              <CardTitle>Catalog manopere</CardTitle>
-              <CardDescription>Manoperele configurate și cele adăugate de Manager pot primi rate diferite pentru fiecare tehnician.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <TextInput label="Caută manoperă" onChange={(event) => setOperationSearch(event.target.value)} placeholder="Cod, denumire sau descriere" value={operationSearch} />
-              <div className="manager-technicians__operation-list">
-                {visibleOperations.map((operation) => (
-                  <div className="manager-technicians__operation" key={operation.id}>
-                    <div><strong>{operation.name}</strong><span className="manager-technicians__operation-code">Cod intern: {operation.code}</span>{operation.description ? <span>{operation.description}</span> : null}</div>
-                    <Button disabled={!canManageRates} onClick={() => { setEditingOperationId(operation.id); setOperationCode(operation.code); setOperationName(operation.name); setOperationDescription(operation.description ?? ""); setOperationPriceDecimal(""); setIsOperationModalOpen(true); }} size="small" type="button" variant="outline">Editează</Button>
-                  </div>
-                ))}
-                {visibleOperations.length === 0 ? <p className="manager-technicians__muted">Nu există manopere pentru această căutare.</p> : null}
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        <Modal description="Completează catalogul și, opțional, prețul pentru tehnicianul selectat." isOpen={isOperationModalOpen} onOpenChange={(open) => { if (!open) resetOperationForm(); setIsOperationModalOpen(open); }} size="lg" title={editingOperationId ? "Editează manoperă" : "Adaugă manoperă"}>
-          <form className="manager-technicians__stack" onSubmit={submitOperation}>
-            <div className="manager-technicians__rate-form">
-              <TextInput label="Cod" onChange={(event) => setOperationCode(event.target.value)} value={operationCode} />
-              <TextInput label="Denumire" onChange={(event) => setOperationName(event.target.value)} value={operationName} />
+        <div className="manager-technicians__workspace">
+          <aside className="manager-technicians__master">
+            <div className="manager-technicians__master-heading"><strong>Tehnicieni</strong><span>{technicians.length} înregistrări</span></div>
+            <TextInput label="Caută tehnician" onChange={(event) => setSearch(event.target.value)} placeholder="Nume sau e-mail" type="search" value={search} />
+            <div className="manager-technicians__technician-list">
+              {matchingTechnicians.map((item) => <button aria-pressed={technicianId === item.id} className={`manager-technicians__technician${technicianId === item.id ? " manager-technicians__technician--selected" : ""}`} key={item.id} onClick={() => setTechnicianId(item.id)} type="button"><span className="manager-technicians__avatar">{initials(item.displayName)}</span><span><strong>{item.displayName}</strong><small>{item.isActive ? "Activ" : "Inactiv"}</small></span></button>)}
+              {!techniciansQuery.isLoading && !matchingTechnicians.length ? <Empty text="Nu există tehnicieni potriviți." /> : null}
             </div>
-            <Textarea label="Descriere" onChange={(event) => setOperationDescription(event.target.value)} rows={3} value={operationDescription} />
-            <NumberInput label="Preț / câștig RON" onChange={(event) => setOperationPriceDecimal(event.target.value)} value={operationPriceDecimal} />
-            <p className="manager-technicians__muted">Prețul se salvează pentru tehnicianul selectat: {selectedTechnicianId ? technicians.find((technician) => technician.id === selectedTechnicianId)?.displayName ?? "tehnician" : "alege un tehnician din selectorul de mai sus"}.</p>
-            <div className="manager-technicians__form-actions">
-              <Button disabled={createOperationMutation.isPending || updateOperationMutation.isPending || setRateMutation.isPending} type="submit">{editingOperationId ? "Salvează modificarea" : "Adaugă manoperă"}</Button>
-              <Button onClick={() => { resetOperationForm(); setIsOperationModalOpen(false); }} type="button" variant="outline">Anulează</Button>
-            </div>
-          </form>
+          </aside>
+          <section className="manager-technicians__detail">
+            {!selected ? <div className="manager-technicians__empty-selection"><span>T</span><h2>Selectează un tehnician</h2><p>Ratele, valoarea realizată, plățile și istoricul apar aici.</p></div> : <>
+              <header className="manager-technicians__detail-header"><span className="manager-technicians__avatar manager-technicians__avatar--large">{initials(selected.displayName)}</span><div><div className="manager-technicians__detail-title"><h2>{selected.displayName}</h2><b className={selected.isActive ? "manager-technicians__status manager-technicians__status--active" : "manager-technicians__status"}>{selected.isActive ? "Activ" : "Inactiv"}</b></div><p>{selected.email}</p></div></header>
+              <nav aria-label="Secțiuni tehnician" className="manager-technicians__tabs" role="tablist">{([{ id: "RATES", label: "Rate manopere" }, { id: "VALUE", label: "Valoare" }, { id: "PAYMENTS", label: "Plăți" }, { id: "HISTORY", label: "Istoric" }] as const).map((item) => <button aria-selected={tab === item.id} key={item.id} onClick={() => setTab(item.id)} role="tab" type="button">{item.label}</button>)}</nav>
+              {tab !== "RATES" ? <div className="manager-technicians__period"><EarningsFilters date={date} month={selectedMonth} onDateChange={setDate} onMonthChange={setSelectedMonth} onPeriodChange={setPeriod} period={period} />{tab !== "PAYMENTS" ? <label className="manager-technicians__removed"><input checked={includeRemoved} onChange={(event) => setIncludeRemoved(event.target.checked)} type="checkbox" /> Include manopere eliminate</label> : null}</div> : null}
+              {tab === "RATES" ? <Rates data={rates.data ?? []} error={rates.isError ? getErrorMessage(rates.error) : undefined} loading={rates.isLoading} manage={canManageRates} onAdd={() => { setOperationId(""); setRateAmount(""); setEffectiveFrom(today()); setRateOpen(true); }} onEdit={(rate) => { setOperationId(rate.operation.id); setRateAmount((rate.rateMinor / 100).toFixed(2)); setEffectiveFrom(today()); setRateOpen(true); }} /> : null}
+              {tab === "VALUE" ? <Value data={earnings.data} error={earnings.isError ? getErrorMessage(earnings.error) : undefined} loading={earnings.isLoading} /> : null}
+              {tab === "PAYMENTS" ? <Payments canPay={canPay} data={earnings.data} error={earnings.isError ? getErrorMessage(earnings.error) : undefined} loading={earnings.isLoading} open={() => { setPaymentAmount(""); setPaymentNotes(""); setPaymentDate(today()); setPaymentOpen(true); }} /> : null}
+              {tab === "HISTORY" ? <History data={earnings.data} error={earnings.isError ? getErrorMessage(earnings.error) : undefined} loading={earnings.isLoading} /> : null}
+            </>}
+          </section>
+        </div>
+        <Modal isOpen={catalogOpen} onOpenChange={setCatalogOpen} size="lg" title="Catalog manopere">
+          {editingId ? <form className="manager-technicians__modal-form" onSubmit={saveOperation}><TextInput label="Cod manoperă" onChange={(event) => setOperationCode(event.target.value)} value={operationCode} /><TextInput label="Denumire" onChange={(event) => setOperationName(event.target.value)} value={operationName} /><Textarea label="Descriere" onChange={(event) => setOperationDescription(event.target.value)} rows={3} value={operationDescription} /><Actions cancel={resetOperation} disabled={createOperation.isPending || updateOperation.isPending} submit="Salvează" /></form> : <><div className="manager-technicians__catalog-toolbar"><TextInput label="Caută manoperă" onChange={(event) => setOperationSearch(event.target.value)} placeholder="Denumire sau descriere" type="search" value={operationSearch} />{canManageRates ? <Button onClick={() => editOperation()} type="button">Adaugă manoperă</Button> : null}</div><div className="manager-technicians__catalog-list">{matchingOperations.map((item) => <div key={item.id}><span><strong>{item.name}</strong><small>{item.category}{item.description ? ` · ${item.description}` : ""}</small></span>{canManageRates ? <Button onClick={() => editOperation(item)} size="small" type="button" variant="outline">Editează</Button> : null}</div>)}</div></>}
         </Modal>
-
-        {canReadRates ? (
-          <Card id="rate-plati">
-            <CardHeader>
-              <CardTitle>Rate viitoare</CardTitle>
-              <CardDescription>Ratele se folosesc pentru manopere viitoare; câștigurile istorice rămân snapshots.</CardDescription>
-            </CardHeader>
-            <CardContent className="manager-technicians__stack">
-              <form className="manager-technicians__rate-form" onSubmit={submitRate}>
-                <Select
-                  label="Manoperă"
-                  onChange={(event) => setOperationId(event.target.value)}
-                  options={operations.map((operation) => ({ label: `${operation.code} · ${operation.name}`, value: operation.id }))}
-                  placeholder="Alege manopera"
-                  value={operationId}
-                />
-                <NumberInput label="Câștig RON" onChange={(event) => setRateDecimal(event.target.value)} value={rateDecimal} />
-                <DateInput label="Valabil de la" onChange={(event) => setEffectiveFrom(event.target.value)} value={effectiveFrom} />
-                <Button disabled={!canManageRates || setRateMutation.isPending} type="submit">Salvează rata</Button>
-              </form>
-              {ratesQuery.isError ? <ErrorState title="Ratele nu pot fi încărcate" description={getErrorMessage(ratesQuery.error)} /> : null}
-              <div className="manager-technicians__rates" aria-label="Rate curente">
-                {(ratesQuery.data ?? []).map((rate) => (
-                  <div className="manager-technicians__rate" key={rate.id}>
-                    <span>{rate.operation.code} · {rate.operation.name}</span>
-                    <strong>{formatMoneyMinor(rate.rateMinor, rate.currency)}</strong>
-                    <span>de la {rate.effectiveFrom.slice(0, 10)}</span>
-                  </div>
-                ))}
-                {selectedTechnicianId && !ratesQuery.isLoading && (ratesQuery.data ?? []).length === 0 ? <p className="manager-technicians__muted">Nu există rate curente pentru tehnicianul selectat.</p> : null}
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-        {selectedTechnicianId ? (
-          <Card>
-            <CardHeader><CardTitle>Înregistrează achitarea</CardTitle><CardDescription>Soldul cumulativ și valuta sunt verificate server-side la data plății.</CardDescription></CardHeader>
-            <CardContent>
-              <form className="manager-technicians__rate-form" onSubmit={submitPayment}>
-                <Select label="Valută" onChange={(event) => setPaymentCurrency(event.target.value)} options={[...new Set((earningsQuery.data?.currencyTotals ?? []).map((total) => total.currency)), "RON"].map((currency) => ({ label: currency, value: currency }))} value={paymentCurrency} />
-                <NumberInput label={`Sumă ${paymentCurrency}`} onChange={(event) => setPaymentDecimal(event.target.value)} value={paymentDecimal} />
-                <DateInput label="Data plății" onChange={(event) => setPaymentDate(event.target.value)} value={paymentDate} />
-                <label className="manager-technicians__field"><span>Notă</span><input onChange={(event) => setPaymentNotes(event.target.value)} value={paymentNotes} /></label>
-                <Button disabled={!canCreatePayments || paymentMutation.isPending} type="submit">Înregistrează plata</Button>
-              </form>
-            </CardContent>
-          </Card>
-        ) : null}
+        <Modal description="Plata este păstrată în istoric. Soldul este verificat la data plății." isOpen={paymentOpen} onOpenChange={setPaymentOpen} title="Înregistrează plată">
+          <form className="manager-technicians__modal-form" onSubmit={savePayment}><p>Tehnician: <strong>{selected?.displayName}</strong></p><div className="manager-technicians__modal-grid"><NumberInput label="Sumă (RON)" onChange={(event) => setPaymentAmount(event.target.value)} value={paymentAmount} /><DateInput label="Data plății" onChange={(event) => setPaymentDate(event.target.value)} value={paymentDate} /></div><Textarea label="Notă" onChange={(event) => setPaymentNotes(event.target.value)} placeholder="Opțional" rows={3} value={paymentNotes} /><Actions cancel={() => setPaymentOpen(false)} disabled={paymentMutation.isPending} submit="Înregistrează plata" /></form>
+        </Modal>
+        <Modal description="O rată nouă se aplică doar manoperelor viitoare. Valorile deja realizate nu se modifică." isOpen={rateOpen} onOpenChange={setRateOpen} title="Configurează rată">
+          <form className="manager-technicians__modal-form" onSubmit={saveRate}><Select label="Manoperă" onChange={(event) => setOperationId(event.target.value)} options={(operations.data?.items ?? []).map((item) => ({ label: `${item.name} · ${item.category}`, value: item.id }))} placeholder="Alege manopera" value={operationId} /><div className="manager-technicians__modal-grid"><NumberInput label="Câștig (RON)" onChange={(event) => setRateAmount(event.target.value)} value={rateAmount} /><DateInput label="Valabil de la" onChange={(event) => setEffectiveFrom(event.target.value)} value={effectiveFrom} /></div><Actions cancel={() => setRateOpen(false)} disabled={rateMutation.isPending || !canManageRates} submit="Salvează rata" /></form>
+        </Modal>
       </section>
     </main>
   );
 }
 
-function PageFrame({ children }: { readonly children: ReactNode }): ReactNode {
-  return <main className="manager-technicians"><section className="dl-container">{children}</section></main>;
+function Summary({ data }: { data: TechnicianEarningsSummary }) {
+  return <div className="manager-technicians__summary">{data.currencyTotals.map((item) => <div className="manager-technicians__currency-summary" key={item.currency}><div><span>Valoare realizată în perioadă</span><strong>{formatMoneyMinor(item.periodEarnedMinor, item.currency)}</strong></div><div><span>Plătit în perioadă</span><strong>{formatMoneyMinor(item.periodPaidMinor, item.currency)}</strong></div><div><span>Sold total de plată</span><strong className={item.balanceMinor < 0 ? "manager-technicians__negative" : ""}>{formatMoneyMinor(item.balanceMinor, item.currency)}</strong></div></div>)}</div>;
 }
+
+function Value({ data, error, loading }: { data: TechnicianEarningsSummary | undefined; error: string | undefined; loading: boolean }) {
+  if (loading) return <LoadingState text="Se încarcă valoarea realizată" />;
+  if (error) return <ErrorState description={error} title="Valoarea nu poate fi încărcată" />;
+  if (!data) return null;
+  const rows = data.works.flatMap((work) => work.operations.filter((operation) => !operation.removedAt).map((operation) => ({ ...operation, patient: work.patientName, work: work.workCode })));
+  return <div className="manager-technicians__tab-content"><Summary data={data} /><Card><CardHeader><CardTitle>Valoare realizată</CardTitle><CardDescription>Valorile sunt calculate folosind tariful valabil la data efectuării.</CardDescription></CardHeader><CardContent>{!rows.length ? <Empty text="Nu există manopere realizate în perioada selectată." /> : <Table headers={["Lucrare", "Manoperă", "Data", "Valoare"]} rows={rows.map((row) => [<><strong>{row.work}</strong><small>{row.patient}</small></>, row.operation.name, dateTime(row.performedAt), <strong>{formatMoneyMinor(row.earningMinor, row.currency)}</strong>])} />}</CardContent></Card></div>;
+}
+
+function Payments({ canPay, data, error, loading, open }: { canPay: boolean; data: TechnicianEarningsSummary | undefined; error: string | undefined; loading: boolean; open: () => void }) {
+  if (loading) return <LoadingState text="Se încarcă plățile" />;
+  if (error) return <ErrorState description={error} title="Plățile nu pot fi încărcate" />;
+  if (!data) return null;
+  return <div className="manager-technicians__tab-content"><div className="manager-technicians__tab-toolbar"><div><h3>Situația plăților</h3><p>Vezi plățile înregistrate și soldul rămas de achitat.</p></div>{canPay ? <Button onClick={open} type="button">Înregistrează plată</Button> : null}</div><Summary data={data} /><Card><CardContent>{!data.payments.length ? <Empty text="Nu există plăți înregistrate în perioada selectată." /> : <Table headers={["Data", "Sumă", "Monedă", "Notă", "Înregistrat de"]} rows={data.payments.map((item) => [dateTime(item.paidAt), <strong>{formatMoneyMinor(item.amountMinor, item.currency)}</strong>, item.currency, item.notes || "—", item.createdByDisplayName ?? "Utilizator autorizat"])} />}</CardContent></Card></div>;
+}
+
+function History({ data, error, loading }: { data: TechnicianEarningsSummary | undefined; error: string | undefined; loading: boolean }) {
+  if (loading) return <LoadingState text="Se încarcă istoricul" />;
+  if (error) return <ErrorState description={error} title="Istoricul nu poate fi încărcat" />;
+  if (!data) return null;
+  const entries = [...data.works.flatMap((work) => work.operations.filter((operation) => !operation.removedAt).map((operation) => ({ amount: operation.earningMinor, at: operation.performedAt, currency: operation.currency, detail: `${work.workCode} · ${operation.operation.name}`, id: operation.performedOperationId, kind: "earning" as const }))), ...data.payments.map((payment) => ({ amount: payment.amountMinor, at: payment.paidAt, currency: payment.currency, detail: payment.notes || `Înregistrată de ${payment.createdByDisplayName ?? "utilizator autorizat"}`, id: payment.id, kind: "payment" as const }))].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  const groups = new Map<string, typeof entries>();
+  entries.forEach((entry) => { const key = entry.at.slice(0, 10); groups.set(key, [...(groups.get(key) ?? []), entry]); });
+  return <Card><CardHeader><CardTitle>Istoric financiar</CardTitle><CardDescription>Valori și plăți reale, în ordine cronologică.</CardDescription></CardHeader><CardContent>{!entries.length ? <Empty text="Nu există evenimente financiare în perioada selectată." /> : <div className="manager-technicians__timeline">{[...groups].map(([day, values]) => <section key={day}><h3>{dateOnly(`${day}T12:00:00.000Z`)}</h3>{values.map((entry) => <div className={`manager-technicians__timeline-event manager-technicians__timeline-event--${entry.kind}`} key={`${entry.kind}-${entry.id}`}><span /><div><strong>{entry.kind === "earning" ? "Valoare realizată" : "Plată"}</strong><p>{entry.detail}</p></div><b>{entry.kind === "earning" ? "+" : "−"}{formatMoneyMinor(entry.amount, entry.currency)}</b></div>)}</section>)}</div>}</CardContent></Card>;
+}
+
+function Rates({ data, error, loading, manage, onAdd, onEdit }: { data: readonly { id: string; currency: string; effectiveFrom: string; operation: { category: string; id: string; name: string }; rateMinor: number }[]; error: string | undefined; loading: boolean; manage: boolean; onAdd: () => void; onEdit: (item: { operation: { id: string }; rateMinor: number }) => void }) {
+  return <div className="manager-technicians__tab-content"><div className="manager-technicians__tab-toolbar"><div><h3>Rate manopere</h3><p>Actualizarea creează o rată nouă pentru viitor; istoricul valorilor rămâne neschimbat.</p></div>{manage ? <Button onClick={onAdd} type="button">Adaugă rată</Button> : null}</div>{loading ? <LoadingState text="Se încarcă ratele" /> : error ? <ErrorState description={error} title="Ratele nu pot fi încărcate" /> : <Card><CardContent>{!data.length ? <Empty text="Nu există rate pentru tehnicianul selectat." /> : <div className="manager-technicians__rate-list">{data.map((item) => <div className="manager-technicians__rate-row" key={item.id}><span><strong>{item.operation.name}</strong><small>{item.operation.category} · De la {dateOnly(item.effectiveFrom)}</small></span><strong>{formatMoneyMinor(item.rateMinor, item.currency)}</strong>{manage ? <Button onClick={() => onEdit(item)} size="small" type="button" variant="outline">Actualizează</Button> : null}</div>)}</div>}</CardContent></Card>}</div>;
+}
+
+function Table({ headers, rows }: { headers: readonly string[]; rows: readonly (readonly ReactNode[])[] }) { return <div className="manager-technicians__table-wrap"><table className="manager-technicians__ledger-table"><thead><tr>{headers.map((header) => <th key={header}>{header}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => <td data-label={headers[cellIndex]} key={headers[cellIndex]}>{cell}</td>)}</tr>)}</tbody></table></div>; }
+function Actions({ cancel, disabled, submit }: { cancel: () => void; disabled: boolean; submit: string }) { return <div className="manager-technicians__actions"><Button onClick={cancel} type="button" variant="outline">Renunță</Button><Button disabled={disabled} type="submit">{submit}</Button></div>; }
+function Empty({ text }: { text: string }) { return <p className="manager-technicians__empty-data">{text}</p>; }
+function Frame({ children }: { children: ReactNode }) { return <main className="manager-technicians"><section className="dl-container">{children}</section></main>; }

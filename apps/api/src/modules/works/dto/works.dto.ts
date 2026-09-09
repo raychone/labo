@@ -175,6 +175,18 @@ export class ReassignWorkDto extends ClaimWorkDto {
   public readonly reason!: string;
 }
 
+export class ChangeWorkCompanyDto {
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  @IsIn(["CDT", "NG"])
+  public readonly executionLegalEntityCode!: "CDT" | "NG";
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  public readonly expectedVersion!: number;
+}
+
 export class SetWorkStatusDto {
   @IsIn([...FINAL_WORK_STATUSES, "PROBA"])
   public readonly status!: (typeof FINAL_WORK_STATUSES)[number] | "PROBA";

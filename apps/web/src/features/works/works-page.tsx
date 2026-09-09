@@ -67,7 +67,7 @@ import { useActiveWorkFormTemplate } from "../work-forms/work-form-templates-api
 import { WorkForm, WorkFormActions, defaultWorkFormValues, toPersistedWorkFormValues, toWorkDeadlinePreviewInput, toWorkFormValues, toWorkMutationInput } from "./work-form.js";
 import { WorkFormFieldRenderer } from "./work-dynamic-form.js";
 import { WorkWorkflowSection } from "./work-workflow-section.js";
-import { downloadWorkAttachment, saveOperationalWorkTypeName, useCreateNextWorkCycle, useCreateWork, useFinalizeRealLabSheet, useProbeTypes, useRealLabSheet, useReceiveProbe, useUpdateProbeTypes, useSetManualWorkDeadline, useUpdateActiveProbeDeadline, useUpdateWork, useUpdateTechnicianWorkDetails, useUploadWorkAttachments, useUpsertRealLabSheet, useWork, useWorkCycles, useWorkDeadlinePreview, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
+import { downloadWorkAttachment, saveOperationalWorkTypeName, useChangeWorkCompany, useCreateNextWorkCycle, useCreateWork, useFinalizeRealLabSheet, useProbeTypes, useRealLabSheet, useReceiveProbe, useUpdateProbeTypes, useSetManualWorkDeadline, useUpdateActiveProbeDeadline, useUpdateWork, useUpdateTechnicianWorkDetails, useUploadWorkAttachments, useUpsertRealLabSheet, useWork, useWorkCycles, useWorkDeadlinePreview, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
 import { workFormSchema, type WorkFormValues } from "./works-page.schema.js";
 import { WorkQrModal } from "./work-qr-modal.js";
 import { filterDraftConnections, getDraftCompositionTeeth, MultiItemWorkEditor, type DraftToothConnection, type DraftWorkOrderItem } from "./multi-item-work-editor.js";
@@ -257,6 +257,7 @@ export function WorksPage(): ReactNode {
   const canUploadFiles = hasPermission(permissionsQuery.data, "files.upload");
   const canReadTechnicianOptions = hasPermission(permissionsQuery.data, "technician.workload.read");
   const canUpdateTechnicianDetails = hasPermission(permissionsQuery.data, "works.technical_details.update");
+  const canChangeCompany = hasPermission(permissionsQuery.data, "works.company.change");
   const worksQuery = useWorks(params, canRead, true);
   const selectedWorkQuery = useWork(selectedWorkId, canRead);
   const clinicOptionsQuery = useQuery({ enabled: canRead || canCreate, queryFn: fetchClinicOptions, queryKey: ["clinics", "options"], retry: false });
@@ -537,6 +538,7 @@ export function WorksPage(): ReactNode {
         canReadCycles={canShowLegacyCycles}
         canShowLegacyExecution={canShowLegacyExecution}
         canReadPricing={canReadPricing}
+        canChangeCompany={canChangeCompany}
           canUpdate={canUpdate}
           canEditDeadline={canEditDeadline}
           canUpdateTechnicianDetails={canUpdateTechnicianDetails}
@@ -972,6 +974,7 @@ function WorkCodeAndFilesFields({
 }
 
 function WorkDetailsDrawer({
+  canChangeCompany,
   canEditTechnicalCode,
   canUploadFiles,
   canCreateNextCycle,
@@ -998,6 +1001,7 @@ function WorkDetailsDrawer({
   workError,
   workTypeOptionsError,
 }: {
+  readonly canChangeCompany: boolean;
   readonly canEditTechnicalCode: boolean;
   readonly canUploadFiles: boolean;
   readonly canCreateNextCycle: boolean;
@@ -1113,7 +1117,7 @@ function WorkDetailsDrawer({
         {workError ? <ErrorState title="Lucrarea nu a fost încărcată" description={getErrorMessage(workError)} /> : null}
         {work ? (
           <div className="works-page__drawer">
-            <ExecutionNowCard activeCycleNumber={canShowLegacyExecution ? activeCycleNumber : null} canEditDeadline={canEditDeadline} showLegacyExecution={canShowLegacyExecution} work={work} />
+            <ExecutionNowCard activeCycleNumber={canShowLegacyExecution ? activeCycleNumber : null} canChangeCompany={canChangeCompany} canEditDeadline={canEditDeadline} showLegacyExecution={canShowLegacyExecution} work={work} />
             {canShowLegacyExecution ? <WorkWorkflowSection isOpen={isOpen} workId={work.id} /> : null}
             {canReadCycles ? (
               <RealLabSheetSection
@@ -1393,11 +1397,12 @@ function MetricCell({ label, value }: { readonly label: string; readonly value: 
   );
 }
 
-function ExecutionNowCard({ activeCycleNumber, canEditDeadline, showLegacyExecution, work }: { readonly activeCycleNumber: number | null; readonly canEditDeadline: boolean; readonly showLegacyExecution: boolean; readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
+function ExecutionNowCard({ activeCycleNumber, canChangeCompany, canEditDeadline, showLegacyExecution, work }: { readonly activeCycleNumber: number | null; readonly canChangeCompany: boolean; readonly canEditDeadline: boolean; readonly showLegacyExecution: boolean; readonly work: import("@dental-lab/shared").WorkDetail }): ReactNode {
   const currentStage = work.workflow?.currentStage ?? null;
   const progress = work.workflow ? `${work.workflow.progress.completed}/${work.workflow.progress.total}` : "0/0";
   const currentTechnician = work.executionSnapshot.currentTechnician ?? work.claim.technician;
-  const executionCompany = work.executionSnapshot.summary.legalEntity?.code ?? work.claim.executionLegalEntity?.code ?? "Nefixată";
+  const currentCompany = work.executionSnapshot.summary.legalEntity ?? work.claim.executionLegalEntity;
+  const executionCompany = currentCompany ? `${currentCompany.code} · ${currentCompany.displayName}` : "Neatribuită";
   const currentCycleLabel = activeCycleNumber ? `Ciclul ${activeCycleNumber}` : "Fără ciclu activ";
   const workTypeSymbols = getWorkTypeSymbols(work);
   const [editingDeadline, setEditingDeadline] = useState(false);
@@ -1406,6 +1411,10 @@ function ExecutionNowCard({ activeCycleNumber, canEditDeadline, showLegacyExecut
   const initialDeadline = toLocalDateTimeInput(work.deadline.effectiveDueAt, work.requestedDeliveryDate, work.deadline.timeSet);
   const [deadlineDate, setDeadlineDate] = useState(initialDeadline.slice(0, 10));
   const [deadlineTime, setDeadlineTime] = useState(work.deadline.timeSet ? initialDeadline.slice(11, 16) : "");
+  const [companyModalOpen, setCompanyModalOpen] = useState(false);
+  const [nextCompanyCode, setNextCompanyCode] = useState<"CDT" | "NG">(currentCompany?.code === "NG" ? "NG" : "CDT");
+  const companyMutation = useChangeWorkCompany();
+  const toast = useToast();
   useEffect(() => {
     const next = toLocalDateTimeInput(work.deadline.effectiveDueAt, work.requestedDeliveryDate, work.deadline.timeSet);
     setDeadlineDate(next.slice(0, 10));
@@ -1426,7 +1435,12 @@ function ExecutionNowCard({ activeCycleNumber, canEditDeadline, showLegacyExecut
           <MetricCell label="Pacient" value={work.patient?.fullName ?? work.patientName} />
           <MetricCell label="Tip lucrare" value={workTypeSymbols} />
           <MetricCell label="Urgență" value={work.urgency ? urgencyLabel(work.urgency) : (work.priority === "URGENT" ? "Urgent" : "Normal")} />
-          <MetricCell label="Firmă" value={executionCompany} />
+          <div className="works-page__detail-field">
+            <span>Firmă</span>
+            <strong>{executionCompany}</strong>
+            {canChangeCompany ? <Button disabled={Boolean(work.invoicedDocumentId)} onClick={() => { setNextCompanyCode(currentCompany?.code === "NG" ? "CDT" : "NG"); setCompanyModalOpen(true); }} size="small" type="button" variant="outline">{currentCompany ? "Schimbă firma" : "Setează firma"}</Button> : null}
+            {canChangeCompany && work.invoicedDocumentId ? <small>Firma nu mai poate fi schimbată după emiterea documentului financiar.</small> : null}
+          </div>
           <MetricCell label="Start execuție" value={formatOptionalDateTime(work.executionSnapshot.deadline?.startAt ?? work.deadline.startAt)} />
           <MetricCell label="Status" value={toWorkOperationalLabel(work).label} />
           <div className="works-page__detail-field"><span>Termen {canEditDeadline ? <button aria-label="Editează termenul" className="works-page__inline-icon-button" onClick={() => setEditingDeadline((value) => !value)} type="button">✎</button> : null}</span><strong>{formatOptionalDateTime(work.executionSnapshot.deadline?.effectiveDueAt ?? work.deadline.effectiveDueAt)}</strong>{!work.deadline.timeSet && work.deadline.effectiveDueAt ? <small>Ora nesetată</small> : null}{editingDeadline ? <div className="works-page__inline-deadline-editor"><input aria-label="Data termenului" className="dl-control" onChange={(event) => setDeadlineDate(event.target.value)} type="date" value={deadlineDate} /><input aria-label="Ora termenului" className="dl-control" onChange={(event) => setDeadlineTime(event.target.value)} type="time" value={deadlineTime} /><Button disabled={!deadlineDate || deadlineMutation.isPending || activeProbeDeadlineMutation.isPending} isLoading={deadlineMutation.isPending || activeProbeDeadlineMutation.isPending} onClick={() => { const dueAt = toBucharestIso(deadlineDate, deadlineTime); if (work.activeProbeCycle) { activeProbeDeadlineMutation.mutate({ cycleId: work.activeProbeCycle.id, deadlineAt: dueAt, workOrderId: work.id }, { onSuccess: () => setEditingDeadline(false) }); } else { deadlineMutation.mutate({ dueAt, expectedRevision: work.deadline.revision, manualDueTimeSet: deadlineTime !== "", workOrderId: work.id }, { onSuccess: () => setEditingDeadline(false) }); } }} size="small" type="button">Salvează</Button></div> : null}</div>
@@ -1438,6 +1452,15 @@ function ExecutionNowCard({ activeCycleNumber, canEditDeadline, showLegacyExecut
           {showLegacyExecution ? <MetricCell label="Progres" value={progress} /> : null}
         </div>
       </CardContent>
+      <Modal
+        description={currentCompany ? `Schimbi firma lucrării din ${currentCompany.code} în ${nextCompanyCode}? Modificarea se aplică documentelor financiare viitoare.` : "Alege firma care va fi folosită pentru documentele financiare viitoare."}
+        footer={<Button disabled={companyMutation.isPending || currentCompany?.code === nextCompanyCode} isLoading={companyMutation.isPending} onClick={() => companyMutation.mutate({ input: { executionLegalEntityCode: nextCompanyCode, expectedVersion: work.version }, workOrderId: work.id }, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Firma nu a fost schimbată", variant: "error" }), onSuccess: () => { setCompanyModalOpen(false); toast.showToast({ message: `Lucrarea este acum atribuită firmei ${nextCompanyCode}.`, title: "Firma a fost actualizată", variant: "success" }); } })}>Confirmă schimbarea</Button>}
+        isOpen={companyModalOpen}
+        onOpenChange={setCompanyModalOpen}
+        title={currentCompany ? "Schimbă firma" : "Setează firma"}
+      >
+        <Select label="Firmă" onChange={(event) => setNextCompanyCode(event.target.value as "CDT" | "NG")} options={LEGAL_ENTITY_CODES.map((code) => ({ label: `${code} · ${getLegalEntityDisplayName(code)}`, value: code }))} value={nextCompanyCode} />
+      </Modal>
     </Card>
   );
 }

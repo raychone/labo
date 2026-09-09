@@ -20,6 +20,7 @@ import { WorkflowExecutionService } from "../workflow-execution/workflow-executi
 import { WORK_ORDER_AUDIT_ACTIONS, WORK_ORDER_RESOURCE_TYPE } from "./works.constants.js";
 import type {
   ClaimWorkDto,
+  ChangeWorkCompanyDto,
   CreateNextWorkCycleDto,
   CreateWorkDto,
   ListClaimWorksQueryDto,
@@ -1181,7 +1182,9 @@ export class WorksService {
     // this value was silently ignored and the clinic's collaboration was used,
     // leaving the active cycle without the company/pricing snapshot expected
     // by billing when the work was later finalized.
-    const requestedLegalEntityCode = dto.executionLegalEntityCode ?? clinicLegalEntityCode;
+    const requestedLegalEntityCode = dto.executionLegalEntityCode
+      ?? (before.executionLegalEntity?.code === "CDT" || before.executionLegalEntity?.code === "NG" ? before.executionLegalEntity.code : undefined)
+      ?? clinicLegalEntityCode;
     const legalEntity = requestedLegalEntityCode === "CDT" || requestedLegalEntityCode === "NG"
       ? await this.validateExecutionLegalEntity(this.prisma, requestedLegalEntityCode)
       : null;
@@ -1476,6 +1479,118 @@ export class WorksService {
     });
 
     return toWorkDetailView(after, false, await this.createClaimAccess(context.actorUserId));
+  }
+
+  public async changeExecutionCompany(context: ActorContext, workOrderId: string, dto: ChangeWorkCompanyDto): Promise<WorkDetailView> {
+    await this.authorizationService.requirePermission({
+      permission: "works.company.change",
+      requiredScope: "ALL",
+      userId: context.actorUserId,
+    });
+    const before = await this.findWorkOrderOrThrow(workOrderId);
+    if (before.version !== dto.expectedVersion) {
+      throw new ConflictException("Lucrarea a fost modificată între timp. Reîncarcă detaliile.");
+    }
+    if (before.invoicedDocumentId) {
+      throw new ConflictException("Firma nu poate fi schimbată după emiterea unui document financiar. Folosește mai întâi fluxul de corecție sau storno.");
+    }
+
+    const legalEntity = await this.validateExecutionLegalEntity(this.prisma, dto.executionLegalEntityCode);
+    if (before.executionLegalEntityId === legalEntity.id) {
+      return toWorkDetailView(before, await this.canReadPricing(context.actorUserId), await this.createClaimAccess(context.actorUserId));
+    }
+
+    const after = await this.prisma.$transaction(async (tx) => {
+      const activeSnapshot = before.activeCycle?.executionSnapshot ?? null;
+      if (activeSnapshot) {
+        const pricing = await this.resolveExecutionPricing(tx, {
+          actorUserId: context.actorUserId,
+          claimedAt: activeSnapshot.claimedAt,
+          legalEntity,
+          requestMetadata: context.requestMetadata,
+          workOrder: before,
+        });
+        const pricingSnapshot = buildPricingSnapshot(pricing, before.workType.unit, new Date());
+        await tx.workExecutionSnapshot.update({
+          data: {
+            contextSnapshotJson: replaceExecutionCompanyInContextSnapshot(activeSnapshot.contextSnapshotJson, legalEntity),
+            executionLegalEntityCode: legalEntity.code,
+            executionLegalEntityId: legalEntity.id,
+            pricingAgreementId: pricing.appliedAgreementId,
+            pricingCatalogItemId: pricing.catalogItemId,
+            pricingCurrency: pricing.currency,
+            pricingQuantity: pricing.quantity.toString(),
+            pricingSnapshotJson: pricingSnapshot,
+            pricingSourceLabel: getPricingSourceLabel(pricing),
+            pricingSourceType: getPricingSourceType(pricing),
+            pricingTotalMinor: pricing.totalPriceMinor,
+            pricingUnitPriceMinor: pricing.finalUnitPriceMinor,
+          },
+          where: { id: activeSnapshot.id },
+        });
+        if (before.activeCycle) {
+          await tx.workCycle.update({
+            data: {
+              executionLegalEntityCodeSnapshot: legalEntity.code,
+              executionLegalEntityId: legalEntity.id,
+              executionLegalEntityNameSnapshot: legalEntity.displayName,
+              executionSnapshotJson: replaceExecutionCompanyInContextSnapshot(activeSnapshot.contextSnapshotJson, legalEntity),
+              pricingSnapshotJson: pricingSnapshot,
+            },
+            where: { id: before.activeCycle.id },
+          });
+        }
+      } else if (before.claimStatus === "CLAIMED") {
+        const technicianId = before.claimedByUserId ?? before.assignedTechnicianId;
+        if (!technicianId) {
+          throw new ConflictException("Lucrarea nu are un tehnician responsabil pentru actualizarea firmei.");
+        }
+        await this.prepareExecutionSnapshot(tx, {
+          actorUserId: context.actorUserId,
+          claimedAt: before.claimedAt ?? new Date(),
+          legalEntity,
+          nextClaimRevision: before.claimRevision,
+          requestMetadata: context.requestMetadata,
+          source: "ADMIN_REPAIR",
+          technicianId,
+          workOrder: before,
+        });
+      }
+
+      const updatedCount = await tx.workOrder.updateMany({
+        data: {
+          executionLegalEntityId: legalEntity.id,
+          updatedByUserId: context.actorUserId,
+          version: { increment: 1 },
+        },
+        where: {
+          id: workOrderId,
+          invoicedDocumentId: null,
+          version: dto.expectedVersion,
+        },
+      });
+      if (updatedCount.count !== 1) {
+        throw new ConflictException("Lucrarea a fost modificată sau blocată financiar între timp. Reîncarcă detaliile.");
+      }
+
+      await this.recordAudit(tx, {
+        action: WORK_ORDER_AUDIT_ACTIONS.executionEntityChanged,
+        actorUserId: context.actorUserId,
+        metadata: {
+          newCompany: { code: legalEntity.code, displayName: legalEntity.displayName, id: legalEntity.id },
+          previousCompany: before.executionLegalEntity
+            ? { code: before.executionLegalEntity.code, displayName: before.executionLegalEntity.displayName, id: before.executionLegalEntityId }
+            : null,
+          workCode: before.code,
+        },
+        requestMetadata: context.requestMetadata,
+        resourceId: workOrderId,
+      });
+
+      return tx.workOrder.findUniqueOrThrow({ include: WORK_ORDER_INCLUDE, where: { id: workOrderId } });
+    });
+
+    return toWorkDetailView(after, await this.canReadPricing(context.actorUserId), await this.createClaimAccess(context.actorUserId));
   }
 
   public async reassignWork(context: ActorContext, workOrderId: string, dto: ReassignWorkDto): Promise<WorkDetailView> {
@@ -3415,6 +3530,23 @@ function canonicalSelectedAddOns(allowedAddOns: Prisma.JsonValue | null, selecte
     }
   }
   return (selectedAddOns ?? []).map((selected) => ({ code: selected.code, amountMinor: amounts.get(selected.code) ?? null }));
+}
+
+function replaceExecutionCompanyInContextSnapshot(
+  value: Prisma.JsonValue,
+  legalEntity: { readonly code: "CDT" | "NG"; readonly displayName: string; readonly id: string },
+): Prisma.InputJsonObject {
+  const current = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Prisma.JsonObject
+    : {};
+  return {
+    ...current,
+    executionLegalEntity: {
+      code: legalEntity.code,
+      displayName: legalEntity.displayName,
+      publicId: legalEntity.id,
+    },
+  } as Prisma.InputJsonObject;
 }
 
 function validateAggregateCatalogRules(

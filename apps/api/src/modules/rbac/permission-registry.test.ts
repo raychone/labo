@@ -58,6 +58,7 @@ const expectedPermissionKeys = [
   "works.claim.assign",
   "works.claim.reassign",
   "works.claim.history.read",
+  "works.company.change",
   "works.execution_snapshot.read",
   "works.execution_snapshot.read_pricing",
   "works.execution_snapshot.read_deadline",
@@ -242,6 +243,8 @@ describe("PERMISSION_REGISTRY", () => {
   it("keeps representative matrix permissions with expected scopes", () => {
     expect(ROLE_PERMISSION_MATRIX.MANAGER["users.create"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["works.read_all"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["works.company.change"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.company.change"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["works.create"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["works.urgency.update"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["works.deadline.current.update"]).toBe("ALL");

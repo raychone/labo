@@ -36,6 +36,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
+    "pdfjs-dist": "^5.7.284",
     "typescript": "^5.9.2"
   }
 }

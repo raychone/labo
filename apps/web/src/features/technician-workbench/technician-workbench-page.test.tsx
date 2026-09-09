@@ -5,7 +5,15 @@ import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { TechnicianWorkbenchPage } from "./technician-workbench-page.js";
+import { getOperationSelectionState, TechnicianWorkbenchPage } from "./technician-workbench-page.js";
+
+describe("getOperationSelectionState", () => {
+  it("distinge selecțiile fără manoperă, parțiale și complete", () => {
+    expect(getOperationSelectionState([21, 22], [])).toBe("NONE");
+    expect(getOperationSelectionState([21, 22], [{ selectedTeeth: [21] }])).toBe("PARTIAL");
+    expect(getOperationSelectionState([21, 22], [{ selectedTeeth: [21] }, { selectedTeeth: [22] }])).toBe("ALL");
+  });
+});
 
 function renderWithProviders(component: ReactNode): void {
   const queryClient = new QueryClient({
@@ -497,5 +505,62 @@ describe("TechnicianWorkbenchPage", () => {
         method: "POST",
       }));
     });
+  });
+
+  it("adds a partial operation only to missing selected teeth without removing existing history", async () => {
+    const baseFetch = createFetchMock();
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/technician-operations/options")) {
+        return Promise.resolve(createJsonResponse([{ category: "Coroană zirconiu", code: "SCAN", id: "operation_scan", name: "Scanare" }]));
+      }
+      if (url.includes("/technician-operations/performed?") && (!init?.method || init.method === "GET")) {
+        return Promise.resolve(createJsonResponse([{
+          createdAt: "2026-08-14T09:00:00.000Z",
+          createdByUserId: "tech_1",
+          currency: "RON",
+          earningMinor: 3000,
+          id: "performed_scan_21",
+          operation: { code: "SCAN", id: "operation_scan", name: "Scanare" },
+          operationNameSnapshot: "Scanare",
+          performedAt: "2026-08-14T09:00:00.000Z",
+          probeCycle: null,
+          probeCycleId: null,
+          quantity: 1,
+          rateId: "rate_1",
+          rateMinorSnapshot: 3000,
+          removalReason: null,
+          removedAt: null,
+          removedByUserId: null,
+          selectedTeeth: [11],
+          technicianId: "tech_1",
+          workOrderId: "work_3",
+        }]));
+      }
+      if (url.endsWith("/technician-operations/performed") && init?.method === "POST") {
+        return Promise.resolve(createJsonResponse({ id: "performed_scan_22" }));
+      }
+      return baseFetch(input, init);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const matchMedia = createMatchMedia(false);
+    vi.stubGlobal("matchMedia", matchMedia);
+    Object.defineProperty(window, "matchMedia", { configurable: true, value: matchMedia });
+    renderWithProviders(<TechnicianWorkbenchPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Lucrările mele" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Manopere" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Dinte 11" }));
+    fireEvent.click(screen.getByRole("button", { name: "Dinte 12" }));
+    const partial = await screen.findByRole("button", { name: /Scanare Parțial/ });
+    expect(partial.getAttribute("data-selection-state")).toBe("PARTIAL");
+    fireEvent.click(partial);
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([input, init]) => String(input).endsWith("/technician-operations/performed") && init?.method === "POST");
+      expect(call).toBeDefined();
+      expect(JSON.parse(String(call?.[1]?.body))).toEqual(expect.objectContaining({ operationId: "operation_scan", selectedTeeth: [12], workOrderId: "work_3" }));
+    });
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/performed_scan_21/remove"))).toBe(false);
   });
 });

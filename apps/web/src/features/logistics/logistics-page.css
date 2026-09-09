@@ -1570,3 +1570,20 @@
     padding: 0 0 14px;
   }
 }
+.logistics-page__route-history {
+  border-top: 1px solid var(--dl-color-border);
+  margin-top: var(--dl-space-5);
+  padding-top: var(--dl-space-4);
+}
+
+.logistics-page__route-history > summary {
+  color: var(--dl-color-text);
+  cursor: pointer;
+  font-weight: var(--dl-font-weight-semibold);
+  padding: var(--dl-space-2) 0;
+}
+
+.logistics-page__route-history > p {
+  color: var(--dl-color-text-muted);
+  margin: 0 0 var(--dl-space-3);
+}

@@ -17,6 +17,7 @@ import { PermissionsGuard } from "../rbac/permissions.guard.js";
 import { RequirePermission } from "../rbac/require-permission.decorator.js";
 import {
   ClaimWorkDto,
+  ChangeWorkCompanyDto,
   CompleteTechnicalWorkDto,
   CreateNextWorkCycleDto,
   CreateWorkDto,
@@ -387,6 +388,13 @@ export class WorksController {
   @UseGuards(CsrfGuard)
   public reassignWork(@Param("id") workOrderId: string, @Body() dto: ReassignWorkDto, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
     return this.worksService.reassignWork({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, workOrderId, dto);
+  }
+
+  @Patch(":id/company")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("works.company.change", "ALL")
+  public changeWorkCompany(@Param("id") workOrderId: string, @Body() dto: ChangeWorkCompanyDto, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
+    return this.worksService.changeExecutionCompany({ actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, workOrderId, dto);
   }
 
   @Post(":id/status")

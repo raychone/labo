@@ -104,12 +104,12 @@ test("final realignment cross-role acceptance path", async ({ page }) => {
   expect(createdRoute.stops).toHaveLength(2);
   const routes = await browserJson<{ readonly items: readonly { readonly id: string; readonly routeNumber: string; readonly stops: readonly unknown[] }[] }>(
     page,
-    "/routes?page=1&pageSize=100",
+    `/routes?page=1&pageSize=100&exactDate=${pickupDate}`,
   );
   expect(routes.items.some((route) => route.id === createdRoute.id && route.stops.length === 2)).toBe(true);
 
   await loginAs(page, "CURIER");
-  const courierRoutes = await browserJson<{ readonly items: readonly { readonly id: string; readonly stops: readonly unknown[] }[] }>(page, "/routes?page=1&pageSize=100");
+  const courierRoutes = await browserJson<{ readonly items: readonly { readonly id: string; readonly stops: readonly unknown[] }[] }>(page, `/routes?page=1&pageSize=100&exactDate=${pickupDate}`);
   expect(courierRoutes.items.some((route) => route.id === createdRoute.id && route.stops.length === 2)).toBe(true);
 
   await loginAs(page, "MANAGER");

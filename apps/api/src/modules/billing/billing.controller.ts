@@ -97,6 +97,7 @@ export class BillingController {
   ): Promise<StreamableFile> {
     const document = await this.billingService.getDocument(legalEntity, documentId);
     const pdf = await this.billingPdfExportService.renderPdf({
+      ...(document.formattedNumber ? { expectedText: document.formattedNumber } : {}),
       filenameBase: document.formattedNumber ? `${document.type === "INVOICE" ? "factura" : "proforma"}-${document.formattedNumber}` : `${document.type === "INVOICE" ? "factura" : "proforma"}-${document.id}`,
       path: `/billing/documents/${documentId}/print`,
       query: requestUrlQuery(request),

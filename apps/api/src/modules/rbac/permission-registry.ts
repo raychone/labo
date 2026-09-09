@@ -64,6 +64,7 @@ export type PermissionKey =
   | "works.claim.assign"
   | "works.claim.reassign"
   | "works.claim.history.read"
+  | "works.company.change"
   | "works.execution_snapshot.read"
   | "works.execution_snapshot.read_pricing"
   | "works.execution_snapshot.read_deadline"
@@ -265,6 +266,7 @@ export const PERMISSION_REGISTRY = [
   definePermission("works.claim.assign", "Assign an unclaimed work order to a technician."),
   definePermission("works.claim.reassign", "Reassign a claimed work order to another technician."),
   definePermission("works.claim.history.read", "Read work assignment history."),
+  definePermission("works.company.change", "Assign or correct the execution company before financial documents are issued."),
   definePermission("works.execution_snapshot.read", "Read fixed execution context snapshots."),
   definePermission("works.execution_snapshot.read_pricing", "Read financial execution snapshot fields."),
   definePermission("works.execution_snapshot.read_deadline", "Read execution snapshot deadline fields."),
@@ -537,6 +539,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "works.assign": "ALL",
     "works.change_status": "ALL",
     "works.claim.history.read": "ALL",
+    "works.company.change": "ALL",
     "works.create": "ALL",
     "works.deadline.read": "ALL",
     "works.deadline.preview": "ALL",

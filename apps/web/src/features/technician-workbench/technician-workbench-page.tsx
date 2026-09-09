@@ -37,6 +37,20 @@ import "./technician-workbench-page.css";
 
 type WorkbenchTab = "AVAILABLE" | "MINE";
 type CompletionTarget = { readonly action: "FINALIZE" | "PROBE_READY"; readonly work: WorkSummary };
+export type OperationSelectionState = "NONE" | "PARTIAL" | "ALL";
+
+export function getOperationSelectionState(
+  selectedTeeth: readonly number[],
+  executions: readonly { readonly selectedTeeth?: readonly number[] | null }[],
+  isCaseLevel = false,
+): OperationSelectionState {
+  if (isCaseLevel) return executions.some((execution) => (execution.selectedTeeth ?? []).length === 0) ? "ALL" : "NONE";
+  if (selectedTeeth.length === 0) return "NONE";
+  const selected = new Set(selectedTeeth);
+  const covered = new Set(executions.flatMap((execution) => execution.selectedTeeth ?? []).filter((tooth) => selected.has(tooth)));
+  if (covered.size === 0) return "NONE";
+  return covered.size === selected.size ? "ALL" : "PARTIAL";
+}
 
 function currentCompletionCompany(work: WorkSummary): "" | "CDT" | "NG" {
   const code = work.executionSnapshot.summary.legalEntity?.code ?? work.claim.executionLegalEntity?.code;
@@ -558,13 +572,6 @@ function OperationsModal({
       replaceCoverage(remainingTeeth, `Manopera a fost eliminată de pe ${teethToRemove.length === 1 ? "dinte" : "dinții"} selectat${teethToRemove.length === 1 ? "" : "i"}.`);
       return;
     }
-    if (!isCaseLevel && teethToRemove.length > 0) {
-      // If only part of an existing operation is selected, rebuild its
-      // coverage so the same operation can be applied to the full selection.
-      replaceCoverage(selectedTeeth, `Manopera a fost reaplicată pentru ${selectedTeeth.length} dinți.`);
-      return;
-    }
-
     const teeth = isCaseLevel ? [] as readonly AdultFdiTooth[] : selectedTeeth.filter((tooth) => !coveredTeeth.has(tooth));
     if (!isCaseLevel && teeth.length === 0) return;
     performMutation.mutate({ operationId, selectedTeeth: teeth, workOrderId: work.id }, {
@@ -638,25 +645,23 @@ function OperationsModal({
                 <div className="technician-workbench__operation-grid">
                   {(operations ?? []).map((operation) => {
                     if (selectedOperationCategories && !selectedOperationCategories.has(operation.category)) return null;
-                    const active = (isCaseLevel || selectedTeeth.length > 0) && currentCyclePerformed.filter((performed) => performed.operation.id === operation.id).some((performed) => {
-                      if (isCaseLevel) return (performed.selectedTeeth ?? []).length === 0;
-                      const performedTeeth = new Set(performed.selectedTeeth ?? []);
-                      return selectedTeeth.every((tooth) => performedTeeth.has(tooth));
-                    });
+                    const operationExecutions = currentCyclePerformed.filter((performed) => performed.operation.id === operation.id);
+                    const selectionState = getOperationSelectionState(selectedTeeth, operationExecutions, isCaseLevel);
                     return <button
-                      aria-pressed={active}
-                      className={`technician-workbench__operation-card${active ? " technician-workbench__operation-card--active" : ""}`}
+                      aria-pressed={selectionState === "ALL"}
+                      className={`technician-workbench__operation-card technician-workbench__operation-card--${selectionState.toLowerCase()}`}
+                      data-selection-state={selectionState}
                       disabled={!canManageOperations || (!isCaseLevel && selectedTeeth.length === 0) || isMutating}
                       key={operation.id}
                       onClick={() => toggleOperation(operation.id)}
                       type="button"
-                    >{operation.name}</button>;
+                    ><span>{operation.name}</span>{selectionState === "PARTIAL" ? <small>Parțial</small> : null}</button>;
                   })}
                 </div>
               </section>
             ))}
           </div>
-          <p className="technician-workbench__modal-note">Selectează unul sau mai mulți dinți, apoi apasă manopera. Se va salva o singură manoperă cu cantitatea egală cu numărul dinților selectați. Click din nou pe cardul verde o dezactivează pentru aceeași selecție.</p>
+          <p className="technician-workbench__modal-note">Selectează unul sau mai mulți dinți, apoi apasă manopera. „Parțial” înseamnă că manopera există doar pe o parte dintre dinții selectați; apăsarea o adaugă numai pe dinții lipsă. O manoperă activă pe toți dinții selectați poate fi eliminată printr-o nouă apăsare.</p>
         </div>
       ) : null}
       {canReadOperations && (performedQuery.data?.length ?? 0) > 0 ? (

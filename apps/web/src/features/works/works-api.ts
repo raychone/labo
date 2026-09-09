@@ -3,6 +3,7 @@ import type {
   CreateWorkInput,
   CreateNextWorkCycleInput,
   ClaimWorkInput,
+  ChangeWorkCompanyInput,
   ClaimWorksListParams,
   CompleteStageInput,
   FinalizeRealLabSheetInput,
@@ -250,6 +251,10 @@ export async function releaseWork(workOrderId: string, input: ReleaseWorkInput):
 
 export async function reassignWork(workOrderId: string, input: ReassignWorkInput): Promise<WorkDetail> {
   return sendJson<WorkDetail>(`/works/${workOrderId}/reassign`, "POST", input);
+}
+
+export async function changeWorkCompany(workOrderId: string, input: ChangeWorkCompanyInput): Promise<WorkDetail> {
+  return sendJson<WorkDetail>(`/works/${workOrderId}/company`, "PATCH", input);
 }
 
 export async function setWorkStatus(workOrderId: string, input: SetWorkStatusInput): Promise<WorkDetail> {
@@ -702,6 +707,19 @@ export function useReassignWork() {
     mutationFn: ({ input, workOrderId }: { readonly input: ReassignWorkInput; readonly workOrderId: string }) => reassignWork(workOrderId, input),
     onSuccess: async (_work, variables) => {
       await invalidateClaimQueries(queryClient, variables.workOrderId);
+    },
+  });
+}
+
+export function useChangeWorkCompany() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ input, workOrderId }: { readonly input: ChangeWorkCompanyInput; readonly workOrderId: string }) => changeWorkCompany(workOrderId, input),
+    onSuccess: async (_work, variables) => {
+      await Promise.all([
+        invalidateClaimQueries(queryClient, variables.workOrderId),
+        queryClient.invalidateQueries({ queryKey: ["logistics"] }),
+      ]);
     },
   });
 }

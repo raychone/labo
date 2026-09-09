@@ -68,6 +68,7 @@ function createService({ allowUpload = true } = {}) {
     version: 1,
   };
   const courierRouteCount = vi.fn(() => Promise.resolve(0));
+  const courierRouteFindMany = vi.fn(() => Promise.resolve([] as { readonly routeNumber: string }[]));
   const courierRouteFindUnique = vi.fn(() => Promise.resolve(routeRecord));
   const courierRouteCreate = vi.fn(({ data }: { readonly data: Record<string, unknown> }) => Promise.resolve({
     ...routeRecord,
@@ -101,6 +102,7 @@ function createService({ allowUpload = true } = {}) {
   const courierRouteStopFindFirst = vi.fn(() => Promise.resolve(null));
   const courierRouteStopUpdate = vi.fn(() => Promise.resolve({ id: "stop_1" }));
   const workOrderUpdate = vi.fn(() => Promise.resolve({ id: "work_1" }));
+  const workOrderFindMany = vi.fn(({ where }: { readonly where: { readonly id: { readonly in: readonly string[] } } }) => Promise.resolve(where.id.in.map((id) => ({ id }))));
   const workAttachmentCreate = vi.fn(({ data }: { readonly data: { readonly fileName: string; readonly mimeType: string; readonly sizeBytes: number } }) => Promise.resolve({
     id: `att_${data.fileName}`,
     fileName: data.fileName,
@@ -110,19 +112,21 @@ function createService({ allowUpload = true } = {}) {
   }));
   const prisma = {
     $transaction: vi.fn((callback: (tx: unknown) => unknown) => callback({
+      $executeRaw: vi.fn().mockResolvedValue(0),
       auditLog: { create: auditLogCreate },
-      courierRoute: { count: courierRouteCount, create: courierRouteCreate, findUnique: courierRouteFindUnique, update: courierRouteUpdate },
+      courierRoute: { count: courierRouteCount, create: courierRouteCreate, findMany: courierRouteFindMany, findUnique: courierRouteFindUnique, update: courierRouteUpdate },
       courierRouteEvent: { create: courierRouteEventCreate },
       courierRouteStop: { findFirst: courierRouteStopFindFirst, update: courierRouteStopUpdate },
       delivery: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       deliveryPreparationItem: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       pickupRequest: { create: pickupRequestCreate, findUnique: pickupRequestFindUnique, update: pickupRequestUpdate },
       workAttachment: { create: workAttachmentCreate },
-      workOrder: { update: workOrderUpdate },
+      workOrder: { findMany: workOrderFindMany, update: workOrderUpdate },
     })),
     clinic: { findFirst: vi.fn(() => Promise.resolve({ id: "clinic_1" })) },
     doctor: { findFirst: vi.fn(() => Promise.resolve({ id: "doctor_1" })) },
     pickupRequest: { findMany: pickupRequestFindMany },
+    workOrder: { findMany: workOrderFindMany },
     courierRouteStop: { findFirst: courierRouteStopFindFirst },
   };
 
@@ -132,6 +136,7 @@ function createService({ allowUpload = true } = {}) {
     courierRouteCreate,
     courierRouteEventCreate,
     courierRouteFindUnique,
+    courierRouteFindMany,
     courierRouteStopUpdate,
     courierRouteUpdate,
     prisma,
@@ -141,6 +146,7 @@ function createService({ allowUpload = true } = {}) {
     service: new LogisticsService(authorizationService as never, prisma as never, worksService as never),
     work,
     workAttachmentCreate,
+    workOrderFindMany,
     worksService,
   };
 }
@@ -295,6 +301,7 @@ describe("LogisticsService delivery eligibility", () => {
     const readinessBranch = (eligibility.OR as Array<Record<string, unknown>>)[0]!;
 
     expect(readinessBranch.technicalReadiness).toEqual({ in: ["PROBE_READY", "FINAL_READY"] });
+    expect(readinessBranch.requiresDelivery).toBe(true);
     expect(readinessBranch.courierRouteStops).toEqual({
       none: {
         outcomeStatus: "PENDING",
@@ -305,6 +312,27 @@ describe("LogisticsService delivery eligibility", () => {
 });
 
 describe("LogisticsService routes", () => {
+  it("rejects probe-ready and final-ready deliveries until Livrare was explicitly requested", async () => {
+    const { courierRouteCreate, service, workOrderFindMany } = createService();
+    workOrderFindMany.mockResolvedValueOnce([]);
+
+    await expect(service.createRoute(
+      { actor: { id: "user_1" } as never, requestMetadata: {} },
+      {
+        name: "Traseu blocat",
+        routeDate: "2026-08-21",
+        stops: [{ type: "DELIVERY", workOrderId: "work_1" }],
+      },
+    )).rejects.toThrow("marcate explicit pentru Livrare");
+    expect(workOrderFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        requiresDelivery: true,
+        technicalReadiness: { in: ["PROBE_READY", "FINAL_READY"] },
+      }),
+    }));
+    expect(courierRouteCreate).not.toHaveBeenCalled();
+  });
+
   it("creates a mixed route and persists manual selection order", async () => {
     const { auditLogCreate, courierRouteCreate, courierRouteEventCreate, service } = createService();
 
@@ -334,6 +362,48 @@ describe("LogisticsService routes", () => {
     expect(courierRouteEventCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ routeId: "route_1", type: "ROUTE_CREATED" }) });
     expect(auditLogCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ action: "route.created", resourceType: "courier_route" }) });
     expect(result.stops.map((stop) => [stop.type, stop.stopOrder])).toEqual([["DELIVERY", 1], ["PICKUP", 2]]);
+  });
+
+  it("allocates the next route number from the highest issued suffix instead of the row count", async () => {
+    const { courierRouteCreate, courierRouteFindMany, service } = createService();
+    courierRouteFindMany.mockResolvedValueOnce([{ routeNumber: "TR-260821-01" }, { routeNumber: "TR-260821-03" }]);
+
+    await service.createRoute(
+      { actor: { id: "user_1" } as never, requestMetadata: {} },
+      { name: "Traseu fără coliziune", routeDate: "2026-08-21", stops: [{ type: "DELIVERY", workOrderId: "work_1" }] },
+    );
+
+    expect(courierRouteCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ routeNumber: "TR-260821-04" }),
+    }));
+  });
+
+  it("does not allow route editing to bypass the explicit Livrare gate", async () => {
+    const { courierRouteUpdate, service, workOrderFindMany } = createService();
+    workOrderFindMany.mockResolvedValueOnce([]);
+
+    await expect(service.updateRoute(
+      { actor: { id: "user_1" } as never, requestMetadata: {} },
+      "route_1",
+      {
+        courierUserId: "courier_1",
+        name: "Traseu 1",
+        routeDate: "2026-08-21",
+        stops: [
+          { type: "DELIVERY", workOrderId: "work_1" },
+          { type: "DELIVERY", workOrderId: "work_2" },
+        ],
+        version: 1,
+      },
+    )).rejects.toThrow("marcate explicit pentru Livrare");
+    expect(workOrderFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        id: { in: ["work_2"] },
+        requiresDelivery: true,
+        technicalReadiness: { in: ["PROBE_READY", "FINAL_READY"] },
+      }),
+    }));
+    expect(courierRouteUpdate).not.toHaveBeenCalled();
   });
 
   it("rejects a route stop with an ambiguous target", async () => {

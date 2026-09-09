@@ -503,6 +503,16 @@
   text-align: left;
 }
 
+.technician-workbench__operation-card > span,
+.technician-workbench__operation-card > small {
+  display: block;
+}
+
+.technician-workbench__operation-card > small {
+  font-size: var(--dl-font-size-small);
+  margin-top: var(--dl-space-1);
+}
+
 .technician-workbench__operation-card:hover:not(:disabled),
 .technician-workbench__operation-card:focus-visible {
   border-color: var(--dl-color-accent);
@@ -510,10 +520,22 @@
   outline-offset: 2px;
 }
 
-.technician-workbench__operation-card--active {
+.technician-workbench__operation-card--all {
   background: var(--dl-color-success, #16803c);
   border-color: var(--dl-color-success, #16803c);
   color: #fff;
+}
+
+.technician-workbench__operation-card--partial {
+  background: color-mix(in srgb, var(--dl-color-success, #16803c) 12%, var(--dl-color-surface));
+  border-color: var(--dl-color-success, #16803c);
+  color: var(--dl-color-text);
+}
+
+@supports not (background: color-mix(in srgb, white 50%, black)) {
+  .technician-workbench__operation-card--partial {
+    background: #e8f5ee;
+  }
 }
 
 .technician-workbench__operation-legend {

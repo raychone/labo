@@ -1370,7 +1370,7 @@ async function seedDemoTechnicianOperations(prisma: PrismaClient, now: Date): Pr
     ["Coroană ceramică", "METAL_TF", "demo_operation_tf", "TF"], ["Coroană ceramică", "METAL_SF", "demo_operation_sf", "SF"], ["Coroană ceramică", "MODELARE", "demo_operation_modelare", "Modelare"], ["Coroană ceramică", "PRESARE", "demo_operation_presare", "Presare"], ["Coroană ceramică", "GLAZURA", "demo_operation_glazura", "Glaze"], ["Coroană ceramică", "PLACARE_CERAMICA_CERAMICA", "demo_operation_placare_ceramica", "Placare ceramică"],
     ["Altele", "PLACARE_CERAMICA_ALTELE", "demo_operation_placare_altele", "Placare ceramică"], ["Altele", "COROANA_COMPOZIT_INLAY", "demo_operation_compozit_inlay", "Coroană compozit / Inlay"], ["Altele", "PROTEZA", "demo_operation_proteza", "Proteză"], ["Altele", "COROANE_ADIACENTE", "demo_operation_coroane_adiacente", "Coroane adiacente"], ["Altele", "GINGIE", "demo_operation_gingie", "Gingie"],
   ] as const;
-  const operations = operationSpecs.map(([category, code, id, name], index) => ({ category, code, id, name, sortOrder: index + 1 }));
+  const operations = operationSpecs.map(([category, businessCode, legacyId, name], index) => ({ category, businessCode, code: `TECH-${businessCode}`, id: `technical_operation_${businessCode.toLowerCase()}`, legacyId, name, sortOrder: index + 1 }));
   await prisma.technicianOperation.updateMany({
     data: { isActive: false, sortOrder: 999 },
     where: { id: { startsWith: "demo_operation_" } },
@@ -1381,7 +1381,7 @@ async function seedDemoTechnicianOperations(prisma: PrismaClient, now: Date): Pr
         category: operation.category,
         code: operation.code,
         createdByUserId: "demo_user_manager",
-        description: "Manoperă demonstrativă pentru câștiguri.",
+        description: null,
         id: operation.id,
         name: operation.name,
         sortOrder: "sortOrder" in operation ? operation.sortOrder : 0,
@@ -1390,7 +1390,7 @@ async function seedDemoTechnicianOperations(prisma: PrismaClient, now: Date): Pr
       update: {
         category: operation.category,
         code: operation.code,
-        description: "Manoperă demonstrativă pentru câștiguri.",
+        description: null,
         isActive: true,
         name: operation.name,
         sortOrder: operation.sortOrder,
@@ -1401,10 +1401,10 @@ async function seedDemoTechnicianOperations(prisma: PrismaClient, now: Date): Pr
   }
 
   for (const operation of operations) {
-    const operationKey = operation.id.replace("demo_operation_", "");
+    const operationKey = operation.legacyId.replace("demo_operation_", "");
     const technicianRates = [
-      [`demo_rate_t1_${operationKey}`, "demo_user_tehnician_1", 3_000 + (operation.id === "demo_operation_tf" ? 0 : operation.sortOrder * 250)],
-      [`demo_rate_t2_${operationKey}`, "demo_user_tehnician_2", 3_500 + (operation.id === "demo_operation_sf" ? 0 : operation.id === "demo_operation_glazura" ? 1_500 : operation.sortOrder * 250)],
+      [`demo_rate_t1_${operationKey}`, "demo_user_tehnician_1", 3_000 + (operation.legacyId === "demo_operation_tf" ? 0 : operation.sortOrder * 250)],
+      [`demo_rate_t2_${operationKey}`, "demo_user_tehnician_2", 3_500 + (operation.legacyId === "demo_operation_sf" ? 0 : operation.legacyId === "demo_operation_glazura" ? 1_500 : operation.sortOrder * 250)],
     ] as const;
     for (const [id, technicianId, rateMinor] of technicianRates) {
       await prisma.technicianOperationRate.upsert({
@@ -1415,13 +1415,16 @@ async function seedDemoTechnicianOperations(prisma: PrismaClient, now: Date): Pr
     }
   }
 
+  const operationIds = new Map(operations.map((operation) => [operation.legacyId, operation.id]));
   const performed = [
     ["demo_performed_001", "demo_work_001", "demo_user_tehnician_1", "demo_operation_tf", "demo_rate_t1_tf", 3_000],
     ["demo_performed_002", "demo_work_001", "demo_user_tehnician_1", "demo_operation_placare", "demo_rate_t1_placare", 4_500],
     ["demo_performed_003", "demo_work_002", "demo_user_tehnician_2", "demo_operation_sf", "demo_rate_t2_sf", 3_500],
     ["demo_performed_004", "demo_work_002", "demo_user_tehnician_2", "demo_operation_glazura", "demo_rate_t2_glazura", 5_000],
   ] as const;
-  for (const [id, workOrderId, technicianId, operationId, rateId, earningMinor] of performed) {
+  for (const [id, workOrderId, technicianId, legacyOperationId, rateId, earningMinor] of performed) {
+    const operationId = operationIds.get(legacyOperationId);
+    if (!operationId) throw new Error(`Missing canonical technician operation for ${legacyOperationId}.`);
     await prisma.technicianPerformedOperation.upsert({
       create: { createdByUserId: technicianId, earningMinor, id, operationId, performedAt: addDemoDays(now, -2), rateId, technicianId, workOrderId },
       update: { earningMinor, operationId, performedAt: addDemoDays(now, -2), rateId, technicianId, workOrderId },

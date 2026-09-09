@@ -127,6 +127,7 @@ export type TechnicianEarningsPeriodView = "DAY" | "MONTH" | "YEAR";
 export interface TechnicianPaymentView {
   readonly amountMinor: number;
   readonly createdAt: string;
+  readonly createdByDisplayName: string | null;
   readonly createdByUserId: string;
   readonly currency: string;
   readonly id: string;
@@ -382,6 +383,7 @@ export function toTechnicianEarningsSummaryView(input: {
     payments: input.payments.map((payment) => ({
       amountMinor: payment.amountMinor,
       createdAt: payment.createdAt.toISOString(),
+      createdByDisplayName: (payment as typeof payment & { readonly createdBy?: { readonly displayName: string } | null }).createdBy?.displayName ?? null,
       createdByUserId: payment.createdByUserId,
       currency: payment.currency,
       id: payment.id,

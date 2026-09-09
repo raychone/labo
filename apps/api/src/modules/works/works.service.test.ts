@@ -1787,6 +1787,119 @@ describe("WorksService", () => {
       false,
     )).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  it("lets an authorized Manager or Logistics user assign an unassigned company and audits the change", async () => {
+    const before = workOrder();
+    const after = workOrder({ executionLegalEntity: { code: "NG", displayName: "Nicolaie Gabriel" }, executionLegalEntityId: "legal_ng", version: 2 });
+    const auditCreate = vi.fn().mockResolvedValue({});
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const requirePermission = vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ALL"], permission: "works.company.change" });
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        auditLog: { create: auditCreate },
+        workOrder: { findUniqueOrThrow: vi.fn().mockResolvedValue(after), updateMany },
+      })),
+      legalEntity: { findUnique: vi.fn().mockResolvedValue({ code: "NG", displayName: "Nicolaie Gabriel", id: "legal_ng", isActive: true }) },
+      workOrder: { findUnique: vi.fn().mockResolvedValue(before) },
+    }, {
+      hasPermission: vi.fn().mockResolvedValue({ allowed: false, effectiveScopes: [] }),
+      requirePermission,
+    });
+
+    const result = await service.changeExecutionCompany({ actorUserId: "manager_1", requestMetadata: { ipAddress: "127.0.0.1" } }, "work_order_1", {
+      executionLegalEntityCode: "NG",
+      expectedVersion: 1,
+    });
+
+    expect(requirePermission).toHaveBeenCalledWith({ permission: "works.company.change", requiredScope: "ALL", userId: "manager_1" });
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ executionLegalEntityId: "legal_ng" }), where: expect.objectContaining({ invoicedDocumentId: null, version: 1 }) }));
+    expect(auditCreate).toHaveBeenCalledWith({ data: expect.objectContaining({
+      action: "work_orders.execution_entity_changed",
+      actorUserId: "manager_1",
+      metadata: expect.objectContaining({ newCompany: expect.objectContaining({ code: "NG" }), previousCompany: null, workCode: before.code }),
+    }) });
+    expect(result.claim.executionLegalEntity?.code).toBe("NG");
+  });
+
+  it("recalculates the active unbilled execution snapshot when the company is corrected", async () => {
+    const activeSnapshot = {
+      claimedAt: new Date("2026-08-01T09:00:00.000Z"),
+      contextSnapshotJson: { executionLegalEntity: { code: "CDT", displayName: "Nicolaie Cristina", publicId: "legal_cdt" } },
+      id: "snapshot_1",
+    };
+    const before = workOrder({
+      activeCycle: { cycleNumber: 1, executionSnapshot: activeSnapshot, id: "cycle_1", logisticsState: null, reason: "INITIAL", status: "ACTIVE", workflowExecution: null },
+      assignedTechnicianId: "tech_1",
+      claimedAt: activeSnapshot.claimedAt,
+      claimedByUserId: "tech_1",
+      claimStatus: "CLAIMED",
+      executionLegalEntity: { code: "CDT", displayName: "Nicolaie Cristina" },
+      executionLegalEntityId: "legal_cdt",
+    });
+    const after = workOrder({ executionLegalEntity: { code: "NG", displayName: "Nicolaie Gabriel" }, executionLegalEntityId: "legal_ng", version: 2 });
+    const snapshotUpdate = vi.fn().mockResolvedValue({});
+    const cycleUpdate = vi.fn().mockResolvedValue({});
+    const pricingResolve = vi.fn().mockResolvedValue({
+      adjustment: { basisPoints: null, fixedAmountMinor: null, overridePriceMinor: null, type: null },
+      appliedAgreementId: null,
+      appliedAgreementType: null,
+      appliedRuleScope: null,
+      catalogItemId: "catalog_ng",
+      currency: "RON",
+      executionTimeRule: null,
+      executionTimeRules: [],
+      explanation: "Preț NG",
+      finalUnitPriceMinor: 42000,
+      legalEntityCode: "NG",
+      quantity: 2,
+      resolutionTrace: [],
+      standardUnitPriceMinor: 42000,
+      totalPriceMinor: 84000,
+      workTypeId: "work_type_1",
+    });
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+        workCycle: { update: cycleUpdate },
+        workExecutionSnapshot: { update: snapshotUpdate },
+        workOrder: { findUniqueOrThrow: vi.fn().mockResolvedValue(after), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      })),
+      legalEntity: { findUnique: vi.fn().mockResolvedValue({ code: "NG", displayName: "Nicolaie Gabriel", id: "legal_ng", isActive: true }) },
+      workOrder: { findUnique: vi.fn().mockResolvedValue(before) },
+    }, {
+      hasPermission: vi.fn().mockResolvedValue({ allowed: false, effectiveScopes: [] }),
+      requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ALL"] }),
+    }, undefined, undefined, undefined, undefined, undefined, undefined, { resolve: pricingResolve });
+
+    await service.changeExecutionCompany({ actorUserId: "logistics_1", requestMetadata: {} }, "work_order_1", { executionLegalEntityCode: "NG", expectedVersion: 1 });
+
+    expect(pricingResolve).toHaveBeenCalledWith(expect.objectContaining({ legalEntityCode: "NG", legalEntityId: "legal_ng" }), expect.anything());
+    expect(snapshotUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ executionLegalEntityCode: "NG", executionLegalEntityId: "legal_ng", pricingTotalMinor: 84000 }) }));
+    expect(cycleUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ executionLegalEntityCodeSnapshot: "NG", executionLegalEntityId: "legal_ng" }) }));
+  });
+
+  it("blocks company correction after a financial document exists", async () => {
+    const authorizationService = {
+      hasPermission: vi.fn().mockResolvedValue({ allowed: false, effectiveScopes: [] }),
+      requirePermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ALL"] }),
+    };
+    const service = createService({
+      workOrder: { findUnique: vi.fn().mockResolvedValue(workOrder({ invoicedDocumentId: "invoice_1" })) },
+    }, authorizationService);
+
+    await expect(service.changeExecutionCompany({ actorUserId: "manager_1", requestMetadata: {} }, "work_order_1", { executionLegalEntityCode: "NG", expectedVersion: 1 })).rejects.toThrow("document financiar");
+  });
+
+  it("rejects a direct company-change request without the dedicated permission", async () => {
+    const findUnique = vi.fn();
+    const service = createService({ workOrder: { findUnique } }, {
+      hasPermission: vi.fn(),
+      requirePermission: vi.fn().mockRejectedValue(new ForbiddenException("Interzis")),
+    });
+
+    await expect(service.changeExecutionCompany({ actorUserId: "reception_1", requestMetadata: {} }, "work_order_1", { executionLegalEntityCode: "NG", expectedVersion: 1 })).rejects.toBeInstanceOf(ForbiddenException);
+    expect(findUnique).not.toHaveBeenCalled();
+  });
 });
 
 describe("work order helpers", () => {

@@ -159,4 +159,73 @@ describe("WorkItemsService", () => {
     await subject.update({ actorUserId: "user_1", workOrderId: "work_1", itemId: "item_1", dto: { scope: "TOOTH", teeth: [21] } });
     expect(prisma.workOrderItem.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ scope: "TOOTH", teeth: { deleteMany: {}, create: [{ fdiTooth: 21, sortOrder: 0 }] } }) }));
   });
+
+  it("removes one tooth while preserving the sub-work and recalculating current quantity and price", async () => {
+    const initial = record({
+      scope: "TEETH",
+      selectedAddOns: [{ code: "ADAOS", amountMinor: 500 }],
+      teeth: [{ fdiTooth: 21, sortOrder: 0 }, { fdiTooth: 22, sortOrder: 1 }],
+      totalPriceMinor: 9000,
+      workType: { code: "ZR", colorHex: null, id: "type_1", name: "Coroană zirconiu", probeFamily: null, probeTypeCodes: null, symbol: "ZR", unit: "ELEMENT" },
+    });
+    const updated = { ...initial, teeth: [{ fdiTooth: 21, sortOrder: 0 }], totalPriceMinor: 4500 };
+    const operationHistoryUpdate = vi.fn();
+    const itemUpdate = vi.fn().mockResolvedValue(updated);
+    const workUpdate = vi.fn().mockResolvedValue({});
+    const prisma = {
+      workOrder: {
+        findUnique: vi.fn().mockResolvedValue({ code: "WO-1", currency: "RON", id: "work_1", invoicedDocumentId: null }),
+        update: workUpdate,
+      },
+      workOrderItem: {
+        findMany: vi.fn().mockResolvedValueOnce([initial]).mockResolvedValueOnce([updated]),
+        update: itemUpdate,
+        updateMany: vi.fn(),
+      },
+      workOrderToothConnection: { create: vi.fn(), deleteMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
+      workType: { findUnique: vi.fn().mockResolvedValue({ allowedAddOns: [{ code: "ADAOS", amountMinor: 900 }], basePriceMinor: 4000, exclusiveGroup: null, id: "type_1", unit: "ELEMENT" }) },
+      technicianPerformedOperation: { updateMany: operationHistoryUpdate },
+      $transaction: vi.fn(),
+    };
+    prisma.$transaction.mockImplementation(async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+    const authorizationService = { hasPermission: vi.fn().mockResolvedValue({ allowed: true, effectiveScopes: ["ALL"] }), requirePermission: vi.fn() };
+    const auditService = { record: vi.fn().mockResolvedValue(undefined) };
+    const subject = new WorkItemsService(authorizationService as never, auditService as never, prisma as never, { cleanupOrphanedConnections: vi.fn() } as never);
+
+    const result = await subject.updateComposition({
+      actorUserId: "reception_1",
+      dto: { items: [{ id: "item_1", scope: "TOOTH", selectedAddOns: [{ code: "ADAOS", amountMinor: 500 }], teeth: [21], workTypeId: "type_1" }], toothConnections: [] },
+      workOrderId: "work_1",
+    });
+
+    expect(result.items[0]?.teeth.map((tooth) => tooth.fdiTooth)).toEqual([21]);
+    expect(itemUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ totalPriceMinor: 4500 }) }));
+    expect(workUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ quantity: 1, totalPriceMinor: 4500 }) }));
+    expect(operationHistoryUpdate).not.toHaveBeenCalled();
+  });
+
+  it("does not silently persist a sub-work without any selected tooth", async () => {
+    const { subject, prisma } = service();
+    prisma.workOrder.findUnique.mockResolvedValueOnce({ code: "WO-1", currency: "RON", id: "work_1", invoicedDocumentId: null });
+    prisma.workOrderItem.findMany.mockResolvedValueOnce([record({ scope: "TOOTH", teeth: [{ fdiTooth: 21, sortOrder: 0 }] })]);
+
+    await expect(subject.updateComposition({
+      actorUserId: "reception_1",
+      dto: { items: [{ id: "item_1", scope: "TOOTH", teeth: [], workTypeId: "type_1" }], toothConnections: [] },
+      workOrderId: "work_1",
+    })).rejects.toThrow("exact un dinte");
+    expect(prisma.workOrderItem.update).not.toHaveBeenCalled();
+  });
+
+  it("blocks structural changes after the work was included in a financial document", async () => {
+    const { subject, prisma } = service();
+    prisma.workOrder.findUnique.mockResolvedValueOnce({ code: "WO-1", currency: "RON", id: "work_1", invoicedDocumentId: "invoice_1" });
+
+    await expect(subject.updateComposition({
+      actorUserId: "manager_1",
+      dto: { items: [{ id: "item_1", scope: "TOOTH", teeth: [21], workTypeId: "type_1" }], toothConnections: [] },
+      workOrderId: "work_1",
+    })).rejects.toThrow("facturate");
+    expect(prisma.workOrderItem.findMany).not.toHaveBeenCalled();
+  });
 });

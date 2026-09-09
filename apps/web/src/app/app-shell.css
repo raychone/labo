@@ -749,7 +749,7 @@
 
 .dashboard-page__manager-kpis .dashboard-page__metric-label {
   color: var(--dl-color-text);
-  font-size: var(--dl-font-size-body);
+  font-size: calc(var(--dl-font-size-body) * 1.2);
   font-weight: var(--dl-font-weight-semibold);
 }
 
@@ -765,12 +765,12 @@
   background: var(--kpi-accent-surface);
   border-radius: var(--dl-radius-sm);
   display: inline-flex;
-  height: 2.1rem;
+  height: 2.52rem;
   justify-content: center;
-  width: 2.1rem;
+  width: 2.52rem;
 }
 
-.dashboard-page__metric-icon .dashboard-page__icon-svg { height: 1.2rem; width: 1.2rem; }
+.dashboard-page__metric-icon .dashboard-page__icon-svg { height: 1.44rem; width: 1.44rem; }
 .dashboard-page__icon-svg { height: 1.05rem; width: 1.05rem; }
 
 .dashboard-page__metrics.dashboard-page__manager-kpis .dashboard-page__metric--danger {

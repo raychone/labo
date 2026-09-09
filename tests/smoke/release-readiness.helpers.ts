@@ -569,6 +569,12 @@ export async function deliverSmokeCycle(
 
   await loginAs(page, "LOGISTICA");
   await page.goto("/logistics");
+  // Reproduce the explicit Status/Logistics action that authorizes this
+  // technically-ready work to enter route preparation. Technical readiness
+  // alone must never make a work route-eligible.
+  await mutateJson(page, `/works/${work.id}/logistics-actions`, "PATCH", {
+    requiresDelivery: true,
+  });
   const workForDelivery = await browserJson<{
     readonly clinic: { readonly id: string };
   }>(page, `/works/${work.id}`);

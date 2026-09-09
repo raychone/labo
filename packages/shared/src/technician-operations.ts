@@ -201,6 +201,7 @@ export interface TechnicianCurrencyTotal {
 export interface TechnicianPaymentView {
   readonly amountMinor: number;
   readonly createdAt: string;
+  readonly createdByDisplayName: string | null;
   readonly createdByUserId: string;
   readonly currency: string;
   readonly id: string;

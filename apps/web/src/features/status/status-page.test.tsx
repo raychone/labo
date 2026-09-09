@@ -195,4 +195,33 @@ describe("StatusPage", () => {
     fireEvent.click(openLink!);
     expect(await screen.findByText("Works detail route")).toBeDefined();
   });
+
+  it("marks a probe-ready work for delivery only after the explicit Livrare action", async () => {
+    const mutations: unknown[] = [];
+    const response: OperationalStatusResponse = {
+      ...operationalStatusResponse,
+      items: operationalStatusResponse.items.map((item) => ({ ...item, requiresDelivery: false, technicalReadiness: "PROBE_READY" })),
+    };
+    const fallback = createFetchMock();
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/auth/permissions")) return Promise.resolve(createJsonResponse({ permissions: [
+        { key: "logistics.delivery_marker.update", scopes: ["ALL"] },
+        { key: "works.read_all", scopes: ["ALL"] },
+      ] }));
+      if (url.endsWith("/auth/csrf")) return Promise.resolve(createJsonResponse({ csrfToken: "csrf-token" }));
+      if (url.includes("/status/operational")) return Promise.resolve(createJsonResponse(response));
+      if (url.endsWith("/works/work_1/logistics-actions") && init?.method === "PATCH") {
+        mutations.push(JSON.parse(String(init.body)));
+        return Promise.resolve(createJsonResponse({ requiresDelivery: true, requiresPickup: false }));
+      }
+      return fallback(input);
+    }));
+
+    renderWithProviders(<StatusPage experimental />);
+    expect(await screen.findByText("Maria Ionescu")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Livrare" }));
+
+    await waitFor(() => expect(mutations).toEqual([{ requiresDelivery: true }]));
+  });
 });

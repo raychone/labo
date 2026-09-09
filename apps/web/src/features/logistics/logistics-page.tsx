@@ -505,6 +505,13 @@ export function LogisticsPage({ initialCreatePickup = false, initialRouteQueueWi
                 return !horizon || isWithinDays(item.requestedDeliveryDate, horizon);
               }).filter((item) => !assignedStopKeys.has(`DELIVERY:${item.id}`) && !assignedStopKeys.has(`PICKUP:${item.id}`)).map((item) => (
                 <WorkRow item={item} key={item.id} onFastAction={(direction) => {
+                  if (direction === "DELIVERY" && !item.requiresDelivery) {
+                    updateWorkActions.mutate({ input: { requiresDelivery: true, requiresPickup: false }, workOrderId: item.id }, {
+                      onSuccess: () => toast.showToast({ message: `${item.workCode} este pregătită pentru adăugarea într-un traseu.`, variant: "success" }),
+                      onError: (error) => toast.showToast({ title: "Livrarea nu a fost pregătită", message: getErrorMessage(error), variant: "error" }),
+                    });
+                    return;
+                  }
                   queueTransport.mutate({
                     workOrderId: item.id,
                     input: { direction, version: item.logistics.version },

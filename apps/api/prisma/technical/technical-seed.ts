@@ -95,8 +95,8 @@ export async function seedTechnicalCatalog(prisma: PrismaClient): Promise<{ read
 
   for (const [index, [category, code, name]] of operationSpecs.entries()) {
     await prisma.technicianOperation.upsert({
-      create: { category, code: `TECH-${code}`, createdByUserId: manager.id, description: "Manoperă din catalogul tehnic.", id: `technical_operation_${code.toLowerCase()}`, name, sortOrder: index + 1, updatedByUserId: manager.id },
-      update: { category, description: "Manoperă din catalogul tehnic.", isActive: true, name, sortOrder: index + 1, updatedByUserId: manager.id },
+      create: { category, code: `TECH-${code}`, createdByUserId: manager.id, description: null, id: `technical_operation_${code.toLowerCase()}`, name, sortOrder: index + 1, updatedByUserId: manager.id },
+      update: { category, description: null, isActive: true, name, sortOrder: index + 1, updatedByUserId: manager.id },
       where: { id: `technical_operation_${code.toLowerCase()}` },
     });
 

@@ -38,6 +38,10 @@ function isPreparationList(route: CourierRouteView): boolean {
   return route.status === "DRAFT" && route.courier === null && route.name === "Lista pentru viitoarele trasee";
 }
 
+function isTerminalRoute(route: CourierRouteView): boolean {
+  return route.status === "COMPLETED" || route.status === "CANCELLED";
+}
+
 function routeStatusLabel(status: CourierRouteView["status"], route?: CourierRouteView): string {
   switch (status) {
     case "DRAFT": return route && !isPreparationList(route) ? "Traseu pregătit · neasignat" : "Listă de pregătire";
@@ -132,12 +136,7 @@ export function LogisticsRouteBuilderPage(): ReactNode {
     return contacts;
   }, [allRoutesQuery.data?.items]);
   const deliveryCandidates = deliveryCandidatesQuery.data?.items ?? [];
-  const deliveryRouteCandidates = deliveryCandidates.filter((work) =>
-    work.requiresLogisticsAction
-      && (work.requiresDelivery
-        || work.logisticsActionReasons.includes("READY_FOR_PROBE_DELIVERY")
-        || work.logisticsActionReasons.includes("READY_FOR_FINAL_DELIVERY")),
-  );
+  const deliveryRouteCandidates = deliveryCandidates.filter((work) => work.requiresDelivery);
   const pickupCandidates = (pickupsQuery.data ?? []).filter((pickup) => pickup.status === "SCHEDULED");
   const assignedStopKeys = useMemo(() => new Set((allRoutesQuery.data?.items ?? [])
     // Draft/list entries remain available to be arranged into a real route.
@@ -161,7 +160,8 @@ export function LogisticsRouteBuilderPage(): ReactNode {
     return !listCourierId || route.courier?.id === listCourierId;
   }), [listCourierId, listRouteId, printRouteId, routesQuery.data?.items]);
   const preparationLists = useMemo(() => visibleRoutes.filter(isPreparationList), [visibleRoutes]);
-  const plannedRoutes = useMemo(() => visibleRoutes.filter((route) => !isPreparationList(route)), [visibleRoutes]);
+  const plannedRoutes = useMemo(() => visibleRoutes.filter((route) => !isPreparationList(route) && !isTerminalRoute(route)), [visibleRoutes]);
+  const historicalRoutes = useMemo(() => visibleRoutes.filter((route) => !isPreparationList(route) && isTerminalRoute(route)), [visibleRoutes]);
   function editRoute(route: CourierRouteView): void {
     setEditingRouteId(route.id);
     setEditingRouteStatus(route.status);
@@ -368,7 +368,7 @@ export function LogisticsRouteBuilderPage(): ReactNode {
           <div><strong>{preparationLists.reduce((total, list) => total + list.stops.length, 0)}</strong><span>De pregătit</span></div>
           <div><strong>{plannedRoutes.filter((route) => route.status === "ASSIGNED").length}</strong><span>Planificate</span></div>
           <div><strong>{plannedRoutes.filter((route) => route.status === "IN_PROGRESS").length}</strong><span>În desfășurare</span></div>
-          <div><strong>{plannedRoutes.filter((route) => route.status === "COMPLETED").length}</strong><span>Finalizate</span></div>
+          <div><strong>{historicalRoutes.length}</strong><span>În istoric</span></div>
         </div>
 
         <div className="logistics-page__print-hide">
@@ -505,6 +505,13 @@ export function LogisticsRouteBuilderPage(): ReactNode {
             {plannedRoutes.filter((route) => route.courier).map((route) => (
               <RouteGroup key={route.id} canAssign={canAssign} canCancel={canCancel} canExecute={canExecute} assigningCourierId={assigningCourierId} assigningRouteId={assigningRouteId} couriers={couriersQuery.data ?? []} deletePending={deleteRoute.isPending} editRoute={editRoute} onAssign={assignRoute} onRecord={recordRouteStopAsLogistics} onRemove={removeRoute} onStart={startRouteAsLogistics} onStartAssigning={startAssigning} outcomePending={outcomeRoute.isPending} route={route} startPending={startRoute.isPending} updatePending={updateRoute.isPending} setAssigningCourierId={setAssigningCourierId} printRoutes={printRoutes} />
             ))}
+            {historicalRoutes.length > 0 ? <details className="logistics-page__route-history">
+              <summary>Istoric trasee · {historicalRoutes.length}</summary>
+              <p>Trasee încheiate, păstrate pentru evidență.</p>
+              {historicalRoutes.map((route) => (
+                <RouteGroup key={route.id} canAssign={false} canCancel={false} canExecute={false} assigningCourierId="" assigningRouteId={null} couriers={[]} deletePending={false} editRoute={editRoute} onAssign={() => undefined} onRecord={() => undefined} onRemove={() => undefined} onStart={() => undefined} onStartAssigning={() => undefined} outcomePending={false} route={route} startPending={false} updatePending={false} setAssigningCourierId={() => undefined} printRoutes={printRoutes} />
+              ))}
+            </details> : null}
           </CardContent>
         </Card>
       </section>
@@ -550,7 +557,7 @@ function RouteGroup({ assigningCourierId, assigningRouteId, canAssign, canCancel
       </div> : null}
       {canCancel && (route.status === "DRAFT" || route.status === "ASSIGNED") ? <Button disabled={deletePending} onClick={() => onRemove(route)} size="small" type="button" variant="secondary">Anulează traseul</Button> : null}
       <Tooltip content="Printează traseul"><IconButton aria-label={`Printează traseul ${route.routeNumber}`} icon="⎙" onClick={() => printRoutes(route.id)} size="medium" variant="outline" /></Tooltip>
-      {route.status !== "COMPLETED" ? <Tooltip content="Editează traseul"><IconButton aria-label={`Editează traseul ${route.routeNumber}`} icon="✎" onClick={() => editRoute(route)} size="medium" variant="outline" /></Tooltip> : null}
+      {!isTerminalRoute(route) ? <Tooltip content="Editează traseul"><IconButton aria-label={`Editează traseul ${route.routeNumber}`} icon="✎" onClick={() => editRoute(route)} size="medium" variant="outline" /></Tooltip> : null}
     </div>
     {canExecute && route.status === "IN_PROGRESS" ? <LogisticsRouteExecution route={route} onRecord={(stop, outcome, notes) => onRecord(route.id, stop.id, outcome, notes)} pending={outcomePending} /> : null}
   </div>;

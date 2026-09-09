@@ -413,6 +413,11 @@ export type ReassignWorkInput = {
   readonly technicianId: string;
 };
 
+export type ChangeWorkCompanyInput = {
+  readonly executionLegalEntityCode: LegalEntityCode;
+  readonly expectedVersion: number;
+};
+
 export type SetWorkStatusInput = {
   readonly reason?: string | null;
   readonly status: Exclude<WorkStatus, "REGISTERED"> | "PROBA";

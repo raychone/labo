@@ -513,6 +513,43 @@ describe("WorksPage", () => {
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/work-types/options"), expect.anything());
   });
 
+  it("lets an authorized manager assign the company from work details", async () => {
+    const companyChanges: unknown[] = [];
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/auth/permissions")) {
+        return Promise.resolve(createJsonResponse({ permissions: [
+          { key: "works.company.change", scopes: ["ALL"] },
+          { key: "works.create", scopes: ["ALL"] },
+          { key: "works.read_all", scopes: ["ALL"] },
+        ] }));
+      }
+      if (url.endsWith("/auth/csrf")) return Promise.resolve(createJsonResponse({ csrfToken: "csrf-token" }));
+      if (url.endsWith("/works/work_order_1/company") && init?.method === "PATCH") {
+        companyChanges.push(JSON.parse(String(init.body)));
+        return Promise.resolve(createJsonResponse({ ...workDetail, claim: { ...workDetail.claim, executionLegalEntity: { code: "NG", displayName: "Nicolaie Gabriel" } }, version: 2 }));
+      }
+      if (url.includes("/works/work_order_1")) return Promise.resolve(createJsonResponse(workDetail));
+      if (url.includes("/works/work-type-options")) return Promise.resolve(createJsonResponse(workTypeOptionsResponse));
+      if (url.includes("/clinics/options")) return Promise.resolve(createJsonResponse(clinicOptionsResponse));
+      if (url.includes("/doctors/options")) return Promise.resolve(createJsonResponse(doctorOptionsResponse));
+      if (url.includes("/works?")) return Promise.resolve(createJsonResponse(worksListResponse));
+      return Promise.resolve(createJsonResponse({}, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(<WorksPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Deschide" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Setează firma" }));
+    const dialog = await screen.findByRole("dialog", { name: "Setează firma" });
+    fireEvent.focus(within(dialog).getByLabelText("Firmă"));
+    fireEvent.click(await within(dialog).findByRole("option", { name: "NG · Nicolaie Gabriel" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirmă schimbarea" }));
+
+    await waitFor(() => expect(companyChanges).toEqual([{ executionLegalEntityCode: "NG", expectedVersion: 1 }]));
+    expect(await screen.findByText("Lucrarea este acum atribuită firmei NG.")).toBeDefined();
+  });
+
   it("resets doctor selection when clinic changes in the create form", async () => {
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
       const url = String(input);

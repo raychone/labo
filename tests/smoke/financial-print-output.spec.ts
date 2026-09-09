@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
-import type { Page } from "@playwright/test";
+import type { BrowserName, Page } from "@playwright/test";
+import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 
@@ -107,7 +108,7 @@ function statementRange(document: Awaited<ReturnType<typeof listDocuments>>[numb
   return { dateFrom: `${year}-01-01`, dateTo: `${year}-12-31` };
 }
 
-async function createAndPrintPdf(page: Page, url: string, outputPath: string, expectedDocumentTitle?: "FACTURA" | "PROFORMA"): Promise<void> {
+async function createAndPrintPdf(page: Page, browserName: BrowserName, url: string, outputPath: string, expectedDocumentTitle?: "FACTURA" | "PROFORMA"): Promise<void> {
   await page.goto(url);
   await expect(page.locator(".app-shell__sidebar")).toHaveCount(0);
   await expect(page.getByText("Sari la conținut")).toHaveCount(0);
@@ -123,12 +124,31 @@ async function createAndPrintPdf(page: Page, url: string, outputPath: string, ex
     await expect(page.getByRole("heading", { name: expectedDocumentTitle ?? "FACTURA" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Seria:")).toBeVisible({ timeout: 15_000 });
   }
-  mkdirSync(dirname(outputPath), { recursive: true });
-  await page.pdf({ format: "A4", path: outputPath, printBackground: true, preferCSSPageSize: true });
+  if (browserName === "chromium") {
+    mkdirSync(dirname(outputPath), { recursive: true });
+    await page.pdf({ format: "A4", path: outputPath, printBackground: true, preferCSSPageSize: true });
+  }
+}
+
+async function exportedPdfText(page: Page, path: string): Promise<string> {
+  const response = await page.request.get(`${process.env.PLAYWRIGHT_API_BASE_URL ?? "http://127.0.0.1:3137"}${path}`);
+  expect(response.ok(), await response.text()).toBe(true);
+  expect(response.headers()["content-type"]).toContain("application/pdf");
+  const bytes = await response.body();
+  expect(bytes.subarray(0, 5).toString("ascii")).toBe("%PDF-");
+  const document = await getDocument({ data: new Uint8Array(bytes) }).promise;
+  const pages: string[] = [];
+  for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+    const pdfPage = await document.getPage(pageNumber);
+    const content = await pdfPage.getTextContent();
+    pages.push(content.items.map((item) => "str" in item ? item.str : "").join(" "));
+  }
+  await document.destroy();
+  return pages.join(" ").replace(/\s+/g, " ").trim();
 }
 
 test.describe("financial print output", () => {
-  test("prints clean A4 billing documents and statements without the app shell", async ({ page }) => {
+  test("prints clean A4 billing documents and statements without the app shell", async ({ browserName, page }) => {
     test.setTimeout(600_000);
     await loginAs(page, "MANAGER");
     await page.goto("/dashboard");
@@ -142,11 +162,23 @@ test.describe("financial print output", () => {
     const cdtStatementRange = statementRange(cdtOneLineInvoice);
     await createAndPrintPdf(
       page,
+      browserName,
       `/billing/statements/clinic/print?clinicId=${encodeURIComponent(cdtOneLineInvoice.clinicId)}&dateFrom=${cdtStatementRange.dateFrom}&dateTo=${cdtStatementRange.dateTo}&documentIds=${encodeURIComponent(cdtOneLineInvoice.documentId)}`,
       join("test-results", "financial-print", "cdt-statement.pdf"),
     );
-    await createAndPrintPdf(page, `/billing/documents/${cdtOneLineInvoice.documentId}/print`, join("test-results", "financial-print", "cdt-invoice.pdf"), cdtOneLineInvoice.type === "INVOICE" ? "FACTURA" : "PROFORMA");
-    await createAndPrintPdf(page, `/billing/documents/${cdtMultiLineInvoice.documentId}/print`, join("test-results", "financial-print", "cdt-multi-invoice.pdf"), cdtMultiLineInvoice.type === "INVOICE" ? "FACTURA" : "PROFORMA");
+    await createAndPrintPdf(page, browserName, `/billing/documents/${cdtOneLineInvoice.documentId}/print`, join("test-results", "financial-print", "cdt-invoice.pdf"), cdtOneLineInvoice.type === "INVOICE" ? "FACTURA" : "PROFORMA");
+    await createAndPrintPdf(page, browserName, `/billing/documents/${cdtMultiLineInvoice.documentId}/print`, join("test-results", "financial-print", "cdt-multi-invoice.pdf"), cdtMultiLineInvoice.type === "INVOICE" ? "FACTURA" : "PROFORMA");
+
+    const documentText = await exportedPdfText(page, `/billing-documents/${cdtOneLineInvoice.documentId}/pdf`);
+    expect(documentText).toContain(cdtOneLineInvoice.documentNumber);
+    expect(documentText).not.toContain("Se verifică sesiunea");
+    expect(documentText).not.toContain("Se încarcă documentul pentru print");
+    const statementQuery = `clinicId=${encodeURIComponent(cdtOneLineInvoice.clinicId)}&dateFrom=${cdtStatementRange.dateFrom}&dateTo=${cdtStatementRange.dateTo}&documentIds=${encodeURIComponent(cdtOneLineInvoice.documentId)}`;
+    const statementText = await exportedPdfText(page, `/billing/statements/clinic/pdf?${statementQuery}`);
+    expect(statementText).toContain("Anexa la factura");
+    expect(statementText).toContain(cdtOneLineInvoice.documentNumber);
+    expect(statementText).not.toContain("Se verifică sesiunea");
+    expect(statementText).not.toContain("Se încarcă nota de plată");
 
     await switchCompany(page, "NG");
     const ngDocuments = await ensureDocumentsForCompany(page, "NG");
@@ -155,9 +187,10 @@ test.describe("financial print output", () => {
     const ngStatementRange = statementRange(ngDocument);
     await createAndPrintPdf(
       page,
+      browserName,
       `/billing/statements/clinic/print?clinicId=${encodeURIComponent(ngDocument.clinicId)}&dateFrom=${ngStatementRange.dateFrom}&dateTo=${ngStatementRange.dateTo}&documentIds=${encodeURIComponent(ngDocument.documentId)}`,
       join("test-results", "financial-print", "ng-statement.pdf"),
     );
-    await createAndPrintPdf(page, `/billing/documents/${ngDocument.documentId}/print`, join("test-results", "financial-print", "ng-invoice.pdf"), ngDocument.type === "INVOICE" ? "FACTURA" : "PROFORMA");
+    await createAndPrintPdf(page, browserName, `/billing/documents/${ngDocument.documentId}/print`, join("test-results", "financial-print", "ng-invoice.pdf"), ngDocument.type === "INVOICE" ? "FACTURA" : "PROFORMA");
   });
 });

@@ -62,7 +62,7 @@ describe("LogisticsRouteBuilderPage", () => {
             preparationGroup: null,
             priority: "NORMAL",
             technicalReadiness: "FINAL_READY",
-            requiresDelivery: false,
+            requiresDelivery: true,
             requiresPickup: false,
             requestedDeliveryDate: "2026-08-21T00:00:00.000Z",
             workCode: "WO-26-0001",
@@ -165,5 +165,43 @@ describe("LogisticsRouteBuilderPage", () => {
 
     expect(await screen.findByText("WO-26-0001 · Ion Pop")).toBeDefined();
     expect(screen.getByRole("button", { name: "Salvează modificările" })).toBeDefined();
+  });
+
+  it("keeps completed and cancelled routes in a collapsed, read-only history instead of the active register", async () => {
+    const route = (id: string, routeNumber: string, status: "ASSIGNED" | "COMPLETED" | "CANCELLED") => ({
+      completedAt: status === "COMPLETED" ? "2026-08-21T12:00:00.000Z" : null,
+      courier: { id: "courier_1", name: "Curier Test" },
+      createdAt: "2026-08-21T08:00:00.000Z",
+      id,
+      name: status === "ASSIGNED" ? "Activ" : status === "COMPLETED" ? "Finalizat" : "Anulat",
+      notes: null,
+      routeDate: "2026-08-21",
+      routeNumber,
+      startedAt: status === "COMPLETED" ? "2026-08-21T09:00:00.000Z" : null,
+      status,
+      stops: [{ addressOverride: "Str. Test 1", failureReason: null, id: `stop_${id}`, outcomeAt: status === "COMPLETED" ? "2026-08-21T11:00:00.000Z" : null, outcomeByUserName: status === "COMPLETED" ? "Curier Test" : null, outcomeNotes: null, outcomeStatus: status === "COMPLETED" ? "DELIVERED" : "PENDING", phoneOverride: "0700000000", pickupRequestId: null, stopNotes: null, stopOrder: 1, targetLabel: `${routeNumber} · Pacient`, type: "DELIVERY", workOrderId: `work_${id}` }],
+      updatedAt: "2026-08-21T12:00:00.000Z",
+      version: 1,
+    });
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/auth/permissions")) return Promise.resolve(createJsonResponse({ permissions: ["routes.read", "logistics.center.read", "pickup.read"].map((key) => ({ key, scopes: ["ALL"] })) }));
+      if (url.includes("/logistics/center?")) return Promise.resolve(createJsonResponse({ items: [], page: 1, pageCount: 1, pageSize: 100, total: 0 }));
+      if (url.includes("/routes?")) return Promise.resolve(createJsonResponse({ items: [route("route_active", "TR-ACTIV", "ASSIGNED"), route("route_completed", "TR-FINALIZAT", "COMPLETED"), route("route_cancelled", "TR-ANULAT", "CANCELLED")], page: 1, pageCount: 1, pageSize: 100, total: 3 }));
+      if (url.endsWith("/couriers/options") || url.endsWith("/pickup-requests")) return Promise.resolve(createJsonResponse([]));
+      return Promise.resolve(createJsonResponse({}, 404));
+    }));
+
+    renderWithProviders(<LogisticsRouteBuilderPage />);
+
+    expect(await screen.findByText("Traseu · TR-ACTIV · Activ")).toBeDefined();
+    expect(screen.getByText("1 traseu pentru ziua selectată")).toBeDefined();
+    const historySummary = screen.getByText("Istoric trasee · 2");
+    const history = historySummary.closest("details");
+    expect(history?.open).toBe(false);
+    expect(history?.textContent).toContain("Traseu · TR-FINALIZAT · Finalizat");
+    expect(history?.textContent).toContain("Traseu · TR-ANULAT · Anulat");
+    expect(screen.queryByRole("button", { name: "Editează traseul TR-FINALIZAT" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Editează traseul TR-ANULAT" })).toBeNull();
   });
 });
