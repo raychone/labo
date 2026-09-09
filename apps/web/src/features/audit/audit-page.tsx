@@ -41,6 +41,11 @@ export function AuditPage(): ReactNode {
     setFilters((current) => ({ ...current, [key]: value }));
   }
 
+  function resetFilters(): void {
+    setPage(1);
+    setFilters({ action: "", actor: "", dateFrom: "", dateTo: "", resourceType: "" });
+  }
+
   return (
     <main className="dl-container">
       <header>
@@ -48,7 +53,7 @@ export function AuditPage(): ReactNode {
         <p>Istoricul activităților importante din laborator, prezentat clar și ușor de urmărit.</p>
       </header>
       <Card>
-        <CardHeader><CardTitle>Filtre audit</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Filtre audit</CardTitle><Button disabled={Object.values(filters).every((value) => value.length === 0)} onClick={resetFilters} size="small" variant="outline">Resetează filtrele</Button></CardHeader>
         <CardContent className="audit-page__filters">
           <TextInput label="Actor" value={filters.actor} onChange={(event) => updateFilter("actor", event.target.value)} />
           <Select label="Acțiune" options={[{ label: "Toate acțiunile", value: "" }, { label: "Autentificare", value: "auth." }, { label: "Lucrări", value: "work" }, { label: "Pacienți", value: "patient" }, { label: "Prețuri", value: "pricing." }, { label: "Facturare", value: "billing." }, { label: "Logistică", value: "logistics." }, { label: "Tehnicieni", value: "technician" }, { label: "Utilizatori", value: "user." }, { label: "Setări", value: "settings." } ]} value={filters.action} onChange={(event) => updateFilter("action", event.target.value)} />
@@ -59,6 +64,7 @@ export function AuditPage(): ReactNode {
       </Card>
       <Card>
         <CardContent>
+          <p className="audit-page__result-summary" aria-live="polite">{auditQuery.data?.total ?? 0} activități găsite</p>
           <DataTable columns={columns} emptyMessage="Nu există intrări pentru filtrele curente." error={auditQuery.error ? getErrorMessage(auditQuery.error) : undefined} getRowKey={(row) => row.id} isLoading={auditQuery.isLoading} rows={auditQuery.data?.items ?? []} />
           <div className="audit-page__pagination">
             <Button disabled={page <= 1 || auditQuery.isLoading} onClick={() => setPage((current) => Math.max(1, current - 1))} variant="outline">Înapoi</Button>

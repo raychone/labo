@@ -50,13 +50,14 @@ case "$RESTORE_DATABASE_URL" in
   *-pooler.*) fail "RESTORE_DATABASE_URL must be a direct PostgreSQL connection, not a pooled Neon URL." ;;
 esac
 
-actual_database="$(PGDATABASE="$RESTORE_DATABASE_URL" psql -X -v ON_ERROR_STOP=1 -Atqc 'select current_database();')"
+actual_database="$(psql --dbname="$RESTORE_DATABASE_URL" -X -v ON_ERROR_STOP=1 -Atqc 'select current_database();')"
 [[ "$actual_database" == "$RESTORE_EXPECTED_DATABASE" ]] || fail "Connected database does not match RESTORE_EXPECTED_DATABASE."
 case "$actual_database" in
   postgres|template0|template1) fail "Refusing to restore into a PostgreSQL system database." ;;
 esac
 
-guard_present="$(PGDATABASE="$RESTORE_DATABASE_URL" psql -X -v ON_ERROR_STOP=1 -v guard_token="$RESTORE_GUARD_TOKEN" -Atqc "select exists (select 1 from public.restore_verification_guard where token = :'guard_token');")"
+guard_present="$(printf '%s\n' "select exists (select 1 from public.restore_verification_guard where token = :'guard_token');" \
+  | psql --dbname="$RESTORE_DATABASE_URL" -X -v ON_ERROR_STOP=1 -v guard_token="$RESTORE_GUARD_TOKEN" -Atq)"
 [[ "$guard_present" == "t" ]] || fail "The isolated target does not contain the required restore verification guard."
 
 checksum_file="$RESTORE_BACKUP_FILE.sha256"
@@ -76,16 +77,17 @@ pg_restore --list "$plain_dump" >/dev/null
 
 pg_restore \
   --clean \
+  --file=- \
   --if-exists \
   --no-owner \
   --no-privileges \
   "$plain_dump" \
-  | PGDATABASE="$RESTORE_DATABASE_URL" psql -X -v ON_ERROR_STOP=1
+  | psql --dbname="$RESTORE_DATABASE_URL" -X -v ON_ERROR_STOP=1
 
-schema_check="$(PGDATABASE="$RESTORE_DATABASE_URL" psql -X -v ON_ERROR_STOP=1 -Atqc "select (to_regclass('public._prisma_migrations') is not null and to_regclass('public.work_orders') is not null and to_regclass('public.users') is not null);")"
+schema_check="$(psql --dbname="$RESTORE_DATABASE_URL" -X -v ON_ERROR_STOP=1 -Atqc "select (to_regclass('public._prisma_migrations') is not null and to_regclass('public.work_orders') is not null and to_regclass('public.users') is not null);")"
 [[ "$schema_check" == "t" ]] || fail "Required application tables are missing after restore."
 
-unfinished_migrations="$(PGDATABASE="$RESTORE_DATABASE_URL" psql -X -v ON_ERROR_STOP=1 -Atqc 'select count(*) from public._prisma_migrations where finished_at is null and rolled_back_at is null;')"
+unfinished_migrations="$(psql --dbname="$RESTORE_DATABASE_URL" -X -v ON_ERROR_STOP=1 -Atqc 'select count(*) from public._prisma_migrations where finished_at is null and rolled_back_at is null;')"
 [[ "$unfinished_migrations" == "0" ]] || fail "The restored database contains unfinished Prisma migrations."
 
 printf 'verify-postgres-restore: completed database=%s\n' "$actual_database"

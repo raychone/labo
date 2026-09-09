@@ -41,13 +41,14 @@ function useOverlayLifecycle(
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
-    window.setTimeout(() => {
+    const focusTimer = window.setTimeout(() => {
       const initialElement =
         initialFocusRef?.current ?? getFocusableElements(containerRef.current ?? document.body)[0];
       initialElement?.focus();
     }, 0);
 
     return () => {
+      window.clearTimeout(focusTimer);
       document.body.style.overflow = previousOverflow;
       returnFocusRef.current?.focus();
     };

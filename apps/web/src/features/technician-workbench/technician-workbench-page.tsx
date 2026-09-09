@@ -22,6 +22,7 @@ import {
   type WorkSummary,
 } from "@dental-lab/shared";
 import { ToothDiagram } from "../../components/dental/tooth-diagram.js";
+import { NextStep } from "../../components/next-step.js";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -189,6 +190,11 @@ export function TechnicianWorkbenchPage(): ReactNode {
             <p>Lucrări de preluat și lucrările mele · {new Intl.DateTimeFormat("ro-RO", { dateStyle: "full" }).format(new Date())}</p>
           </div>
         </header>
+
+        <NextStep
+          action={tab === "AVAILABLE" ? <Button onClick={() => activateSummary("AVAILABLE")} size="small">Vezi lucrările de preluat</Button> : undefined}
+          description={tab === "AVAILABLE" ? "Preia o lucrare pentru a începe execuția." : "Alege lucrarea activă, adaugă manopere, apoi marchează proba sau lucrarea ca gata."}
+        />
 
         <div className="technician-workbench__summary" aria-label="Rezumat atelier">
           <MetricButton label="Lucrări de preluat" onClick={() => activateSummary("AVAILABLE")} value={availableQuery.data?.total ?? 0} />

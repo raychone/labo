@@ -79,10 +79,14 @@ export function DataTable<TRow>({
           <thead>
             <tr>
               {columns.map((column) => (
-                <th className={clsx(column.align && `dl-table-cell--${column.align}`)} key={column.id} scope="col">
+                <th
+                  aria-sort={sort?.columnId === column.id ? sort.direction : undefined}
+                  className={clsx(column.align && `dl-table-cell--${column.align}`)}
+                  key={column.id}
+                  scope="col"
+                >
                   {column.isSortable ? (
                     <button
-                      aria-sort={sort?.columnId === column.id ? sort.direction : undefined}
                       className="dl-data-table__sort"
                       onClick={() => toggleSort(column.id)}
                       type="button"

@@ -3,6 +3,7 @@ import {
   DELIVERY_FAILURE_REASON_LABELS,
   DELIVERY_FILTERS,
   DELIVERY_STATUS_LABELS,
+  LOGISTICS_STATUS_LABELS,
   SIGNATURE_LIMITS,
   SIGNATURE_OVERRIDE_REASON_LABELS,
   type DeliveryDetail,
@@ -43,6 +44,8 @@ const filterLabels: Record<DeliveryFilter, string> = {
   TODAY: "Astăzi",
   UNASSIGNED: "Neatribuite",
 };
+
+const logisticsStatusLabels: Readonly<Record<string, string>> = LOGISTICS_STATUS_LABELS;
 
 function formatDateTime(value: string | null): string {
   return value ? new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "-";
@@ -298,7 +301,7 @@ function DeliveryDrawer({ delivery, onAction }: { readonly delivery: DeliveryDet
           <div className="deliveries-page__work" key={work.id}>
             <strong>{work.workCode}</strong>
             <span>{work.patientName} · {work.doctorName} · {work.workTypeName}</span>
-            <span>{work.cycleNumber ? `Ciclul ${work.cycleNumber}` : "Ciclu nedeterminat"} · {work.logisticsStatus}</span>
+            <span>{work.cycleNumber ? `Ciclul ${work.cycleNumber}` : "Ciclu nedeterminat"} · {logisticsStatusLabels[work.logisticsStatus] ?? work.logisticsStatus}</span>
           </div>
         ))}
       </section>

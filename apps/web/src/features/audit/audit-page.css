@@ -12,6 +12,12 @@
   margin-top: 16px;
 }
 
+.audit-page__result-summary {
+  color: var(--dl-color-text-muted, #667085);
+  font-size: 0.875rem;
+  margin: 0 0 12px;
+}
+
 .audit-page__pagination span {
   color: var(--dl-color-text-muted, #667085);
   font-size: 0.875rem;

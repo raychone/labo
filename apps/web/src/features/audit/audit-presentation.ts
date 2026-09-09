@@ -81,6 +81,9 @@ function businessValue(value: unknown): string {
     RECEPTIE: "Recepție",
     IN_ASTEPTARE: "În așteptare",
     IN_LUCRU: "În lucru",
+    IN_TRANSIT: "În tranzit",
+    IN_PROGRESS: "În desfășurare",
+    COMPLETED: "Finalizat",
     FINALIZATA: "Finalizată",
     PROBE_READY: "Probă gata",
     FINAL_READY: "Gata pentru livrare finală",
@@ -89,10 +92,13 @@ function businessValue(value: unknown): string {
     PICKED_UP: "Ridicat",
     NOT_PICKED_UP: "Neridicat",
     RECEIVED: "Recepționat",
+    READY_FOR_DELIVERY: "Gata de livrare",
+    READY_FOR_PICKUP: "Gata de ridicare",
+    PENDING: "În așteptare",
     PLANNED: "Planificat",
     CANCELLED: "Anulat",
   };
-  return labels[raw] ?? raw;
+  return labels[raw] ?? raw.replaceAll("_", " ").toLocaleLowerCase("ro-RO");
 }
 
 export function getAuditActionLabel(action: string): string {

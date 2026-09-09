@@ -16,6 +16,7 @@ import {
 import { fetchUsers, hasPermission } from "../users/users-api.js";
 import { EarningsContent, EarningsFilters } from "../technician-earnings/technician-earnings-page.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
+import { NextStep } from "../../components/next-step.js";
 import "./manager-technicians-page.css";
 
 type EarningsPeriod = "DAY" | "MONTH" | "YEAR";
@@ -180,6 +181,14 @@ export function ManagerTechniciansPage(): ReactNode {
           {canManageRates ? <Button onClick={() => { resetOperationForm(); setIsOperationModalOpen(true); }} type="button">Adaugă manoperă</Button> : null}
         </header>
 
+        <NextStep description={selectedTechnicianId ? "Verifică valoarea realizată, apoi actualizează ratele viitoare sau înregistrează achitarea." : "Selectează un tehnician pentru a vedea valoarea, ratele și achitările relevante."} />
+
+        <nav className="manager-technicians__workspace-nav" aria-label="Zone configurare tehnicieni">
+          <a href="#valoare">Valoare</a>
+          <a href="#catalog-manopere">Catalog manopere</a>
+          <a href="#rate-plati">Rate și plăți</a>
+        </nav>
+
         <Card>
           <CardContent className="manager-technicians__filters">
             <Select
@@ -193,20 +202,20 @@ export function ManagerTechniciansPage(): ReactNode {
         </Card>
 
         <EarningsFilters date={date} month={month} onDateChange={setDate} onMonthChange={setMonth} onPeriodChange={(value) => setPeriod(value)} period={period} />
-        <EarningsContent data={earningsQuery.data} error={earningsQuery.isError ? getErrorMessage(earningsQuery.error) : undefined} isLoading={earningsQuery.isLoading} paymentPerspective="manager" />
+        <section id="valoare" aria-labelledby="valoare-title"><h2 className="manager-technicians__section-title" id="valoare-title">Valoare realizată</h2><EarningsContent data={earningsQuery.data} error={earningsQuery.isError ? getErrorMessage(earningsQuery.error) : undefined} isLoading={earningsQuery.isLoading} paymentPerspective="manager" /></section>
 
         {canReadRates ? (
-          <Card>
+          <Card id="catalog-manopere">
             <CardHeader>
               <CardTitle>Catalog manopere</CardTitle>
-              <CardDescription>Manoperele seeduite și cele adăugate de Manager pot primi rate diferite pentru fiecare tehnician.</CardDescription>
+              <CardDescription>Manoperele configurate și cele adăugate de Manager pot primi rate diferite pentru fiecare tehnician.</CardDescription>
             </CardHeader>
             <CardContent>
               <TextInput label="Caută manoperă" onChange={(event) => setOperationSearch(event.target.value)} placeholder="Cod, denumire sau descriere" value={operationSearch} />
               <div className="manager-technicians__operation-list">
                 {visibleOperations.map((operation) => (
                   <div className="manager-technicians__operation" key={operation.id}>
-                    <div><strong>{operation.code} · {operation.name}</strong>{operation.description ? <span>{operation.description}</span> : null}</div>
+                    <div><strong>{operation.name}</strong><span className="manager-technicians__operation-code">Cod intern: {operation.code}</span>{operation.description ? <span>{operation.description}</span> : null}</div>
                     <Button disabled={!canManageRates} onClick={() => { setEditingOperationId(operation.id); setOperationCode(operation.code); setOperationName(operation.name); setOperationDescription(operation.description ?? ""); setOperationPriceDecimal(""); setIsOperationModalOpen(true); }} size="small" type="button" variant="outline">Editează</Button>
                   </div>
                 ))}
@@ -233,7 +242,7 @@ export function ManagerTechniciansPage(): ReactNode {
         </Modal>
 
         {canReadRates ? (
-          <Card>
+          <Card id="rate-plati">
             <CardHeader>
               <CardTitle>Rate viitoare</CardTitle>
               <CardDescription>Ratele se folosesc pentru manopere viitoare; câștigurile istorice rămân snapshots.</CardDescription>

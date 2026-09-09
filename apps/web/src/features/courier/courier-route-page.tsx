@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 
 import { fetchPermissions } from "../auth/auth-api.js";
+import { NextStep } from "../../components/next-step.js";
 import { hasPermission } from "../users/users-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
 import { useCourierRoutes, useRecordCourierRouteStopOutcome, useStartCourierRoute } from "../logistics/logistics-api.js";
@@ -81,6 +82,7 @@ export function CourierRoutePage(): ReactNode {
         <p>Aici vezi doar traseele trimise ție. Parcurge opririle în ordinea stabilită de logistică.</p>
           </div>
         </header>
+        <NextStep description={inProgressRoute ? `Continuă cu oprirea ${inProgressRoute.stops.find((stop) => stop.outcomeStatus === "PENDING")?.stopOrder ?? "următoare"} și confirmă rezultatul.` : startableRoute ? "Pornește traseul disponibil, apoi confirmă fiecare oprire în ordine." : "Așteaptă finalizarea traseului anterior sau verifică traseele asignate."} />
         {routesQuery.isLoading ? <LoadingState text="Se încarcă rutele" /> : null}
         {routesQuery.isError ? <ErrorState title="Rutele nu au fost încărcate" description={getErrorMessage(routesQuery.error)} /> : null}
         <div className="logistics-page__content">
@@ -93,32 +95,37 @@ export function CourierRoutePage(): ReactNode {
 }
 
 function RouteCard({ canExecute, canStart, onRecord, onStart, pending, route }: { readonly canExecute: boolean; readonly canStart: boolean; readonly onRecord: (routeId: string, stop: CourierRouteStopView, outcomeStatus: CourierRouteStopOutcome, notes: string) => void; readonly onStart: () => void; readonly pending: boolean; readonly route: CourierRouteView }): ReactNode {
+  const currentStopOrder = route.stops.find((stop) => stop.outcomeStatus === "PENDING")?.stopOrder ?? route.stops.length;
+  const resolvedStops = route.stops.filter((stop) => stop.outcomeStatus !== "PENDING").length;
   return (
     <Card>
       <CardHeader>
         <CardTitle>{route.routeNumber} · {route.name}</CardTitle>
         <CardDescription>{formatDate(route.routeDate)} · {route.stops.length} {route.stops.length === 1 ? "oprire" : "opriri"} · {route.stops.filter((stop) => stop.outcomeStatus !== "PENDING").length} rezolvate</CardDescription>
         <StatusBadge label={routeStatusLabel(route.status)} variant={route.status === "COMPLETED" ? "delivered" : route.status === "IN_PROGRESS" ? "planned" : "awaiting"} />
+        <div aria-label={`Progres traseu: ${resolvedStops} din ${route.stops.length} opriri rezolvate`} className="logistics-page__route-progress"><span style={{ width: `${route.stops.length === 0 ? 0 : (resolvedStops / route.stops.length) * 100}%` }} /><small>{resolvedStops} din {route.stops.length} opriri rezolvate{route.status === "IN_PROGRESS" && resolvedStops < route.stops.length ? ` · urmează oprirea ${currentStopOrder}` : ""}</small></div>
         {canStart ? <Button disabled={pending} onClick={onStart}>Începe traseul</Button> : null}
         {route.status === "ASSIGNED" && !canStart ? <p className="logistics-page__route-waiting">Disponibil după finalizarea traseului anterior.</p> : null}
       </CardHeader>
       <CardContent className="logistics-page__route-stops">
-        {route.stops.map((stop) => <RouteStop canExecute={canExecute} key={stop.id} onRecord={(outcome, notes) => onRecord(route.id, stop, outcome, notes)} pending={pending} stop={stop} />)}
+        {route.stops.map((stop) => <RouteStop canExecute={canExecute} isCurrent={route.status === "IN_PROGRESS" && stop.outcomeStatus === "PENDING" && stop.stopOrder === currentStopOrder} key={stop.id} onRecord={(outcome, notes) => onRecord(route.id, stop, outcome, notes)} pending={pending} stop={stop} />)}
       </CardContent>
     </Card>
   );
 }
 
-function RouteStop({ canExecute, onRecord, pending, stop }: { readonly canExecute: boolean; readonly onRecord: (outcomeStatus: CourierRouteStopOutcome, notes: string) => void; readonly pending: boolean; readonly stop: CourierRouteStopView }): ReactNode {
+function RouteStop({ canExecute, isCurrent, onRecord, pending, stop }: { readonly canExecute: boolean; readonly isCurrent: boolean; readonly onRecord: (outcomeStatus: CourierRouteStopOutcome, notes: string) => void; readonly pending: boolean; readonly stop: CourierRouteStopView }): ReactNode {
   const [notes, setNotes] = useState("");
   const isPending = stop.outcomeStatus === "PENDING";
   const positiveOutcome: CourierRouteStopOutcome = stop.type === "DELIVERY" ? "DELIVERED" : "PICKED_UP";
   const negativeOutcome: CourierRouteStopOutcome = stop.type === "DELIVERY" ? "NOT_DELIVERED" : "NOT_PICKED_UP";
   return (
-    <article className="logistics-page__route-stop">
+    <article className={`logistics-page__route-stop${isCurrent ? " logistics-page__route-stop--current" : ""}`}>
       <span>{stop.stopOrder}</span>
       <strong>{stop.type === "DELIVERY" ? "Livrare" : "Ridicare"}</strong>
+      {isCurrent ? <span className="logistics-page__route-stop-current">Oprirea curentă</span> : null}
       <p>{stop.targetLabel}</p>
+      {stop.addressOverride || stop.phoneOverride ? <div className="logistics-page__route-stop-contact-summary"><span>{stop.addressOverride ? `Adresă: ${stop.addressOverride}` : "Adresă indisponibilă"}</span><span>{stop.phoneOverride ? `Telefon: ${stop.phoneOverride}` : "Telefon indisponibil"}</span></div> : null}
       <StatusBadge label={stopOutcomeLabel(stop.outcomeStatus)} variant={stop.outcomeStatus === "PENDING" ? "planned" : stop.outcomeStatus.includes("NOT") ? "rejected" : "delivered"} />
       {isPending && canExecute ? (
         <div className="logistics-page__route-stop-actions">

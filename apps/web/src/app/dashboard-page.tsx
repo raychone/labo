@@ -112,11 +112,12 @@ export function DashboardPage(): ReactNode {
   const canReadOrganization = permissionKeys.includes("organization_context.read");
   const isReceptionWorkspace = canCreateWork || (canReadWorks && !canReadTechnician && !isManagerWorkspace);
   const isTechnicianWorkspace = !isManagerWorkspace && (canReadTechnician || canReadAvailable || canReadOwnClaims);
+  const isDoctorPortal = canReadAssignedWorks && !isManagerWorkspace && !isReceptionWorkspace && !isTechnicianWorkspace;
   const showTechnicianWorkspace = isTechnicianWorkspace && !isManagerWorkspace;
   const showReceptionWorkspace = isReceptionWorkspace && !isManagerWorkspace;
   const showManagerWorkspace = isManagerWorkspace;
   const canReadDashboardWorks = showReceptionWorkspace || showManagerWorkspace;
-  const canReadDashboardOperational = canReadOperational && canReadDashboardWorks;
+  const canReadDashboardOperational = canReadOperational && (canReadDashboardWorks || isDoctorPortal);
   const settingsQuery = useSettings(permissionKeys.includes("settings.read"));
   const organizationQuery = useQuery({ enabled: canReadOrganization, queryFn: fetchOrganizationContext, queryKey: ["organization-context"], retry: false });
   const laboratoryName = settingsQuery.data?.laboratoryName ?? "Dental Lab Management";
@@ -161,7 +162,7 @@ export function DashboardPage(): ReactNode {
           <div>
             <p className="dashboard-page__eyebrow">{laboratoryName}</p>
             <h1 id="dashboard-title">Acasă</h1>
-            <p>{auth.user?.displayName ?? "Utilizator"} · dashboard compus după permisiunile contului.</p>
+            <p>{isDoctorPortal ? "Urmărește lucrările clinicii, termenele și stadiul lor curent." : `${auth.user?.displayName ?? "Utilizator"} · dashboard compus după permisiunile contului.`}</p>
           </div>
         <div className="dashboard-page__actions">
           {showTechnicianWorkspace ? <DashboardAction label="Lucrările mele" to="/workbench" /> : null}
@@ -208,7 +209,18 @@ export function DashboardPage(): ReactNode {
         />
       ) : null}
 
-      {!isManagerWorkspace && !isReceptionWorkspace && !isTechnicianWorkspace ? (
+      {isDoctorPortal ? (
+        <DoctorPortalDashboard
+          isLateError={operationalLateQuery.isError}
+          isLateLoading={operationalLateQuery.isLoading}
+          isTodayError={operationalTodayQuery.isError}
+          isTodayLoading={operationalTodayQuery.isLoading}
+          lateRows={operationalLateQuery.data?.items ?? []}
+          todayRows={operationalTodayQuery.data?.items ?? []}
+        />
+      ) : null}
+
+      {!isManagerWorkspace && !isReceptionWorkspace && !isTechnicianWorkspace && !isDoctorPortal ? (
         <DashboardEmptyState
           action={{ label: "Deschide status", to: "/status" }}
           description="Nu există widgeturi dedicate pentru permisiunile curente."
@@ -216,6 +228,46 @@ export function DashboardPage(): ReactNode {
         />
       ) : null}
     </section>
+  );
+}
+
+function DoctorPortalDashboard({
+  isLateError,
+  isLateLoading,
+  isTodayError,
+  isTodayLoading,
+  lateRows,
+  todayRows,
+}: {
+  readonly isLateError: boolean;
+  readonly isLateLoading: boolean;
+  readonly isTodayError: boolean;
+  readonly isTodayLoading: boolean;
+  readonly lateRows: readonly OperationalStatusRow[];
+  readonly todayRows: readonly OperationalStatusRow[];
+}): ReactNode {
+  return (
+    <div className="dashboard-page__workspace" aria-labelledby="doctor-dashboard-title">
+      <div className="dashboard-page__workspace-header">
+        <div>
+          <h2 id="doctor-dashboard-title">Portal medic</h2>
+          <p>Vizualizezi doar lucrările asociate clinicii tale.</p>
+        </div>
+        <DashboardAction label="Deschide toate lucrările" to="/status" variant="primary" />
+      </div>
+      <div className="dashboard-page__columns">
+        <DashboardSection title="În termen sau scadente azi" description="Lucrările care au nevoie de urmărire astăzi.">
+          <SectionState error={isTodayError} isLoading={isTodayLoading} text="Se încarcă lucrările clinicii" />
+          {!isTodayLoading && !isTodayError && todayRows.length === 0 ? <DashboardEmptyState description="Nu există lucrări cu termen astăzi." title="Nicio lucrare scadentă azi" /> : null}
+          {todayRows.slice(0, shortListSize).map((row) => <OperationalPreviewCard key={row.id} actionLabel="Vezi detalii" row={row} />)}
+        </DashboardSection>
+        <DashboardSection title="Necesită atenție" description="Lucrări depășite față de termenul comunicat.">
+          <SectionState error={isLateError} isLoading={isLateLoading} text="Se verifică termenele" />
+          {!isLateLoading && !isLateError && lateRows.length === 0 ? <DashboardEmptyState description="Nu există întârzieri în lucrările pe care le poți consulta." title="Toate lucrările sunt în termen" /> : null}
+          {lateRows.slice(0, shortListSize).map((row) => <OperationalPreviewCard key={row.id} actionLabel="Vezi detalii" row={row} />)}
+        </DashboardSection>
+      </div>
+    </div>
   );
 }
 

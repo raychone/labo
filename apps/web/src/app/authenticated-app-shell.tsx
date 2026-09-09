@@ -16,6 +16,7 @@ import { usePageTitle } from "./use-page-title.js";
 import "./app-shell.css";
 
 const fallbackLaboratoryName = "Dental Lab Management";
+const notificationPageSize = 40;
 
 function getBrandInitials(name: string): string {
   return name
@@ -28,6 +29,10 @@ function getBrandInitials(name: string): string {
 
 function getSafeBrandColor(value: string | undefined): string {
   return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : "#0f766e";
+}
+
+function formatNotificationBadge(unreadCount: number): string {
+  return unreadCount > 99 ? "99+" : String(unreadCount);
 }
 
 export function AuthenticatedAppShell(): ReactNode {
@@ -60,6 +65,7 @@ export function AuthenticatedAppShell(): ReactNode {
   const dismissMutation = useDismissNotification();
   const dismissAllMutation = useDismissAllNotifications();
   const notificationItems = notificationsQuery.data?.items ?? [];
+  const unreadNotificationCount = notificationsQuery.data?.unreadCount ?? 0;
   const courierOnly = routes.length === 1 && routes[0]?.path === "/my-route";
   usePageTitle(pageTitle, laboratoryName);
   const logoutMutation = useMutation({
@@ -152,7 +158,7 @@ export function AuthenticatedAppShell(): ReactNode {
             <span>{pageTitle}</span>
             <small>{laboratoryName}</small>
           </div>
-          {canReadNotifications ? <button aria-label="Deschide centrul de notificări" className={`app-shell__notification-button${(notificationsQuery.data?.unreadCount ?? 0) > 0 ? " app-shell__notification-button--attention" : ""}`} onClick={() => setIsNotificationsOpen(true)} type="button"><span aria-hidden="true">🔔</span>{(notificationsQuery.data?.unreadCount ?? 0) > 0 ? <span aria-label={`${notificationsQuery.data?.unreadCount ?? 0} notificări necitite`} className="app-shell__notification-badge">{notificationsQuery.data?.unreadCount}</span> : null}</button> : null}
+          {canReadNotifications ? <button aria-label="Deschide centrul de notificări" className={`app-shell__notification-button${unreadNotificationCount > 0 ? " app-shell__notification-button--attention" : ""}`} onClick={() => setIsNotificationsOpen(true)} type="button"><span aria-hidden="true">🔔</span>{unreadNotificationCount > 0 ? <span aria-label={`${unreadNotificationCount} notificări necitite`} className="app-shell__notification-badge">{formatNotificationBadge(unreadNotificationCount)}</span> : null}</button> : null}
         </header>
         {incomingNotification ? <div aria-live="assertive" className="app-shell__notification-alert" role="alert"><button className="app-shell__notification-alert-content" onClick={() => { if (!incomingNotification.readAt) markReadMutation.mutate(incomingNotification.id); setIncomingNotification(null); navigate(getSafeNotificationTarget(incomingNotification.deepLink, auth.permissionKeys)); }} type="button"><span aria-hidden="true">🔔</span><span><strong>{incomingNotification.title}</strong><small>{incomingNotification.message}</small><em>Deschide lucrarea</em></span></button><button aria-label="Închide alerta" className="app-shell__notification-alert-close" onClick={() => setIncomingNotification(null)} type="button">×</button></div> : null}
         <AppHeader courierOnly={courierOnly} pageTitle={pageTitle} pathname={location.pathname} />
@@ -199,10 +205,11 @@ export function AuthenticatedAppShell(): ReactNode {
       />
       <Drawer isOpen={isNotificationsOpen} onOpenChange={setIsNotificationsOpen} position="right" title="Notificări">
         <div className="app-shell__notifications">
-          <div className="app-shell__notifications-actions"><span>{notificationsQuery.data?.unreadCount ?? 0} necitite</span><Button isLoading={markAllReadMutation.isPending} onClick={() => markAllReadMutation.mutate()} variant="secondary">Marchează citite</Button><Button disabled={(notificationsQuery.data?.items.length ?? 0) === 0} isLoading={dismissAllMutation.isPending} onClick={() => dismissAllMutation.mutate()} variant="secondary">Șterge toate</Button></div>
+          <div className="app-shell__notifications-actions"><span>{unreadNotificationCount} necitite</span><Button disabled={unreadNotificationCount === 0} isLoading={markAllReadMutation.isPending} onClick={() => markAllReadMutation.mutate()} variant="secondary">Marchează citite</Button><Button disabled={notificationItems.length === 0} isLoading={dismissAllMutation.isPending} onClick={() => dismissAllMutation.mutate()} variant="secondary">Șterge toate</Button></div>
           {notificationsQuery.isLoading ? <LoadingState text="Se încarcă notificările" /> : null}
           {notificationsQuery.error ? <ErrorState title="Notificările nu au putut fi încărcate" description="Încearcă din nou." /> : null}
           {!notificationsQuery.isLoading && !notificationsQuery.error && (notificationsQuery.data?.items.length ?? 0) === 0 ? <p className="app-shell__notifications-empty">Nu ai notificări.</p> : null}
+          {!notificationsQuery.isLoading && !notificationsQuery.error && unreadNotificationCount > notificationItems.length ? <p className="app-shell__notifications-summary">Sunt afișate cele mai recente {notificationPageSize} notificări. Marchează-le citite sau șterge-le pentru a reduce lista.</p> : null}
           {notificationItems.map((notification) => <div className="app-shell__notification-row" key={notification.id}><button className={`app-shell__notification-item${notification.readAt ? "" : " app-shell__notification-item--unread"}`} onClick={() => { if (!notification.readAt) markReadMutation.mutate(notification.id); setIsNotificationsOpen(false); navigate(getSafeNotificationTarget(notification.deepLink, auth.permissionKeys)); }} type="button"><span className={`app-shell__notification-severity app-shell__notification-severity--${notification.severity.toLowerCase()}`} /><span><strong>{notification.title}</strong><small>{notification.message}</small><time dateTime={notification.createdAt}>{new Intl.DateTimeFormat("ro-RO", { day: "2-digit", hour: "2-digit", minute: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(notification.createdAt))}</time></span></button><Button isLoading={dismissMutation.isPending && dismissMutation.variables === notification.id} onClick={() => dismissMutation.mutate(notification.id)} variant="secondary">Șterge</Button></div>)}
         </div>
       </Drawer>

@@ -65,7 +65,8 @@ trap cleanup EXIT
 plain_dump="$temporary_directory/database.dump"
 encrypted_dump="$temporary_directory/$backup_name"
 
-PGDATABASE="$BACKUP_DATABASE_URL" pg_dump \
+pg_dump \
+  --dbname="$BACKUP_DATABASE_URL" \
   --format=custom \
   --no-owner \
   --no-privileges \

@@ -35,6 +35,7 @@ function createJsonResponse(body: unknown, status = 200): Response {
 }
 
 const permissions = {
+  doctor: ["works.read_assigned"],
   manager: [
     "finance.read",
     "finance.record_payment",
@@ -290,6 +291,18 @@ describe("DashboardPage", () => {
     expect(screen.getAllByRole("link", { name: "Scanează lucrare" }).length).toBe(1);
     expect(screen.queryByText("Situație financiară")).toBeNull();
     expect(screen.queryByRole("link", { name: "Lucrările mele" })).toBeNull();
+  });
+
+  it("renders the doctor portal with only read-only work tracking actions", async () => {
+    vi.stubGlobal("fetch", createFetchMock(permissions.doctor));
+
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByRole("heading", { name: "Portal medic" })).toBeDefined();
+    expect(screen.getByRole("link", { name: "Deschide toate lucrările" })).toBeDefined();
+    expect((await screen.findAllByRole("link", { name: "Vezi detalii" })).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("link", { name: "Lucrare nouă" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Facturare" })).toBeNull();
   });
 
   it("renders manager company context and finance widgets when permitted", async () => {

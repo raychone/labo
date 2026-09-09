@@ -3,10 +3,10 @@ import { randomUUID } from "node:crypto";
 
 const clinicName = "Clinica Dentară Aurora Demo SRL";
 const doctorName = "Dr. Ioana Pavel";
-export const smokeApiBaseUrl = (process.env.PLAYWRIGHT_API_BASE_URL ?? "http://127.0.0.1:3010")
+export const smokeApiBaseUrl = (process.env.PLAYWRIGHT_API_BASE_URL ?? "http://127.0.0.1:3137")
   .replace(/\/health(?:\/ready|\/live)?\/?$/, "")
   .replace(/\/$/, "");
-export const smokeWebBaseUrl = (process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000").replace(/\/$/, "");
+export const smokeWebBaseUrl = (process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3138").replace(/\/$/, "");
 const patientSexValue = "MALE";
 const shadeValue = "A2";
 const smokeDateValue = "2026-08-15";

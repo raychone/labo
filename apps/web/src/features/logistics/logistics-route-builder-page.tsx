@@ -1,4 +1,5 @@
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, DateInput, ErrorState, IconButton, LoadingState, Select, StatusBadge, Textarea, TextInput, Tooltip, useToast } from "@dental-lab/ui";
+import { NextStep } from "../../components/next-step.js";
 import type { CourierOption, CourierRouteStopInput, CourierRouteStopOutcome, CourierRouteStopView, CourierRouteView, LogisticsCenterItem, PickupRequestView } from "@dental-lab/shared";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -360,6 +361,8 @@ export function LogisticsRouteBuilderPage(): ReactNode {
             <p>Pregătește opririle, creează traseul și urmărește ce s-a livrat sau ridicat.</p>
           </div>
         </header>
+
+        <NextStep description={selectedStops.length > 0 ? `${selectedStops.length} opriri sunt în traseul de pregătire. Verifică datele de contact, ordinea și curierul înainte de salvare.` : "Alege livrări sau ridicări din panourile disponibile; acestea vor apărea aici în ordinea aleasă."} />
 
         <div className="logistics-page__route-overview" aria-label="Rezumat trasee">
           <div><strong>{preparationLists.reduce((total, list) => total + list.stops.length, 0)}</strong><span>De pregătit</span></div>

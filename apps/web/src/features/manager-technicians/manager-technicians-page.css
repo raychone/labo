@@ -8,6 +8,11 @@
   gap: 20px;
 }
 
+.manager-technicians__workspace-nav { align-items: center; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 8px; display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; position: sticky; top: 4.25rem; z-index: 2; }
+.manager-technicians__workspace-nav a { border-radius: 6px; color: var(--color-primary); font-weight: 700; min-height: 40px; padding: 10px 12px; text-decoration: none; }
+.manager-technicians__workspace-nav a:hover, .manager-technicians__workspace-nav a:focus-visible { background: var(--color-primary-soft); }
+.manager-technicians__section-title { font-size: 1.1rem; margin: 0 0 -8px; }
+
 .manager-technicians__header h1 {
   margin: 0;
 }
@@ -54,6 +59,11 @@
   gap: 12px;
   justify-content: space-between;
   padding: 10px 12px;
+}
+
+.manager-technicians__operation-code {
+  color: var(--dl-color-text-muted, #667085);
+  font-size: 0.8125rem;
 }
 
 .manager-technicians__operation div {
