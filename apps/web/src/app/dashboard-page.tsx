@@ -14,7 +14,9 @@ import {
   useToast,
 } from "@dental-lab/ui";
 import {
+  type BillingOverview,
   type OperationalStatusRow,
+  type OperationalStatusResponse,
   type OperationalStatusTab,
   type TechnicianWorkbenchItem,
   type WorkSummary,
@@ -58,6 +60,10 @@ function formatKpiMoneyMinor(value: number, currency: string, locale = "ro-RO"):
 
 function formatDate(value: string | null | undefined): string {
   return value ? new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium" }).format(new Date(value)) : "Fără termen";
+}
+
+function formatDashboardDate(value = new Date()): string {
+  return new Intl.DateTimeFormat("ro-RO", { dateStyle: "full" }).format(value);
 }
 
 function probeLabel(row: OperationalStatusRow | null): string {
@@ -142,6 +148,8 @@ export function DashboardPage(): ReactNode {
   const operationalTodayQuery = useOperationalStatus(operationalQuery("TODAY", 8), canReadDashboardOperational);
   const operationalLateQuery = useOperationalStatus(operationalQuery("LATE", 8), canReadDashboardOperational);
   const operationalReturnedQuery = useOperationalStatus(operationalQuery("RETURNED", 8), canReadDashboardOperational);
+  const operationalOverviewQuery = useOperationalStatus(operationalQuery("ALL", 1), showManagerWorkspace && canReadDashboardOperational);
+  const transportOverviewQuery = useOperationalStatus({ ...operationalQuery("ALL", 1), excludeDemo: true, transportOnly: true }, showManagerWorkspace && canReadDashboardOperational);
   const availableWorksQuery = useAvailableWorksForClaim(claimListParams, canReadAvailable);
   const myClaimedWorksQuery = useMyClaimedWorks(claimListParams, canReadOwnClaims);
   const technicianWorkbenchQuery = useTechnicianWorkbench({
@@ -158,16 +166,20 @@ export function DashboardPage(): ReactNode {
 
   return (
     <section className="dashboard-page dashboard-page--role" aria-labelledby="dashboard-title">
+      {showManagerWorkspace ? (
+        <div className="dashboard-page__manager-page-title"><h1 id="dashboard-title">Panou de control</h1></div>
+      ) : (
         <div className="dashboard-page__header">
           <div>
             <p className="dashboard-page__eyebrow">{laboratoryName}</p>
-            <h1 id="dashboard-title">Acasă</h1>
-            <p>{isDoctorPortal ? "Urmărește lucrările clinicii, termenele și stadiul lor curent." : `${auth.user?.displayName ?? "Utilizator"} · dashboard compus după permisiunile contului.`}</p>
+            <h1 id="dashboard-title">{showManagerWorkspace ? "Panou de control" : "Acasă"}</h1>
+            <p>{showManagerWorkspace ? `Bun venit, ${auth.user?.displayName ?? "Manager"}. Urmărește prioritățile laboratorului dintr-un singur loc.` : isDoctorPortal ? "Urmărește lucrările clinicii, termenele și stadiul lor curent." : `${auth.user?.displayName ?? "Utilizator"} · dashboard compus după permisiunile contului.`}</p>
           </div>
-        <div className="dashboard-page__actions">
-          {showTechnicianWorkspace ? <DashboardAction label="Lucrările mele" to="/workbench" /> : null}
+          <div className="dashboard-page__actions">
+            {showTechnicianWorkspace ? <DashboardAction label="Lucrările mele" to="/workbench" /> : null}
+          </div>
         </div>
-      </div>
+      )}
 
       {showTechnicianWorkspace ? (
         <TechnicianDashboard
@@ -201,9 +213,14 @@ export function DashboardPage(): ReactNode {
         <ManagerDashboard
           activeCompanyLabel={activeCompanyLabel}
           billing={billingOverviewQuery.data}
+          canCreateWork={canCreateWork}
           canReadBilling={canReadBilling}
+          isOperationalError={operationalOverviewQuery.isError || transportOverviewQuery.isError}
+          isOperationalLoading={operationalOverviewQuery.isLoading || transportOverviewQuery.isLoading}
           lateRows={operationalLateQuery.data?.items ?? []}
+          operationalOverview={operationalOverviewQuery.data}
           returnedRows={operationalReturnedQuery.data?.items ?? []}
+          transportOverview={transportOverviewQuery.data}
           isBillingError={billingOverviewQuery.isError}
           isBillingLoading={billingOverviewQuery.isLoading}
         />
@@ -689,56 +706,143 @@ function ReceptionDashboard({
 function ManagerDashboard({
   activeCompanyLabel,
   billing,
+  canCreateWork,
   canReadBilling,
+  isOperationalError,
+  isOperationalLoading,
   lateRows,
+  operationalOverview,
   returnedRows,
+  transportOverview,
   isBillingError,
   isBillingLoading,
 }: {
   readonly activeCompanyLabel: string;
-  readonly billing: { readonly currency: string; readonly outstandingMinor: number; readonly overdueInvoiceCount: number; readonly partialInvoiceCount: number; readonly totalIssuedMinor: number; readonly paidMinor: number; readonly uninvoicedWorkCount: number; readonly unpaidInvoiceCount: number } | undefined;
+  readonly billing: BillingOverview | undefined;
+  readonly canCreateWork: boolean;
   readonly canReadBilling: boolean;
+  readonly isOperationalError: boolean;
+  readonly isOperationalLoading: boolean;
   readonly lateRows: readonly OperationalStatusRow[];
+  readonly operationalOverview: OperationalStatusResponse | undefined;
   readonly returnedRows: readonly OperationalStatusRow[];
+  readonly transportOverview: OperationalStatusResponse | undefined;
   readonly isBillingError: boolean;
   readonly isBillingLoading: boolean;
 }): ReactNode {
   const currency = billing?.currency ?? "RON";
+  const countFor = (tab: OperationalStatusTab): number => operationalOverview?.counters.find((counter) => counter.tab === tab)?.count ?? 0;
+  const needsAttention = [
+    ...lateRows.map((row) => ({ kind: "Întârziată", row })),
+    ...returnedRows.map((row) => ({ kind: "Revenită", row })),
+  ].filter((item, index, items) => items.findIndex((candidate) => candidate.row.id === item.row.id) === index).slice(0, 5);
+
   return (
-    <div className="dashboard-page__workspace" aria-labelledby="manager-dashboard-title">
-      <div className="dashboard-page__workspace-header">
+    <div className="dashboard-page__workspace dashboard-page__manager" aria-labelledby="manager-dashboard-title">
+      <div className="dashboard-page__manager-context">
         <div>
-          <h2 id="manager-dashboard-title">Manager</h2>
-          <p>{activeCompanyLabel} · activitate operațională și financiară după permisiuni.</p>
+          <h2 id="manager-dashboard-title">Prioritățile zilei</h2>
+          <p>Situația lucrărilor în laborator (toate firmele).</p>
         </div>
-        <div className="dashboard-page__actions">
-          <DashboardAction label="Vezi statusul" to="/status" variant="primary" />
-          {canReadBilling ? <DashboardAction label="Facturare" to="/billing" /> : null}
+        <time dateTime={new Date().toISOString()}>{formatDashboardDate()}</time>
+      </div>
+
+      <section aria-label="Situație operațională">
+        <p className="dashboard-page__manager-scope-note">Indicatorii operaționali includ toate lucrările laboratorului.</p>
+        <SectionState error={isOperationalError} isLoading={isOperationalLoading} text="Se încarcă situația operațională" />
+        <div className="dashboard-page__metrics dashboard-page__metrics--five dashboard-page__manager-kpis">
+          <ManagerKpi icon="work" label="Total lucrări" to="/status?tab=ALL" value={operationalOverview?.meta.total} />
+          <ManagerKpi icon="activity" label="În lucru" to="/status?tab=IN_PROGRESS" value={operationalOverview ? countFor("IN_PROGRESS") : undefined} />
+          <ManagerKpi icon="warning" label="Întârziate" tone="danger" to="/status?tab=LATE" value={operationalOverview ? countFor("LATE") : undefined} />
+          <ManagerKpi icon="truck" label="De livrat / ridicat" tone="warning" to="/status" value={transportOverview?.meta.total} />
+          <ManagerKpi icon="check" label="Finalizate" tone="success" to="/status?tab=COMPLETED" value={operationalOverview ? countFor("COMPLETED") : undefined} />
         </div>
-      </div>
-      <div className="dashboard-page__columns">
-        <DashboardSection title="Lucrări întârziate" description="Lucrări care necesită intervenție.">
-          {lateRows.length === 0 ? <DashboardEmptyState description="Nu există lucrări întârziate." title="Totul este în termen" /> : null}
-          {lateRows.slice(0, shortListSize).map((row) => <OperationalPreviewCard key={row.id} actionLabel="Deschide lucrarea" row={row} />)}
+      </section>
+
+      <div className="dashboard-page__manager-layout">
+        <DashboardSection
+          action={<ManagerSectionAction label="Vezi toate lucrările" to="/status" />}
+          description="Lucrările care cer o decizie sau următoarea acțiune."
+          title="Necesită atenție"
+        >
+          {needsAttention.length === 0 ? <DashboardEmptyState description="Nu există întârzieri sau reveniri în lista curentă." title="Totul este în regulă" /> : null}
+          {needsAttention.length > 0 ? <ManagerAttentionList items={needsAttention} /> : null}
         </DashboardSection>
-        <DashboardSection title="Lucrări revenite" description="Lucrări care au nevoie de următoarea acțiune.">
-          {returnedRows.length === 0 ? <DashboardEmptyState description="Nu există lucrări revenite." title="Nicio revenire" /> : null}
-          {returnedRows.slice(0, shortListSize).map((row) => <OperationalPreviewCard key={row.id} actionLabel="Deschide lucrarea" row={row} />)}
+
+        <DashboardSection title="Acțiuni rapide" description="Accesează activitățile folosite frecvent.">
+          <div className="dashboard-page__quick-actions">
+            {canCreateWork ? <ManagerQuickAction icon="add" label="Lucrare nouă" to="/works?create=1" variant="primary" /> : null}
+            <ManagerQuickAction icon="list" label="Lucrări" to="/status" />
+            {canReadBilling ? <ManagerQuickAction icon="invoice" label="Facturare" to="/billing" /> : null}
+          </div>
         </DashboardSection>
       </div>
+
       {canReadBilling ? (
-        <DashboardSection title="Situație financiară" description="Date filtrate de firma activă NC/NG.">
+        <DashboardSection action={<ManagerSectionAction label="Deschide facturarea" to="/billing" />} title="Situație financiară" description={`Luna curentă · ${activeCompanyLabel}.`}>
           <SectionState error={isBillingError} isLoading={isBillingLoading} text="Se încarcă situația financiară" />
           {billing ? (
-            <div className="dashboard-page__finance-row">
-              <span>Emis: <strong>{formatKpiMoneyMinor(billing.totalIssuedMinor, currency, "ro-RO")}</strong></span>
-              <span>Încasat: <strong>{formatKpiMoneyMinor(billing.paidMinor, currency, "ro-RO")}</strong></span>
-              <span>Restant: <strong>{formatKpiMoneyMinor(billing.outstandingMinor, currency, "ro-RO")}</strong></span>
-              <DashboardAction label="Deschide facturarea" to="/billing" />
+            <div className="dashboard-page__finance-summary">
+              <FinanceMetric icon="invoice" label="Total emis" value={formatKpiMoneyMinor(billing.totalIssuedMinor, currency, "ro-RO")} />
+              <FinanceMetric icon="coins" label="Încasat" value={formatKpiMoneyMinor(billing.paidMinor, currency, "ro-RO")} />
+              <FinanceMetric icon="warning" label="Sold restant" tone="danger" value={formatKpiMoneyMinor(billing.outstandingMinor, currency, "ro-RO")} />
+              <FinanceMetric icon="invoice" label="De facturat" value={`${billing.uninvoicedWorkCount} ${billing.uninvoicedWorkCount === 1 ? "lucrare" : "lucrări"}`} />
             </div>
           ) : null}
         </DashboardSection>
       ) : null}
+    </div>
+  );
+}
+
+function ManagerKpi({ icon, label, to, tone, value }: { readonly icon: DashboardIconName; readonly label: string; readonly to: string; readonly tone?: "danger" | "warning" | "success"; readonly value: number | undefined }): ReactNode {
+  return (
+    <Link className={`dashboard-page__metric dashboard-page__metric--link${tone ? ` dashboard-page__metric--${tone}` : ""}`} to={to}>
+      <span className="dashboard-page__metric-label"><span aria-hidden="true" className="dashboard-page__metric-icon"><DashboardIcon name={icon} /></span>{label}</span>
+      <strong>{value === undefined ? "—" : value}</strong>
+    </Link>
+  );
+}
+
+function ManagerAttentionList({ items }: { readonly items: readonly { readonly kind: string; readonly row: OperationalStatusRow }[] }): ReactNode {
+  return (
+    <div className="dashboard-page__manager-attention-list">
+      {items.map(({ kind, row }) => (
+        <Link className="dashboard-page__manager-attention" key={row.id} to={`/works?workId=${row.id}`}>
+          <div>
+            <span className={`dashboard-page__attention-kind dashboard-page__attention-kind--${kind === "Întârziată" ? "late" : "returned"}`}>{kind}</span>
+            <strong>{row.workCode}</strong>
+            <small>{row.patient.name} · {row.clinic?.name ?? "Fără clinică"}</small>
+          </div>
+          <span aria-hidden="true" className="dashboard-page__manager-attention-chevron">›</span>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function ManagerQuickAction({ icon, label, to, variant = "outline" }: { readonly icon: DashboardIconName; readonly label: string; readonly to: string; readonly variant?: "outline" | "primary" }): ReactNode {
+  return <Link className={`dashboard-page__quick-action dashboard-page__quick-action--${variant}`} to={to}><span aria-hidden="true" className="dashboard-page__quick-action-icon"><DashboardIcon name={icon} /></span><strong>{label}</strong></Link>;
+}
+
+function ManagerSectionAction({ label, to }: { readonly label: string; readonly to: string }): ReactNode {
+  return <Link className="dashboard-page__action-link dashboard-page__action-link--outline" to={to}>{label}<span aria-hidden="true"><DashboardIcon name="arrow" /></span></Link>;
+}
+
+type DashboardIconName = "activity" | "add" | "arrow" | "check" | "coins" | "invoice" | "list" | "truck" | "warning" | "work";
+
+function DashboardIcon({ name }: { readonly name: DashboardIconName }): ReactNode {
+  const paths: Record<DashboardIconName, string> = {
+    activity: "M4 14h3l2-6 4 10 2-5h5", add: "M12 8v8M8 12h8M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", arrow: "M5 12h13m-5-5 5 5-5 5", check: "M9 12l2 2 4-5M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", coins: "M5 7c0 1.1 3.1 2 7 2s7-.9 7-2-3.1-2-7-2-7 .9-7 2Zm0 0v5c0 1.1 3.1 2 7 2s7-.9 7-2V7m-14 5v5c0 1.1 3.1 2 7 2s7-.9 7-2v-5", invoice: "M6 3h9l3 3v15H6V3Zm3 8h6m-6 4h6m-6 4h4", list: "M8 6h11M8 12h11M8 18h11M4 6h.01M4 12h.01M4 18h.01", truck: "M3 6h11v10H3V6Zm11 4h4l3 3v3h-7v-6Zm-7 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm10 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z", warning: "M12 4 3 20h18L12 4Zm0 6v4m0 3h.01", work: "M4 7h16v13H4V7Zm6 0V4h4v3m-4 6h4",
+  };
+  return <svg className="dashboard-page__icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8"><path d={paths[name]} /></svg>;
+}
+
+function FinanceMetric({ icon, label, tone, value }: { readonly icon: DashboardIconName; readonly label: string; readonly tone?: "danger"; readonly value: string }): ReactNode {
+  return (
+    <div className={`dashboard-page__finance-metric${tone ? ` dashboard-page__finance-metric--${tone}` : ""}`}>
+      <span><i aria-hidden="true"><DashboardIcon name={icon} /></i>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }

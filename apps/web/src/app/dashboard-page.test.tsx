@@ -164,7 +164,12 @@ const technicianItem = {
   workflowStatus: "ACTIVE",
 };
 
-function createFetchMock(permissionKeys: readonly string[], options: { readonly emptyTechnician?: boolean; readonly failBilling?: boolean; readonly loadingTechnician?: boolean } = {}) {
+function createFetchMock(permissionKeys: readonly string[], options: {
+  readonly activeCompany?: { readonly code: "CDT" | "NG"; readonly displayName: string };
+  readonly emptyTechnician?: boolean;
+  readonly failBilling?: boolean;
+  readonly loadingTechnician?: boolean;
+} = {}) {
   return vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
     if (url.endsWith("/auth/me")) {
@@ -177,7 +182,7 @@ function createFetchMock(permissionKeys: readonly string[], options: { readonly 
       return Promise.resolve(createJsonResponse({ laboratoryName: "Laborator Test" }));
     }
     if (url.endsWith("/organization-context")) {
-      return Promise.resolve(createJsonResponse({ active: { code: "NC", displayName: "Nicolaie Cristina" }, available: [], canSwitch: true }));
+      return Promise.resolve(createJsonResponse({ active: options.activeCompany ?? { code: "CDT", displayName: "Nicolaie Cristina" }, available: [], canSwitch: true }));
     }
     if (url.includes("/billing/overview")) {
       return Promise.resolve(options.failBilling ? createJsonResponse({ message: "fail" }, 500) : createJsonResponse({
@@ -305,27 +310,51 @@ describe("DashboardPage", () => {
     expect(screen.queryByRole("link", { name: "Facturare" })).toBeNull();
   });
 
-  it("renders manager company context and finance widgets when permitted", async () => {
+  it("renders the manager control center with linked operational and finance summaries", async () => {
     vi.stubGlobal("fetch", createFetchMock(permissions.manager));
 
     renderWithProviders(<DashboardPage />);
 
-    expect(await screen.findByRole("heading", { name: "Manager" })).toBeDefined();
-    expect(await screen.findByText(/NC · Nicolaie Cristina/)).toBeDefined();
+    expect(await screen.findByRole("heading", { name: "Panou de control" })).toBeDefined();
+    expect(await screen.findByRole("heading", { name: "Prioritățile zilei" })).toBeDefined();
+    expect(await screen.findByText("Situația lucrărilor în laborator (toate firmele).")).toBeDefined();
+    expect(await screen.findByText("Luna curentă · CDT · Nicolaie Cristina.")).toBeDefined();
     expect(await screen.findByText("Situație financiară")).toBeDefined();
-    expect(await screen.findByText("Lucrări întârziate")).toBeDefined();
+    expect(await screen.findByText("Necesită atenție")).toBeDefined();
+    expect((await screen.findByRole("link", { name: /Total lucrări/ })).getAttribute("href")).toBe("/status?tab=ALL");
+    expect((await screen.findByRole("link", { name: /De livrat \/ ridicat/ })).getAttribute("href")).toBe("/status");
+    expect(screen.getByRole("link", { name: /Lucrare nouă/ })).toBeDefined();
     expect(screen.getByRole("link", { name: "Deschide facturarea" })).toBeDefined();
     expect(screen.queryByRole("heading", { name: "Recepție" })).toBeNull();
     expect(screen.queryByText("Activitate operațională")).toBeNull();
   });
 
-  it("renders manager operational content when optional finance query fails", async () => {
+  it("keeps manager operational KPIs lab-wide while showing the active company separately", async () => {
+    const fetchMock = createFetchMock(permissions.manager, { activeCompany: { code: "NG", displayName: "NG Dental" } });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText("Luna curentă · NG · NG Dental.")).toBeDefined();
+    expect(await screen.findByText("Situația lucrărilor în laborator (toate firmele).")).toBeDefined();
+    expect((await screen.findByRole("link", { name: /Întârziate/ })).className).toContain("dashboard-page__metric--danger");
+    expect((await screen.findByRole("link", { name: /Finalizate/ })).className).toContain("dashboard-page__metric--success");
+
+    const operationalRequests = fetchMock.mock.calls
+      .map(([input]) => String(input))
+      .filter((url) => url.includes("/status/operational"));
+    expect(operationalRequests.length).toBeGreaterThan(0);
+    expect(operationalRequests.every((url) => !url.includes("executionLegalEntityCode="))).toBe(true);
+  });
+
+  it("keeps manager operational controls available when the optional finance query fails", async () => {
     vi.stubGlobal("fetch", createFetchMock(permissions.manager, { failBilling: true }));
 
     renderWithProviders(<DashboardPage />);
 
-    expect(await screen.findByRole("heading", { name: "Manager" })).toBeDefined();
+    expect(await screen.findByRole("heading", { name: "Panou de control" })).toBeDefined();
     expect(await screen.findByText("Secțiunea nu a fost încărcată")).toBeDefined();
-    expect(screen.queryByText("Necesită atenție")).toBeNull();
+    expect(screen.getByRole("link", { name: /Total lucrări/ })).toBeDefined();
+    expect(screen.getByRole("heading", { name: "Necesită atenție" })).toBeDefined();
   });
 });
