@@ -47,7 +47,7 @@ export function TestStatusPage(): ReactNode {
           onTabChange={() => setTransportFilter(undefined)}
           showTransportKpi={canSeeTransportKpi}
           {...(transportFilter === undefined ? {} : { transportFilter })}
-          transportKpi={<TestTransportKpi onOpen={(days) => setTransportFilter(days ?? null)} />}
+          transportKpi={<TestTransportKpi activeFilter={transportFilter} onOpen={(days) => setTransportFilter(days ?? null)} />}
         />
         <StatusProbeModal isOpen={probeOpen} onOpenChange={setProbeOpen} />
         <PickupRequestModal editingPickup={null} isOpen={pickupOpen} onOpenChange={setPickupOpen} />
@@ -56,7 +56,7 @@ export function TestStatusPage(): ReactNode {
   );
 }
 
-function TestTransportKpi({ onOpen }: { readonly onOpen: (days?: 1 | 2 | 3) => void }): ReactNode {
+function TestTransportKpi({ activeFilter, onOpen }: { readonly activeFilter: 1 | 2 | 3 | null | undefined; readonly onOpen: (days?: 1 | 2 | 3) => void }): ReactNode {
   const query: OperationalStatusQuery = { excludeDemo: true, page: 1, pageSize: 100, sortBy: "effectiveDueAt", sortDirection: "asc", tab: "TODAY", transportOnly: true };
   const summary = useOperationalStatus(query, true);
   const total = summary.data?.meta.total ?? 0;
@@ -67,7 +67,7 @@ function TestTransportKpi({ onOpen }: { readonly onOpen: (days?: 1 | 2 | 3) => v
           <strong>{total}</strong>
         </button>
         <div className="test-status-page__transport-windows" aria-label="Filtru livrare sau ridicare">
-          {[1, 2, 3].map((days) => <button key={days} onClick={() => onOpen(days as 1 | 2 | 3)} type="button">{days}</button>)}
+          {[1, 2, 3].map((days) => <button aria-pressed={activeFilter === days} key={days} onClick={() => onOpen(days as 1 | 2 | 3)} type="button">{days}</button>)}
         </div>
     </div>
   );

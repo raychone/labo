@@ -338,6 +338,7 @@ export interface CourierRouteStopInput {
 
 export interface CreateCourierRouteInput {
   readonly courierUserId?: string | null;
+  readonly dispatchToCourier?: boolean;
   readonly name: string;
   readonly notes?: string | null;
   readonly routeDate: string;

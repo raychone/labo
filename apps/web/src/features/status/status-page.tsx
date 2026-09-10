@@ -398,6 +398,14 @@ export function StatusPage({ allowLogisticsRead = false, experimental = false, h
     || hasPermission(permissionsQuery.data, "audit.read");
   const canReadOptions = canReadStatus;
   const baseStatusQuery = useOperationalStatus(experimental ? { ...query, excludeDemo: true } : query, canReadStatus, { refetchIntervalMs: REALTIME_FALLBACK_REFETCH_MS });
+  // Counters describe the whole current register, not only the tab currently
+  // displayed in the table. Keeping this query on ALL makes Total and the
+  // other KPI values stable while users browse individual tabs.
+  const countersQuery = useOperationalStatus(
+    experimental ? { ...query, excludeDemo: true, tab: "ALL" } : { ...query, tab: "ALL" },
+    canReadStatus,
+    { refetchIntervalMs: REALTIME_FALLBACK_REFETCH_MS },
+  );
   const transportStatusQuery = useOperationalStatus(
     { ...query, excludeDemo: true, transportOnly: true, ...(transportFilter === null || transportFilter === undefined ? {} : { transportHorizonDays: transportFilter }) },
     canReadStatus && experimental && transportFilter !== undefined,
@@ -479,16 +487,18 @@ export function StatusPage({ allowLogisticsRead = false, experimental = false, h
           />
       ),
     },
-    {
-      header: "Alerte",
-      id: "alerts",
-      renderCell: (row) => experimental && canEditOperationalFields ? <TestLogisticsActions row={row} /> : "-",
-    },
-    {
-      header: "Livrare/Ridicare",
-      id: "deliveryPickup",
-      renderCell: (row) => experimental && canEditOperationalFields ? <TestTransportActions row={row} /> : getRouteMarker(row),
-    },
+    ...(canEditOperationalFields ? ([
+      {
+        header: "Alerte",
+        id: "alerts",
+        renderCell: (row: OperationalStatusRow) => experimental ? <TestLogisticsActions row={row} /> : "-",
+      },
+      {
+        header: "Livrare/Ridicare",
+        id: "deliveryPickup",
+        renderCell: (row: OperationalStatusRow) => experimental ? <TestTransportActions row={row} /> : getRouteMarker(row),
+      },
+    ] satisfies readonly DataTableColumn<OperationalStatusRow>[]) : []),
   ], [canEditOperationalFields, experimental, navigate]);
 
   if (permissionsQuery.isLoading) {
@@ -506,23 +516,22 @@ export function StatusPage({ allowLogisticsRead = false, experimental = false, h
           <div>
             <h1 id="status-title">Status</h1>
           </div>
+          {headerActions ? <div className="status-page__header-actions">{headerActions}</div> : null}
         </header>
-
-        {headerActions ? <div className="status-page__header-actions">{headerActions}</div> : null}
 
         <div className="status-page__tabs" role="list" aria-label="Status lucrări">
           {OPERATIONAL_STATUS_TABS.map((tab) => {
-            const count = baseStatusQuery.data?.counters.find((counter) => counter.tab === tab)?.count ?? 0;
+            const count = countersQuery.data?.counters.find((counter) => counter.tab === tab)?.count ?? 0;
             return (
-              <button
-                aria-pressed={query.tab === tab}
+              <div
+                className={`status-page__kpi-card status-page__kpi-card--${tab.toLowerCase()}${query.tab === tab ? " is-selected" : ""}`}
                 key={tab}
-                onClick={() => { onTabChange?.(tab); patchQuery({ tab }); }}
-                type="button"
               >
-                <span>{tabLabels[tab]}</span>
-                <strong>{count}</strong>
-              </button>
+                <button aria-pressed={query.tab === tab} className="status-page__kpi-tab" onClick={() => { onTabChange?.(tab); patchQuery({ tab }); }} type="button">
+                  <span>{tabLabels[tab]}</span>
+                  <strong>{count}</strong>
+                </button>
+              </div>
             );
           })}
           {experimental && showTransportKpi ? transportKpi : null}
@@ -532,11 +541,10 @@ export function StatusPage({ allowLogisticsRead = false, experimental = false, h
           <CardHeader>
             <div className="status-page__card-header-row">
               <div>
-                <CardTitle>Registru status</CardTitle>
+                <CardTitle>Registru lucrări</CardTitle>
                 <CardDescription>
                   Total: {statusQuery.data?.meta.total ?? 0}
                   {statusQuery.data?.meta.hasMore ? " · există și rezultate pe paginile următoare" : ""}
-                  {" · filtrele nu expun date financiare"}
                 </CardDescription>
               </div>
               <Button onClick={() => setFiltersOpen((current) => !current)} variant="secondary">
@@ -659,9 +667,7 @@ export function StatusPage({ allowLogisticsRead = false, experimental = false, h
               />
               <Button onClick={() => setSearchParams(new URLSearchParams())} variant="secondary">Resetează</Button>
               </div>
-            ) : (
-              <p className="status-page__filters-collapsed">Filtrele sunt ascunse. Deschide-le când ai nevoie de rafinare.</p>
-            )}
+            ) : null}
 
             <div className="status-page__desktop-table">
               <DataTable

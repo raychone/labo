@@ -413,7 +413,7 @@ export class LogisticsService {
           notes: dto.notes ?? null,
           routeDate,
           routeNumber,
-          status: dto.courierUserId ? CourierRouteStatus.ASSIGNED : CourierRouteStatus.DRAFT,
+          status: dto.courierUserId && dto.dispatchToCourier !== false ? CourierRouteStatus.ASSIGNED : CourierRouteStatus.DRAFT,
           stops: { create: stops },
         },
         include: courierRouteInclude,
@@ -443,7 +443,7 @@ export class LogisticsService {
       return created;
     });
     const view = this.toCourierRouteView(route);
-    if (route.courierUserId) {
+    if (route.courierUserId && dto.dispatchToCourier !== false) {
       await this.notificationsService?.publishRouteReceived({ routeId: route.id, routeNumber: route.routeNumber, routeDate: route.routeDate.toISOString().slice(0, 10), stopCount: route.stops.length, courierUserId: route.courierUserId });
     }
     return view;
@@ -526,7 +526,7 @@ export class LogisticsService {
           notes: dto.notes ?? null,
           routeDate: startOfUtcDay(dto.routeDate),
           ...(current.status === CourierRouteStatus.DRAFT || current.status === CourierRouteStatus.ASSIGNED
-            ? { status: dto.courierUserId ? CourierRouteStatus.ASSIGNED : CourierRouteStatus.DRAFT }
+            ? { status: dto.courierUserId && dto.dispatchToCourier !== false ? CourierRouteStatus.ASSIGNED : CourierRouteStatus.DRAFT }
             : {}),
           updatedByUserId: context.actor.id,
           version: { increment: 1 },
@@ -555,7 +555,7 @@ export class LogisticsService {
       return route;
     });
     const view = this.toCourierRouteView(updated);
-    if (updated.courierUserId && dto.courierUserId) {
+    if (updated.courierUserId && dto.dispatchToCourier !== false) {
       await this.notificationsService?.publishRouteReceived({ routeId: updated.id, routeNumber: updated.routeNumber, routeDate: updated.routeDate.toISOString().slice(0, 10), stopCount: updated.stops.length, courierUserId: updated.courierUserId });
     }
     return view;

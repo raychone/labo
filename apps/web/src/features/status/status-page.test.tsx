@@ -8,7 +8,7 @@ import type { OperationalStatusResponse } from "@dental-lab/shared";
 
 import { StatusPage } from "./status-page.js";
 
-function renderWithProviders(component: ReactNode, initialEntries = ["/status"]): void {
+function renderWithProviders(component: ReactNode, initialEntries = ["/status"]) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -17,7 +17,7 @@ function renderWithProviders(component: ReactNode, initialEntries = ["/status"])
     },
   });
 
-  render(
+  return render(
     <MemoryRouter initialEntries={initialEntries}>
       <QueryClientProvider client={queryClient}>
         <ToastProvider>
@@ -137,6 +137,16 @@ function createFetchMock() {
   });
 }
 
+function createFetchMockWithPermissions(permissionKeys: readonly string[]) {
+  const fallback = createFetchMock();
+  return vi.fn((input: RequestInfo | URL) => {
+    if (String(input).includes("/auth/permissions")) {
+      return Promise.resolve(createJsonResponse({ permissions: permissionKeys.map((key) => ({ key, scopes: ["ALL"] })) }));
+    }
+    return fallback(input);
+  });
+}
+
 describe("StatusPage", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -157,12 +167,18 @@ describe("StatusPage", () => {
     expect(screen.getByRole("columnheader", { name: "Preluare" })).toBeDefined();
     expect(screen.getByRole("columnheader", { name: "Termen" })).toBeDefined();
     expect(screen.getByRole("columnheader", { name: "Stare" })).toBeDefined();
-    expect(screen.getByRole("columnheader", { name: "Alerte" })).toBeDefined();
-    expect(screen.getByRole("columnheader", { name: "Livrare/Ridicare" })).toBeDefined();
+    expect(screen.queryByRole("columnheader", { name: "Alerte" })).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: "Livrare/Ridicare" })).toBeNull();
     expect(screen.getAllByText("CZr").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Tehnician Ana").length).toBeGreaterThan(0);
     expect(screen.queryByText(/rezultate limitate la 1000/)).toBeNull();
     expect(screen.queryByText(/120,00|RON|factură|preț/i)).toBeNull();
+    expect(screen.queryByTestId("status-kpi-icon")).toBeNull();
+    expect(screen.getByText("Registru lucrări")).toBeDefined();
+    expect(screen.getByRole("button", { name: /Total/ }).closest(".status-page__kpi-card")?.classList.contains("status-page__kpi-card--all")).toBe(true);
+    expect(screen.getByRole("button", { name: /Finalizate/ }).closest(".status-page__kpi-card")?.classList.contains("status-page__kpi-card--completed")).toBe(true);
+    expect(screen.queryByText("filtrele nu expun date financiare")).toBeNull();
+    expect(screen.queryByText("Filtrele sunt ascunse. Deschide-le când ai nevoie de rafinare.")).toBeNull();
   });
 
   it("sends filters, sorting and tab state through the STATUS-001A API query", async () => {
@@ -186,6 +202,18 @@ describe("StatusPage", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("executionLegalEntityCode=CDT"), expect.anything()));
   });
 
+  it("keeps KPI counters sourced from the unfiltered register while the table tab changes", async () => {
+    const fetchMock = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(<StatusPage />);
+
+    await screen.findByText("Maria Ionescu");
+    fireEvent.click(screen.getByRole("button", { name: /Finalizate/ }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("tab=COMPLETED"), expect.anything()));
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("tab=ALL"), expect.anything());
+  });
+
   it("opens the existing works detail flow from a status row", async () => {
     vi.stubGlobal("fetch", createFetchMock());
 
@@ -194,6 +222,59 @@ describe("StatusPage", () => {
     const openLink = await screen.findByRole("link", { name: "Maria Ionescu" });
     fireEvent.click(openLink!);
     expect(await screen.findByText("Works detail route")).toBeDefined();
+  });
+
+  it("opens work details from a safe row click, while inline operational controls do not navigate", async () => {
+    vi.stubGlobal("fetch", createFetchMockWithPermissions(["works.read_all", "audit.read"]));
+
+    renderWithProviders(<StatusPage experimental />);
+
+    const deadline = await screen.findByLabelText("Termen WO-2026-000001");
+    fireEvent.click(deadline);
+    expect(screen.queryByText("Works detail route")).toBeNull();
+    fireEvent.click(screen.getByText("Clinica Test"));
+    expect(await screen.findByText("Works detail route")).toBeDefined();
+  });
+
+  it("keeps Termen and Stare editable for Manager and Logistică, but read-only for Recepție and Tehnician", async () => {
+    const editableRoles: readonly (readonly string[])[] = [
+      ["works.read_all", "audit.read"],
+      ["works.read_all", "logistics.delivery_marker.update"],
+    ];
+
+    for (const permissions of editableRoles) {
+      vi.stubGlobal("fetch", createFetchMockWithPermissions(permissions));
+      const { unmount } = renderWithProviders(<StatusPage experimental />);
+      expect((await screen.findByLabelText("Termen WO-2026-000001")).hasAttribute("disabled")).toBe(false);
+      expect(screen.getAllByLabelText("Stare WO-2026-000001")[0]?.hasAttribute("disabled")).toBe(false);
+      expect(screen.getByRole("columnheader", { name: "Alerte" })).toBeDefined();
+      expect(screen.getByRole("columnheader", { name: "Livrare/Ridicare" })).toBeDefined();
+      unmount();
+      vi.unstubAllGlobals();
+    }
+
+    for (const permissions of [["works.read_all"], ["works.read_assigned"]] as const) {
+      vi.stubGlobal("fetch", createFetchMockWithPermissions(permissions));
+      const { unmount } = renderWithProviders(<StatusPage experimental />);
+      await screen.findByText("Maria Ionescu");
+      expect(screen.queryByLabelText("Termen WO-2026-000001")).toBeNull();
+      expect(screen.queryByLabelText("Stare WO-2026-000001")).toBeNull();
+      expect(screen.queryByRole("columnheader", { name: "Alerte" })).toBeNull();
+      expect(screen.queryByRole("columnheader", { name: "Livrare/Ridicare" })).toBeNull();
+      unmount();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps the deadline warning immediately before the editable deadline and does not expose a patient reference in the row", async () => {
+    vi.stubGlobal("fetch", createFetchMockWithPermissions(["works.read_all", "audit.read"]));
+
+    renderWithProviders(<StatusPage experimental />);
+
+    const deadline = await screen.findByLabelText("Termen WO-2026-000001");
+    const deadlineControl = deadline.parentElement;
+    expect(deadlineControl?.firstElementChild?.getAttribute("aria-label")).toBe("Termen apropiat");
+    expect(screen.queryByText("MI-1")).toBeNull();
   });
 
   it("marks a probe-ready work for delivery only after the explicit Livrare action", async () => {

@@ -366,6 +366,10 @@ export class CreateCourierRouteDto {
   public readonly courierUserId?: string | null;
 
   @IsOptional()
+  @IsBoolean()
+  public readonly dispatchToCourier?: boolean;
+
+  @IsOptional()
   @Transform(({ value }) => trimOptionalString(value))
   @IsString()
   @MaxLength(1000)

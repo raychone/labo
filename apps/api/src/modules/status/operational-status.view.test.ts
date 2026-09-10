@@ -227,7 +227,7 @@ describe("operational status view", () => {
 
     expect(matchesOperationalStatusTab(reception, "COMPLETED")).toBe(false);
     expect(matchesOperationalStatusTab(finalized, "COMPLETED")).toBe(true);
-    expect(matchesOperationalStatusTab(probeReady, "COMPLETED")).toBe(true);
+    expect(matchesOperationalStatusTab(probeReady, "COMPLETED")).toBe(false);
   });
 
   it("keeps returned count at zero when cycle data does not exist", () => {

@@ -361,11 +361,10 @@ export function matchesOperationalStatusTab(row: OperationalStatusRowView, tab: 
     // real return only after reception has opened the next cycle for it.
     return row.currentCycle !== null && row.currentCycle.number > 1;
   }
-  // „Finalizate” is a status bucket, not a delivery/history bucket. A work
-  // must have the current operational status FINALIZATA, or be explicitly
-  // marked PROBE_READY by the technician. Old workflow or transport records
-  // alone must not make other works appear among finalized works.
-  return row.operationalStatus === "FINALIZATA" || row.technicalReadiness === "PROBE_READY";
+  // „Finalizate” is reserved for true technical finalization. A probe that is
+  // ready for delivery remains in its probe cycle and must never be presented
+  // as a completed work.
+  return row.operationalStatus === "FINALIZATA";
 }
 
 export function compareOperationalStatusRows(
