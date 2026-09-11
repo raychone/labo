@@ -11,6 +11,7 @@ import { PublicOnlyRoute, AuthenticatedRoute, PermissionRoute } from "./route-gu
 import { RouteLoading } from "./route-loading.js";
 import { deliveryReadPermissions, operationalStatusReadPermissions, scanPermissions, workReadPermissions } from "./route-registry.js";
 import { LoginPage } from "../features/auth/login-page.js";
+import { BillingArchiveRedirect } from "../features/billing/billing-archive-redirect.js";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -224,11 +225,11 @@ const router = createBrowserRouter([
         path: "my-route",
       },
       {
-        element: <PermissionRoute requiredPermissions={["finance.read", "invoice.read", "invoice.create"]}><LazyRoute><BillingPage /></LazyRoute></PermissionRoute>,
+        element: <PermissionRoute requiredPermissions={["finance.read", "finance.read_reports", "invoice.read", "invoice.create"]}><LazyRoute><BillingPage /></LazyRoute></PermissionRoute>,
         path: "billing",
       },
       {
-        element: <PermissionRoute requiredPermissions={["finance.read_reports"]}><LazyRoute><BillingArchivePage /></LazyRoute></PermissionRoute>,
+        element: <PermissionRoute requiredPermissions={["finance.read_reports"]}><BillingArchiveRedirect /></PermissionRoute>,
         path: "billing/archive",
       },
       {

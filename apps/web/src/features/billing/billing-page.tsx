@@ -31,19 +31,21 @@ import {
   type DoctorBillingStatement,
   type BillingReceivableRow,
   type DocumentPaymentFilter,
+  type MonthCloseArchiveSummary,
   type MonthEndRegistry,
   type PaymentMethod,
   type RecordPaymentInput,
 } from "@dental-lab/shared";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useNavigate, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
 import { hasPermission } from "../users/users-api.js";
 import { useSettings } from "../settings/settings-api.js";
 import {
   downloadBillingDocumentPdf,
+  billingQueryKeys,
   downloadClinicStatementPdf,
   downloadDoctorStatementPdf,
   downloadMonthRegistryPdf,
@@ -62,17 +64,20 @@ import {
   useDoctorStatement,
   closeMonthRegistry,
   fetchBillingDocument,
+  fetchMonthRegistryArchives,
   fetchPdfBlob,
   downloadMonthRegistryCsv,
   recordDocumentShareAttempt,
   type BillingWorkspaceParams,
 } from "./billing-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
-import { fetchClinic, fetchDoctor } from "../clinics/clinics-api.js";
+import { fetchClinic, fetchClinicOptions, fetchDoctor, fetchDoctorOptions } from "../clinics/clinics-api.js";
+import { BillingArchivePage } from "./billing-archive-page.js";
+import { BillingTabToolbar } from "./billing-tab-toolbar.js";
 import "./billing-page.css";
 
 const pageSize = 20;
-type BillingTabId = "overview" | "uninvoiced" | "invoices" | "storno" | "payments" | "receivables" | "statements" | "month-close";
+type BillingTabId = "uninvoiced" | "invoices" | "storno" | "payments" | "receivables" | "statements" | "archive";
 type StatementSource = "documents" | "works";
 type AdjustmentScope = BillingAdjustmentInput["scope"];
 type AdjustmentMode = BillingAdjustmentInput["mode"];
@@ -215,19 +220,6 @@ interface BillingPeriod {
   readonly year: number;
 }
 
-const BILLING_YEAR_OPTIONS = Array.from({ length: 101 }, (_, index) => {
-  const year = 2000 + index;
-  return { label: String(year), value: String(year) };
-});
-
-const BILLING_MONTH_OPTIONS = Array.from({ length: 12 }, (_, index) => {
-  const month = index + 1;
-  return {
-    label: new Intl.DateTimeFormat("ro-RO", { month: "short", timeZone: "UTC" }).format(new Date(Date.UTC(2026, index, 1))).replaceAll(".", ""),
-    value: String(month),
-  };
-});
-
 function currentBillingPeriod(now = new Date()): BillingPeriod {
   return { month: now.getMonth() + 1, year: now.getFullYear() };
 }
@@ -243,10 +235,6 @@ function monthRange(period: BillingPeriod): { readonly dateFrom: string; readonl
   return { dateFrom: from.toISOString().slice(0, 10), dateTo: to.toISOString().slice(0, 10) };
 }
 
-function currentMonthRange(now = new Date()): { readonly dateFrom: string; readonly dateTo: string } {
-  return monthRange(currentBillingPeriod(now));
-}
-
 function isBillingTabId(value: string | null): value is BillingTabId {
   return value === "uninvoiced"
     || value === "invoices"
@@ -254,7 +242,7 @@ function isBillingTabId(value: string | null): value is BillingTabId {
     || value === "storno"
     || value === "receivables"
     || value === "statements"
-    || value === "month-close";
+    || value === "archive";
 }
 
 function isDocumentPaymentFilter(value: string | null): value is DocumentPaymentFilter {
@@ -335,6 +323,31 @@ function formatCsvDate(value: string | null): string {
     return "";
   }
   return new Intl.DateTimeFormat("ro-RO", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
+}
+
+function BillingRowSelectionCheckbox({
+  ariaLabel,
+  checked,
+  disabled = false,
+  onChange,
+}: {
+  readonly ariaLabel: string;
+  readonly checked: boolean;
+  readonly disabled?: boolean;
+  readonly onChange: () => void;
+}): ReactNode {
+  return (
+    <span className="billing-page__row-selection-control">
+      <input
+        aria-label={ariaLabel}
+        checked={checked}
+        className="billing-page__row-selection-checkbox"
+        disabled={disabled}
+        onChange={onChange}
+        type="checkbox"
+      />
+    </span>
+  );
 }
 
 function toggleSelectedId(values: readonly string[], id: string): readonly string[] {
@@ -473,7 +486,6 @@ function toDocumentCsvRow(document: BillingDocumentSummary, currency: string): R
 
 export function BillingPage(): ReactNode {
   const toast = useToast();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   const canReadFinance = hasPermission(permissionsQuery.data, "finance.read");
@@ -481,15 +493,17 @@ export function BillingPage(): ReactNode {
   const canReadReports = hasPermission(permissionsQuery.data, "finance.read_reports");
   const canCreateInvoice = hasPermission(permissionsQuery.data, "invoice.create");
   const canRecordPayment = hasPermission(permissionsQuery.data, "finance.record_payment");
-  const canUseBilling = canReadFinance || canReadInvoices || canCreateInvoice;
+  const canUseBilling = canReadFinance || canReadInvoices || canCreateInvoice || canReadReports;
   const settingsQuery = useSettings(canUseBilling);
   const currency = settingsQuery.data?.currency ?? "RON";
   const locale = settingsQuery.data?.locale ?? "ro-RO";
-  const activeCompanyLabel = settingsQuery.data ? `${settingsQuery.data.legalEntityCode} - ${settingsQuery.data.legalEntityDisplayName}` : "Firma activă";
+  const activeCompanyLabel = settingsQuery.data ? `${settingsQuery.data.legalEntityCode} — ${settingsQuery.data.legalEntityDisplayName}` : "Firma activă";
   const urlPeriod = useMemo(() => readBillingPeriod(searchParams), [searchParams.toString()]);
-  const [range, setRange] = useState(currentMonthRange);
   const selectedPeriod = useMemo(() => urlPeriod ?? currentBillingPeriod(), [urlPeriod]);
+  const [range, setRange] = useState(() => monthRange(urlPeriod ?? currentBillingPeriod()));
   const [groupBy, setGroupBy] = useState("clinic");
+  const [clinicFilter, setClinicFilter] = useState("");
+  const [doctorFilter, setDoctorFilter] = useState("");
   const [paymentFilter, setPaymentFilter] = useState<DocumentPaymentFilter>(() => {
     const urlPaymentFilter = searchParams.get("paymentFilter");
     return isDocumentPaymentFilter(urlPaymentFilter) ? urlPaymentFilter : "ALL";
@@ -498,6 +512,8 @@ export function BillingPage(): ReactNode {
   const [workCodeFilter, setWorkCodeFilter] = useState("");
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [monthCloseOpen, setMonthCloseOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<BillingTabId>(() => {
     const urlTab = searchParams.get("tab");
     return isBillingTabId(urlTab) ? urlTab : "uninvoiced";
@@ -514,9 +530,18 @@ export function BillingPage(): ReactNode {
   const [clinicStatementId, setClinicStatementId] = useState("");
   const [doctorStatementId, setDoctorStatementId] = useState("");
   const [statementSource, setStatementSource] = useState<StatementSource>("documents");
+  useEffect(() => {
+    if (permissionsQuery.isLoading) {
+      return;
+    }
+    const urlTab = searchParams.get("tab");
+    const fallbackTab: BillingTabId = canReadReports && !canReadFinance && !canReadInvoices && !canCreateInvoice ? "archive" : "uninvoiced";
+    const nextTab = isBillingTabId(urlTab) && (urlTab !== "archive" || canReadReports) ? urlTab : fallbackTab;
+    setActiveTab((current) => current === nextTab ? current : nextTab);
+  }, [canCreateInvoice, canReadFinance, canReadInvoices, canReadReports, permissionsQuery.isLoading, searchParams.toString()]);
   const monthRegistryParams = useMemo<BillingWorkspaceParams>(() => ({ ...monthRange(selectedPeriod), month: selectedPeriod.month, year: selectedPeriod.year }), [selectedPeriod]);
-  const overviewParams: BillingWorkspaceParams = { ...range, groupBy };
-  const billableParams: BillingWorkspaceParams = { ...range, search, uninvoicedOnly: true, ...(patientFilter ? { patient: patientFilter } : {}), ...(workCodeFilter ? { workCode: workCodeFilter } : {}) };
+  const overviewParams: BillingWorkspaceParams = { ...range, groupBy, ...(clinicFilter ? { clinicId: clinicFilter } : {}), ...(doctorFilter ? { doctorId: doctorFilter } : {}), ...(search ? { search } : {}) };
+  const billableParams: BillingWorkspaceParams = { ...range, search, uninvoicedOnly: true, ...(clinicFilter ? { clinicId: clinicFilter } : {}), ...(doctorFilter ? { doctorId: doctorFilter } : {}), ...(patientFilter ? { patient: patientFilter } : {}), ...(workCodeFilter ? { workCode: workCodeFilter } : {}) };
   const baseDocumentParams: BillingListQuery = {
     ...range,
     page: 1,
@@ -524,6 +549,8 @@ export function BillingPage(): ReactNode {
     paymentFilter,
     sortBy: "createdAt",
     sortDirection: "desc",
+    ...(clinicFilter ? { clinicId: clinicFilter } : {}),
+    ...(doctorFilter ? { doctorId: doctorFilter } : {}),
     ...(patientFilter ? { patient: patientFilter } : {}),
     ...(search ? { search } : {}),
     ...(workCodeFilter ? { workCode: workCodeFilter } : {}),
@@ -531,16 +558,25 @@ export function BillingPage(): ReactNode {
   const invoiceParams: BillingListQuery = { ...baseDocumentParams, type: "INVOICE" };
   const stornoParams: BillingListQuery = { ...baseDocumentParams, paymentFilter: "ALL", type: "INVOICE" };
   const receivablesParams: BillingListQuery = { ...baseDocumentParams, paymentFilter: paymentFilter === "ALL" ? "OUTSTANDING" : paymentFilter, type: "INVOICE" };
+  const clinicOptionsQuery = useQuery({ enabled: canUseBilling, queryFn: fetchClinicOptions, queryKey: ["clinics", "options", "billing"], retry: false });
+  const doctorOptionsQuery = useQuery({ enabled: canUseBilling, queryFn: () => fetchDoctorOptions(clinicFilter || undefined), queryKey: ["doctors", "options", "billing", clinicFilter], retry: false });
   const overviewQuery = useBillingOverview(overviewParams, canReadFinance);
-  const monthCloseClinicOverviewQuery = useBillingOverview({ ...monthRegistryParams, groupBy: "clinic" }, canReadReports && activeTab === "month-close");
-  const monthCloseDoctorOverviewQuery = useBillingOverview({ ...monthRegistryParams, groupBy: "doctor" }, canReadReports && activeTab === "month-close");
+  const monthCloseClinicOverviewQuery = useBillingOverview({ ...monthRegistryParams, groupBy: "clinic" }, canReadReports && monthCloseOpen);
+  const monthCloseDoctorOverviewQuery = useBillingOverview({ ...monthRegistryParams, groupBy: "doctor" }, canReadReports && monthCloseOpen);
   const billableWorksQuery = useBillableWorks(billableParams, (canCreateInvoice || canReadReports) && (activeTab === "uninvoiced" || activeTab === "statements"));
   const invoicesQuery = useBillingDocuments(invoiceParams, canReadInvoices && activeTab === "invoices");
   const statementInvoicesQuery = useBillingDocuments({ ...invoiceParams, pageSize: 100, paymentFilter: "ALL" }, canReadInvoices && activeTab === "statements");
   const stornoQuery = useBillingDocuments(stornoParams, canReadInvoices && activeTab === "storno");
   const paymentsQuery = usePayments(canReadFinance && activeTab === "payments");
   const receivablesQuery = useReceivables(receivablesParams, canReadReports && activeTab === "receivables");
-  const monthRegistryQuery = useMonthRegistry(monthRegistryParams, canReadReports && activeTab === "month-close");
+  const monthRegistryQuery = useMonthRegistry(monthRegistryParams, canReadReports && monthCloseOpen);
+  const monthArchivesQuery = useQuery<{ readonly items: readonly MonthCloseArchiveSummary[] }>({
+    enabled: canReadReports && Boolean(settingsQuery.data?.legalEntityCode),
+    queryFn: fetchMonthRegistryArchives,
+    queryKey: billingQueryKeys.monthRegistryArchives(settingsQuery.data?.legalEntityCode ?? "loading"),
+    retry: false,
+  });
+  const selectedArchive = (monthArchivesQuery.data?.items ?? []).find((archive) => archive.year === selectedPeriod.year && archive.month === selectedPeriod.month) ?? null;
   const closeMonthRegistryMutation = useMutation({
     mutationFn: () => closeMonthRegistry(monthRegistryParams),
     onSuccess: async () => {
@@ -549,7 +585,9 @@ export function BillingPage(): ReactNode {
         overviewQuery.refetch(),
         monthCloseClinicOverviewQuery.refetch(),
         monthCloseDoctorOverviewQuery.refetch(),
+        monthArchivesQuery.refetch(),
       ]);
+      setMonthCloseOpen(false);
       toast.showToast({ message: "Luna a fost arhivată.", variant: "success" });
     },
   });
@@ -558,8 +596,16 @@ export function BillingPage(): ReactNode {
     next.set("year", String(period.year));
     next.set("month", String(period.month));
     setSearchParams(next, { replace: true });
+    setRange(monthRange(period));
   }
-  const yearOptions = useMemo(() => BILLING_YEAR_OPTIONS, []);
+  function updateActiveTab(tab: BillingTabId, nextFilter?: DocumentPaymentFilter): void {
+    setActiveTab(tab);
+    if (nextFilter) setPaymentFilter(nextFilter);
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", tab);
+    if (nextFilter) next.set("paymentFilter", nextFilter);
+    setSearchParams(next, { replace: true });
+  }
   const billableItemClinics = useMemo(() => {
     const items = billableWorksQuery.data?.items ?? [];
     const clinics = new Map<string, string>();
@@ -818,6 +864,14 @@ export function BillingPage(): ReactNode {
     });
   }
 
+  async function exportMonthRegistryCsv(): Promise<void> {
+    try {
+      downloadCsv(`registru-lunar-facturare-${selectedPeriod.year}-${String(selectedPeriod.month).padStart(2, "0")}.csv`, await downloadMonthRegistryCsv(monthRegistryParams));
+    } catch (error) {
+      toast.showToast({ message: getErrorMessage(error), variant: "error" });
+    }
+  }
+
   if (!canUseBilling && !permissionsQuery.isLoading) {
     return <main className="billing-page"><ErrorState title="Acces refuzat" description="Nu ai permisiuni pentru facturare." /></main>;
   }
@@ -828,27 +882,52 @@ export function BillingPage(): ReactNode {
         <div>
           <p className="billing-page__eyebrow">Workspace financiar</p>
           <h1>Facturare</h1>
-          <p>{activeCompanyLabel} · Registru lunar pentru lucrări, facturi, încasări și solduri.</p>
+          <p>{activeCompanyLabel}</p>
         </div>
-        <div className="billing-page__quick-actions">
-          <Button onClick={() => updateSelectedPeriod(currentBillingPeriod())} variant="secondary">Luna curentă</Button>
-          <Button onClick={() => updateSelectedPeriod(shiftBillingPeriod(selectedPeriod, -1))} variant="secondary">Luna anterioară</Button>
-          <Button onClick={() => updateSelectedPeriod(shiftBillingPeriod(selectedPeriod, 1))} variant="secondary">Luna următoare</Button>
+        <div className="billing-page__period-actions">
+          <div className="billing-page__period-selector" aria-label="Perioadă financiară">
+            <Button aria-label="Luna anterioară" onClick={() => updateSelectedPeriod(shiftBillingPeriod(selectedPeriod, -1))} size="small" variant="outline">‹</Button>
+            <strong>{formatBillingPeriod(selectedPeriod)}</strong>
+            <Button aria-label="Luna următoare" onClick={() => updateSelectedPeriod(shiftBillingPeriod(selectedPeriod, 1))} size="small" variant="outline">›</Button>
+          </div>
+          {selectedArchive ? <span className="billing-page__archive-indicator">Lună arhivată</span> : null}
+          {canReadReports ? <div className="billing-page__actions-menu">
+            <Button aria-controls="billing-financial-actions" aria-expanded={actionsOpen} className="billing-page__actions-trigger" onClick={() => setActionsOpen((current) => !current)} size="small">Acțiuni</Button>
+            {actionsOpen ? <div aria-label="Acțiuni financiare" id="billing-financial-actions" role="group">
+              <Button onClick={() => void exportMonthRegistryCsv()} size="small" variant="secondary">Export registru CSV</Button>
+              <Button onClick={() => void exportMonthRegistryPdf()} size="small" variant="secondary">Export PDF</Button>
+              {!monthArchivesQuery.isLoading && !selectedArchive ? <Button onClick={() => { setActionsOpen(false); setMonthCloseOpen(true); }} size="small" variant="secondary">Închide și arhivează luna</Button> : null}
+              <Button onClick={() => { setActionsOpen(false); updateActiveTab("archive"); }} size="small" variant="secondary">Deschide arhiva</Button>
+            </div> : null}
+          </div> : null}
         </div>
       </section>
 
+      {overviewQuery.isLoading ? <LoadingState text="Se încarcă situația financiară" /> : null}
+      {overviewQuery.error ? <ErrorState title="Situația nu poate fi încărcată" description={getErrorMessage(overviewQuery.error)} /> : null}
+      {overviewQuery.data ? <OverviewCards overview={overviewQuery.data} currency={currency} locale={locale} onNavigate={updateActiveTab} /> : null}
+
       <section className="billing-page__filters-shell" aria-label="Filtre facturare">
-        <div className="billing-page__toolbar billing-page__toolbar--filters">
-          <p>Filtrele nu sunt afișate până nu le ceri.</p>
-          <Button onClick={() => setFiltersOpen((current) => !current)} variant="secondary">
-            {filtersOpen ? "Ascunde filtrele" : "Vezi filtrele"}
-          </Button>
+        <div className="billing-page__quick-filters">
+          <Select
+            label="Clinică"
+            onChange={(event) => { setClinicFilter(event.target.value); setDoctorFilter(""); }}
+            options={[{ label: "Toate clinicile", value: "" }, ...(clinicOptionsQuery.data ?? []).map((clinic) => ({ label: clinic.name, value: clinic.id }))]}
+            value={clinicFilter}
+          />
+          <Select
+            label="Medic"
+            onChange={(event) => setDoctorFilter(event.target.value)}
+            options={[{ label: "Toți medicii", value: "" }, ...(doctorOptionsQuery.data ?? []).map((doctor) => ({ label: doctor.displayName, value: doctor.id }))]}
+            value={doctorFilter}
+          />
+          <TextInput label="Căutare" placeholder="Pacient, lucrare, factură sau chitanță" type="search" value={search} onChange={(event) => setSearch(event.target.value)} />
+          <Button aria-expanded={filtersOpen} onClick={() => setFiltersOpen((current) => !current)} variant="secondary">Filtre avansate</Button>
         </div>
         {filtersOpen ? (
-          <section className="billing-page__filters" aria-label="Filtre facturare">
+          <section className="billing-page__filters" aria-label="Filtre avansate facturare">
             <DateInput label="De la" value={range.dateFrom} onChange={(event) => setRange((current) => ({ ...current, dateFrom: event.target.value }))} />
             <DateInput label="Până la" value={range.dateTo} onChange={(event) => setRange((current) => ({ ...current, dateTo: event.target.value }))} />
-            <TextInput label="Căutare" placeholder="Caută pacient, clinică, medic, cod lucrare, factură sau chitanță" value={search} onChange={(event) => setSearch(event.target.value)} />
             <TextInput label="Pacient" placeholder="Filtru pacient" value={patientFilter} onChange={(event) => setPatientFilter(event.target.value)} />
             <TextInput label="Cod lucrare" placeholder="WO-2026..." value={workCodeFilter} onChange={(event) => setWorkCodeFilter(event.target.value)} />
             <Select
@@ -874,22 +953,14 @@ export function BillingPage(): ReactNode {
           </section>
         ) : null}
       </section>
-
-      {overviewQuery.isLoading ? <LoadingState text="Se încarcă situația financiară" /> : null}
-      {overviewQuery.error ? <ErrorState title="Situația nu poate fi încărcată" description={getErrorMessage(overviewQuery.error)} /> : null}
-      {overviewQuery.data ? <OverviewCards overview={overviewQuery.data} currency={currency} locale={locale} onNavigate={(tab, nextFilter) => {
-        setActiveTab(tab);
-        if (nextFilter) {
-          setPaymentFilter(nextFilter);
-        }
-      }} /> : null}
       <Tabs
-        onValueChange={(value) => setActiveTab(isBillingTabId(value) ? value : "uninvoiced")}
+        className="billing-page__workspace-tabs"
+        onValueChange={(value) => updateActiveTab(isBillingTabId(value) ? value : "uninvoiced")}
         value={activeTab}
         tabs={[
           {
             id: "uninvoiced",
-            label: "Lucrări nefacturate",
+            label: "De facturat",
             content: (
               <BillableWorksTab
                 canCreateInvoice={canCreateInvoice}
@@ -1043,35 +1114,34 @@ export function BillingPage(): ReactNode {
               />
             ),
           },
-          {
-            id: "month-close",
-            label: "Închidere lună",
-            content: <MonthCloseTab
-              clinicOverview={monthCloseClinicOverviewQuery.data}
-              overview={overviewQuery.data}
-              registry={monthRegistryQuery.data}
-              currency={currency}
-              locale={locale}
-              doctorOverview={monthCloseDoctorOverviewQuery.data}
-              isClosing={closeMonthRegistryMutation.isPending}
-              monthLabel={formatBillingPeriod(selectedPeriod)}
-              onOpenArchive={() => navigate(`/billing/archive?year=${selectedPeriod.year}`)}
-              onPeriodChange={updateSelectedPeriod}
-              onExportRegistry={async () => {
-                try {
-                  downloadCsv(`registru-lunar-facturare-${selectedPeriod.year}-${String(selectedPeriod.month).padStart(2, "0")}.csv`, await downloadMonthRegistryCsv(monthRegistryParams));
-                } catch (error) {
-                  toast.showToast({ message: getErrorMessage(error), variant: "error" });
-                }
-              }}
-              onPrintRegistry={() => void exportMonthRegistryPdf()}
-              onCloseRegistry={() => closeMonthRegistryMutation.mutate()}
-              yearOptions={yearOptions}
-              selectedPeriod={selectedPeriod}
-            />,
-          },
+          ...(canReadReports ? [{
+            id: "archive",
+            label: "Arhivă",
+            content: activeTab === "archive" ? <BillingArchivePage embedded /> : null,
+          }] : []),
         ]}
       />
+      <Modal
+        description={`${formatBillingPeriod(selectedPeriod)} · ${activeCompanyLabel}. Verifică registrul înainte de a crea snapshot-ul financiar imuabil.`}
+        isOpen={monthCloseOpen}
+        onOpenChange={setMonthCloseOpen}
+        size="xl"
+        title="Închide și arhivează luna"
+      >
+        <MonthCloseTab
+          clinicOverview={monthCloseClinicOverviewQuery.data}
+          overview={overviewQuery.data}
+          registry={monthRegistryQuery.data}
+          currency={currency}
+          locale={locale}
+          doctorOverview={monthCloseDoctorOverviewQuery.data}
+          isClosing={closeMonthRegistryMutation.isPending}
+          monthLabel={formatBillingPeriod(selectedPeriod)}
+          onExportRegistry={() => void exportMonthRegistryCsv()}
+          onPrintRegistry={() => void exportMonthRegistryPdf()}
+          onCloseRegistry={() => closeMonthRegistryMutation.mutate()}
+        />
+      </Modal>
       <Modal
         description={`Calculat ${formatMoneyMinor(draftReviewTotals.subtotalMinor, currency, locale)} · ajustări ${formatMoneyMinor(draftReviewTotals.discountMinor, currency, locale)} · final ${formatMoneyMinor(draftReviewTotals.totalMinor, currency, locale)}`}
         footer={<Button disabled={selectedWorkIds.length === 0 || createInvoiceMutation.isPending} isLoading={createInvoiceMutation.isPending} onClick={() => void createReviewedInvoiceDraft()}>Creează draftul revizuit</Button>}
@@ -1146,12 +1216,10 @@ function OverviewCards({
   readonly overview: BillingOverview;
 }): ReactNode {
   const cards = [
-    { count: overview.uninvoicedWorkCount, label: "Lucrări nefacturate", tab: "uninvoiced", tone: "money", value: overview.uninvoicedMinor },
-    { count: overview.unpaidInvoiceCount, label: "Facturi neachitate", filter: "UNPAID", tab: "receivables", tone: "money", value: overview.unpaidOutstandingMinor ?? overview.outstandingMinor },
-    { count: overview.partialInvoiceCount, label: "Facturi parțial achitate", filter: "PARTIALLY_PAID", tab: "receivables", tone: "money", value: overview.partialOutstandingMinor ?? overview.outstandingMinor },
-    { count: overview.paidInvoiceCount, label: "Facturi achitate", filter: "PAID", tab: "invoices", tone: "money", value: overview.paidMinor },
-    { count: overview.invoiceCount, label: "Total emis", tab: "invoices", tone: "money", value: overview.totalIssuedMinor },
-    { count: overview.unpaidInvoiceCount, label: "Sold restant", filter: "OUTSTANDING", tab: "receivables", tone: "money", value: overview.outstandingMinor },
+    { label: "De facturat", meta: `${overview.uninvoicedWorkCount} lucrări`, tab: "uninvoiced", value: overview.uninvoicedMinor },
+    { label: "Neachitat", meta: `${overview.unpaidInvoiceCount} facturi neachitate`, filter: "UNPAID", tab: "receivables", value: overview.unpaidOutstandingMinor ?? overview.outstandingMinor },
+    { label: "Încasat", meta: `${overview.paidInvoiceCount} facturi achitate · total emis ${formatKpiMoneyMinor(overview.totalIssuedMinor, currency, locale)}`, tab: "payments", value: overview.paidMinor },
+    { label: "Sold restant", meta: `${overview.unpaidInvoiceCount} neachitate · ${overview.partialInvoiceCount} parțiale`, filter: "OUTSTANDING", tab: "receivables", value: overview.outstandingMinor },
   ] as const;
 
   return (
@@ -1167,7 +1235,7 @@ function OverviewCards({
           <strong className="billing-page__kpi-value">
             {formatKpiMoneyMinor(card.value, currency, locale)}
           </strong>
-          <small className="billing-page__kpi-meta">{card.count} înregistrări</small>
+          <small className="billing-page__kpi-meta">{card.meta}</small>
         </button>
       ))}
     </section>
@@ -1267,18 +1335,27 @@ function StatementsTab({
 
   return (
     <section className="billing-page__tab">
-      <div className="billing-page__toolbar billing-page__toolbar--actions">
-        <Button onClick={() => setScope("clinic")} variant={scope === "clinic" ? "primary" : "secondary"}>Clinică</Button>
-        <Button onClick={() => setScope("doctor")} variant={scope === "doctor" ? "primary" : "secondary"}>Medic</Button>
-        <Button onClick={() => setSource("documents")} variant={activeSource === "documents" ? "primary" : "secondary"}>Documente emise</Button>
-        <Button disabled={!hasWorks} onClick={() => setSource("works")} variant={activeSource === "works" ? "primary" : "secondary"}>Lucrări nefacturate</Button>
-        <Button disabled={!statement} onClick={() => onOpenPrint(scope, activeSource)} variant="outline">
-          {activeSource === "documents" && hasSelection ? "Exportă selecția PDF" : "Export PDF"}
-        </Button>
-        {hasSelection ? <Button onClick={() => onSelectionChange([])} variant="secondary">Golește selecția</Button> : null}
-        <Button disabled={!statement} onClick={() => onShare(scope, activeSource, "EMAIL")} variant="outline">Trimite email</Button>
-        <Button disabled={!statement} onClick={() => onShare(scope, activeSource, "WHATSAPP")} variant="outline">Trimite WhatsApp</Button>
-      </div>
+      <BillingTabToolbar
+        actions={(
+          <>
+            <Button disabled={!statement} onClick={() => onOpenPrint(scope, activeSource)} variant="outline">
+              {activeSource === "documents" && hasSelection ? "Exportă selecția PDF" : "Export PDF"}
+            </Button>
+            <Button disabled={!statement} onClick={() => onShare(scope, activeSource, "EMAIL")} variant="outline">Trimite email</Button>
+            <Button disabled={!statement} onClick={() => onShare(scope, activeSource, "WHATSAPP")} variant="outline">Trimite WhatsApp</Button>
+          </>
+        )}
+        ariaLabel="Toolbar note de plată"
+        context={(
+          <>
+            <Button onClick={() => setScope("clinic")} size="small" variant={scope === "clinic" ? "primary" : "outline"}>Clinică</Button>
+            <Button onClick={() => setScope("doctor")} size="small" variant={scope === "doctor" ? "primary" : "outline"}>Medic</Button>
+            <Button onClick={() => setSource("documents")} size="small" variant={activeSource === "documents" ? "primary" : "outline"}>Documente emise</Button>
+            <Button disabled={!hasWorks} onClick={() => setSource("works")} size="small" variant={activeSource === "works" ? "primary" : "outline"}>Lucrări nefacturate</Button>
+            {hasSelection ? <Button onClick={() => onSelectionChange([])} size="small" variant="outline">Golește selecția</Button> : null}
+          </>
+        )}
+      />
       <div className="billing-page__filters">
         <TextInput label="Caută clinica" placeholder="Nume clinică" value={clinicSearch} onChange={(event) => setClinicSearch(event.target.value)} />
         <TextInput label="Caută medicul" placeholder="Nume medic" value={doctorSearch} onChange={(event) => setDoctorSearch(event.target.value)} />
@@ -1408,7 +1485,7 @@ function SelectableStatementDocumentsTable({
   readonly selectedDocumentIds: readonly string[];
 }): ReactNode {
   const columns = useMemo<readonly DataTableColumn<BillingStatementRow>[]>(() => [
-    { id: "select", header: "", renderCell: (row) => <input aria-label={`Selectează ${row.documentNumber ?? row.documentId}`} checked={selectedDocumentIds.includes(row.documentId)} onChange={() => onSelectionChange(toggleSelectedId(selectedDocumentIds, row.documentId))} type="checkbox" /> },
+    { id: "select", header: "", align: "center", renderCell: (row) => <BillingRowSelectionCheckbox ariaLabel={`Selectează ${row.documentNumber ?? row.documentId}`} checked={selectedDocumentIds.includes(row.documentId)} onChange={() => onSelectionChange(toggleSelectedId(selectedDocumentIds, row.documentId))} /> },
     { id: "number", header: "Document", renderCell: (row) => row.documentNumber ?? "-" },
     { id: "type", header: "Tip", renderCell: (row) => toDocumentTypeLabel(row.documentType) },
     { id: "issue", header: "Emis", renderCell: (row) => formatDate(row.issueDate) },
@@ -1472,7 +1549,7 @@ function BillableWorksTab({
   readonly selectedWorkIds: readonly string[];
 }): ReactNode {
   const columns = useMemo<readonly DataTableColumn<BillableWork>[]>(() => [
-    { id: "select", header: "", renderCell: (work) => <input aria-label={`Selectează ${work.code}`} checked={selectedWorkIds.includes(work.id)} disabled={!work.isBillable} onChange={() => onToggleWork(work)} type="checkbox" /> },
+    { id: "select", header: "", align: "center", renderCell: (work) => <BillingRowSelectionCheckbox ariaLabel={`Selectează ${work.code}`} checked={selectedWorkIds.includes(work.id)} disabled={!work.isBillable} onChange={() => onToggleWork(work)} /> },
     { id: "clinic", header: "Clinică", renderCell: (work) => work.clinicName },
     { id: "doctor", header: "Medic", renderCell: (work) => work.doctorName },
     { id: "patient", header: "Pacient", renderCell: (work) => work.patientName },
@@ -1486,12 +1563,17 @@ function BillableWorksTab({
 
   return (
     <section className="billing-page__tab">
-      <div className="billing-page__toolbar billing-page__toolbar--actions">
-        <p>{selectedWorkIds.length} lucrări selectate · {formatMoneyMinor(selectedTotal, currency, locale)}</p>
-        <Button onClick={onExport} variant="outline">Export CSV</Button>
-        {canCreateInvoice ? <Button disabled={selectedWorkIds.length === 0 || isCreating} onClick={onReviewInvoice} variant="secondary">Revizuiește valorile</Button> : null}
-        {canCreateInvoice ? <Button disabled={selectedWorkIds.length === 0 || isCreating} onClick={onCreateInvoice}>Emite factura</Button> : null}
-      </div>
+      <BillingTabToolbar
+        actions={(
+          <>
+            <Button onClick={onExport} variant="outline">Export CSV</Button>
+            {canCreateInvoice ? <Button disabled={selectedWorkIds.length === 0 || isCreating} onClick={onReviewInvoice} variant="outline">Revizuiește valorile</Button> : null}
+            {canCreateInvoice ? <Button disabled={selectedWorkIds.length === 0 || isCreating} onClick={onCreateInvoice}>Emite factură</Button> : null}
+          </>
+        )}
+        ariaLabel="Toolbar de facturat"
+        context={<p>{selectedWorkIds.length} lucrări selectate · {formatMoneyMinor(selectedTotal, currency, locale)}</p>}
+      />
       <DataTable columns={columns} emptyMessage="Nu există lucrări nefacturate în perioada selectată." error={query.error ? getErrorMessage(query.error) : undefined} getRowKey={(work) => work.id} isLoading={query.isLoading} rows={query.data?.items ?? []} />
     </section>
   );
@@ -1526,7 +1608,7 @@ function StornoTab({
   const selected = eligibleDocuments.find((document) => selectedDocumentIds.includes(document.id)) ?? null;
   const eligible = selected && selected.status !== "DRAFT" && selected.status !== "CANCELLED" && !selected.stornoDocumentId;
   const columns = useMemo<readonly DataTableColumn<BillingDocumentSummary>[]>(() => [
-    { id: "select", header: "", renderCell: (document) => <input aria-label={`Selectează ${document.formattedNumber ?? document.id}`} checked={selectedDocumentIds.includes(document.id)} onChange={() => onSelectionChange(toggleSelectedId(selectedDocumentIds, document.id))} type="checkbox" /> },
+    { id: "select", header: "", align: "center", renderCell: (document) => <BillingRowSelectionCheckbox ariaLabel={`Selectează ${document.formattedNumber ?? document.id}`} checked={selectedDocumentIds.includes(document.id)} onChange={() => onSelectionChange(toggleSelectedId(selectedDocumentIds, document.id))} /> },
     { id: "number", header: "Factură", renderCell: (document) => document.formattedNumber ?? "-" },
     { id: "status", header: "Status", renderCell: (document) => toDocumentStatusLabel(document.status) },
     { id: "clinic", header: "Clinică", renderCell: (document) => document.clinicName },
@@ -1538,11 +1620,16 @@ function StornoTab({
 
   return (
     <section className="billing-page__tab">
-      <div className="billing-page__toolbar billing-page__toolbar--wrap">
-        <p>{selected ? `Plătit înainte de storno: ${formatMoneyMinor(selected.paidMinor, selected.currency, locale)}` : "Selectează o factură emisă."}</p>
-        <Button disabled={!eligible || isMutating} isLoading={isMutating} onClick={() => selected && void onCreateStorno(selected.id)}>Creează storno</Button>
-        <Button disabled={!selected} onClick={() => selected && onDownloadPdf(selected.id)} variant="outline">Export PDF</Button>
-      </div>
+      <BillingTabToolbar
+        actions={(
+          <>
+            <Button disabled={!selected} onClick={() => selected && onDownloadPdf(selected.id)} variant="outline">Export PDF</Button>
+            <Button disabled={!eligible || isMutating} isLoading={isMutating} onClick={() => selected && void onCreateStorno(selected.id)}>Creează storno</Button>
+          </>
+        )}
+        ariaLabel="Toolbar storno"
+        context={<p>{selected ? `Plătit înainte de storno: ${formatMoneyMinor(selected.paidMinor, selected.currency, locale)}` : "Selectează o factură emisă."}</p>}
+      />
       <DataTable columns={columns} emptyMessage="Nu există facturi eligibile pentru storno." error={error ? getErrorMessage(error) : undefined} getRowKey={(document) => document.id} isLoading={isLoading} rows={eligibleDocuments} />
       {selected ? <section className="billing-page__print-preview" aria-label="Istoric factură originală"><h2>{selected.formattedNumber ?? "Factura"}</h2><p>Factura originală rămâne nemodificată. Plătit înainte de storno: {formatMoneyMinor(selected.paidMinor, selected.currency, locale)}. Plățile istorice rămân asociate facturii originale.</p></section> : null}
     </section>
@@ -1591,7 +1678,7 @@ function DocumentsTab({
   const selectedDocument = selectedDocuments[0] ?? null;
   const selectedCount = selectedDocumentIds.length;
   const columns = useMemo<readonly DataTableColumn<BillingDocumentSummary>[]>(() => [
-    { id: "select", header: "", renderCell: (document) => <input aria-label={`Selectează ${document.formattedNumber ?? "Draft"}`} checked={selectedDocumentIds.includes(document.id)} onChange={() => onSelectionChange(toggleSelectedId(selectedDocumentIds, document.id))} type="checkbox" /> },
+    { id: "select", header: "", align: "center", renderCell: (document) => <BillingRowSelectionCheckbox ariaLabel={`Selectează ${document.formattedNumber ?? "Draft"}`} checked={selectedDocumentIds.includes(document.id)} onChange={() => onSelectionChange(toggleSelectedId(selectedDocumentIds, document.id))} /> },
     { id: "number", header: "Număr", renderCell: (document) => document.formattedNumber ?? "Draft" },
     { id: "type", header: "Tip", renderCell: (document) => toDocumentTypeLabel(document.type) },
     { id: "status", header: "Status", renderCell: (document) => toDocumentStatusLabel(document.status) },
@@ -1631,14 +1718,19 @@ function DocumentsTab({
 
   return (
     <section className="billing-page__tab">
-      <div className="billing-page__toolbar billing-page__toolbar--actions">
-        <p>{selectedCount} {selectionLabel} selectate · {formatMoneyMinor(selectedTotalMinor, currency, locale)}</p>
-        <Button onClick={onExport} variant="outline">Export CSV</Button>
-        {canRecordPayment ? <Button disabled={!canUsePaymentForm || selectedCount !== 1 || isMutating} onClick={() => setIsPaymentOpen(true)} variant="secondary">Încasează</Button> : null}
-        <Button disabled={selectedCount === 0} onClick={() => onDownloadPdf(selectedDocument ? selectedDocument.id : "")} variant="outline">Export PDF</Button>
-        <Button disabled={!selectedDocument} onClick={() => selectedDocument && onShareDocument(selectedDocument, "EMAIL")} variant="outline">Trimite email</Button>
-        <Button disabled={!selectedDocument} onClick={() => selectedDocument && onShareDocument(selectedDocument, "WHATSAPP")} variant="outline">Trimite WhatsApp</Button>
-      </div>
+      <BillingTabToolbar
+        actions={(
+          <>
+            <Button onClick={onExport} variant="outline">Export CSV</Button>
+            {canRecordPayment ? <Button disabled={!canUsePaymentForm || selectedCount !== 1 || isMutating} onClick={() => setIsPaymentOpen(true)}>Încasează</Button> : null}
+            <Button disabled={selectedCount === 0} onClick={() => onDownloadPdf(selectedDocument ? selectedDocument.id : "")} variant="outline">Export PDF</Button>
+            <Button disabled={!selectedDocument} onClick={() => selectedDocument && onShareDocument(selectedDocument, "EMAIL")} variant="outline">Trimite email</Button>
+            <Button disabled={!selectedDocument} onClick={() => selectedDocument && onShareDocument(selectedDocument, "WHATSAPP")} variant="outline">Trimite WhatsApp</Button>
+          </>
+        )}
+        ariaLabel="Toolbar facturi"
+        context={<p>{selectedCount} {selectionLabel} selectate · {formatMoneyMinor(selectedTotalMinor, currency, locale)}</p>}
+      />
       <DataTable
         columns={columns}
         emptyMessage="Nu există facturi."
@@ -1716,8 +1808,11 @@ function PaymentsTab({ currency, isLoading, locale, onExport, payments }: { read
 
   return (
     <section className="billing-page__tab">
-      <p className="billing-page__readonly">Evidența încasărilor înregistrate în aplicație.</p>
-      <div className="billing-page__toolbar"><Button onClick={onExport} variant="outline">Export CSV</Button></div>
+      <BillingTabToolbar
+        actions={<Button onClick={onExport} variant="outline">Export CSV</Button>}
+        ariaLabel="Toolbar încasări"
+        context={<p>Evidența încasărilor înregistrate în aplicație.</p>}
+      />
       <DataTable columns={columns} emptyMessage="Nu există încasări." getRowKey={(payment) => payment.id} isLoading={isLoading} rows={payments} />
     </section>
   );
@@ -1781,7 +1876,7 @@ function ReceivablesTab({
     setIsPaymentOpen(false);
   }
   const columns = useMemo<readonly DataTableColumn<BillingReceivableRow>[]>(() => [
-    { id: "select", header: "", renderCell: (item) => <input aria-label={`Selectează ${item.documentNumber ?? item.documentId}`} checked={selectedDocumentIds.includes(item.documentId)} onChange={() => onSelectionChange(toggleSelectedId(selectedDocumentIds, item.documentId))} type="checkbox" /> },
+    { id: "select", header: "", align: "center", renderCell: (item) => <BillingRowSelectionCheckbox ariaLabel={`Selectează ${item.documentNumber ?? item.documentId}`} checked={selectedDocumentIds.includes(item.documentId)} onChange={() => onSelectionChange(toggleSelectedId(selectedDocumentIds, item.documentId))} /> },
     { id: "number", header: "Factură", renderCell: (item) => item.documentNumber ?? "-" },
     { id: "clinic", header: "Clinică", renderCell: (item) => item.clinicName },
     { id: "doctor", header: "Medic", renderCell: (item) => item.doctorNames.join(", ") || "-" },
@@ -1795,12 +1890,17 @@ function ReceivablesTab({
 
   return (
     <section className="billing-page__tab">
-      <div className="billing-page__toolbar billing-page__toolbar--wrap">
-        <p>{selectedCount} restanțe selectate</p>
-        <Button onClick={onExport} variant="outline">Export CSV</Button>
-        <Button disabled={selectedCount !== 1 || isMutating} onClick={() => selectedDocument ? onOpenSelected(selectedDocument.documentId) : undefined} variant="secondary">Deschide documentul</Button>
-        <Button disabled={!canUsePaymentForm || selectedCount !== 1 || isMutating} onClick={() => setIsPaymentOpen(true)}>Înregistrează încasare</Button>
-      </div>
+      <BillingTabToolbar
+        actions={(
+          <>
+            <Button onClick={onExport} variant="outline">Export CSV</Button>
+            <Button disabled={selectedCount !== 1 || isMutating} onClick={() => selectedDocument ? onOpenSelected(selectedDocument.documentId) : undefined} variant="outline">Deschide documentul</Button>
+            <Button disabled={!canUsePaymentForm || selectedCount !== 1 || isMutating} onClick={() => setIsPaymentOpen(true)}>Înregistrează încasare</Button>
+          </>
+        )}
+        ariaLabel="Toolbar restanțe"
+        context={<p>{selectedCount} restanțe selectate</p>}
+      />
       <DataTable columns={columns} emptyMessage="Nu există facturi restante sau parțial achitate pentru filtrele curente." error={error ? getErrorMessage(error) : undefined} getRowKey={(item) => item.documentId} isLoading={isLoading} rows={items} />
       {selectedDocument ? (
         <section className="billing-page__print-preview" aria-label="Restanță selectată">
@@ -1855,13 +1955,9 @@ function MonthCloseTab({
   monthLabel,
   onExportRegistry,
   onCloseRegistry,
-  onOpenArchive,
   onPrintRegistry,
-  onPeriodChange,
-  selectedPeriod,
   overview,
   registry,
-  yearOptions,
 }: {
   readonly clinicOverview: BillingOverview | undefined;
   readonly currency: string;
@@ -1871,13 +1967,9 @@ function MonthCloseTab({
   readonly monthLabel: string;
   readonly onExportRegistry: () => void;
   readonly onCloseRegistry: () => void;
-  readonly onOpenArchive: () => void;
   readonly onPrintRegistry: () => void;
-  readonly onPeriodChange: (period: BillingPeriod) => void;
-  readonly selectedPeriod: BillingPeriod;
   readonly overview: BillingOverview | undefined;
   readonly registry: MonthEndRegistry | undefined;
-  readonly yearOptions: readonly { readonly label: string; readonly value: string }[];
 }): ReactNode {
   if (!overview) {
     return <LoadingState text="Se încarcă închiderea lunii" />;
@@ -1885,45 +1977,11 @@ function MonthCloseTab({
 
   return (
     <section className="billing-page__tab">
-      <Card>
-        <CardHeader>
-          <CardTitle>Lună și an</CardTitle>
-          <CardDescription>Alege orice perioadă, iar URL-ul rămâne stabil la refresh.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="billing-page__month-picker">
-            <Select
-              label="An"
-              options={yearOptions}
-              value={String(selectedPeriod.year)}
-              onChange={(event) => onPeriodChange({ month: selectedPeriod.month, year: Number(event.target.value) })}
-            />
-            <div className="billing-page__month-grid" aria-label="Alege luna">
-              {BILLING_MONTH_OPTIONS.map((month) => {
-                const isActive = month.value === String(selectedPeriod.month);
-                return (
-                  <Button
-                    key={month.value}
-                    onClick={() => onPeriodChange({ month: Number(month.value), year: selectedPeriod.year })}
-                    variant={isActive ? "primary" : "secondary"}
-                  >
-                    {month.label}
-                  </Button>
-                );
-              })}
-            </div>
-            <div className="billing-page__toolbar billing-page__toolbar--tight">
-              <Button onClick={() => onPeriodChange(currentBillingPeriod())} variant="secondary">Luna curentă</Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
       <div className="billing-page__toolbar billing-page__toolbar--wrap">
         <p className="billing-page__readonly">Perioada selectată: {monthLabel}</p>
         <Button onClick={onExportRegistry} variant="outline">Export registru lunar CSV</Button>
         <Button onClick={onPrintRegistry} variant="outline">Export PDF</Button>
-        <Button onClick={onOpenArchive} variant="secondary">Arhivă facturare</Button>
-        <Button disabled={isClosing} onClick={onCloseRegistry} variant="secondary">Închide și arhivează luna</Button>
+        <Button disabled={isClosing} isLoading={isClosing} onClick={onCloseRegistry} variant="primary">Confirmă închiderea lunii</Button>
       </div>
       {registry ? (
         <div className="billing-page__registry-summary">
@@ -1947,7 +2005,7 @@ function BillingGuideTab(): ReactNode {
     {
       id: "uninvoiced",
       title: "Lucrări nefacturate",
-      content: "Aici selectezi lucrările eligibile și folosești Emite factura pentru fluxul normal sau Revizuiește valorile pentru draftul editabil.",
+      content: "Aici selectezi lucrările eligibile și folosești Emite factură pentru fluxul normal sau Revizuiește valorile pentru draftul editabil.",
     },
     {
       id: "statement",

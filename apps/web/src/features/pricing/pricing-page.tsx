@@ -25,6 +25,7 @@ import {
   TextInput,
   useToast,
   type DataTableColumn,
+  type DataTableSort,
 } from "@dental-lab/ui";
 import {
   decimalStringToMinor,
@@ -45,20 +46,19 @@ import {
   type TechnicianOperationInput,
   type TechnicianOperationSummary,
   type TechnicianOperationsListParams,
-  type TechnicianRateInput,
-  type TechnicianRateView,
   type WorkTypeOption,
   type ProbeTypeView,
 } from "@dental-lab/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
+import { Link, useSearchParams } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
 import { fetchClinicOptions, fetchDoctorOptions } from "../clinics/clinics-api.js";
 import { registerOrganizationContextSwitchGuard } from "../organization-context/organization-context-switch-guards.js";
 import { useSettings } from "../settings/settings-api.js";
-import { fetchUsers, hasPermission, type UserSummary } from "../users/users-api.js";
+import { hasPermission } from "../users/users-api.js";
 import { useCreateWorkType, useUpdateWorkType, useWorkType, useWorkTypeOptions } from "../work-types/work-types-api.js";
 import { useAllProbeTypes, useCreateProbeType, useUpdateProbeType } from "../works/works-api.js";
 import {
@@ -82,9 +82,7 @@ import {
   useArchiveTechnicianOperation,
   useCreateTechnicianOperation,
   useRestoreTechnicianOperation,
-  useSetTechnicianRate,
   useTechnicianOperations,
-  useTechnicianRates,
   useUpdateTechnicianOperation,
 } from "./technician-operations-api.js";
 import {
@@ -93,12 +91,10 @@ import {
   previewFormSchema,
   pricingCategoryOptions,
   technicianOperationFormSchema,
-  technicianRateFormSchema,
   type AgreementFormValues,
   type CatalogFormValues,
   type PreviewFormValues,
   type TechnicianOperationFormValues,
-  type TechnicianRateFormValues,
 } from "./pricing-page.schema.js";
 import { applyApiErrorsToForm, getErrorMessage, UnsavedChangesPrompt, useBeforeUnloadPrompt, useCloseGuard } from "../../lib/form-utils.js";
 import "./pricing-page.css";
@@ -108,6 +104,12 @@ const activeOptions = [
   { label: "Arhivate", value: "archived" },
   { label: "Toate", value: "all" },
 ] as const;
+
+type PricingTabId = "catalog" | "agreements" | "probe-types" | "operations" | "archive";
+
+function isPricingTabId(value: string | null): value is PricingTabId {
+  return value === "catalog" || value === "agreements" || value === "probe-types" || value === "operations" || value === "archive";
+}
 
 const subjectTypeOptions = [
   { label: "Clinică", value: "CLINIC" },
@@ -283,12 +285,12 @@ function getEffectiveCatalogPrice(item: PriceCatalogItemSummary, agreement: Pric
   return rule.overridePriceMinor ?? item.standardPriceMinor;
 }
 
-function getTechnicianOperationDefaults(): TechnicianOperationFormValues {
+function getTechnicianOperationDefaults(operation?: TechnicianOperationSummary | null): TechnicianOperationFormValues {
   return {
-    category: "Altele",
-    code: "",
-    description: "",
-    name: "",
+    category: operation?.category ?? "Altele",
+    code: operation?.code ?? "",
+    description: operation?.description ?? "",
+    name: operation?.name ?? "",
   };
 }
 
@@ -301,31 +303,11 @@ function toTechnicianOperationInput(values: TechnicianOperationFormValues): Tech
   };
 }
 
-function getTechnicianRateDefaults(): TechnicianRateFormValues {
-  return {
-    effectiveFrom: "",
-    operationId: "",
-    rateDecimal: "",
-    technicianId: "",
-  };
-}
-
-function toTechnicianRateInput(values: TechnicianRateFormValues): TechnicianRateInput {
-  const rate = decimalStringToMinor(values.rateDecimal);
-  if (!rate.ok) {
-    throw new Error(rate.error);
-  }
-
-  const baseInput: TechnicianRateInput = {
-    operationId: values.operationId,
-    rateMinor: rate.value,
-    technicianId: values.technicianId,
-  };
-  return values.effectiveFrom ? { ...baseInput, effectiveFrom: new Date(values.effectiveFrom).toISOString() } : baseInput;
-}
-
 export function PricingPage(): ReactNode {
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const activeTab: PricingTabId = isPricingTabId(requestedTab) ? requestedTab : "catalog";
   const [catalogParams, setCatalogParams] = useState<PricingCatalogListParams>({
     active: true,
     page: 1,
@@ -354,11 +336,12 @@ export function PricingPage(): ReactNode {
     sortBy: "name",
     sortDirection: "asc",
   });
-  const [selectedTechnicianId, setSelectedTechnicianId] = useState<string | undefined>(undefined);
-  const [selectedOperationId, setSelectedOperationId] = useState<string | undefined>(undefined);
   const [selectedCatalogId, setSelectedCatalogId] = useState<string | null>(null);
   const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
   const [isAgreementModalOpen, setIsAgreementModalOpen] = useState(false);
+  const [isProbeTypeModalOpen, setIsProbeTypeModalOpen] = useState(false);
+  const [isOperationModalOpen, setIsOperationModalOpen] = useState(false);
+  const [selectedOperation, setSelectedOperation] = useState<TechnicianOperationSummary | null>(null);
   const [selectedAgreementId, setSelectedAgreementId] = useState<string | null>(null);
   const [catalogAudience, setCatalogAudience] = useState<"STANDARD" | "CLINIC" | "DOCTOR">("STANDARD");
   const [catalogAudienceId, setCatalogAudienceId] = useState("");
@@ -371,28 +354,20 @@ export function PricingPage(): ReactNode {
   const canReadAgreements = hasPermission(permissionsQuery.data, "pricing.agreements.read");
   const canManageAgreements = hasPermission(permissionsQuery.data, "pricing.agreements.manage");
   const canPreview = hasPermission(permissionsQuery.data, "pricing.resolve_preview");
-  const canReadOperations = hasPermission(permissionsQuery.data, "technician.operations.read");
-  const canReadRates = hasPermission(permissionsQuery.data, "technician.rates.read");
-  const canManageRates = hasPermission(permissionsQuery.data, "technician.rates.manage");
   const canManageProbeTypes = hasPermission(permissionsQuery.data, "probe_types.manage");
+  const canReadOperations = hasPermission(permissionsQuery.data, "technician.operations.read");
+  const canManageOperations = hasPermission(permissionsQuery.data, "technician.rates.manage");
   const settingsQuery = useSettings(canRead);
   const catalogQuery = usePricingCatalog(catalogParams, canRead);
   const archiveQuery = usePricingCatalog(archiveParams, canRead);
   const agreementsQuery = usePricingAgreements(agreementParams, canRead && canReadAgreements);
+  const operationsQuery = useTechnicianOperations(operationParams, canReadOperations);
   const selectedAudienceAgreement = (agreementsQuery.data?.items ?? []).find((agreement) => {
     if (catalogAudience === "STANDARD" || agreement.subjectType !== catalogAudience) return false;
     return catalogAudience === "CLINIC" ? agreement.clinic?.id === catalogAudienceId : agreement.doctor?.id === catalogAudienceId;
   });
   const audienceAgreementQuery = usePricingAgreement(selectedAudienceAgreement?.id ?? null, canRead && canReadAgreements);
   const selectedAgreementQuery = usePricingAgreement(selectedAgreementId, canRead && canReadAgreements);
-  const operationsQuery = useTechnicianOperations(operationParams, canReadOperations);
-  const techniciansQuery = useQuery({
-    enabled: canReadRates,
-    queryFn: () => fetchUsers({ isActive: true, page: 1, pageSize: 100, roleKey: "TEHNICIAN", search: undefined, sortBy: "displayName", sortDirection: "asc" }),
-    queryKey: ["users", "technicians", "active"],
-    retry: false,
-  });
-  const ratesQuery = useTechnicianRates(selectedTechnicianId, canReadRates);
   const selectedCatalogQuery = usePricingCatalogItem(selectedCatalogId, canRead);
   const workTypesQuery = useWorkTypeOptions(canRead);
   const probeTypesQuery = useAllProbeTypes(canRead);
@@ -414,7 +389,6 @@ export function PricingPage(): ReactNode {
   const updateOperationMutation = useUpdateTechnicianOperation();
   const archiveOperationMutation = useArchiveTechnicianOperation();
   const restoreOperationMutation = useRestoreTechnicianOperation();
-  const setRateMutation = useSetTechnicianRate();
   const currency = settingsQuery.data?.currency ?? "RON";
   const locale = settingsQuery.data?.locale ?? "ro-RO";
   void canPreview;
@@ -422,8 +396,6 @@ export function PricingPage(): ReactNode {
   void PreviewTab;
   void TermsTab;
   void AuditSourceTab;
-
-  const editingOperation = (operationsQuery.data?.items ?? []).find((operation) => operation.id === selectedOperationId);
 
   const catalogColumns = useMemo<readonly DataTableColumn<PriceCatalogItemSummary>[]>(() => [
     { header: "Categorie", id: "category", isSortable: true, renderCell: (item) => item.category },
@@ -433,6 +405,14 @@ export function PricingPage(): ReactNode {
     { header: "Unitate", id: "unit", renderCell: (item) => formatWorkTypeUnit(item.unit) },
     { header: "Status", id: "status", renderCell: (item) => <StatusBadge label={item.isActive ? "Activ" : "Arhivat"} variant={item.isActive ? "approved" : "closed"} /> },
   ], [audienceAgreementQuery.data, catalogAudience, currency, locale]);
+  const archiveColumns = useMemo<readonly DataTableColumn<PriceCatalogItemSummary>[]>(() => [
+    { header: "Categorie", id: "category", isSortable: true, renderCell: (item) => item.category },
+    { header: "Tip lucrare", id: "displayName", isSortable: true, renderCell: (item) => item.workType.name },
+    { header: "Simbol", id: "symbol", renderCell: (item) => item.workType.symbol },
+    { align: "right", header: "Preț standard", id: "standardPriceMinor", isSortable: true, renderCell: (item) => formatMoneyMinor(item.standardPriceMinor, currency, locale) },
+    { header: "Unitate", id: "unit", renderCell: (item) => formatWorkTypeUnit(item.unit) },
+    { header: "Status", id: "status", renderCell: () => <StatusBadge label="Arhivat" variant="closed" /> },
+  ], [currency, locale]);
   const agreementColumns = useMemo<readonly DataTableColumn<PricingAgreementSummary>[]>(() => [
     { header: "Acord", id: "name", renderCell: (item) => item.name },
     { header: "Subiect", id: "subject", renderCell: (item) => item.clinic?.name ?? item.doctor?.displayName ?? "-" },
@@ -444,49 +424,30 @@ export function PricingPage(): ReactNode {
   const operationColumns = useMemo<readonly DataTableColumn<TechnicianOperationSummary>[]>(() => [
     { header: "Cod", id: "code", isSortable: true, renderCell: (item) => item.code },
     { header: "Manoperă", id: "name", isSortable: true, renderCell: (item) => item.name },
+    { header: "Categorie", id: "category", renderCell: (item) => item.category },
     { header: "Descriere", id: "description", renderCell: (item) => item.description ?? "-" },
     { header: "Status", id: "status", renderCell: (item) => <StatusBadge label={item.isActive ? "Activ" : "Arhivat"} variant={item.isActive ? "approved" : "closed"} /> },
     {
       header: "Acțiuni",
       id: "actions",
-      renderCell: (item) => item.isActive ? (
+      renderCell: (item) => (
         <div className="pricing-page__table-actions">
-          <Button disabled={!canManageRates} onClick={() => setSelectedOperationId(item.id)} size="small" variant="outline">Editează</Button>
-          <Button disabled={!canManageRates} onClick={() => archiveOperationMutation.mutate(item.id, {
+          {item.isActive ? <Button disabled={!canManageOperations} onClick={() => { setSelectedOperation(item); setIsOperationModalOpen(true); }} size="small" variant="outline">Editează</Button> : null}
+          {item.isActive ? <Button disabled={!canManageOperations} onClick={() => archiveOperationMutation.mutate(item.id, {
             onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Manopera nu a fost arhivată", variant: "error" }),
             onSuccess: () => toast.showToast({ message: "Manopera a fost arhivată.", variant: "success" }),
-          })} size="small" variant="outline">Arhivează</Button>
+          })} size="small" variant="outline">Arhivează</Button> : <Button disabled={!canManageOperations} onClick={() => restoreOperationMutation.mutate(item.id, {
+            onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Manopera nu a fost reactivată", variant: "error" }),
+            onSuccess: () => toast.showToast({ message: "Manopera a fost reactivată.", variant: "success" }),
+          })} size="small" variant="outline">Reactivează</Button>}
         </div>
-      ) : (
-        <Button disabled={!canManageRates} onClick={() => restoreOperationMutation.mutate(item.id, {
-          onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Manopera nu a fost reactivată", variant: "error" }),
-          onSuccess: () => toast.showToast({ message: "Manopera a fost reactivată.", variant: "success" }),
-        })} size="small" variant="outline">Reactivează</Button>
       ),
     },
-  ], [archiveOperationMutation, canManageRates, restoreOperationMutation, toast]);
-  const rateColumns = useMemo<readonly DataTableColumn<TechnicianRateView>[]>(() => [
-    { header: "Tehnician", id: "technician", renderCell: (item) => item.technician.displayName },
-    { header: "Manoperă", id: "operation", renderCell: (item) => `${item.operation.code} · ${item.operation.name}` },
-    { align: "right", header: "Tarif / element", id: "rateMinor", renderCell: (item) => `${formatMoneyMinor(item.rateMinor, item.currency, locale)} / element` },
-    { header: "Valabil de la", id: "effectiveFrom", renderCell: (item) => item.effectiveFrom.slice(0, 10) },
-    { header: "Valabil până la", id: "validUntil", renderCell: (item) => item.validUntil?.slice(0, 10) ?? "rata curentă/viitoare" },
-  ], [locale]);
-  function saveOperation(values: TechnicianOperationFormValues, form: ReturnType<typeof useForm<TechnicianOperationFormValues>>): void {
-    const input = toTechnicianOperationInput(values);
-    const onError = (error: unknown) => { applyApiErrorsToForm(form, error); toast.showToast({ message: getErrorMessage(error), title: "Manopera nu a fost salvată", variant: "error" }); };
-    const onSuccess = () => { setSelectedOperationId(undefined); form.reset(getTechnicianOperationDefaults()); toast.showToast({ message: editingOperation ? "Manopera a fost modificată." : "Manopera a fost creată.", variant: "success" }); };
-    if (editingOperation) updateOperationMutation.mutate({ id: editingOperation.id, input }, { onError, onSuccess });
-    else createOperationMutation.mutate(input, { onError, onSuccess });
-  }
-
-  function saveRate(values: TechnicianRateFormValues, form: ReturnType<typeof useForm<TechnicianRateFormValues>>): void {
-    try {
-      setRateMutation.mutate(toTechnicianRateInput(values), {
-        onError: (error) => { applyApiErrorsToForm(form, error); toast.showToast({ message: getErrorMessage(error), title: "Tariful nu a fost salvat", variant: "error" }); },
-        onSuccess: () => { form.reset(getTechnicianRateDefaults()); toast.showToast({ message: "Tariful tehnicianului a fost salvat.", variant: "success" }); },
-      });
-    } catch (error) { toast.showToast({ message: getErrorMessage(error), title: "Tarif invalid", variant: "error" }); }
+  ], [archiveOperationMutation, canManageOperations, restoreOperationMutation, toast]);
+  function updateActiveTab(tab: PricingTabId): void {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", tab);
+    setSearchParams(next);
   }
 
   if (permissionsQuery.isLoading || settingsQuery.isLoading) {
@@ -502,20 +463,23 @@ export function PricingPage(): ReactNode {
       <section className="dl-container pricing-page__layout" aria-labelledby="pricing-title">
         <header className="pricing-page__header">
           <div>
+            <nav aria-label="Navigare contextuală" className="pricing-page__breadcrumb"><Link to="/status">Status</Link><span aria-hidden="true">/</span><span>Setări lucrări</span></nav>
             <h1 id="pricing-title">Setări lucrări</h1>
-            <p>Catalogul standard, acordurile comerciale și tipurile de lucrări arhivate.</p>
-            <p>Firmă activă: <strong>{settingsQuery.data?.legalEntityDisplayName ?? "-"}</strong></p>
+            <p>Administrează catalogul de lucrări, acordurile comerciale și tipurile de probă.</p>
+            <p className="pricing-page__company">Firmă activă: <strong>{settingsQuery.data?.legalEntityDisplayName ?? "-"}</strong></p>
           </div>
           <div className="pricing-page__actions">
-            <Button disabled={!canCreate} onClick={() => setIsCatalogModalOpen(true)}>Adaugă tip lucrare</Button>
-            <Button disabled={!canManageAgreements} onClick={() => setIsAgreementModalOpen(true)} variant="outline">Adaugă acord</Button>
+            {activeTab === "catalog" ? <><Button onClick={() => window.print()} variant="outline">Printează catalogul</Button><Button disabled={!canCreate} onClick={() => setIsCatalogModalOpen(true)}>Adaugă tip lucrare</Button></> : null}
+            {activeTab === "agreements" ? <Button disabled={!canManageAgreements} onClick={() => setIsAgreementModalOpen(true)}>Adaugă acord</Button> : null}
+            {activeTab === "probe-types" && canManageProbeTypes ? <Button onClick={() => setIsProbeTypeModalOpen(true)}>Adaugă tip probă</Button> : null}
+            {activeTab === "operations" && canManageOperations ? <Button onClick={() => { setSelectedOperation(null); setIsOperationModalOpen(true); }}>Adaugă manoperă</Button> : null}
           </div>
         </header>
         {!canUpdate ? <p className="pricing-page__readonly">Ai acces de citire. Modificările de preț cer permisiuni financiare explicite.</p> : null}
 
-        <ProbeTypeCatalogCard canManage={canManageProbeTypes} isLoading={probeTypesQuery.isLoading} probeTypes={probeTypesQuery.data ?? []} />
-
         <Tabs
+          className="pricing-page__workspace-tabs"
+          onValueChange={(value) => updateActiveTab(isPricingTabId(value) ? value : "catalog")}
           tabs={[
             {
               content: (
@@ -531,10 +495,12 @@ export function PricingPage(): ReactNode {
                   onAudienceChange={(value) => { setCatalogAudience(value); setCatalogAudienceId(""); }}
                   onAudienceIdChange={setCatalogAudienceId}
                   onActiveChange={(active) => setCatalogParams((current) => ({ ...current, active, page: 1 }))}
+                  onCategoryChange={(category) => setCatalogParams((current) => ({ ...current, category: category || undefined, page: 1 }))}
                   onRowAction={(item) => setSelectedCatalogId(item.id)}
                   onSearchChange={(search) => setCatalogParams((current) => ({ ...current, page: 1, search: search || undefined }))}
                   printPrice={(item) => formatMoneyMinor(getEffectiveCatalogPrice(item, catalogAudience === "STANDARD" ? null : audienceAgreementQuery.data ?? null), currency, locale)}
                   search={catalogParams.search ?? ""}
+                  category={catalogParams.category ?? ""}
                 />
               ),
               id: "catalog",
@@ -565,45 +531,58 @@ export function PricingPage(): ReactNode {
               label: "Acorduri",
             },
             {
-              content: <CatalogTab active={archiveParams.active} archived audience="STANDARD" audienceId="" clinics={[]} doctors={[]} catalogQuery={archiveQuery} columns={catalogColumns} onActiveChange={() => undefined} onAudienceChange={() => undefined} onAudienceIdChange={() => undefined} onRestore={(id) => restoreCatalogMutation.mutate(id, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Tipul nu a fost reactivat", variant: "error" }), onSuccess: () => toast.showToast({ message: "Tipul de lucrare a fost reactivat.", variant: "success" }) })} onRowAction={(item) => setSelectedCatalogId(item.id)} onSearchChange={(search) => setArchiveParams((current) => ({ ...current, page: 1, search: search || undefined }))} printPrice={(item) => formatMoneyMinor(item.standardPriceMinor, currency, locale)} search={archiveParams.search ?? ""} />,
-              id: "archive",
-              label: "Arhivă",
+              content: <ProbeTypeCatalogCard canManage={canManageProbeTypes} isEditorOpen={isProbeTypeModalOpen} isLoading={probeTypesQuery.isLoading} onEditorOpenChange={setIsProbeTypeModalOpen} probeTypes={probeTypesQuery.data ?? []} showAddAction={false} />,
+              id: "probe-types",
+              label: "Tipuri de probă",
             },
             {
               content: (
-                <TechnicianOperationsTab
+                <TechnicianOperationsCatalog
                   active={operationParams.isActive}
-                  canManageRates={canManageRates}
-                  canReadOperations={canReadOperations}
-                  canReadRates={canReadRates}
+                  canRead={canReadOperations}
                   columns={operationColumns}
-                  currency={currency}
-                  editingOperation={editingOperation}
-                  isSaving={createOperationMutation.isPending || updateOperationMutation.isPending || archiveOperationMutation.isPending || restoreOperationMutation.isPending || setRateMutation.isPending}
-                  locale={locale}
-                  onCancelOperationEdit={() => setSelectedOperationId(undefined)}
-                  onActiveChange={(active) => setOperationParams((current) => ({ ...current, isActive: active, page: 1 }))}
-                  onOperationSubmit={saveOperation}
-                  onRateSubmit={saveRate}
+                  onActiveChange={(isActive) => setOperationParams((current) => ({ ...current, isActive, page: 1 }))}
+                  onPageChange={(page) => setOperationParams((current) => ({ ...current, page }))}
                   onSearchChange={(search) => setOperationParams((current) => ({ ...current, page: 1, search: search || undefined }))}
-                  onTechnicianChange={setSelectedTechnicianId}
-                  operations={operationsQuery.data?.items ?? []}
+                  onSortChange={(sort) => setOperationParams((current) => ({ ...current, page: 1, sortBy: sort.columnId === "code" ? "code" : "name", sortDirection: sort.direction === "ascending" ? "asc" : "desc" }))}
+                  operationParams={operationParams}
                   operationsQuery={operationsQuery}
-                  rateColumns={rateColumns}
-                  ratesQuery={ratesQuery}
                   search={operationParams.search ?? ""}
-                  selectedTechnicianId={selectedTechnicianId}
-                  technicians={techniciansQuery.data?.items ?? []}
-                  techniciansError={techniciansQuery.isError ? getErrorMessage(techniciansQuery.error) : undefined}
-                  techniciansLoading={techniciansQuery.isLoading}
                 />
               ),
               id: "operations",
               label: "Manopere",
             },
+            {
+              content: <CatalogTab active={archiveParams.active} archived audience="STANDARD" audienceId="" category={archiveParams.category ?? ""} clinics={[]} doctors={[]} catalogQuery={archiveQuery} columns={archiveColumns} onActiveChange={() => undefined} onAudienceChange={() => undefined} onAudienceIdChange={() => undefined} onCategoryChange={(category) => setArchiveParams((current) => ({ ...current, category: category || undefined, page: 1 }))} onRestore={(id) => restoreCatalogMutation.mutate(id, { onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Tipul nu a fost reactivat", variant: "error" }), onSuccess: () => toast.showToast({ message: "Tipul de lucrare a fost reactivat.", variant: "success" }) })} onRowAction={(item) => setSelectedCatalogId(item.id)} onSearchChange={(search) => setArchiveParams((current) => ({ ...current, page: 1, search: search || undefined }))} printPrice={(item) => formatMoneyMinor(item.standardPriceMinor, currency, locale)} search={archiveParams.search ?? ""} />,
+              id: "archive",
+              label: "Arhivă",
+            },
           ]}
+          value={activeTab}
         />
       </section>
+
+      <TechnicianOperationModal
+        initialOperation={selectedOperation}
+        isOpen={isOperationModalOpen}
+        isSaving={createOperationMutation.isPending || updateOperationMutation.isPending}
+        onOpenChange={(isOpen) => { setIsOperationModalOpen(isOpen); if (!isOpen) setSelectedOperation(null); }}
+        onSubmit={(values, form) => {
+          const input = toTechnicianOperationInput(values);
+          const onError = (error: unknown) => {
+            applyApiErrorsToForm(form, error);
+            toast.showToast({ message: getErrorMessage(error), title: "Manopera nu a fost salvată", variant: "error" });
+          };
+          const onSuccess = () => {
+            setIsOperationModalOpen(false);
+            setSelectedOperation(null);
+            toast.showToast({ message: selectedOperation ? "Manopera a fost modificată." : "Manopera a fost creată.", variant: "success" });
+          };
+          if (selectedOperation) updateOperationMutation.mutate({ id: selectedOperation.id, input }, { onError, onSuccess });
+          else createOperationMutation.mutate(input, { onError, onSuccess });
+        }}
+      />
 
       <CatalogModal
         currency={currency}
@@ -744,19 +723,59 @@ function PageFrame({ children }: { readonly children: ReactNode }): ReactNode {
   return <main className="pricing-page"><section className="dl-container">{children}</section></main>;
 }
 
-export function ProbeTypeCatalogCard({ canManage, isLoading, probeTypes }: { readonly canManage: boolean; readonly isLoading: boolean; readonly probeTypes: readonly ProbeTypeView[] }): ReactNode {
+export function ProbeTypeCatalogCard({
+  canManage,
+  isEditorOpen: controlledEditorOpen,
+  isLoading,
+  onEditorOpenChange,
+  probeTypes,
+  showAddAction = true,
+}: {
+  readonly canManage: boolean;
+  readonly isEditorOpen?: boolean;
+  readonly isLoading: boolean;
+  readonly onEditorOpenChange?: (isOpen: boolean) => void;
+  readonly probeTypes: readonly ProbeTypeView[];
+  readonly showAddAction?: boolean;
+}): ReactNode {
   const toast = useToast();
   const createMutation = useCreateProbeType();
   const updateMutation = useUpdateProbeType();
+  const [internalEditorOpen, setInternalEditorOpen] = useState(false);
   const [name, setName] = useState("");
   const [sortOrder, setSortOrder] = useState("0");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("all");
+  const isEditorOpen = controlledEditorOpen ?? internalEditorOpen;
   const isSaving = createMutation.isPending || updateMutation.isPending;
+
+  function setEditorOpen(isOpen: boolean): void {
+    setInternalEditorOpen(isOpen);
+    onEditorOpenChange?.(isOpen);
+  }
 
   function resetForm(): void {
     setEditingId(null);
     setName("");
     setSortOrder("0");
+  }
+
+  function closeEditor(): void {
+    resetForm();
+    setEditorOpen(false);
+  }
+
+  function openCreateEditor(): void {
+    resetForm();
+    setEditorOpen(true);
+  }
+
+  function openEditEditor(type: ProbeTypeView): void {
+    setEditingId(type.id);
+    setName(type.name);
+    setSortOrder(String(type.sortOrder));
+    setEditorOpen(true);
   }
 
   function save(): void {
@@ -767,9 +786,9 @@ export function ProbeTypeCatalogCard({ canManage, isLoading, probeTypes }: { rea
       return;
     }
     if (editingId) {
-      updateMutation.mutate({ id: editingId, input: { name: trimmedName, sortOrder: parsedSortOrder } }, { onError: handleSaveError, onSuccess: () => { resetForm(); toast.showToast({ message: "Tipul probei a fost modificat.", variant: "success" }); } });
+      updateMutation.mutate({ id: editingId, input: { name: trimmedName, sortOrder: parsedSortOrder } }, { onError: handleSaveError, onSuccess: () => { closeEditor(); toast.showToast({ message: "Tipul probei a fost modificat.", variant: "success" }); } });
     } else {
-      createMutation.mutate({ name: trimmedName, sortOrder: parsedSortOrder }, { onError: handleSaveError, onSuccess: () => { resetForm(); toast.showToast({ message: "Tipul probei a fost creat.", variant: "success" }); } });
+      createMutation.mutate({ name: trimmedName, sortOrder: parsedSortOrder }, { onError: handleSaveError, onSuccess: () => { closeEditor(); toast.showToast({ message: "Tipul probei a fost creat.", variant: "success" }); } });
     }
   }
 
@@ -781,17 +800,135 @@ export function ProbeTypeCatalogCard({ canManage, isLoading, probeTypes }: { rea
     { header: "Denumire", id: "name", renderCell: (type) => type.name },
     { header: "Ordine", id: "sortOrder", renderCell: (type) => type.sortOrder },
     { header: "Stare", id: "status", renderCell: (type) => <StatusBadge label={type.isArchived ? "Arhivat" : "Activ"} variant={type.isArchived ? "closed" : "approved"} /> },
-    ...(canManage ? [{ header: "Acțiuni", id: "actions", renderCell: (type: ProbeTypeView) => <div className="pricing-page__table-actions"><Button onClick={() => { setEditingId(type.id); setName(type.name); setSortOrder(String(type.sortOrder)); }} size="small" variant="outline">Editează</Button><Button onClick={() => updateMutation.mutate({ id: type.id, input: { isArchived: !type.isArchived } }, { onError: handleSaveError, onSuccess: () => toast.showToast({ message: type.isArchived ? "Tipul probei a fost reactivat." : "Tipul probei a fost arhivat.", variant: "success" }) })} size="small" variant="outline">{type.isArchived ? "Reactivează" : "Arhivează"}</Button></div> }] : []),
+    ...(canManage ? [{ header: "Acțiuni", id: "actions", renderCell: (type: ProbeTypeView) => <div className="pricing-page__table-actions"><Button onClick={() => openEditEditor(type)} size="small" variant="outline">Editează</Button><Button onClick={() => updateMutation.mutate({ id: type.id, input: { isArchived: !type.isArchived } }, { onError: handleSaveError, onSuccess: () => toast.showToast({ message: type.isArchived ? "Tipul probei a fost reactivat." : "Tipul probei a fost arhivat.", variant: "success" }) })} size="small" variant="outline">{type.isArchived ? "Reactivează" : "Arhivează"}</Button></div> }] : []),
   ] as readonly DataTableColumn<ProbeTypeView>[];
+  const normalizedSearch = search.trim().toLocaleLowerCase("ro");
+  const filteredProbeTypes = probeTypes.filter((type) => {
+    const matchesSearch = !normalizedSearch || type.name.toLocaleLowerCase("ro").includes(normalizedSearch);
+    const matchesStatus = status === "all" || (status === "archived" ? type.isArchived : !type.isArchived);
+    return matchesSearch && matchesStatus;
+  });
 
-  return <Card>
-    <CardHeader><CardTitle>Tipuri de probă</CardTitle><CardDescription>Catalog global comun pentru CDT și NG.</CardDescription></CardHeader>
-    <CardContent className="pricing-page__stack">
-      {isLoading ? <LoadingState text="Se încarcă tipurile de probă" /> : null}
-      <DataTable columns={columns} emptyMessage="Nu există tipuri de probă." getRowKey={(type) => type.id} rows={probeTypes} />
-      {canManage ? <FormGrid><TextInput label="Denumire" onChange={(event) => setName(event.target.value)} value={name} /><TextInput label="Ordine" onChange={(event) => setSortOrder(event.target.value)} value={sortOrder} /><div className="pricing-page__actions"><Button disabled={isSaving} onClick={save}>{editingId ? "Salvează modificarea" : "Adaugă tip probă"}</Button>{editingId ? <Button onClick={resetForm} variant="ghost">Renunță</Button> : null}</div></FormGrid> : <p className="pricing-page__readonly">Catalogul este disponibil doar pentru citire.</p>}
-    </CardContent>
-  </Card>;
+  return <>
+    <Card>
+      <CardHeader><CardTitle>Tipuri de probă</CardTitle><CardDescription>Catalog global comun pentru CDT și NG.</CardDescription></CardHeader>
+      <CardContent className="pricing-page__stack">
+        <div className="pricing-page__toolbar">
+          <div className="pricing-page__filters pricing-page__filters--compact">
+            <TextInput label="Căutare" onChange={(event) => setSearch(event.target.value)} placeholder="Denumire tip probă" type="search" value={search} />
+            <Select label="Status" onChange={(event) => setStatus(event.target.value)} options={activeOptions} value={status} />
+          </div>
+          {canManage && showAddAction ? <Button onClick={openCreateEditor}>Adaugă tip probă</Button> : null}
+        </div>
+        {isLoading ? <LoadingState text="Se încarcă tipurile de probă" /> : null}
+        <DataTable columns={columns} emptyMessage="Nu există tipuri de probă pentru filtrele curente." getRowKey={(type) => type.id} rows={filteredProbeTypes} />
+        {!canManage ? <p className="pricing-page__readonly">Catalogul este disponibil doar pentru citire.</p> : null}
+      </CardContent>
+    </Card>
+    {canManage ? <Modal description="Păstrează denumirea scurtă și ordinea folosită în fluxul lucrărilor." isOpen={isEditorOpen} onOpenChange={(isOpen) => isOpen ? setEditorOpen(true) : closeEditor()} size="sm" title={editingId ? "Editează tip probă" : "Adaugă tip probă"}>
+      <FormLayout className="pricing-page__form" onSubmit={(event) => { event.preventDefault(); save(); }}>
+        <FormGrid>
+          <TextInput label="Denumire" onChange={(event) => setName(event.target.value)} value={name} />
+          <NumberInput label="Ordine" min={0} onChange={(event) => setSortOrder(event.target.value)} value={sortOrder} />
+        </FormGrid>
+        <FormActions canReset={Boolean(name || sortOrder !== "0")} isSubmitting={isSaving} onCancel={closeEditor} onReset={resetForm} submitLabel={editingId ? "Salvează modificarea" : "Adaugă tip probă"} />
+      </FormLayout>
+    </Modal> : null}
+  </>;
+}
+
+function TechnicianOperationsCatalog({
+  active,
+  canRead,
+  columns,
+  onActiveChange,
+  onPageChange,
+  onSearchChange,
+  onSortChange,
+  operationParams,
+  operationsQuery,
+  search,
+}: {
+  readonly active: boolean | undefined;
+  readonly canRead: boolean;
+  readonly columns: readonly DataTableColumn<TechnicianOperationSummary>[];
+  readonly onActiveChange: (active: boolean | undefined) => void;
+  readonly onPageChange: (page: number) => void;
+  readonly onSearchChange: (search: string) => void;
+  readonly onSortChange: (sort: DataTableSort) => void;
+  readonly operationParams: TechnicianOperationsListParams;
+  readonly operationsQuery: ReturnType<typeof useTechnicianOperations>;
+  readonly search: string;
+}): ReactNode {
+  if (!canRead) {
+    return <ErrorState description="Contul curent nu are permisiunea technician.operations.read." title="Acces refuzat" />;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Catalog global de manopere</CardTitle>
+        <CardDescription>Operațiile tehnice disponibile tuturor tehnicienilor. Tarifele individuale se configurează în Tehnicieni.</CardDescription>
+      </CardHeader>
+      <CardContent className="pricing-page__stack">
+        <div className="pricing-page__filters pricing-page__filters--compact">
+          <TextInput label="Căutare" onChange={(event) => onSearchChange(event.target.value)} placeholder="Cod, denumire sau descriere" type="search" value={search} />
+          <Select label="Status" onChange={(event) => onActiveChange(toApiActive(event.target.value))} options={activeOptions} value={fromApiActive(active)} />
+        </div>
+        <DataTable
+          columns={columns}
+          emptyMessage="Nu există manopere pentru filtrele curente."
+          error={operationsQuery.isError ? getErrorMessage(operationsQuery.error) : undefined}
+          getRowKey={(item) => item.id}
+          isLoading={operationsQuery.isLoading}
+          onSortChange={onSortChange}
+          pagination={{ onPageChange, page: operationsQuery.data?.page ?? operationParams.page, pageCount: operationsQuery.data?.pageCount ?? 1 }}
+          rows={operationsQuery.data?.items ?? []}
+          sort={{ columnId: operationParams.sortBy === "code" ? "code" : "name", direction: operationParams.sortDirection === "asc" ? "ascending" : "descending" }}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+function TechnicianOperationModal({
+  initialOperation,
+  isOpen,
+  isSaving,
+  onOpenChange,
+  onSubmit,
+}: {
+  readonly initialOperation: TechnicianOperationSummary | null;
+  readonly isOpen: boolean;
+  readonly isSaving: boolean;
+  readonly onOpenChange: (isOpen: boolean) => void;
+  readonly onSubmit: (values: TechnicianOperationFormValues, form: ReturnType<typeof useForm<TechnicianOperationFormValues>>) => void;
+}): ReactNode {
+  const form = useForm<TechnicianOperationFormValues>({
+    defaultValues: getTechnicianOperationDefaults(initialOperation),
+    resolver: zodResolver(technicianOperationFormSchema),
+  });
+
+  useEffect(() => {
+    if (isOpen) form.reset(getTechnicianOperationDefaults(initialOperation));
+  }, [form, initialOperation, isOpen]);
+
+  return (
+    <Modal description="Definește operația globală disponibilă la configurarea ratelor tehnicienilor." isOpen={isOpen} onOpenChange={onOpenChange} size="md" title={initialOperation ? "Editează manoperă" : "Adaugă manoperă"}>
+      <FormLayout className="pricing-page__form" onSubmit={(event) => void form.handleSubmit((values) => onSubmit(values, form))(event)}>
+        <section className="pricing-page__editor-section">
+          <h3>Date manoperă</h3>
+          <FormGrid>
+            <TextInput error={form.formState.errors.code?.message} label="Cod" {...form.register("code")} />
+            <TextInput error={form.formState.errors.name?.message} label="Denumire" {...form.register("name")} />
+            <TextInput error={form.formState.errors.category?.message} label="Categorie" {...form.register("category")} />
+            <FormGridFull><Textarea error={form.formState.errors.description?.message} label="Descriere" rows={3} {...form.register("description")} /></FormGridFull>
+          </FormGrid>
+        </section>
+        <FormActions canReset={form.formState.isDirty} className="pricing-page__modal-actions" isSubmitting={isSaving} onCancel={() => onOpenChange(false)} onReset={() => form.reset(getTechnicianOperationDefaults(initialOperation))} submitLabel={initialOperation ? "Salvează modificarea" : "Adaugă manoperă"} />
+      </FormLayout>
+    </Modal>
+  );
 }
 
 function CatalogTab({
@@ -799,6 +936,7 @@ function CatalogTab({
   audience,
   audienceId,
   archived,
+  category,
   catalogQuery,
   columns,
   clinics,
@@ -806,6 +944,7 @@ function CatalogTab({
   onActiveChange,
   onAudienceChange,
   onAudienceIdChange,
+  onCategoryChange,
   onRestore,
   onRowAction,
   onSearchChange,
@@ -816,6 +955,7 @@ function CatalogTab({
   readonly audience: "STANDARD" | "CLINIC" | "DOCTOR";
   readonly audienceId: string;
   readonly archived: boolean;
+  readonly category: string;
   readonly catalogQuery: ReturnType<typeof usePricingCatalog>;
   readonly columns: readonly DataTableColumn<PriceCatalogItemSummary>[];
   readonly clinics: readonly { readonly id: string; readonly name: string }[];
@@ -823,6 +963,7 @@ function CatalogTab({
   readonly onActiveChange: (active: boolean | undefined) => void;
   readonly onAudienceChange: (value: "STANDARD" | "CLINIC" | "DOCTOR") => void;
   readonly onAudienceIdChange: (value: string) => void;
+  readonly onCategoryChange: (category: string) => void;
   readonly onRestore?: (id: string) => void;
   readonly onRowAction: (item: PriceCatalogItemSummary) => void;
   readonly onSearchChange: (search: string) => void;
@@ -834,26 +975,26 @@ function CatalogTab({
     <div className="pricing-page__catalog-print">
       <Card>
       <CardHeader>
-        <CardTitle>Catalog de prețuri</CardTitle>
-        <CardDescription>Total: {catalogQuery.data?.total ?? 0}</CardDescription>
-        {!archived ? <Button onClick={() => window.print()} variant="outline">Printează catalogul</Button> : null}
+        <CardTitle>{archived ? "Arhivă catalog" : "Catalog de lucrări"}</CardTitle>
+        <CardDescription>{archived ? "Tipuri de lucrări arhivate, disponibile pentru consultare sau reactivare." : `Tipuri de lucrări și prețuri standard. Total: ${catalogQuery.data?.total ?? 0}`}</CardDescription>
       </CardHeader>
       <CardContent className="pricing-page__stack">
-        <div className="pricing-page__filters">
-          {!archived ? <Select label="Catalog afișat" onChange={(event) => onAudienceChange(event.target.value as "STANDARD" | "CLINIC" | "DOCTOR")} options={[{ label: "Catalog standard", value: "STANDARD" }, { label: "Catalog clinică", value: "CLINIC" }, { label: "Catalog medic", value: "DOCTOR" }]} value={audience} /> : null}
-          {!archived && audience === "CLINIC" ? <Select label="Clinică" onChange={(event) => onAudienceIdChange(event.target.value)} options={clinics.map((clinic) => ({ label: clinic.name, value: clinic.id }))} placeholder="Alege clinica" value={audienceId} /> : null}
-          {!archived && audience === "DOCTOR" ? <Select label="Medic" onChange={(event) => onAudienceIdChange(event.target.value)} options={doctors.map((doctor) => ({ label: doctor.displayName, value: doctor.id }))} placeholder="Alege medicul" value={audienceId} /> : null}
+        {!archived ? <div className="pricing-page__audience-filters">
+          <Select label="Catalog afișat" onChange={(event) => onAudienceChange(event.target.value as "STANDARD" | "CLINIC" | "DOCTOR")} options={[{ label: "Catalog standard", value: "STANDARD" }, { label: "Catalog clinică", value: "CLINIC" }, { label: "Catalog medic", value: "DOCTOR" }]} value={audience} />
+          {audience === "CLINIC" ? <Select label="Clinică" onChange={(event) => onAudienceIdChange(event.target.value)} options={clinics.map((clinic) => ({ label: clinic.name, value: clinic.id }))} placeholder="Alege clinica" value={audienceId} /> : null}
+          {audience === "DOCTOR" ? <Select label="Medic" onChange={(event) => onAudienceIdChange(event.target.value)} options={doctors.map((doctor) => ({ label: doctor.displayName, value: doctor.id }))} placeholder="Alege medicul" value={audienceId} /> : null}
+        </div> : null}
+        <div className="pricing-page__filters pricing-page__filters--catalog">
           <TextInput label="Căutare" onChange={(event) => onSearchChange(event.target.value)} placeholder="Produs, categorie, cod lucrare" type="search" value={search} />
-          <Select label="Status" onChange={(event) => onActiveChange(toApiActive(event.target.value))} options={activeOptions} value={fromApiActive(active)} />
+          <Select label="Categorie" onChange={(event) => onCategoryChange(event.target.value)} options={[{ label: "Toate categoriile", value: "" }, ...pricingCategoryOptions]} value={category} />
+          {!archived ? <Select label="Status" onChange={(event) => onActiveChange(toApiActive(event.target.value))} options={activeOptions} value={fromApiActive(active)} /> : null}
         </div>
         <DataTable
-          columns={archived && onRestore ? [...columns, { header: "Acțiuni", id: "actions", renderCell: (item) => <Button onClick={() => onRestore(item.id)} size="small" variant="outline">Reactivează</Button> }] : columns}
+          columns={[...columns, { header: "Acțiuni", id: "actions", renderCell: (item) => <div className="pricing-page__table-actions">{archived && onRestore ? <Button onClick={() => onRestore(item.id)} size="small" variant="outline">Reactivează</Button> : null}<Button onClick={() => onRowAction(item)} size="small" variant="outline">Deschide</Button></div> }]}
           emptyMessage="Nu există prețuri pentru filtrele curente."
           error={catalogQuery.isError ? getErrorMessage(catalogQuery.error) : undefined}
           getRowKey={(item) => item.id}
           isLoading={catalogQuery.isLoading}
-          onRowAction={onRowAction}
-          rowActionLabel="Deschide"
           rows={catalogQuery.data?.items ?? []}
         />
       </CardContent>
@@ -902,10 +1043,10 @@ function AgreementsTab({
     <Card>
       <CardHeader>
         <CardTitle>Acorduri comerciale</CardTitle>
-        <CardDescription>Regulile de medic au prioritate doar când există o regulă aplicabilă.</CardDescription>
+        <CardDescription>Reguli comerciale specifice clinicilor și medicilor.</CardDescription>
       </CardHeader>
       <CardContent className="pricing-page__stack">
-        <div className="pricing-page__filters">
+        <div className="pricing-page__filters pricing-page__filters--compact">
           <TextInput label="Căutare" onChange={(event) => onSearchChange(event.target.value)} placeholder="Acord, clinică, medic" type="search" value={search} />
           <Select label="Status" onChange={(event) => onActiveChange(toApiActive(event.target.value))} options={activeOptions} value={fromApiActive(active)} />
         </div>
@@ -1026,191 +1167,6 @@ function TermsTab({ items }: { readonly items: readonly PriceCatalogItemSummary[
   );
 }
 
-function TechnicianOperationsTab({
-  active,
-  canManageRates,
-  canReadOperations,
-  canReadRates,
-  columns,
-  currency,
-  editingOperation,
-  isSaving,
-  onCancelOperationEdit,
-  onActiveChange,
-  onOperationSubmit,
-  onRateSubmit,
-  onSearchChange,
-  onTechnicianChange,
-  operations,
-  operationsQuery,
-  rateColumns,
-  ratesQuery,
-  search,
-  selectedTechnicianId,
-  technicians,
-  techniciansError,
-  techniciansLoading,
-}: {
-  readonly active: boolean | undefined;
-  readonly canManageRates: boolean;
-  readonly canReadOperations: boolean;
-  readonly canReadRates: boolean;
-  readonly columns: readonly DataTableColumn<TechnicianOperationSummary>[];
-  readonly currency: string;
-  readonly editingOperation: TechnicianOperationSummary | undefined;
-  readonly isSaving: boolean;
-  readonly onCancelOperationEdit: () => void;
-  readonly locale: string;
-  readonly onActiveChange: (active: boolean | undefined) => void;
-  readonly onOperationSubmit: (values: TechnicianOperationFormValues, form: ReturnType<typeof useForm<TechnicianOperationFormValues>>) => void;
-  readonly onRateSubmit: (values: TechnicianRateFormValues, form: ReturnType<typeof useForm<TechnicianRateFormValues>>) => void;
-  readonly onSearchChange: (search: string) => void;
-  readonly onTechnicianChange: (technicianId: string | undefined) => void;
-  readonly operations: readonly TechnicianOperationSummary[];
-  readonly operationsQuery: ReturnType<typeof useTechnicianOperations>;
-  readonly rateColumns: readonly DataTableColumn<TechnicianRateView>[];
-  readonly ratesQuery: ReturnType<typeof useTechnicianRates>;
-  readonly search: string;
-  readonly selectedTechnicianId: string | undefined;
-  readonly technicians: readonly UserSummary[];
-  readonly techniciansError: string | undefined;
-  readonly techniciansLoading: boolean;
-}): ReactNode {
-  const operationForm = useForm<TechnicianOperationFormValues>({
-    defaultValues: getTechnicianOperationDefaults(),
-    resolver: zodResolver(technicianOperationFormSchema),
-  });
-  const rateForm = useForm<TechnicianRateFormValues>({
-    defaultValues: getTechnicianRateDefaults(),
-    resolver: zodResolver(technicianRateFormSchema),
-  });
-
-  useEffect(() => {
-    operationForm.reset(editingOperation ? {
-      category: editingOperation.category,
-      code: editingOperation.code,
-      description: editingOperation.description ?? "",
-      name: editingOperation.name,
-    } : getTechnicianOperationDefaults());
-  }, [editingOperation, operationForm]);
-
-  useEffect(() => {
-    if (selectedTechnicianId) {
-      rateForm.setValue("technicianId", selectedTechnicianId);
-    }
-  }, [rateForm, selectedTechnicianId]);
-
-  if (!canReadOperations) {
-    return <ErrorState title="Acces refuzat" description="Contul curent nu are permisiunea technician.operations.read." />;
-  }
-
-  return (
-    <div className="pricing-page__stack">
-      <Card>
-        <CardHeader>
-          <CardTitle>Catalog manopere</CardTitle>
-          <CardDescription>Total: {operationsQuery.data?.total ?? 0}</CardDescription>
-        </CardHeader>
-        <CardContent className="pricing-page__stack">
-          <div className="pricing-page__filters">
-            <TextInput label="Căutare" onChange={(event) => onSearchChange(event.target.value)} placeholder="Cod, manoperă" type="search" value={search} />
-            <Select label="Status" onChange={(event) => onActiveChange(toApiActive(event.target.value))} options={activeOptions} value={fromApiActive(active)} />
-          </div>
-          <DataTable
-            columns={columns}
-            emptyMessage="Nu există manopere pentru filtrele curente."
-            error={operationsQuery.isError ? getErrorMessage(operationsQuery.error) : undefined}
-            getRowKey={(item) => item.id}
-            isLoading={operationsQuery.isLoading}
-            rows={operations}
-          />
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>{editingOperation ? "Editează manoperă" : "Adaugă manoperă"}</CardTitle>
-          <CardDescription>Manoperele sunt operații tehnice, separate de tipurile de lucrări.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <FormLayout className="pricing-page__form" onSubmit={(event) => void operationForm.handleSubmit((values) => onOperationSubmit(values, operationForm))(event)}>
-            <FormGrid>
-              <TextInput error={operationForm.formState.errors.category?.message} label="Categorie" {...operationForm.register("category")} />
-              <TextInput error={operationForm.formState.errors.code?.message} label="Cod" {...operationForm.register("code")} />
-              <TextInput error={operationForm.formState.errors.name?.message} label="Manoperă" {...operationForm.register("name")} />
-              <p className="pricing-page__muted">Tarif tehnician / element selectat.</p>
-              <FormGridFull>
-                <Textarea error={operationForm.formState.errors.description?.message} label="Descriere" rows={3} {...operationForm.register("description")} />
-              </FormGridFull>
-            </FormGrid>
-            <FormActions
-              canReset={operationForm.formState.isDirty}
-              isSubmitting={isSaving}
-              onReset={() => {
-                operationForm.reset(getTechnicianOperationDefaults());
-                onCancelOperationEdit();
-              }}
-              submitDisabled={!canManageRates}
-              submitLabel={editingOperation ? "Salvează modificarea" : "Salvează manopera"}
-            />
-          </FormLayout>
-        </CardContent>
-      </Card>
-      {canReadRates ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Rate tehnicieni</CardTitle>
-            <CardDescription>Valorile sunt câștiguri pe manoperă și se salvează în {currency} ca minor units.</CardDescription>
-          </CardHeader>
-          <CardContent className="pricing-page__stack">
-            <FormLayout className="pricing-page__form" onSubmit={(event) => void rateForm.handleSubmit((values) => onRateSubmit(values, rateForm))(event)}>
-              <FormGrid>
-                <Select
-                  error={rateForm.formState.errors.technicianId?.message}
-                  label="Tehnician"
-                  onChange={(event) => {
-                    const technicianId = event.target.value || undefined;
-                    rateForm.setValue("technicianId", event.target.value, { shouldDirty: true });
-                    onTechnicianChange(technicianId);
-                  }}
-                  options={technicians.map((technician) => ({ label: technician.displayName, value: technician.id }))}
-                  placeholder="Alege tehnicianul"
-                  value={rateForm.watch("technicianId")}
-                />
-                <Select
-                  error={rateForm.formState.errors.operationId?.message}
-                  label="Manoperă"
-                  options={operations.filter((operation) => operation.isActive).map((operation) => ({ label: `${operation.code} · ${operation.name}`, value: operation.id }))}
-                  placeholder="Alege manopera"
-                  {...rateForm.register("operationId")}
-                />
-                {rateForm.watch("operationId") ? <p className="pricing-page__muted">Tariful se aplică per element/dinte selectat.</p> : null}
-                <NumberInput error={rateForm.formState.errors.rateDecimal?.message} label={`Câștig ${currency}`} {...rateForm.register("rateDecimal")} />
-                <DateInput error={rateForm.formState.errors.effectiveFrom?.message} label="Valabil de la" {...rateForm.register("effectiveFrom")} />
-              </FormGrid>
-              <FormActions
-                canReset={rateForm.formState.isDirty}
-                isSubmitting={isSaving}
-                onReset={() => rateForm.reset(getTechnicianRateDefaults())}
-                submitDisabled={!canManageRates}
-                submitLabel="Salvează rata"
-              />
-            </FormLayout>
-            {techniciansError ? <ErrorState title="Tehnicienii nu pot fi încărcați" description={techniciansError} /> : null}
-            <DataTable
-              columns={rateColumns}
-              emptyMessage="Nu există rate curente pentru tehnicianul selectat."
-              error={ratesQuery.isError ? getErrorMessage(ratesQuery.error) : undefined}
-              getRowKey={(item) => item.id}
-              isLoading={ratesQuery.isLoading || techniciansLoading}
-              rows={ratesQuery.data ?? []}
-            />
-          </CardContent>
-        </Card>
-      ) : null}
-    </div>
-  );
-}
-
 function AuditSourceTab(): ReactNode {
   return (
     <Card>
@@ -1271,29 +1227,37 @@ function CatalogModal({
       title={mode === "create" ? "Adaugă tip lucrare" : "Editează tip lucrare"}
     >
       <FormLayout className="pricing-page__form" onSubmit={(event) => void form.handleSubmit((values) => onSubmit(values, form))(event)}>
-        <FormGrid>
-          {mode === "create" ? (
-            <>
+        <section className="pricing-page__editor-section">
+          <h3>Date tip lucrare</h3>
+          <FormGrid>
+            {mode === "create" ? <>
               <TextInput label="Denumire tip lucrare" {...form.register("workTypeName")} />
               <TextInput label="Simbol" {...form.register("workTypeSymbol")} />
               <FormGridFull><Textarea label="Descriere" rows={3} {...form.register("workTypeDescription")} /></FormGridFull>
-            </>
-          ) : <Select label="Tip lucrare" options={workTypes.map((workType) => ({ label: `${workType.code} · ${workType.name}`, value: workType.id }))} placeholder="Alege tipul" {...form.register("workTypeId")} />}
-          <TextInput label="Denumire comercială" {...form.register("displayName")} />
-          <Select label="Categorie" options={pricingCategoryOptions} {...form.register("category")} />
-          <Select label="Unitate" options={workTypeUnitOptions} {...form.register("unit")} />
-          <WorkTypeColorPicker value={form.watch("colorHex")} onChange={(value) => form.setValue("colorHex", value, { shouldDirty: true, shouldValidate: true })} />
-          <NumberInput label="Preț standard" {...form.register("standardPriceDecimal")} />
-          <NumberInput label="Ordine" {...form.register("sortOrder", { valueAsNumber: true })} />
-          <FormGridFull>
-            <Textarea label="Note" rows={3} {...form.register("notes")} />
-          </FormGridFull>
-          <FormGridFull>
+            </> : <Select label="Tip lucrare" options={workTypes.map((workType) => ({ label: `${workType.code} · ${workType.name}`, value: workType.id }))} placeholder="Alege tipul" {...form.register("workTypeId")} />}
+            <WorkTypeColorPicker value={form.watch("colorHex")} onChange={(value) => form.setValue("colorHex", value, { shouldDirty: true, shouldValidate: true })} />
+          </FormGrid>
+        </section>
+        <section className="pricing-page__editor-section">
+          <h3>Parametri comerciali</h3>
+          <FormGrid>
+            <TextInput label="Denumire comercială" {...form.register("displayName")} />
+            <NumberInput label={`Preț standard ${currency}`} {...form.register("standardPriceDecimal")} />
+            <Select label="Categorie" options={pricingCategoryOptions} {...form.register("category")} />
+            <Select label="Unitate" options={workTypeUnitOptions} {...form.register("unit")} />
+            <Select label="Termen implicit" options={[1, 2, 3, 4, 5, 6].map((days) => ({ label: `${days} zile`, value: String(days) }))} {...form.register("executionDays")} />
             <Checkbox label="Activ" {...form.register("isActive")} />
-          </FormGridFull>
-        </FormGrid>
+          </FormGrid>
+        </section>
+        <section className="pricing-page__editor-section">
+          <h3>Metadate catalog</h3>
+          <FormGrid>
+            <NumberInput label="Ordine" {...form.register("sortOrder", { valueAsNumber: true })} />
+            <FormGridFull><Textarea label="Note" rows={3} {...form.register("notes")} /></FormGridFull>
+          </FormGrid>
+        </section>
         <UnsavedChangesPrompt when={form.formState.isDirty} />
-        <FormActions isSubmitting={isSaving} onReset={() => form.reset(getCatalogDefaults(initialItem))} submitLabel="Salvează" />
+        <FormActions canReset={form.formState.isDirty} className="pricing-page__modal-actions" isSubmitting={isSaving} onCancel={() => closeGuard.handleOpenChange(false)} onReset={() => form.reset(getCatalogDefaults(initialItem))} submitLabel="Salvează" />
       </FormLayout>
       {closeGuard.confirmModal}
     </Modal>
@@ -1331,7 +1295,7 @@ function CatalogInlineForm({
 
   return (
     <section className="pricing-page__drawer-section">
-      <h3>Editor catalog</h3>
+      <h3>Parametri comerciali și metadate</h3>
       <FormLayout className="pricing-page__form" onSubmit={(event) => void form.handleSubmit((values) => onSubmit(values, form))(event)}>
         <FormGrid>
           <Select label="Tip lucrare" options={workTypes.map((workType) => ({ label: `${workType.code} · ${workType.name}`, value: workType.id }))} placeholder="Alege tipul" {...form.register("workTypeId")} />

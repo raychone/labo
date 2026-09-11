@@ -4,10 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useMemo, type ReactNode } from "react";
 
-import { downloadMonthRegistryCsv, downloadMonthRegistryPdf, fetchMonthRegistry, fetchMonthRegistryArchives } from "./billing-api.js";
+import { billingQueryKeys, downloadMonthRegistryCsv, downloadMonthRegistryPdf, fetchMonthRegistry, fetchMonthRegistryArchives } from "./billing-api.js";
 import { useSettings } from "../settings/settings-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
 import { MonthRegistryReportView } from "./billing-month-registry-print-page.js";
+import { BillingTabToolbar } from "./billing-tab-toolbar.js";
 import "./billing-page.css";
 
 const MONTH_LABELS = Array.from({ length: 12 }, (_, index) => {
@@ -50,7 +51,7 @@ function downloadName(year: number, month: number): string {
   return `arhiva-facturare-${year}-${String(month).padStart(2, "0")}.csv`;
 }
 
-export function BillingArchivePage(): ReactNode {
+export function BillingArchivePage({ embedded = false }: { readonly embedded?: boolean } = {}): ReactNode {
   const navigate = useNavigate();
   const params = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -58,7 +59,7 @@ export function BillingArchivePage(): ReactNode {
   const archivesQuery = useQuery<{ readonly items: readonly MonthCloseArchiveSummary[] }>({
     enabled: Boolean(settingsQuery.data?.legalEntityCode),
     queryFn: fetchMonthRegistryArchives,
-    queryKey: ["billing", "month-registry", "archives", settingsQuery.data?.legalEntityCode ?? "loading"],
+    queryKey: billingQueryKeys.monthRegistryArchives(settingsQuery.data?.legalEntityCode ?? "loading"),
     retry: false,
   });
 
@@ -74,6 +75,7 @@ export function BillingArchivePage(): ReactNode {
     queryKey: ["billing", "archive", "detail", detailYear ?? "invalid", detailMonth ?? "invalid", settingsQuery.data?.legalEntityCode ?? "loading"],
     retry: false,
   });
+  const Root = embedded ? "section" : "main";
 
   function updateYear(year: number): void {
     const next = new URLSearchParams(searchParams);
@@ -83,14 +85,14 @@ export function BillingArchivePage(): ReactNode {
   }
 
   if (settingsQuery.isLoading || archivesQuery.isLoading) {
-    return <main className="billing-archive-page"><LoadingState text="Se încarcă arhiva facturare" /></main>;
+    return <Root className={`billing-archive-page${embedded ? " billing-archive-page--embedded" : ""}`}><LoadingState text="Se încarcă arhiva facturare" /></Root>;
   }
 
   if (settingsQuery.error || archivesQuery.error || !settingsQuery.data || !archivesQuery.data) {
     return (
-      <main className="billing-archive-page">
+      <Root className={`billing-archive-page${embedded ? " billing-archive-page--embedded" : ""}`}>
         <ErrorState title="Arhiva facturare nu poate fi încărcată" description={getErrorMessage(archivesQuery.error ?? settingsQuery.error)} />
-      </main>
+      </Root>
     );
   }
 
@@ -113,7 +115,7 @@ export function BillingArchivePage(): ReactNode {
             </div>
           </div>
           <EmptyState
-            action={<Button onClick={() => navigate("/billing/archive")} variant="outline">Înapoi la arhivă</Button>}
+            action={<Button onClick={() => navigate(`/billing?tab=archive&year=${year}`)} variant="outline">Înapoi la arhivă</Button>}
             description={`Luna ${monthLabel(month)} ${year} nu este arhivată pentru compania activă.`}
             title="Arhivă inexistentă"
           />
@@ -123,47 +125,48 @@ export function BillingArchivePage(): ReactNode {
 
     return (
       <main className="billing-archive-page billing-archive-page--detail">
-        <div className="billing-archive-page__toolbar">
-          <Button onClick={() => navigate("/billing/archive")} variant="outline">Înapoi la arhivă</Button>
-          <Button
-            onClick={() => void downloadMonthRegistryPdf({ year, month })}
-            variant="secondary"
-          >
-            PDF
-          </Button>
-          <Button
-            onClick={async () => {
-              const csv = await downloadMonthRegistryCsv({ month, year });
-              downloadCsv(downloadName(year, month), csv);
-            }}
-            variant="outline"
-          >
-            CSV
-          </Button>
-        </div>
-
         <section className="billing-archive-page__detail-shell">
-          <header className="billing-archive-page__header billing-archive-page__header--detail">
-            <div>
-              <h1>Arhivă facturare</h1>
-              <p>Lunile financiare închise și documentele istorice ale firmei active.</p>
-            </div>
-            <div className="billing-archive-page__company">
-              <span>Firma activă</span>
-              <strong>{companyLabel}</strong>
-            </div>
-          </header>
+          <BillingTabToolbar
+            actions={(
+              <>
+                <StatusBadge label="Snapshot arhivat" variant="closed" />
+                <Button
+                  onClick={() => void downloadMonthRegistryPdf({ year, month })}
+                  variant="outline"
+                >
+                  PDF
+                </Button>
+                <Button
+                  onClick={async () => {
+                    const csv = await downloadMonthRegistryCsv({ month, year });
+                    downloadCsv(downloadName(year, month), csv);
+                  }}
+                  variant="outline"
+                >
+                  CSV
+                </Button>
+              </>
+            )}
+            ariaLabel="Toolbar arhivă"
+            className="billing-archive-page__header--detail"
+            context={(
+              <div className="billing-archive-page__detail-heading">
+                <Button onClick={() => navigate(`/billing?tab=archive&year=${year}`)} variant="outline">Înapoi la arhivă</Button>
+                <p className="billing-archive-page__eyebrow">Snapshot financiar</p>
+                <h1>{monthLabel(month)} {year}</h1>
+                <p>{companyLabel}</p>
+                <p>
+                  Închis la {new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(archive.closedAt))}
+                  {" · "}Închis de {archive.closedByDisplayName ?? archive.closedByEmail ?? "Necunoscut"}
+                </p>
+              </div>
+            )}
+          />
 
           <Card>
             <CardHeader>
-              <CardTitle>
-                {monthLabel(month)} {year}
-              </CardTitle>
-              <CardDescription>
-                <StatusBadge label="Snapshot arhivat" variant="closed" />
-                <span> Închis la {new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(new Date(archive.closedAt))}</span>
-                <span> · Închis de {archive.closedByDisplayName ?? archive.closedByEmail ?? "Necunoscut"}</span>
-              </CardDescription>
+              <CardTitle>Situație arhivată</CardTitle>
+              <CardDescription>Valorile financiare păstrate la închiderea lunii.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="billing-archive-page__summary">
@@ -187,13 +190,12 @@ export function BillingArchivePage(): ReactNode {
   const selectedYear = resolveSelectedYear(searchParams, currentYear());
   const availableYears = resolveArchiveYears(archives, selectedYear);
   const monthsForYear = archiveByYear.get(selectedYear) ?? [];
-  const archiveMap = new Map(monthsForYear.map((archive) => [archive.month, archive] as const));
 
   return (
-    <main className="billing-archive-page">
+    <Root className={`billing-archive-page${embedded ? " billing-archive-page--embedded" : ""}`}>
       <div className="billing-archive-page__header">
         <div>
-          <h1>Arhivă facturare</h1>
+          {embedded ? <h2>Arhiva lunilor închise</h2> : <h1>Arhivă facturare</h1>}
           <p>Lunile financiare închise și documentele istorice ale firmei active.</p>
         </div>
         <div className="billing-archive-page__company">
@@ -224,65 +226,46 @@ export function BillingArchivePage(): ReactNode {
         />
       ) : (
         <section className="billing-archive-page__month-grid" aria-label={`Arhivă ${selectedYear}`}>
-          {Array.from({ length: 12 }, (_, index) => 12 - index).map((month) => {
-            const archive = archiveMap.get(month);
-            return (
-              <Card className="billing-archive-page__month-card" key={`${selectedYear}-${month}`}>
+          {monthsForYear.map((archive) => (
+              <Card className="billing-archive-page__month-card" key={archive.archiveId}>
                 <CardHeader>
-                  <CardTitle>{monthLabel(month)} {selectedYear}</CardTitle>
+                  <CardTitle>{monthLabel(archive.month)} {archive.year}</CardTitle>
                   <CardDescription>
-                    {archive ? (
-                      <StatusBadge label="Închisă" variant="closed" />
-                    ) : (
-                      <StatusBadge label="Neînchisă" variant="draft" />
-                    )}
+                    <StatusBadge label="Închisă" variant="closed" />
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {archive ? (
-                    <div className="billing-archive-page__month-meta">
-                      <span>Închis la {new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium" }).format(new Date(archive.closedAt))}</span>
-                      <span>Închis de {archive.closedByDisplayName ?? archive.closedByEmail ?? "Necunoscut"}</span>
-                      <span>Total: {formatMoneyMinor(archive.totalMinor, archive.currency, settingsQuery.data.locale)}</span>
-                      <span>Încasat: {formatMoneyMinor(archive.paidMinor, archive.currency, settingsQuery.data.locale)}</span>
-                      <span>Neachitat: {formatMoneyMinor(archive.unpaidTotalMinor, archive.currency, settingsQuery.data.locale)}</span>
-                    </div>
-                  ) : (
-                    <EmptyState description="Neînchisă" title="Luna nu are snapshot arhivat" />
-                  )}
+                  <div className="billing-archive-page__month-meta">
+                    <span>Închis la {new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium" }).format(new Date(archive.closedAt))}</span>
+                    <span>Închis de {archive.closedByDisplayName ?? archive.closedByEmail ?? "Necunoscut"}</span>
+                    <span>Total emis: {formatMoneyMinor(archive.totalMinor, archive.currency, settingsQuery.data.locale)}</span>
+                    <span>Încasat: {formatMoneyMinor(archive.paidMinor, archive.currency, settingsQuery.data.locale)}</span>
+                    <span>Sold restant: {formatMoneyMinor(archive.unpaidTotalMinor + archive.partialTotalMinor, archive.currency, settingsQuery.data.locale)}</span>
+                  </div>
 
                   <div className="billing-archive-page__toolbar billing-archive-page__toolbar--compact">
-                    {archive ? (
-                      <>
-                        <Button onClick={() => navigate(`/billing/archive/${archive.year}/${archive.month}`)} variant="secondary">Deschide</Button>
-                        <Button onClick={() => void downloadMonthRegistryPdf({ year: archive.year, month: archive.month })} variant="outline">
-                          PDF
-                        </Button>
-                        <Button
-                          onClick={async () => {
-                            const csv = await downloadMonthRegistryCsv({ month: archive.month, year: archive.year });
-                            downloadCsv(downloadName(archive.year, archive.month), csv);
-                          }}
-                          variant="outline"
-                        >
-                          CSV
-                        </Button>
-                      </>
-                    ) : (
-                      <Button onClick={() => navigate(`/billing?year=${selectedYear}&month=${month}`)} variant="outline">Du-te la facturare</Button>
-                    )}
+                    <Button onClick={() => navigate(`/billing/archive/${archive.year}/${archive.month}`)} variant="outline">Deschide</Button>
+                    <Button onClick={() => void downloadMonthRegistryPdf({ year: archive.year, month: archive.month })} variant="outline">PDF</Button>
+                    <Button
+                      onClick={async () => {
+                        const csv = await downloadMonthRegistryCsv({ month: archive.month, year: archive.year });
+                        downloadCsv(downloadName(archive.year, archive.month), csv);
+                      }}
+                      variant="outline"
+                    >
+                      CSV
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
-            );
-          })}
+          ))}
         </section>
       )}
 
-      <div className="billing-archive-page__footer-link">
+      {!embedded ? <div className="billing-archive-page__footer-link">
         <Link to="/billing">Înapoi la facturare</Link>
-      </div>
-    </main>
+      </div> : null}
+    </Root>
   );
 }
 

@@ -1,11 +1,11 @@
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, DateInput, ErrorState, LoadingState, Modal, NumberInput, Select, Textarea, TextInput, useToast } from "@dental-lab/ui";
-import { decimalStringToMinor, formatMoneyMinor, type TechnicianEarningsParams, type TechnicianEarningsSummary, type TechnicianOperationInput } from "@dental-lab/shared";
+import { decimalStringToMinor, formatMoneyMinor, type TechnicianEarningsParams, type TechnicianEarningsSummary } from "@dental-lab/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 
 import { getErrorMessage } from "../../lib/form-utils.js";
 import { fetchPermissions } from "../auth/auth-api.js";
-import { useCreateTechnicianOperation, useCreateTechnicianPayment, useManagerTechnicianEarnings, useSetTechnicianRate, useTechnicianOperations, useTechnicianRates, useUpdateTechnicianOperation } from "../pricing/technician-operations-api.js";
+import { useCreateTechnicianPayment, useManagerTechnicianEarnings, useSetTechnicianRate, useTechnicianOperations, useTechnicianRates } from "../pricing/technician-operations-api.js";
 import { EarningsFilters } from "../technician-earnings/technician-earnings-page.js";
 import { fetchUsers, hasPermission } from "../users/users-api.js";
 import "./manager-technicians-page.css";
@@ -41,12 +41,6 @@ export function ManagerTechniciansPage(): ReactNode {
   const [operationId, setOperationId] = useState("");
   const [rateAmount, setRateAmount] = useState("");
   const [effectiveFrom, setEffectiveFrom] = useState(today());
-  const [catalogOpen, setCatalogOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [operationCode, setOperationCode] = useState("");
-  const [operationName, setOperationName] = useState("");
-  const [operationDescription, setOperationDescription] = useState("");
-  const [operationSearch, setOperationSearch] = useState("");
 
   const techniciansQuery = useQuery({
     enabled: canEarnings || canRates,
@@ -74,9 +68,6 @@ export function ManagerTechniciansPage(): ReactNode {
   const operations = useTechnicianOperations({ isActive: true, page: 1, pageSize: 100, sortBy: "name", sortDirection: "asc" }, canRates);
   const paymentMutation = useCreateTechnicianPayment();
   const rateMutation = useSetTechnicianRate();
-  const createOperation = useCreateTechnicianOperation();
-  const updateOperation = useUpdateTechnicianOperation();
-  const matchingOperations = (operations.data?.items ?? []).filter((item) => `${item.name} ${item.description ?? ""}`.toLocaleLowerCase("ro-RO").includes(operationSearch.trim().toLocaleLowerCase("ro-RO")));
   const fail = (title: string) => (error: unknown) => toast.showToast({ message: getErrorMessage(error), title, variant: "error" });
 
   function savePayment(event: FormEvent<HTMLFormElement>) {
@@ -111,38 +102,6 @@ export function ManagerTechniciansPage(): ReactNode {
     });
   }
 
-  function resetOperation() {
-    setEditingId(null);
-    setOperationCode("");
-    setOperationName("");
-    setOperationDescription("");
-  }
-
-  function editOperation(item?: { id: string; code: string; name: string; description: string | null }) {
-    setEditingId(item?.id ?? "new");
-    setOperationCode(item?.code ?? "");
-    setOperationName(item?.name ?? "");
-    setOperationDescription(item?.description ?? "");
-  }
-
-  function saveOperation(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const input: TechnicianOperationInput = { category: "Altele", code: operationCode.trim(), description: operationDescription.trim() || null, name: operationName.trim() };
-    if (!input.code || input.name.length < 2) {
-      toast.showToast({ message: "Completează codul și denumirea manoperei.", title: "Manopera nu a fost salvată", variant: "error" });
-      return;
-    }
-    const callbacks = {
-      onError: fail("Manopera nu a fost salvată"),
-      onSuccess: () => {
-        resetOperation();
-        toast.showToast({ message: "Manopera a fost salvată.", variant: "success" });
-      },
-    };
-    if (editingId && editingId !== "new") updateOperation.mutate({ id: editingId, input }, callbacks);
-    else createOperation.mutate(input, callbacks);
-  }
-
   if (permissions.isLoading) return <Frame><LoadingState text="Se încarcă tehnicienii" /></Frame>;
   if (!canEarnings) return <Frame><ErrorState description="Contul curent nu are acces la valoarea realizată de tehnicieni." title="Acces refuzat" /></Frame>;
 
@@ -155,7 +114,6 @@ export function ManagerTechniciansPage(): ReactNode {
             <h1>Tehnicieni</h1>
             <p>Administrează ratele, valoarea realizată și plățile echipei tehnice.</p>
           </div>
-          {canManageRates ? <Button onClick={() => setCatalogOpen(true)} type="button" variant="outline">Gestionează catalogul</Button> : null}
         </header>
         <div className="manager-technicians__workspace">
           <aside className="manager-technicians__master">
@@ -178,9 +136,6 @@ export function ManagerTechniciansPage(): ReactNode {
             </>}
           </section>
         </div>
-        <Modal isOpen={catalogOpen} onOpenChange={setCatalogOpen} size="lg" title="Catalog manopere">
-          {editingId ? <form className="manager-technicians__modal-form" onSubmit={saveOperation}><TextInput label="Cod manoperă" onChange={(event) => setOperationCode(event.target.value)} value={operationCode} /><TextInput label="Denumire" onChange={(event) => setOperationName(event.target.value)} value={operationName} /><Textarea label="Descriere" onChange={(event) => setOperationDescription(event.target.value)} rows={3} value={operationDescription} /><Actions cancel={resetOperation} disabled={createOperation.isPending || updateOperation.isPending} submit="Salvează" /></form> : <><div className="manager-technicians__catalog-toolbar"><TextInput label="Caută manoperă" onChange={(event) => setOperationSearch(event.target.value)} placeholder="Denumire sau descriere" type="search" value={operationSearch} />{canManageRates ? <Button onClick={() => editOperation()} type="button">Adaugă manoperă</Button> : null}</div><div className="manager-technicians__catalog-list">{matchingOperations.map((item) => <div key={item.id}><span><strong>{item.name}</strong><small>{item.category}{item.description ? ` · ${item.description}` : ""}</small></span>{canManageRates ? <Button onClick={() => editOperation(item)} size="small" type="button" variant="outline">Editează</Button> : null}</div>)}</div></>}
-        </Modal>
         <Modal description="Plata este păstrată în istoric. Soldul este verificat la data plății." isOpen={paymentOpen} onOpenChange={setPaymentOpen} title="Înregistrează plată">
           <form className="manager-technicians__modal-form" onSubmit={savePayment}><p>Tehnician: <strong>{selected?.displayName}</strong></p><div className="manager-technicians__modal-grid"><NumberInput label="Sumă (RON)" onChange={(event) => setPaymentAmount(event.target.value)} value={paymentAmount} /><DateInput label="Data plății" onChange={(event) => setPaymentDate(event.target.value)} value={paymentDate} /></div><Textarea label="Notă" onChange={(event) => setPaymentNotes(event.target.value)} placeholder="Opțional" rows={3} value={paymentNotes} /><Actions cancel={() => setPaymentOpen(false)} disabled={paymentMutation.isPending} submit="Înregistrează plata" /></form>
         </Modal>

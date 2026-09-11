@@ -1,9 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router";
+import type { ReactNode } from "react";
 
 import { BillingArchivePage } from "./billing-archive-page.js";
+import { BillingArchiveRedirect } from "./billing-archive-redirect.js";
 
 function renderArchivePage(entry: string): void {
   const queryClient = new QueryClient({
@@ -35,10 +37,28 @@ function createJsonResponse(body: unknown, status = 200): Response {
   } as Response;
 }
 
+function ArchiveRedirectTarget(): ReactNode {
+  const location = useLocation();
+  return <div>{location.pathname}{location.search}</div>;
+}
+
 describe("BillingArchivePage", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("redirects the legacy archive URL to the unified archive tab and preserves the period", async () => {
+    render(
+      <MemoryRouter initialEntries={["/billing/archive?year=2026&month=8"]}>
+        <Routes>
+          <Route element={<BillingArchiveRedirect />} path="/billing/archive" />
+          <Route element={<ArchiveRedirectTarget />} path="/billing" />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("/billing?year=2026&month=8&tab=archive")).toBeDefined();
   });
 
   it("renders the dedicated archive home workspace for the active company", async () => {
@@ -167,14 +187,16 @@ describe("BillingArchivePage", () => {
 
     renderArchivePage("/billing/archive/2026/8");
 
-    expect(await screen.findByRole("heading", { name: "Arhivă facturare" })).toBeDefined();
+    expect(await screen.findByRole("heading", { name: "august 2026" })).toBeDefined();
+    expect(screen.getByText("Snapshot financiar")).toBeDefined();
     expect(screen.getByText("Snapshot arhivat")).toBeDefined();
     expect(screen.getByText("august 2026")).toBeDefined();
     expect(screen.getAllByText("Cabinet Stomatologic Central").length).toBeGreaterThan(0);
     expect(screen.getByText("Registru lunar facturare")).toBeDefined();
-    expect(screen.getByRole("button", { name: "Înapoi la arhivă" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "PDF" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "CSV" })).toBeDefined();
+    const archiveToolbar = screen.getByRole("group", { name: "Toolbar arhivă" });
+    expect(within(archiveToolbar).getByRole("button", { name: "Înapoi la arhivă" })).toBeDefined();
+    expect(within(archiveToolbar).getByRole("button", { name: "PDF" })).toBeDefined();
+    expect(within(archiveToolbar).getByRole("button", { name: "CSV" })).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "PDF" }));
     await waitFor(() => expect(createObjectUrlSpy).toHaveBeenCalled());
     await waitFor(() => expect(revokeObjectUrlSpy).toHaveBeenCalled());

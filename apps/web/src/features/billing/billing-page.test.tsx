@@ -1,6 +1,6 @@
 import { ToastProvider } from "@dental-lab/ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RouterProvider, createMemoryRouter } from "react-router";
@@ -52,7 +52,7 @@ describe("BillingPage", () => {
   });
 
   it("renders month-end cards, billable works and document actions", async () => {
-    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith("/auth/permissions")) {
         return Promise.resolve(createJsonResponse({
@@ -69,6 +69,12 @@ describe("BillingPage", () => {
       }
       if (url.endsWith("/settings")) {
         return Promise.resolve(createJsonResponse({ currency: "RON", legalEntityCode: "NC", legalEntityDisplayName: "Nicolaie Cristina", locale: "ro-RO" }));
+      }
+      if (url.endsWith("/clinics/options")) {
+        return Promise.resolve(createJsonResponse([{ code: "CL-001", id: "clinic_1", name: "Clinica Test" }]));
+      }
+      if (url.includes("/doctors/options")) {
+        return Promise.resolve(createJsonResponse([{ clinicId: "clinic_1", displayName: "Dr. Ana Popescu", id: "doctor_1" }]));
       }
       if (url.includes("/billing/overview")) {
         return Promise.resolve(createJsonResponse({
@@ -190,6 +196,28 @@ describe("BillingPage", () => {
       if (url.endsWith("/billing/ambiguous-legacy")) {
         return Promise.resolve(createJsonResponse({ items: [] }));
       }
+      if (url.endsWith("/billing/month-registry/archives")) {
+        return Promise.resolve(createJsonResponse({
+          items: [{
+            archiveId: "archive_1",
+            closedAt: "2026-08-13T10:15:00.000Z",
+            closedByDisplayName: "Demo Manager",
+            closedByEmail: "manager@demo.local",
+            closedByUserId: "user_1",
+            currency: "RON",
+            month: 8,
+            paidMinor: 10000,
+            paidTotalMinor: 10000,
+            partialTotalMinor: 0,
+            periodEnd: "2026-08-31",
+            periodStart: "2026-08-01",
+            reportVersion: "1",
+            totalMinor: 15000,
+            unpaidTotalMinor: 5000,
+            year: 2026,
+          }],
+        }));
+      }
       if (url.includes("/billing/month-registry")) {
         return Promise.resolve(createJsonResponse({ currency: "RON", dateFrom: "2026-08-01", dateTo: "2026-08-31", generatedAt: "2026-08-04T00:00:00.000Z", paidMinor: 0, paidTotalMinor: 0, partialTotalMinor: 0, payments: [], rows: [], totalMinor: 0, unpaidTotalMinor: 0 }));
       }
@@ -242,6 +270,8 @@ describe("BillingPage", () => {
             paidMinor: 0,
             paymentStatus: "UNPAID",
             status: "ISSUED",
+            stornoDocumentId: null,
+            stornoOfDocumentId: null,
             totalMinor: 10000,
             type: "INVOICE",
             workCodes: ["WO-2026-000002"],
@@ -264,24 +294,42 @@ describe("BillingPage", () => {
       }
 
       return Promise.resolve(createJsonResponse({}, 404));
-    }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
     vi.stubGlobal("open", vi.fn());
 
     renderWithProviders(<BillingPage />);
 
     expect(await screen.findByRole("heading", { name: "Facturare" })).toBeDefined();
+    expect(within(await screen.findByLabelText("Indicatori facturare")).getAllByRole("button")).toHaveLength(4);
+    const filters = screen.getByLabelText("Filtre facturare");
+    const clinicFilter = within(filters).getByLabelText("Clinică");
+    expect(within(filters).getByLabelText("Medic")).toBeDefined();
+    expect(within(filters).getByLabelText("Căutare")).toBeDefined();
+    fireEvent.click(clinicFilter);
+    fireEvent.click(await screen.findByRole("option", { name: "Clinica Test" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes("clinicId=clinic_1"))).toBe(true));
     expect(screen.queryByLabelText("Status încasare")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Vezi filtrele" }));
+    fireEvent.click(screen.getByRole("button", { name: "Filtre avansate" }));
     expect(await screen.findByLabelText("Status încasare")).toBeDefined();
     expect(screen.queryByText("Arhivă închideri")).toBeNull();
     expect((await screen.findAllByText("Nefacturat")).length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("tab", { name: "Lucrări nefacturate" }));
-    expect(await screen.findByRole("checkbox", { name: "Selectează WO-2026-000001" })).toBeDefined();
-    fireEvent.click(screen.getByLabelText("Selectează WO-2026-000001"));
+    for (const tabName of ["De facturat", "Facturi", "Note de plată", "Încasări", "Restanțe", "Storno", "Arhivă"]) {
+      expect(screen.getByRole("tab", { name: tabName })).toBeDefined();
+    }
+    expect(screen.queryByRole("tab", { name: "Închidere lună" })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "De facturat" }));
+    const billableCheckbox = await screen.findByRole("checkbox", { name: "Selectează WO-2026-000001" });
+    expect(billableCheckbox.classList.contains("billing-page__row-selection-checkbox")).toBe(true);
+    const billableToolbar = screen.getByRole("group", { name: "Toolbar de facturat" });
+    expect(within(billableToolbar).getByRole("button", { name: "Export CSV" })).toBeDefined();
+    expect((within(billableToolbar).getByRole("button", { name: "Revizuiește valorile" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(billableToolbar).getByRole("button", { name: "Emite factură" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(billableCheckbox);
     expect(await screen.findByText(/1 lucrări selectate/)).toBeDefined();
     expect(screen.getByRole("button", { name: "Export CSV" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Revizuiește valorile" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "Emite factura" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Emite factură" })).toBeDefined();
     expect(screen.queryByRole("button", { name: "Creează notă de plată" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Revizuiește valorile" }));
     expect(await screen.findByRole("heading", { name: "Revizuiește valorile" })).toBeDefined();
@@ -292,7 +340,13 @@ describe("BillingPage", () => {
     expect(screen.queryByRole("tab", { name: "Ghid facturare" })).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Facturi" }));
     expect(await screen.findByRole("button", { name: "Deschide" })).toBeDefined();
-    fireEvent.click(await screen.findByRole("checkbox", { name: "Selectează FACT-2026-000001" }));
+    const invoicesToolbar = screen.getByRole("group", { name: "Toolbar facturi" });
+    expect(within(invoicesToolbar).getByRole("button", { name: "Export CSV" })).toBeDefined();
+    expect((within(invoicesToolbar).getByRole("button", { name: "Încasează" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(invoicesToolbar).getByRole("button", { name: "Export PDF" }) as HTMLButtonElement).disabled).toBe(true);
+    const invoiceCheckbox = await screen.findByRole("checkbox", { name: "Selectează FACT-2026-000001" });
+    expect(invoiceCheckbox.classList.contains("billing-page__row-selection-checkbox")).toBe(true);
+    fireEvent.click(invoiceCheckbox);
     expect(screen.getByRole("button", { name: "Încasează" })).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Încasează" }));
     fireEvent.change(await screen.findByLabelText("Sumă încasată"), { target: { value: "50.00" } });
@@ -300,15 +354,126 @@ describe("BillingPage", () => {
     expect(screen.queryByText("Incaseaza sold")).toBeNull();
 
     fireEvent.click(screen.getByRole("tab", { name: "Restanțe" }));
-    fireEvent.click(await screen.findByRole("checkbox", { name: "Selectează FACT-2026-000001" }));
+    const receivablesToolbar = await screen.findByRole("group", { name: "Toolbar restanțe" });
+    expect(within(receivablesToolbar).getByRole("button", { name: "Export CSV" })).toBeDefined();
+    expect((within(receivablesToolbar).getByRole("button", { name: "Deschide documentul" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(receivablesToolbar).getByRole("button", { name: "Înregistrează încasare" }) as HTMLButtonElement).disabled).toBe(true);
+    const receivableCheckbox = await screen.findByRole("checkbox", { name: "Selectează FACT-2026-000001" });
+    expect(receivableCheckbox.classList.contains("billing-page__row-selection-checkbox")).toBe(true);
+    fireEvent.click(receivableCheckbox);
     fireEvent.click(screen.getByRole("button", { name: "Înregistrează încasare" }));
     expect(await screen.findByLabelText("Sumă încasată")).toBeDefined();
 
     fireEvent.click(screen.getByRole("tab", { name: "Note de plată" }));
     expect(await screen.findByRole("heading", { name: "Clinica Test" })).toBeDefined();
+    const statementsToolbar = screen.getByRole("group", { name: "Toolbar note de plată" });
+    expect(within(statementsToolbar).getByRole("button", { name: "Clinică" })).toBeDefined();
+    expect(within(statementsToolbar).getByRole("button", { name: "Medic" })).toBeDefined();
+    expect(within(statementsToolbar).getByRole("button", { name: "Documente emise" })).toBeDefined();
+    expect(within(statementsToolbar).getByRole("button", { name: "Lucrări nefacturate" })).toBeDefined();
+    expect(within(statementsToolbar).getByRole("button", { name: "Export PDF" })).toBeDefined();
+    expect(within(statementsToolbar).getByRole("button", { name: "Trimite email" })).toBeDefined();
+    expect(within(statementsToolbar).getByRole("button", { name: "Trimite WhatsApp" })).toBeDefined();
     expect(screen.getByText("FACT-2026-000099")).toBeDefined();
+    expect(screen.getByRole("checkbox", { name: "Selectează FACT-2026-000099" }).classList.contains("billing-page__row-selection-checkbox")).toBe(true);
     expect(screen.getAllByText("350,00 RON").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Încasări" }));
+    expect(await screen.findByText("Nu există încasări.")).toBeDefined();
+    expect(within(screen.getByRole("group", { name: "Toolbar încasări" })).getByRole("button", { name: "Export CSV" })).toBeDefined();
+    fireEvent.click(screen.getByRole("tab", { name: "Storno" }));
+    const stornoToolbar = await screen.findByRole("group", { name: "Toolbar storno" });
+    expect(within(stornoToolbar).getByRole("button", { name: "Export PDF" })).toBeDefined();
+    expect((within(stornoToolbar).getByRole("button", { name: "Creează storno" }) as HTMLButtonElement).disabled).toBe(true);
+    const stornoCheckbox = await screen.findByRole("checkbox", { name: "Selectează FACT-2026-000001" });
+    expect(stornoCheckbox.classList.contains("billing-page__row-selection-checkbox")).toBe(true);
+    fireEvent.click(stornoCheckbox);
+    expect((within(stornoToolbar).getByRole("button", { name: "Creează storno" }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("tab", { name: "Arhivă" }));
+    expect(await screen.findByRole("heading", { name: "Arhiva lunilor închise" })).toBeDefined();
+    expect(screen.getByText("august 2026")).toBeDefined();
   }, 30000);
+
+  it("keeps monthly close in contextual actions and invokes the existing close endpoint", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/auth/permissions")) {
+        return Promise.resolve(createJsonResponse({
+          permissions: [
+            { key: "finance.read", scopes: ["ALL"] },
+            { key: "finance.read_reports", scopes: ["ALL"] },
+          ],
+        }));
+      }
+      if (url.endsWith("/auth/csrf")) {
+        return Promise.resolve(createJsonResponse({ csrfToken: "csrf-token" }));
+      }
+      if (url.endsWith("/settings")) {
+        return Promise.resolve(createJsonResponse({ currency: "RON", legalEntityCode: "NC", legalEntityDisplayName: "Nicolaie Cristina", locale: "ro-RO" }));
+      }
+      if (url.endsWith("/clinics/options") || url.includes("/doctors/options")) {
+        return Promise.resolve(createJsonResponse([]));
+      }
+      if (url.endsWith("/billing/month-registry/archives")) {
+        return Promise.resolve(createJsonResponse({ items: [] }));
+      }
+      if (url.includes("/billing/month-registry/close")) {
+        expect(init?.method).toBe("POST");
+        return Promise.resolve(createJsonResponse({
+          archiveId: "archive_1",
+          closedAt: "2026-08-31T20:00:00.000Z",
+          currency: "RON",
+          month: 8,
+          year: 2026,
+        }));
+      }
+      if (url.includes("/billing/month-registry")) {
+        return Promise.resolve(createJsonResponse({ currency: "RON", dateFrom: "2026-08-01", dateTo: "2026-08-31", generatedAt: "2026-08-31T20:00:00.000Z", paidMinor: 0, paidTotalMinor: 0, partialTotalMinor: 0, payments: [], rows: [], totalMinor: 0, unpaidTotalMinor: 0 }));
+      }
+      if (url.includes("/billing/overview")) {
+        return Promise.resolve(createJsonResponse({
+          ambiguousLegacyCount: 0,
+          currency: "RON",
+          documentCount: 0,
+          from: "2026-08-01",
+          groups: [],
+          invoiceCount: 0,
+          openProformaCount: 0,
+          outstandingMinor: 0,
+          overdueInvoiceCount: 0,
+          paidInvoiceCount: 0,
+          paidMinor: 0,
+          partialInvoiceCount: 0,
+          proformaMinor: 0,
+          to: "2026-08-31",
+          totalIssuedMinor: 0,
+          uninvoicedMinor: 0,
+          uninvoicedWorkCount: 0,
+          unpaidInvoiceCount: 0,
+          workValueMinor: 0,
+        }));
+      }
+      if (url.includes("/billing/billable-works")) {
+        return Promise.resolve(createJsonResponse({ items: [] }));
+      }
+
+      return Promise.resolve(createJsonResponse({}, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithRouter(<BillingPage />, ["/billing?year=2026&month=8"]);
+
+    expect(await screen.findByRole("heading", { name: "Facturare" })).toBeDefined();
+    fireEvent.click(await screen.findByRole("button", { name: "Acțiuni" }));
+    const closeAction = await screen.findByRole("button", { name: "Închide și arhivează luna" });
+    fireEvent.click(closeAction);
+    expect(await screen.findByRole("dialog", { name: "Închide și arhivează luna" })).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Confirmă închiderea lunii" }));
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => (
+      String(input).includes("/billing/month-registry/close?") && (init as RequestInit | undefined)?.method === "POST"
+    ))).toBe(true));
+  });
 
   it("keeps the selected historical month stable in the URL when navigating months", async () => {
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
@@ -323,6 +488,9 @@ describe("BillingPage", () => {
       }
       if (url.endsWith("/settings")) {
         return Promise.resolve(createJsonResponse({ currency: "RON", legalEntityCode: "NC", legalEntityDisplayName: "Nicolaie Cristina", locale: "ro-RO" }));
+      }
+      if (url.endsWith("/clinics/options") || url.includes("/doctors/options")) {
+        return Promise.resolve(createJsonResponse([]));
       }
       if (url.includes("/billing/overview")) {
         return Promise.resolve(createJsonResponse({
@@ -362,11 +530,11 @@ describe("BillingPage", () => {
       if (url.endsWith("/billing/ambiguous-legacy")) {
         return Promise.resolve(createJsonResponse({ items: [] }));
       }
-      if (url.includes("/billing/month-registry")) {
-        return Promise.resolve(createJsonResponse({ currency: "RON", dateFrom: "2026-06-01", dateTo: "2026-06-30", generatedAt: "2026-08-04T00:00:00.000Z", paidMinor: 0, paidTotalMinor: 0, partialTotalMinor: 0, payments: [], rows: [], totalMinor: 0, unpaidTotalMinor: 0 }));
-      }
       if (url.endsWith("/billing/month-registry/archives")) {
         return Promise.resolve(createJsonResponse({ items: [] }));
+      }
+      if (url.includes("/billing/month-registry")) {
+        return Promise.resolve(createJsonResponse({ currency: "RON", dateFrom: "2026-06-01", dateTo: "2026-06-30", generatedAt: "2026-08-04T00:00:00.000Z", paidMinor: 0, paidTotalMinor: 0, partialTotalMinor: 0, payments: [], rows: [], totalMinor: 0, unpaidTotalMinor: 0 }));
       }
       if (url.includes("/billing-documents")) {
         return Promise.resolve(createJsonResponse({ items: [], page: 1, pageCount: 1, pageSize: 20, total: 0 }));
@@ -388,7 +556,6 @@ describe("BillingPage", () => {
     expect(router.state.location.search).toBe("?year=2026&month=7");
     fireEvent.click(screen.getByRole("button", { name: "Luna anterioară" }));
     expect(router.state.location.search).toBe("?year=2026&month=6");
-    fireEvent.click(screen.getByRole("button", { name: "Luna curentă" }));
-    expect(router.state.location.search).toMatch(/month=\d{1,2}/);
+    expect(screen.getByLabelText("Perioadă financiară")).toBeDefined();
   });
 });

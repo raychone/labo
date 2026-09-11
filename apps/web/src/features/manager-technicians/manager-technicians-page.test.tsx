@@ -51,9 +51,14 @@ describe("ManagerTechniciansPage", () => {
     renderPage(<ManagerTechniciansPage />);
 
     await screen.findByText("WO-26-0001");
+    expect(screen.queryByRole("button", { name: "Gestionează catalogul" })).toBeNull();
     expect(screen.getByText("Valoare realizată în perioadă")).toBeDefined();
     expect(screen.getByText("Plătit în perioadă")).toBeDefined();
     expect(screen.getByText("Sold total de plată")).toBeDefined();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Rate manopere" }));
+    expect(await screen.findByRole("heading", { name: "Rate manopere" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Adaugă rată" })).toBeDefined();
 
     fireEvent.click(screen.getByRole("tab", { name: "Plăți" }));
     await screen.findByText("Situația plăților");

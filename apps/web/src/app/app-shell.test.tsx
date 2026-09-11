@@ -331,6 +331,8 @@ describe("AuthenticatedAppShell", () => {
     await waitFor(() => expect(screen.getByRole("navigation", { name: "Navigație principală" })).toBeDefined());
     expect(screen.getByRole("button", { name: "Deconectare" })).toBeDefined();
     expect(screen.getAllByText("Arhivă facturare").length).toBeGreaterThan(0);
+    expect(await screen.findAllByRole("link", { name: "Facturare" })).toHaveLength(1);
+    expect(screen.queryByRole("link", { name: "Arhivă facturare" })).toBeNull();
   });
 
   it("asks for confirmation before logging out", async () => {

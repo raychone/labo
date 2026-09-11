@@ -139,7 +139,7 @@ export const appRoutes = [
     navigationGroup: "FINANCIAR",
     path: "/billing",
     permissionMode: "any",
-    requiredPermissions: ["finance.read", "invoice.read", "invoice.create"],
+    requiredPermissions: ["finance.read", "finance.read_reports", "invoice.read", "invoice.create"],
     showInNavigation: true,
   },
   {
@@ -158,7 +158,7 @@ export const appRoutes = [
     path: "/billing/archive",
     permissionMode: "any",
     requiredPermissions: ["finance.read_reports"],
-    showInNavigation: true,
+    showInNavigation: false,
   },
   {
     icon: "BI",
@@ -249,7 +249,6 @@ function shouldShowInNavigation(permissionKeys: readonly string[], route: AppRou
   if (isManagerWorkspace(permissionKeys)) {
     return route.path === "/status"
       || route.path === "/billing"
-      || route.path === "/billing/archive"
       || route.path === "/work-settings"
       || route.path === "/technicians"
       || route.path === "/patients"

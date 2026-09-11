@@ -23,7 +23,7 @@ describe("route registry", () => {
     expect(labels).not.toContain("Acasă");
     expect(labels).toContain("Status");
     expect(labels).toContain("Facturare");
-    expect(labels).toContain("Arhivă facturare");
+    expect(labels).not.toContain("Arhivă facturare");
     expect(labels).toContain("Setări lucrări");
     expect(labels).not.toContain("Prețuri și termene");
     expect(labels).not.toContain("Tipuri de lucrări");
@@ -105,6 +105,14 @@ describe("route registry", () => {
       permissionMode: "any",
       requiredPermissions: scanPermissions,
     })).toBe(true);
+  });
+
+  it("keeps report-only archive access behind the unified Facturare entry", () => {
+    const routes = getNavigationRoutes(["finance.read_reports"]);
+
+    expect(routes.map((route) => route.label)).toContain("Facturare");
+    expect(routes.map((route) => route.label)).not.toContain("Arhivă facturare");
+    expect(hasRouteAccess(["finance.read_reports"], getRouteByPath("/billing")!)).toBe(true);
   });
 
   it("rejects external return URLs", () => {
