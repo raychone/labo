@@ -524,7 +524,7 @@ export function StatusPage({ allowLogisticsRead = false, experimental = false, h
             const count = countersQuery.data?.counters.find((counter) => counter.tab === tab)?.count ?? 0;
             return (
               <div
-                className={`status-page__kpi-card status-page__kpi-card--${tab.toLowerCase()}${query.tab === tab ? " is-selected" : ""}`}
+                className={`status-page__kpi-card status-page__kpi-card--${tab.toLowerCase()}${tab === "ALL" || tab === "COMPLETED" ? " status-page__kpi-card--boundary" : ""}${query.tab === tab ? " is-selected" : ""}`}
                 key={tab}
               >
                 <button aria-pressed={query.tab === tab} className="status-page__kpi-tab" onClick={() => { onTabChange?.(tab); patchQuery({ tab }); }} type="button">

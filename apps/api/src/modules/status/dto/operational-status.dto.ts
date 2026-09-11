@@ -41,6 +41,11 @@ export class OperationalStatusQueryDto {
   @IsOptional()
   @Transform(({ value }) => value === true || value === "true")
   @IsBoolean()
+  public readonly includeProbeReturnCandidates?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === "true")
+  @IsBoolean()
   public readonly transportOnly?: boolean;
 
   @IsOptional()

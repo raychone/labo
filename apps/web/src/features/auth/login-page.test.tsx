@@ -60,8 +60,12 @@ describe("LoginPage", () => {
     renderWithQueryClient(<LoginPage />);
 
     expect(await screen.findByRole("heading", { name: "Acces rapid pentru demonstrație" })).toBeDefined();
-    expect(await screen.findByRole("button", { name: /Intră ca manager/i })).toBeDefined();
-    expect(await screen.findByRole("button", { name: /Intră ca recepție/i })).toBeDefined();
+    expect(await screen.findByRole("button", { name: "Manager" })).toBeDefined();
+    expect(await screen.findByRole("button", { name: "Recepție" })).toBeDefined();
+    expect(await screen.findByRole("button", { name: "Logistică" })).toBeDefined();
+    expect(await screen.findByRole("button", { name: "Tehnician" })).toBeDefined();
+    expect(await screen.findByRole("button", { name: "Curier" })).toBeDefined();
+    expect(screen.queryByRole("button", { name: /medic/i })).toBeNull();
   });
 
   it("clears the password and keeps the email after failed login", async () => {

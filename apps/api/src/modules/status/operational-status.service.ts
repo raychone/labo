@@ -112,12 +112,12 @@ export class OperationalStatusService {
 
   private toBaseWhere(actor: AuthenticatedUser, query: OperationalStatusQueryDto, access: WorkAccess): Prisma.WorkOrderWhereInput {
     const search = query.search?.trim();
-    const isProbeReturnTab = query.tab === "RETURNED" || query.tab === "COMPLETED";
+    const isProbeReturnQuery = query.includeProbeReturnCandidates === true || query.tab === "RETURNED" || query.tab === "COMPLETED";
     const nestedConditions: Prisma.WorkOrderWhereInput[] = [];
     if (query.transportOnly) {
       nestedConditions.push({ OR: [{ requiresDelivery: true }, { requiresPickup: true }, { technicalReadiness: { in: ["PROBE_READY", "FINAL_READY"] } }] });
     }
-    if (!isProbeReturnTab) {
+    if (!isProbeReturnQuery) {
       nestedConditions.push({
         OR: [
           { technicalReadiness: "PROBE_READY", OR: [{ requiresDelivery: true }, { requiresPickup: true }, { courierRouteStops: { none: { outcomeStatus: "DELIVERED" } } }] },

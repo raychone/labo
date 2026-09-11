@@ -280,14 +280,25 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
               }
             }
           }}
+          onClick={() => {
+            // Selecting an option intentionally preserves focus. Reopen on a
+            // subsequent click as focus will not fire again in that case.
+            if (!isOpen) {
+              setSearchValue("");
+              setOpen(true);
+            }
+          }}
           onFocus={() => {
-            setSearchValue(selectedOption?.label ?? "");
+            // Opening an already selected field is an invitation to choose a
+            // different option. Keep the selected value intact, but show the
+            // complete list instead of requiring the user to erase its label.
+            setSearchValue("");
             setOpen(true);
           }}
           onKeyDown={handleKeyDown}
           placeholder={placeholder ?? "Selectează o opțiune"}
           role="combobox"
-          type="search"
+          type="text"
           value={isOpen ? searchValue : selectedOption?.label ?? ""}
         />
         <span aria-hidden="true" className="dl-select__chevron" />

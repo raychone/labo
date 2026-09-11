@@ -5,7 +5,6 @@ import { createBrowserRouter, Navigate, RouterProvider, useLocation } from "reac
 
 import { AuthenticatedAppShell } from "./authenticated-app-shell.js";
 import { useAuthState } from "./auth-state.js";
-import { DashboardPage } from "./dashboard-page.js";
 import { isStylePreviewEnabled } from "./deployment-policy.js";
 import { ForbiddenPage, NotFoundPage } from "./error-pages.js";
 import { PublicOnlyRoute, AuthenticatedRoute, PermissionRoute } from "./route-guards.js";
@@ -174,7 +173,7 @@ const router = createBrowserRouter([
   {
     children: [
       { element: <RoleLandingRedirect />, index: true },
-      { element: <RoleAwareDashboard />, path: "dashboard" },
+      { element: <Navigate replace to="/status" />, path: "dashboard" },
       {
         element: <PermissionRoute requiredPermissions={deliveryReadPermissions}><LazyRoute><DeliveriesPage /></LazyRoute></PermissionRoute>,
         path: "deliveries",
@@ -292,12 +291,7 @@ function NonTechnicianRoute({ children }: { readonly children: ReactNode }): Rea
 
 function RoleLandingRedirect(): ReactNode {
   const auth = useAuthState();
-  return <Navigate replace to={isCourier(auth.permissionKeys) ? "/my-route" : "/dashboard"} />;
-}
-
-function RoleAwareDashboard(): ReactNode {
-  const auth = useAuthState();
-  return isCourier(auth.permissionKeys) ? <Navigate replace to="/my-route" /> : <DashboardPage />;
+  return <Navigate replace to={isCourier(auth.permissionKeys) ? "/my-route" : "/status"} />;
 }
 
 export function App(): ReactNode {

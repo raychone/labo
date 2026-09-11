@@ -28,6 +28,7 @@ function toOperationalStatusQuery(params: OperationalStatusQuery): string {
   appendOptional(query, "deliveryStatus", params.deliveryStatus);
   appendOptional(query, "doctorId", params.doctorId);
   appendOptional(query, "excludeDemo", params.excludeDemo);
+  appendOptional(query, "includeProbeReturnCandidates", params.includeProbeReturnCandidates);
   appendOptional(query, "transportHorizonDays", params.transportHorizonDays);
   appendOptional(query, "transportOnly", params.transportOnly);
   appendOptional(query, "executionLegalEntityCode", params.executionLegalEntityCode);

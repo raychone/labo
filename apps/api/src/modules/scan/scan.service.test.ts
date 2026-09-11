@@ -9,6 +9,7 @@ function createWork() {
   return {
     clinic: { name: "Clinica Test" },
     code: "WO-2026-000001",
+    claimStatus: "CLAIMED",
     doctor: { displayName: "Dr. Ana Popescu" },
     assignedTechnicianId: "actor_1",
     deliveryPreparationItems: [],
@@ -43,10 +44,12 @@ function createWork() {
         workflowNameSnapshot: "Flux standard",
       },
     },
+    activeProbeCycleId: null,
     patientName: "Ion Pop",
     priority: "NORMAL",
     requestedDeliveryDate: new Date("2026-08-01T00:00:00.000Z"),
     status: "REGISTERED",
+    technicalReadiness: null,
     workType: { name: "Coroana zirconiu" },
   };
 }
@@ -145,6 +148,49 @@ describe("ScanService", () => {
     ).resolves.toMatchObject({
       work: { code: "WO-2026-000001" },
     });
+  });
+
+  it("allows a technician to resolve an unclaimed work that is available to claim", async () => {
+    const authorization = {
+      hasPermission: vi.fn(({ permission }: { readonly permission: string }) => Promise.resolve({
+        allowed: ["scan.resolve", "works.claim.available.read"].includes(permission),
+        effectiveScopes: permission === "works.claim.available.read" ? ["ALL"] : ["ASSIGNED"],
+      })),
+    };
+    const service = new ScanService(
+      authorization as unknown as AuthorizationService,
+      {
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+        user: {
+          findUnique: vi.fn().mockResolvedValue({
+            roles: [{ role: { isActive: true, key: "TEHNICIAN" } }],
+          }),
+        },
+        workOrder: {
+          findFirst: vi.fn().mockResolvedValue({
+            ...createWork(),
+            assignedTechnicianId: null,
+            claimStatus: "UNCLAIMED",
+          }),
+        },
+      } as unknown as PrismaService,
+      { assertAllowed: vi.fn() } as unknown as QrRateLimitService,
+    );
+
+    await expect(service.resolveScan(
+      {
+        actor: {
+          displayName: "Tehnician Demo",
+          email: "tech@example.test",
+          id: "actor_1",
+          isActive: true,
+          mustChangePassword: false,
+          preferredColor: null,
+        },
+        requestMetadata: { ipAddress: "127.0.0.1", userAgent: "vitest" },
+      },
+      { payload: "WO-26-0136", source: "manual" },
+    )).resolves.toMatchObject({ work: { code: "WO-2026-000001" } });
   });
 
   it("enables stage actions for a claimed work even when the current stage is still unassigned", async () => {

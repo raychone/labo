@@ -197,6 +197,32 @@ describe("OperationalStatusService", () => {
     expect(response.items[0]?.hasCompletedPickup).toBe(true);
   });
 
+  it("includes eligible returned-probe candidates only when the explicit query option is requested", async () => {
+    const deliveryCompletedAt = new Date("2026-08-04T09:00:00.000Z");
+    const { findMany, service } = createService({
+      findManyRows: [createWorkRecord("returned-probe", {
+        deliveryCompletedAt,
+        deliveryStatus: "DELIVERED",
+        pickupAt: new Date("2026-08-04T10:00:00.000Z"),
+        technicalReadiness: "PROBE_READY",
+      })],
+      readAll: true,
+    });
+
+    const response = await service.getOperationalStatus(actor, {
+      includeProbeReturnCandidates: true,
+      page: 1,
+      pageSize: 25,
+      sortBy: "updatedAt",
+      sortDirection: "desc",
+      tab: "ALL",
+    });
+
+    expect(response.items.map((row) => row.workCode)).toEqual(["WO-2026-returned-probe"]);
+    const where = findMany.mock.calls[0]?.[0].where as { readonly AND: readonly [{}, { readonly AND: readonly unknown[] }] };
+    expect(where.AND[1].AND).toEqual([]);
+  });
+
   it("keeps a finalized work visible until its current final delivery", async () => {
     const finalizedAt = new Date("2026-08-08T10:00:00.000Z");
     const { service } = createService({

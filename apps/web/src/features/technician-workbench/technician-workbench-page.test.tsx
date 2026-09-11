@@ -463,12 +463,20 @@ describe("TechnicianWorkbenchPage", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Ascunde filtrele" })).toBeDefined());
     expect(screen.getByLabelText("Căutare")).toBeDefined();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Lucrările mele" }).at(-1)!);
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "Lucrările mele" }).at(-1)?.getAttribute("aria-pressed")).toBe("true"));
+    const mineKpi = screen.getByRole("button", { name: /^Lucrările mele/ });
+    expect(screen.getAllByRole("button", { name: /^Lucrările mele/ })).toHaveLength(1);
+    fireEvent.click(mineKpi);
+    await waitFor(() => expect(mineKpi.getAttribute("aria-pressed")).toBe("true"));
     await waitFor(() => {
       expect(screen.getByText(/WO-2026-000003/)).toBeDefined();
       expect(screen.getByText(/Elena Stoica/)).toBeDefined();
     });
+
+    const availableKpi = screen.getByRole("button", { name: /^Lucrări de preluat/ });
+    fireEvent.click(availableKpi);
+    await waitFor(() => expect(availableKpi.getAttribute("aria-pressed")).toBe("true"));
+    expect(mineKpi.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByText(/WO-2026-000002/)).toBeDefined();
   });
 
   it("shows claimed work actions and finalizes through the canonical endpoint", async () => {
@@ -480,7 +488,7 @@ describe("TechnicianWorkbenchPage", () => {
 
     renderWithProviders(<TechnicianWorkbenchPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Lucrările mele" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Lucrările mele/ }));
     expect(await screen.findByText(/WO-2026-000003/)).toBeDefined();
     expect(screen.queryByText("Revendicată")).toBeNull();
     expect(screen.getByText("Probă gata")).toBeDefined();
@@ -548,7 +556,7 @@ describe("TechnicianWorkbenchPage", () => {
     Object.defineProperty(window, "matchMedia", { configurable: true, value: matchMedia });
     renderWithProviders(<TechnicianWorkbenchPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Lucrările mele" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Lucrările mele/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Manopere" }));
     fireEvent.click(await screen.findByRole("button", { name: "Dinte 11" }));
     fireEvent.click(screen.getByRole("button", { name: "Dinte 12" }));

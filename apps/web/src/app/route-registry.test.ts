@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getNavigationRoutes, getRouteByPath, getSafeNotificationTarget, getSafeReturnTo, hasRouteAccess, operationalStatusReadPermissions, scanPermissions, workReadPermissions } from "./route-registry.js";
+import { getDefaultAuthorizedRoute, getNavigationRoutes, getRouteByPath, getSafeNotificationTarget, getSafeReturnTo, hasRouteAccess, operationalStatusReadPermissions, scanPermissions, workReadPermissions } from "./route-registry.js";
 
 describe("route registry", () => {
   it("filters navigation by permission snapshot", () => {
@@ -20,7 +20,7 @@ describe("route registry", () => {
       "audit.read",
     ]).map((route) => route.label);
 
-    expect(labels).toContain("Acasă");
+    expect(labels).not.toContain("Acasă");
     expect(labels).toContain("Status");
     expect(labels).toContain("Facturare");
     expect(labels).toContain("Arhivă facturare");
@@ -55,7 +55,9 @@ describe("route registry", () => {
       "works.create", "works.read_all", "scan.use", "patients.read", "status.read",
       "delivery.read", "logistics.center.read", "workflow.read", "cycles.read",
     ]).map((route) => route.label);
-    expect(reception).toEqual(expect.arrayContaining(["Acasă", "Status", "Scanare", "Pacienți"]));
+    expect(reception).toEqual(expect.arrayContaining(["Status", "Pacienți"]));
+    expect(reception).not.toContain("Scanare");
+    expect(reception).not.toContain("Acasă");
     expect(reception).not.toContain("Lucrări");
     expect(reception).not.toContain("Facturare");
     expect(reception).not.toContain("Tehnicieni");
@@ -65,7 +67,9 @@ describe("route registry", () => {
     const logistics = getNavigationRoutes([
       "works.create", "works.read_all", "scan.use", "logistics.center.read", "logistics.plan", "routes.create", "routes.read", "pickup.create", "pickup.read", "delivery.read",
     ]).map((route) => route.label);
-    expect(logistics).toEqual(expect.arrayContaining(["Acasă", "Status", "Scanare", "Trasee"]));
+    expect(logistics).toEqual(expect.arrayContaining(["Status", "Trasee"]));
+    expect(logistics).not.toContain("Scanare");
+    expect(logistics).not.toContain("Acasă");
     expect(logistics).not.toContain("Centru operațional");
     expect(logistics).not.toContain("Livrările mele");
     expect(logistics).not.toContain("Traseul meu");
@@ -73,7 +77,9 @@ describe("route registry", () => {
     const technician = getNavigationRoutes([
       "works.read_assigned", "scan.use", "technician.workbench.read", "technician.earnings.read_own", "patients.read",
     ]).map((route) => route.label);
-    expect(technician).toEqual(expect.arrayContaining(["Acasă", "Status", "Scanare", "Atelier tehnician", "Valoare", "Pacienți"]));
+    expect(technician).toEqual(expect.arrayContaining(["Status", "Atelier tehnician", "Valoare", "Pacienți"]));
+    expect(technician).not.toContain("Scanare");
+    expect(technician).not.toContain("Acasă");
     expect(technician).not.toContain("Traseu");
     expect(technician).not.toContain("Facturare");
 
@@ -107,10 +113,17 @@ describe("route registry", () => {
     expect(getSafeReturnTo("/works?search=abc")).toBe("/works?search=abc");
   });
 
+  it("uses Status for normal operational landings while preserving courier routing and deep links", () => {
+    expect(getDefaultAuthorizedRoute(["works.read_all"])).toBe("/status");
+    expect(getDefaultAuthorizedRoute(["routes.read"])).toBe("/my-route");
+    expect(getRouteByPath("/")?.path).toBe("/status");
+    expect(getSafeReturnTo("/works?workId=work_1")).toBe("/works?workId=work_1");
+  });
+
   it("does not send a notification to a route outside the user's permissions", () => {
-    expect(getSafeNotificationTarget("/billing?tab=uninvoiced&workId=work_1", ["works.read_all"])).toBe("/dashboard");
+    expect(getSafeNotificationTarget("/billing?tab=uninvoiced&workId=work_1", ["works.read_all"])).toBe("/status");
     expect(getSafeNotificationTarget("/billing?tab=uninvoiced&workId=work_1", ["invoice.create"])).toBe("/billing?tab=uninvoiced&workId=work_1");
-    expect(getSafeNotificationTarget("/pagina-care-nu-exista", ["works.read_all"])).toBe("/dashboard");
+    expect(getSafeNotificationTarget("/pagina-care-nu-exista", ["works.read_all"])).toBe("/status");
   });
 
   it("resolves the dedicated TV status route without shadowing /status", () => {

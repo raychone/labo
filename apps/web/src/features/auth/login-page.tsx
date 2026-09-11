@@ -30,7 +30,7 @@ import {
 import type { LoginFormValues } from "./login-form.schema.js";
 import { loginFormSchema } from "./login-form.schema.js";
 import { authQueryKeys, useAuthState } from "../../app/auth-state.js";
-import { getDefaultAuthorizedRoute, getFirstAuthorizedRoute, getSafeReturnTo } from "../../app/route-registry.js";
+import { getDefaultAuthorizedRoute, getSafeReturnTo } from "../../app/route-registry.js";
 import { usePageTitle } from "../../app/use-page-title.js";
 import { getFormErrorSummaryItems, useErrorSummaryFocus } from "../../lib/form-utils.js";
 import "./login-page.css";
@@ -48,16 +48,14 @@ const loginFieldLabels: Record<keyof LoginFormValues, string> = {
 const isDemoMode = import.meta.env.DEV || import.meta.env.VITE_DEMO_MODE === "true";
 
 const demoRoles: readonly {
-  readonly description: string;
   readonly label: string;
   readonly role: DemoLoginRole;
 }[] = [
-  { description: "Administrare, lucrări, facturare și setări", label: "Intră ca manager", role: "MANAGER" },
-  { description: "Înregistrarea și consultarea lucrărilor", label: "Intră ca recepție", role: "RECEPTIE" },
-  { description: "Accesul logistic va fi completat în etapele următoare", label: "Intră ca logistică", role: "LOGISTICA" },
-  { description: "Acces la informațiile operaționale permise", label: "Intră ca tehnician", role: "TEHNICIAN" },
-  { description: "Fluxul de livrare va fi completat ulterior", label: "Intră ca curier", role: "CURIER" },
-  { description: "Acces demonstrativ limitat", label: "Intră ca medic", role: "MEDIC" },
+  { label: "Manager", role: "MANAGER" },
+  { label: "Recepție", role: "RECEPTIE" },
+  { label: "Logistică", role: "LOGISTICA" },
+  { label: "Tehnician", role: "TEHNICIAN" },
+  { label: "Curier", role: "CURIER" },
 ];
 
 export function LoginPage(): ReactNode {
@@ -87,7 +85,10 @@ export function LoginPage(): ReactNode {
     });
     const permissionKeys = permissions.permissions.map((permission) => permission.key);
 
-    navigate(returnTo ?? getFirstAuthorizedRoute(permissionKeys), { replace: true });
+    // A normal successful login always resumes the operational workspace. A
+    // safe deep link remains intact, except for the forbidden error page
+    // itself, which must never become a post-login destination.
+    navigate(returnTo && returnTo !== "/forbidden" ? returnTo : getDefaultAuthorizedRoute(permissionKeys), { replace: true });
   }
 
   const loginMutation = useMutation({
@@ -133,105 +134,90 @@ export function LoginPage(): ReactNode {
     <main className="auth-page">
       <section className="dl-container auth-page__layout" aria-labelledby="login-title">
         <div className="auth-page__intro">
-          <p className="auth-page__eyebrow">Dental Lab Management</p>
+          <div className="auth-page__brand" aria-label="Dental Lab Management">
+            <span aria-hidden="true" className="auth-page__brand-mark">DL</span>
+            <div>
+              <p className="auth-page__eyebrow">Dental Lab Management</p>
+              <span>Platformă operațională pentru laborator</span>
+            </div>
+          </div>
           <h1 id="login-title">Autentificare</h1>
           <p>
             Acces securizat pentru echipa laboratorului.
           </p>
         </div>
 
-        <Card className="auth-page__panel">
-          <CardHeader>
-          <CardTitle>Intră în aplicație</CardTitle>
-            <CardDescription>
-              Folosește contul intern primit de la administrator.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {auth.status === "loading" ? (
-              <LoadingState text="Se verifică sesiunea" />
-            ) : (
-              <FormLayout
-                className="auth-page__form"
-                onSubmit={(event) => {
-                  void form.handleSubmit((values) => loginMutation.mutate(values))(event);
-                }}
-              >
-                <FormErrorSummary errors={summaryItems} ref={summaryRef} />
-                <TextInput
-                  autoComplete="email"
-                  error={form.formState.errors.email?.message}
-                  id="email"
-                  label="Email"
-                  required
-                  type="email"
-                  {...form.register("email")}
-                />
-                <TextInput
-                  autoComplete="current-password"
-                  error={form.formState.errors.password?.message}
-                  id="password"
-                  label="Parola"
-                  required
-                  type="password"
-                  {...passwordRegistration}
-                  ref={(element) => {
-                    passwordRegistration.ref(element);
-                    passwordRef.current = element;
-                  }}
-                />
-                {form.formState.errors.root?.message ? (
-                  <ErrorState
-                    title="Autentificare necesară"
-                    description={form.formState.errors.root.message}
-                  />
-                ) : null}
-                {loginMutation.isError ? (
-                  <ErrorState
-                    title="Autentificare eșuată"
-                    description="Email sau parolă invalide."
-                  />
-                ) : null}
-                <FormActions
-                  className="auth-page__actions"
-                  isSubmitting={isAuthenticating}
-                  submitLabel="Autentificare"
-                />
-              </FormLayout>
-            )}
-          </CardContent>
-        </Card>
-        {isDemoMode ? (
-          <Card className="auth-page__panel auth-page__demo">
+        <div className="auth-page__access">
+          <Card className="auth-page__panel">
             <CardHeader>
-              <CardTitle>Acces rapid pentru demonstrație</CardTitle>
+              <CardTitle>Intră în aplicație</CardTitle>
               <CardDescription>
-                <span className="auth-page__demo-badge">Mod demonstrație</span>
-                Alege un profil demo. Parolele nu sunt expuse în browser.
+                Folosește contul intern primit de la administrator.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="auth-page__demo-grid">
-                {demoRoles.map((item) => (
-                  <Button
-                    className="auth-page__demo-button"
-                    disabled={isAuthenticating}
-                    key={item.role}
-                    onClick={() => {
-                      toast.clearToasts();
-                      demoLoginMutation.mutate(item.role);
+              {auth.status === "loading" ? (
+                <LoadingState text="Se verifică sesiunea" />
+              ) : (
+                <FormLayout
+                  className="auth-page__form"
+                  onSubmit={(event) => {
+                    void form.handleSubmit((values) => loginMutation.mutate(values))(event);
+                  }}
+                >
+                  <FormErrorSummary errors={summaryItems} ref={summaryRef} />
+                  <TextInput autoComplete="email" error={form.formState.errors.email?.message} id="email" label="Email" required type="email" {...form.register("email")} />
+                  <TextInput
+                    autoComplete="current-password"
+                    error={form.formState.errors.password?.message}
+                    id="password"
+                    label="Parola"
+                    required
+                    type="password"
+                    {...passwordRegistration}
+                    ref={(element) => {
+                      passwordRegistration.ref(element);
+                      passwordRef.current = element;
                     }}
-                    type="button"
-                    variant="outline"
-                  >
-                    <span>{item.label}</span>
-                    <small>{item.description}</small>
-                  </Button>
-                ))}
-              </div>
+                  />
+                  {form.formState.errors.root?.message ? <ErrorState title="Autentificare necesară" description={form.formState.errors.root.message} /> : null}
+                  {loginMutation.isError ? <ErrorState title="Autentificare eșuată" description="Email sau parolă invalide." /> : null}
+                  <FormActions className="auth-page__actions" isSubmitting={isAuthenticating} submitLabel="Autentificare" />
+                </FormLayout>
+              )}
             </CardContent>
           </Card>
-        ) : null}
+          {isDemoMode ? (
+            <Card className="auth-page__panel auth-page__demo">
+              <CardHeader>
+                <CardTitle>Acces rapid pentru demonstrație</CardTitle>
+                <CardDescription>
+                  <span className="auth-page__demo-badge">Mod demonstrație</span>
+                  Alege rolul pe care vrei să îl previzualizezi. Parolele nu sunt expuse în browser.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="auth-page__demo-grid">
+                  {demoRoles.map((item) => (
+                    <Button
+                      className="auth-page__demo-button"
+                      disabled={isAuthenticating}
+                      key={item.role}
+                      onClick={() => {
+                        toast.clearToasts();
+                        demoLoginMutation.mutate(item.role);
+                      }}
+                      type="button"
+                      variant="outline"
+                    >
+                      {item.label}
+                    </Button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+        </div>
       </section>
     </main>
   );

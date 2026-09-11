@@ -2,9 +2,6 @@ import {
   Button,
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   ErrorState,
   LoadingState,
   Modal,
@@ -22,8 +19,7 @@ import {
   type WorkSummary,
 } from "@dental-lab/shared";
 import { ToothDiagram } from "../../components/dental/tooth-diagram.js";
-import { NextStep } from "../../components/next-step.js";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 
@@ -85,7 +81,6 @@ function operationCategoryForWorkType(workType: { readonly name: string; readonl
 export function TechnicianWorkbenchPage(): ReactNode {
   const toast = useToast();
   const navigate = useNavigate();
-  const listAnchorRef = useRef<HTMLDivElement | null>(null);
   const [tab, setTab] = useState<WorkbenchTab>(() => new URLSearchParams(window.location.search).get("tab") === "mine" ? "MINE" : "AVAILABLE");
   const [claimFilters, setClaimFilters] = useState<ClaimWorksListParams>(defaultClaimFilters);
   const [operationsTarget, setOperationsTarget] = useState<WorkSummary | null>(null);
@@ -105,31 +100,17 @@ export function TechnicianWorkbenchPage(): ReactNode {
   const probeReadyMutation = useMarkProbeReady();
   const finalizeMutation = useFinalizeTechnicalWork();
   const releaseMutation = useReleaseWork();
-  const visibleAvailableWorks = useMemo(
-    () => pickSingleWorkbenchMatch(availableQuery.data?.items ?? [], claimFilters.search),
-    [availableQuery.data?.items, claimFilters.search],
-  );
-  const visibleClaimedWorks = useMemo(
-    () => pickSingleWorkbenchMatch(myClaimedQuery.data?.items ?? [], claimFilters.search),
-    [claimFilters.search, myClaimedQuery.data?.items],
-  );
-
-  function focusWorkList(): void {
-    window.setTimeout(() => {
-      listAnchorRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
-    }, 0);
-  }
-
   function activateSummary(tabTarget: WorkbenchTab): void {
     setTab(tabTarget);
+    setClaimFilters((current) => ({ ...current, page: 1 }));
     const next = new URLSearchParams(window.location.search);
     next.set("tab", tabTarget === "MINE" ? "mine" : "available");
     window.history.replaceState(null, "", `${window.location.pathname}?${next.toString()}`);
-    focusWorkList();
   }
 
   function selectTab(tabTarget: WorkbenchTab): void {
     setTab(tabTarget);
+    setClaimFilters((current) => ({ ...current, page: 1 }));
     const next = new URLSearchParams(window.location.search);
     next.set("tab", tabTarget === "MINE" ? "mine" : "available");
     window.history.replaceState(null, "", `${window.location.pathname}?${next.toString()}`);
@@ -205,27 +186,13 @@ export function TechnicianWorkbenchPage(): ReactNode {
           </div>
         </header>
 
-        <NextStep
-          action={tab === "AVAILABLE" ? <Button onClick={() => activateSummary("AVAILABLE")} size="small">Vezi lucrările de preluat</Button> : undefined}
-          description={tab === "AVAILABLE" ? "Preia o lucrare pentru a începe execuția." : "Alege lucrarea activă, adaugă manopere, apoi marchează proba sau lucrarea ca gata."}
-        />
-
         <div className="technician-workbench__summary" aria-label="Rezumat atelier">
-          <MetricButton label="Lucrări de preluat" onClick={() => activateSummary("AVAILABLE")} value={availableQuery.data?.total ?? 0} />
-          <MetricButton label="Lucrările mele" onClick={() => activateSummary("MINE")} value={myClaimedQuery.data?.total ?? 0} />
+          <MetricButton active={tab === "AVAILABLE"} kind="available" label="Lucrări de preluat" onClick={() => activateSummary("AVAILABLE")} value={availableQuery.data?.total ?? 0} />
+          <MetricButton active={tab === "MINE"} kind="mine" label="Lucrările mele" onClick={() => activateSummary("MINE")} value={myClaimedQuery.data?.total ?? 0} />
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle>{tab === "AVAILABLE" ? "Lucrări de preluat" : "Lucrările mele"}</CardTitle>
-            <CardDescription>{tab === "AVAILABLE" ? "Lucrări noi și nepreluate introduse în sistem." : "Lucrări preluate de tine, cu acțiunile principale de producție."}</CardDescription>
-          </CardHeader>
           <CardContent className="technician-workbench__content">
-            <div className="technician-workbench__tabs" role="list" aria-label="Filtre rapide">
-              <button aria-pressed={tab === "AVAILABLE"} onClick={() => selectTab("AVAILABLE")} type="button">Lucrări de preluat</button>
-              <button aria-pressed={tab === "MINE"} onClick={() => selectTab("MINE")} type="button">Lucrările mele</button>
-            </div>
-
             <div className="technician-workbench__mobile-toolbar">
               <Button className="technician-workbench__filters-toggle" onClick={() => setMobileFiltersOpen((current) => !current)} variant="secondary">
                 {mobileFiltersOpen ? "Ascunde filtrele" : "Afișează filtrele"}
@@ -254,24 +221,28 @@ export function TechnicianWorkbenchPage(): ReactNode {
               </div>
             ) : null}
 
-            <div ref={listAnchorRef}>
+            <div>
               {tab === "AVAILABLE" ? (
                 <ClaimList
                   emptyDescription="Nu există lucrări disponibile pentru revendicare."
                   isLoading={availableQuery.isLoading}
                   error={availableQuery.error}
-                  items={visibleAvailableWorks}
+                  items={availableQuery.data?.items ?? []}
                   compact={isCompactMobile}
                   mode="available"
                   onClaim={claimWork}
                   onDetails={(work) => navigate(`/works?workId=${work.id}`)}
+                  onPageChange={(page) => setClaimFilters((current) => ({ ...current, page }))}
+                  page={availableQuery.data?.page ?? claimFilters.page}
+                  pageCount={availableQuery.data?.pageCount ?? 1}
+                  total={availableQuery.data?.total ?? 0}
                 />
               ) : (
                 <ClaimList
                   emptyDescription="Nu ai lucrări revendicate."
                   isLoading={myClaimedQuery.isLoading}
                   error={myClaimedQuery.error}
-                  items={visibleClaimedWorks}
+                  items={myClaimedQuery.data?.items ?? []}
                   compact={isCompactMobile}
                   finalizeWorkId={finalizeMutation.isPending ? finalizeMutation.variables?.workOrderId : null}
                   onProbeReady={markProbeReady}
@@ -281,6 +252,10 @@ export function TechnicianWorkbenchPage(): ReactNode {
                   onFinalize={finalizeWork}
                   onRelease={releaseTechnicianWork}
                   onOperations={setOperationsTarget}
+                  onPageChange={(page) => setClaimFilters((current) => ({ ...current, page }))}
+                  page={myClaimedQuery.data?.page ?? claimFilters.page}
+                  pageCount={myClaimedQuery.data?.pageCount ?? 1}
+                  total={myClaimedQuery.data?.total ?? 0}
                 />
               )}
             </div>
@@ -312,64 +287,26 @@ export function TechnicianWorkbenchPage(): ReactNode {
 }
 
 function MetricButton({
+  active,
+  kind,
   label,
   onClick,
   value,
 }: {
+  readonly active: boolean;
+  readonly kind: "available" | "mine";
   readonly label: string;
   readonly onClick: () => void;
   readonly value: number;
 }): ReactNode {
   return (
-    <Button className="dl-kpi technician-workbench__metric" onClick={onClick} variant="secondary">
+    <Button aria-pressed={active} className={`technician-workbench__metric technician-workbench__metric--${kind}`} onClick={onClick} variant="secondary">
       <span className="technician-workbench__metric-copy">
         <span>{label}</span>
         <strong>{value}</strong>
       </span>
     </Button>
   );
-}
-
-function pickSingleWorkbenchMatch(items: readonly WorkSummary[], search: string | undefined): readonly WorkSummary[] {
-  const normalizedSearch = normalizeWorkbenchSearch(search);
-  if (normalizedSearch === "") {
-    return items;
-  }
-
-  const exactMatches = items.filter((work) => {
-    const normalizedCode = normalizeWorkbenchSearch(work.code);
-    const normalizedPatient = normalizeWorkbenchSearch(work.patientName);
-    const normalizedClinic = normalizeWorkbenchSearch(work.clinic?.name ?? "");
-    const normalizedDoctor = normalizeWorkbenchSearch(work.doctor?.displayName ?? "");
-    const normalizedWorkType = normalizeWorkbenchSearch(work.workType.name);
-
-    return normalizedCode === normalizedSearch
-      || normalizedPatient === normalizedSearch
-      || normalizedClinic === normalizedSearch
-      || normalizedDoctor === normalizedSearch
-      || normalizedWorkType === normalizedSearch;
-  });
-  if (exactMatches.length > 0) {
-    const [firstExactMatch] = exactMatches;
-    return firstExactMatch ? [firstExactMatch] : [];
-  }
-
-  const partialMatch = items.find((work) => {
-    const haystack = normalizeWorkbenchSearch([
-      work.code,
-      work.patientName,
-      work.clinic?.name ?? "-",
-      work.doctor?.displayName ?? "-",
-      work.workType.name,
-    ].join(" "));
-    return haystack.includes(normalizedSearch);
-  });
-
-  return partialMatch ? [partialMatch] : [];
-}
-
-function normalizeWorkbenchSearch(value: string | undefined): string {
-  return (value ?? "").trim().toLowerCase();
 }
 
 function ClaimList({
@@ -385,8 +322,12 @@ function ClaimList({
   onFinalize,
   onProbeReady,
   onOperations,
+  onPageChange,
   onRelease,
+  page,
+  pageCount,
   probeReadyWorkId,
+  total,
 }: {
   readonly compact?: boolean;
   readonly emptyDescription: string;
@@ -400,8 +341,12 @@ function ClaimList({
   readonly onFinalize?: (work: WorkSummary) => void;
   readonly onProbeReady?: (work: WorkSummary) => void;
   readonly onOperations?: (work: WorkSummary) => void;
+  readonly onPageChange: (page: number) => void;
   readonly onRelease?: (work: WorkSummary) => void;
+  readonly page: number;
+  readonly pageCount: number;
   readonly probeReadyWorkId?: string | null;
+  readonly total: number;
 }): ReactNode {
   if (isLoading) {
     return <LoadingState text="Se încarcă lucrările" />;
@@ -414,48 +359,57 @@ function ClaimList({
   }
 
   return (
-    <div className="technician-workbench__list">
-      {items.map((work) => (
-        <article className={compact ? "technician-workbench__item technician-workbench__item--compact" : "technician-workbench__item"} key={work.id}>
-          <div className="technician-workbench__item-main">
-            <div>
-              <strong>{work.code}</strong>
-              <p>{work.patientName} · {work.workType.name}</p>
+    <>
+      <div className="technician-workbench__list">
+        {items.map((work) => (
+          <article className={compact ? "technician-workbench__item technician-workbench__item--compact" : "technician-workbench__item"} key={work.id}>
+            <div className="technician-workbench__item-main">
+              <div>
+                <strong>{work.code}</strong>
+                <p>{work.patientName} · {work.workType.name}</p>
+              </div>
+              <PriorityBadge label={work.priority === "URGENT" ? "Urgent" : "Normal"} variant={work.priority === "URGENT" ? "urgent" : "normal"} />
             </div>
-            <PriorityBadge label={work.priority === "URGENT" ? "Urgent" : "Normal"} variant={work.priority === "URGENT" ? "urgent" : "normal"} />
-          </div>
-          <div className="technician-workbench__item-grid">
-            <span>Clinică: {work.clinic?.name ?? "-"}</span>
-            <span>Medic: {work.doctor?.displayName ?? "-"}</span>
-            <span>Termen: {formatDate(work.deadline.effectiveDueAt ?? work.requestedDeliveryDate)}</span>
-            <span>Responsabil: {work.claim.technician?.displayName ?? "Nerevendicată"}</span>
-            {!compact ? <span>Companie execuție: {work.claim.executionLegalEntity?.code ?? "Neselectată"}</span> : null}
-            {!compact ? <span>Context execuție: {work.executionSnapshot.summary.exists ? "Fixat" : "Nefixat"}</span> : null}
-            <span>
-              {work.probeTypeNames?.length
-                ? `Proba ${work.cycleNumber ?? 1}: ${work.probeTypeNames.join(" + ")}`
-                : `Proba ${work.cycleNumber ?? 1}`}
-            </span>
-          </div>
-          <div className="technician-workbench__actions">
-            {mode === "available" ? (
-              <>
-                <StatusBadge label="Disponibilă" variant="awaiting" />
-                <Button disabled={!work.claim.canCurrentUserClaim} onClick={() => onClaim?.(work)}>Preia</Button>
-              </>
-            ) : (
-              <>
-                <Button onClick={() => onDetails(work)} variant="outline">Detalii</Button>
-                <Button onClick={() => onOperations?.(work)} variant="outline">Manopere</Button>
-                <Button onClick={() => onRelease?.(work)} variant="outline">Eliberează</Button>
-                <Button disabled={work.status === "FINALIZATA" || work.technicalReadiness === "PROBE_READY" || work.technicalReadiness === "FINAL_READY"} isLoading={probeReadyWorkId === work.id} onClick={() => onProbeReady?.(work)}>Probă gata</Button>
-                <Button aria-label="Finalizata" disabled={work.status === "FINALIZATA" || work.technicalReadiness === "PROBE_READY" || work.technicalReadiness === "FINAL_READY"} isLoading={finalizeWorkId === work.id} onClick={() => onFinalize?.(work)}>Finalizată</Button>
-              </>
-            )}
-          </div>
-        </article>
-      ))}
-    </div>
+            <div className="technician-workbench__item-grid">
+              <span>Clinică: {work.clinic?.name ?? "-"}</span>
+              <span>Medic: {work.doctor?.displayName ?? "-"}</span>
+              <span>Termen: {formatDate(work.deadline.effectiveDueAt ?? work.requestedDeliveryDate)}</span>
+              <span>Responsabil: {work.claim.technician?.displayName ?? "Nerevendicată"}</span>
+              {!compact ? <span>Companie execuție: {work.claim.executionLegalEntity?.code ?? "Neselectată"}</span> : null}
+              {!compact ? <span>Context execuție: {work.executionSnapshot.summary.exists ? "Fixat" : "Nefixat"}</span> : null}
+              <span>
+                {work.probeTypeNames?.length
+                  ? `Proba ${work.cycleNumber ?? 1}: ${work.probeTypeNames.join(" + ")}`
+                  : `Proba ${work.cycleNumber ?? 1}`}
+              </span>
+            </div>
+            <div className="technician-workbench__actions">
+              {mode === "available" ? (
+                <>
+                  <StatusBadge label="Disponibilă" variant="awaiting" />
+                  <Button disabled={!work.claim.canCurrentUserClaim} onClick={() => onClaim?.(work)}>Preia</Button>
+                </>
+              ) : (
+                <>
+                  <Button onClick={() => onDetails(work)} variant="outline">Detalii</Button>
+                  <Button onClick={() => onOperations?.(work)} variant="outline">Manopere</Button>
+                  <Button onClick={() => onRelease?.(work)} variant="outline">Eliberează</Button>
+                  <Button disabled={work.status === "FINALIZATA" || work.technicalReadiness === "PROBE_READY" || work.technicalReadiness === "FINAL_READY"} isLoading={probeReadyWorkId === work.id} onClick={() => onProbeReady?.(work)}>Probă gata</Button>
+                  <Button aria-label="Finalizata" disabled={work.status === "FINALIZATA" || work.technicalReadiness === "PROBE_READY" || work.technicalReadiness === "FINAL_READY"} isLoading={finalizeWorkId === work.id} onClick={() => onFinalize?.(work)}>Finalizată</Button>
+                </>
+              )}
+            </div>
+          </article>
+        ))}
+      </div>
+      {pageCount > 1 ? (
+        <nav aria-label="Paginare lucrări atelier" className="technician-workbench__pagination">
+          <Button disabled={page <= 1} onClick={() => onPageChange(page - 1)} size="small" variant="outline">Anterior</Button>
+          <span>Pagina {page} din {pageCount} · {total} lucrări</span>
+          <Button disabled={page >= pageCount} onClick={() => onPageChange(page + 1)} size="small" variant="outline">Următor</Button>
+        </nav>
+      ) : null}
+    </>
   );
 }
 
@@ -489,6 +443,18 @@ function OperationsModal({
     scope: item.scope,
     teeth: item.teeth.map((tooth) => tooth.fdiTooth),
   }))), [detailQuery.data?.items]);
+  const componentSummary = useMemo(() => (detailQuery.data?.items ?? [])
+    .filter((item) => item.archivedAt === null)
+    .map((item) => {
+      const label = item.workType ? `${item.workType.symbol} · ${item.workType.name}` : "Lucrare fără tip configurat";
+      const teeth = item.teeth.map((tooth) => tooth.fdiTooth);
+      const scope = item.scope === "BOTH_ARCHES" ? "ambele arcade"
+        : item.scope === "UPPER_ARCH" ? "arcada superioară"
+          : item.scope === "LOWER_ARCH" ? "arcada inferioară"
+            : item.scope === "CASE" ? "lucrare fără dinți"
+              : teeth.length === 1 ? `dintele ${teeth[0]}` : `dinții ${teeth.join(", ")}`;
+      return { id: item.id, label, scope };
+    }), [detailQuery.data?.items]);
   const isCaseLevel = allowedTeeth.length === 0 && (detailQuery.data?.items ?? []).some((item) => item.scope === "CASE");
   const activeProbeCycleId = detailQuery.data?.activeProbeCycle?.id ?? null;
   const currentCyclePerformed = useMemo(() => (performedQuery.data ?? []).filter((performed) => performed.removedAt === null && (activeProbeCycleId === null || performed.probeCycleId === activeProbeCycleId)), [activeProbeCycleId, performedQuery.data]);
@@ -512,7 +478,9 @@ function OperationsModal({
     const legend: { readonly color: string; readonly label: string; readonly code: string }[] = [];
     const toothColors = new Map<number, string[]>();
     for (const item of detailQuery.data?.items ?? []) {
-      if (item.scope === "CASE" || !item.workType) continue;
+      // Whole-arch appliances (such as an x2 whitening tray) must not paint
+      // every tooth and obscure a tooth-specific restoration in the same work.
+      if (item.scope === "CASE" || item.scope === "UPPER_ARCH" || item.scope === "LOWER_ARCH" || item.scope === "BOTH_ARCHES" || !item.workType) continue;
       const key = item.workType.id;
       let color = colorByWorkType.get(key);
       if (!color) {
@@ -616,6 +584,10 @@ function OperationsModal({
         <div className="technician-workbench__operations-editor">
           {allowedTeeth.length > 0 ? <>
             <h3>Selectează dinții</h3>
+            {componentSummary.length > 1 ? <section className="technician-workbench__component-summary" aria-label="Componentele lucrării">
+              <h4>Componentele lucrării</h4>
+              <ul>{componentSummary.map((component) => <li key={component.id}><strong>{component.label}</strong><span>{component.scope}</span></li>)}</ul>
+            </section> : null}
             <div aria-live="polite" className="technician-workbench__selected-teeth-preview">
               <strong>Dinți selectați:</strong>
               <span>{selectedTeeth.length > 0 ? selectedTeeth.join(", ") : "niciun dinte"}</span>

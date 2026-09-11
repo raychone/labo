@@ -37,8 +37,10 @@ function getCameraErrorMessage(error: unknown): string {
 }
 
 export function CameraScanner({
+  compact = false,
   onDetected,
 }: {
+  readonly compact?: boolean;
   readonly onDetected: (payload: string) => void;
 }): ReactNode {
   const [error, setError] = useState<string | null>(null);
@@ -130,10 +132,10 @@ export function CameraScanner({
   return (
     <div className="work-scan-page__camera">
       <div className="work-scan-page__camera-toolbar">
-        <Button disabled={state === "scanning"} onClick={() => void startCamera()}>
+        <Button disabled={state === "scanning"} onClick={() => void startCamera()} size={compact ? "small" : "medium"}>
           Pornește camera
         </Button>
-        <Button disabled={state !== "scanning"} onClick={stopCamera} variant="outline">
+        <Button disabled={state !== "scanning"} onClick={stopCamera} size={compact ? "small" : "medium"} variant="outline">
           Oprește camera
         </Button>
       </div>

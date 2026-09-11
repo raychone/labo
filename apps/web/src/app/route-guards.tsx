@@ -102,7 +102,7 @@ function hasRouteTargetAccess(target: string, permissionKeys: readonly string[])
     return false;
   }
 
-  if (target === "/" || target === "/dashboard") {
+  if (target === "/" || target === "/dashboard" || target === "/status") {
     return true;
   }
 

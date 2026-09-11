@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { WorkScanPage } from "./work-scan-page.js";
+import { WorkScanModal, WorkScanPage } from "./work-scan-page.js";
 
 function renderWithProviders(component: ReactNode): void {
   const queryClient = new QueryClient({
@@ -102,7 +102,7 @@ describe("WorkScanPage", () => {
       if (url.endsWith("/clinics/options")) {
         return Promise.resolve(createJsonResponse([{ code: "NC", id: "clinic_1", name: "Clinica Test" }]));
       }
-      if (url.startsWith("/works?")) {
+      if (url.includes("/works?")) {
         return Promise.resolve(createJsonResponse({
           items: [{
             clinic: { code: "NC", id: "clinic_1", name: "Clinica Test" },
@@ -132,11 +132,11 @@ describe("WorkScanPage", () => {
 
     renderWithProviders(<WorkScanPage />);
 
-    fireEvent.change(await screen.findByLabelText("Cod scanat sau cod lucrare"), { target: { value: "WO-26-0001" } });
-    fireEvent.click(screen.getByRole("button", { name: "Caută lucrarea" }));
+    fireEvent.change(await screen.findByLabelText("Caută lucrare"), { target: { value: "WO-26-0001" } });
 
-    expect(await screen.findByText("Lucrare găsită")).toBeDefined();
     expect(await screen.findByText("WO-26-0001")).toBeDefined();
+    fireEvent.click(await screen.findByRole("button", { name: "Selectează lucrarea" }));
+    expect(await screen.findByText("Lucrare găsită")).toBeDefined();
     expect(await screen.findByText("Flux standard")).toBeDefined();
     expect(await screen.findByText("Tehnician Demo")).toBeDefined();
     expect(await screen.findByText("Necompletată")).toBeDefined();
@@ -144,7 +144,7 @@ describe("WorkScanPage", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/scan/resolve"), expect.anything()));
   });
 
-  it("filters manual lookup by clinic, doctor and patient name", async () => {
+  it("finds manual lookup results by patient name", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith("/auth/permissions")) {
@@ -155,12 +155,8 @@ describe("WorkScanPage", () => {
           ],
         }));
       }
-      if (url.endsWith("/clinics/options")) {
-        return Promise.resolve(createJsonResponse([{ code: "NC", id: "clinic_1", name: "Clinica Test" }]));
-      }
       if (url.includes("/works?")) {
-        expect(url).toContain("clinicId=clinic_1");
-        expect(url).toContain("search=Dr.+Ana+Popescu+Ion+Pop");
+        expect(url).toContain("search=Ion+Pop");
         return Promise.resolve(createJsonResponse({
           items: [{
             clinic: { code: "NC", id: "clinic_1", name: "Clinica Test" },
@@ -185,16 +181,11 @@ describe("WorkScanPage", () => {
 
     renderWithProviders(<WorkScanPage />);
 
-    const clinicSelect = await screen.findByLabelText("Clinică");
-    fireEvent.focus(clinicSelect);
-    fireEvent.change(clinicSelect, { target: { value: "" } });
-    fireEvent.click(await screen.findByRole("option", { name: "NC · Clinica Test" }));
-    fireEvent.change(await screen.findByLabelText("Medic"), { target: { value: "Dr. Ana Popescu" } });
-    fireEvent.change(await screen.findByLabelText("Nume pacient"), { target: { value: "Ion Pop" } });
+    fireEvent.change(await screen.findByLabelText("Caută lucrare"), { target: { value: "Ion Pop" } });
 
     expect(await screen.findByText("Rezultate căutare")).toBeDefined();
     expect(await screen.findByText("WO-2026-000001")).toBeDefined();
-    expect(await screen.findByRole("link", { name: "Deschide lucrarea" })).toBeDefined();
+    expect(await screen.findByRole("button", { name: "Selectează lucrarea" })).toBeDefined();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/works?"), expect.anything()));
   });
 
@@ -204,5 +195,25 @@ describe("WorkScanPage", () => {
     renderWithProviders(<WorkScanPage />);
 
     expect(await screen.findByText("Acces refuzat")).toBeDefined();
+  });
+
+  it("renders the same scanner workspace inside the status modal", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/auth/permissions")) {
+        return Promise.resolve(createJsonResponse({ permissions: [{ key: "scan.use", scopes: ["ALL"] }] }));
+      }
+      if (url.endsWith("/clinics/options")) {
+        return Promise.resolve(createJsonResponse([]));
+      }
+      return Promise.resolve(createJsonResponse({}, 404));
+    }));
+
+    renderWithProviders(<WorkScanModal isOpen onOpenChange={() => undefined} />);
+
+    expect(await screen.findByRole("dialog", { name: "Scanează lucrarea" })).toBeDefined();
+    expect(await screen.findByLabelText("Caută lucrare")).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Caută lucrarea" })).toBeNull();
+    expect(screen.queryByRole("heading", { level: 1, name: "Scanează lucrare" })).toBeNull();
   });
 });

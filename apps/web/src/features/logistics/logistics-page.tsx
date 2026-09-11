@@ -667,6 +667,7 @@ export function PickupRequestModal({
   const createPickup = useCreatePickupRequest();
   const updatePickup = useUpdatePickupRequest();
   const selectedClinicId = form.watch("clinicId");
+  const windowStartTime = form.watch("windowStartTime");
   const clinicOptionsQuery = useQuery({ enabled: isOpen, queryFn: fetchClinicOptions, queryKey: ["clinics", "options"], retry: false });
   const doctorOptionsQuery = useQuery({
     enabled: isOpen,
@@ -683,6 +684,15 @@ export function PickupRequestModal({
   const isSaving = createPickup.isPending || updatePickup.isPending;
   const closeGuard = useCloseGuard(form.formState.isDirty, isSaving, onOpenChange);
   const title = editingPickup ? "Editează ridicare" : "Ridicare nouă";
+  const pickupAddressOptions = useMemo(() => toPickupAddressOptions(selectedClinicQuery.data), [selectedClinicQuery.data]);
+  const pickupPhoneOptions = useMemo(() => toPickupPhoneOptions(selectedClinicQuery.data), [selectedClinicQuery.data]);
+  const windowStartRegistration = form.register("windowStartTime", {
+    onChange: (event) => {
+      const start = event.target.value as string;
+      const end = form.getValues("windowEndTime");
+      if (end !== "" && end <= start) form.setValue("windowEndTime", "", { shouldDirty: true, shouldValidate: true });
+    },
+  });
 
   useEffect(() => {
     if (!isOpen) {
@@ -784,6 +794,8 @@ export function PickupRequestModal({
             onChange={(value) => {
               form.setValue("clinicId", value, { shouldDirty: true, shouldValidate: true });
               form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true });
+              form.setValue("address", "", { shouldDirty: true, shouldValidate: true });
+              form.setValue("phone", "", { shouldDirty: true, shouldValidate: true });
             }}
             options={(clinicOptionsQuery.data ?? []).map((clinic) => ({ label: clinic.name, value: clinic.id }))}
             required
@@ -799,12 +811,32 @@ export function PickupRequestModal({
             options={(doctorOptionsQuery.data ?? []).map((doctor) => ({ label: doctor.displayName, value: doctor.id }))}
             value={form.watch("doctorId")}
           />
-          <TextInput className="logistics-page__pickup-contact" error={form.formState.errors.address?.message} label="Adresă ridicare" {...form.register("address")} />
-          <TextInput className="logistics-page__pickup-contact" error={form.formState.errors.phone?.message} label="Telefon ridicare" type="tel" {...form.register("phone")} />
+          <SearchableChoiceField
+            allowCustomValue
+            disabled={!selectedClinicId || selectedClinicQuery.isLoading}
+            emptyMessage="Nu există altă adresă în datele clinicii."
+            error={form.formState.errors.address?.message}
+            hint={selectedClinicId ? "Alege una dintre adresele clinicii." : "Selectează mai întâi clinica."}
+            label="Adresă ridicare"
+            onChange={(value) => form.setValue("address", value, { shouldDirty: true, shouldValidate: true })}
+            options={pickupAddressOptions}
+            value={form.watch("address")}
+          />
+          <SearchableChoiceField
+            allowCustomValue
+            disabled={!selectedClinicId || selectedClinicQuery.isLoading}
+            emptyMessage="Nu există alt număr în datele clinicii."
+            error={form.formState.errors.phone?.message}
+            hint={selectedClinicId ? "Alege unul dintre numerele clinicii." : "Selectează mai întâi clinica."}
+            label="Telefon ridicare"
+            onChange={(value) => form.setValue("phone", value, { shouldDirty: true, shouldValidate: true })}
+            options={pickupPhoneOptions}
+            value={form.watch("phone")}
+          />
           <DateInput className="logistics-page__pickup-date-picker" error={form.formState.errors.scheduledDate?.message} label="Data programării" required {...form.register("scheduledDate")} />
           <div className="logistics-page__pickup-range" aria-label="Interval orar ridicare">
-            <TextInput className="logistics-page__pickup-time-picker" error={form.formState.errors.windowStartTime?.message} label="De la" required type="time" {...form.register("windowStartTime")} />
-            <TextInput className="logistics-page__pickup-time-picker" error={form.formState.errors.windowEndTime?.message} label="Până la" required type="time" {...form.register("windowEndTime")} />
+            <TextInput className="logistics-page__pickup-time-picker" error={form.formState.errors.windowStartTime?.message} label="De la" max="23:59" required step="60" type="time" {...windowStartRegistration} />
+            <TextInput className="logistics-page__pickup-time-picker" error={form.formState.errors.windowEndTime?.message} label="Până la" max="23:59" min={windowStartTime || undefined} required step="60" type="time" {...form.register("windowEndTime")} />
           </div>
           <Textarea error={form.formState.errors.notes?.message} label="Note" rows={3} {...form.register("notes")} />
         </form>
@@ -816,7 +848,23 @@ export function PickupRequestModal({
 
 type SearchableChoice = { readonly label: string; readonly secondary?: string; readonly value: string };
 
+function toPickupAddressOptions(clinic: Awaited<ReturnType<typeof fetchClinic>> | undefined): readonly SearchableChoice[] {
+  if (!clinic) return [];
+  const values = [
+    [clinic.addressLine1, clinic.addressLine2, clinic.postalCode, clinic.city].filter(Boolean).join(", "),
+    [clinic.billingAddressLine1, clinic.billingAddressLine2, clinic.billingPostalCode, clinic.billingCity].filter(Boolean).join(", "),
+  ].filter(Boolean);
+  return [...new Set(values)].map((value, index) => ({ label: value, secondary: index === 0 ? "Adresă principală" : "Adresă facturare", value }));
+}
+
+function toPickupPhoneOptions(clinic: Awaited<ReturnType<typeof fetchClinic>> | undefined): readonly SearchableChoice[] {
+  if (!clinic) return [];
+  const values = [clinic.phone, clinic.contactPersonPhone].filter((value): value is string => Boolean(value));
+  return [...new Set(values)].map((value, index) => ({ label: value, secondary: index === 0 ? "Telefon clinică" : "Telefon contact", value }));
+}
+
 function SearchableChoiceField({
+  allowCustomValue = false,
   disabled = false,
   emptyMessage,
   error,
@@ -827,6 +875,7 @@ function SearchableChoiceField({
   required,
   value,
 }: {
+  readonly allowCustomValue?: boolean;
   readonly disabled?: boolean;
   readonly emptyMessage?: string;
   readonly error: string | undefined;
@@ -862,11 +911,16 @@ function SearchableChoiceField({
           disabled={disabled}
           id={id}
           onBlur={() => window.setTimeout(() => setOpen(false), 120)}
-          onChange={(event) => { setSearch(event.target.value); onChange(""); setOpen(true); }}
-          onFocus={() => { setSearch(selected?.label ?? ""); setOpen(true); }}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            setSearch(nextValue);
+            onChange(allowCustomValue ? nextValue : "");
+            setOpen(true);
+          }}
+          onFocus={() => { setSearch(selected?.label ?? value); setOpen(true); }}
           placeholder={disabled ? "Indisponibil" : `Caută ${label.toLocaleLowerCase()}`}
           role="combobox"
-          value={search || selected?.label || ""}
+          value={search || selected?.label || value}
         />
         {open ? (
           <div aria-label={`Opțiuni ${label.toLocaleLowerCase()}`} className="logistics-page__choice-menu" role="listbox">
@@ -982,7 +1036,6 @@ function LogisticsCreateWorkModal({ isOpen, onOpenChange }: { readonly isOpen: b
           isDeadlinePreviewLoading={deadlinePreviewQuery.isFetching}
           isDisabled={createMutation.isPending}
           onClinicChange={() => form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true })}
-          onCreatePatient={() => toast.showToast({ message: "Creează pacientul în registru, apoi revino la lucrare.", title: "Registru pacienți", variant: "info" })}
           onSubmit={(values) => {
             form.clearErrors("root");
             createMutation.mutate({ attachments, input: toWorkMutationInput(values, activeTemplateQuery.data) }, {

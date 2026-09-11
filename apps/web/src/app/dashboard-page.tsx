@@ -437,7 +437,6 @@ function ReceptionDashboard({
   const [probeDate, setProbeDate] = useState("");
   const [probeTime, setProbeTime] = useState("");
   const [isReturnModalOpen, setReturnModalOpen] = useState(false);
-  const [isProbeFormOpen, setProbeFormOpen] = useState(false);
   useEffect(() => {
     if (searchParams.get("probe") !== "1" || !canCreateNextCycle) return;
     setReturnModalOpen(true);
@@ -460,19 +459,20 @@ function ReceptionDashboard({
     tab: "RETURNED",
   }, isReturnModalOpen && canCreateNextCycle);
   const availableProbeQuery = useOperationalStatus({
+    includeProbeReturnCandidates: true,
     page: 1,
     pageSize: 100,
     search: null,
     sortBy: "updatedAt",
     sortDirection: "desc",
-    tab: "COMPLETED",
+    tab: "ALL",
   }, isReturnModalOpen && canCreateNextCycle);
   const clinicsQuery = useQuery({ enabled: isReturnModalOpen && canCreateNextCycle, queryFn: fetchClinicOptions, queryKey: ["clinics", "options", "reception-probe"], retry: false });
   const doctorsQuery = useQuery({ enabled: isReturnModalOpen && canCreateNextCycle && Boolean(selectedClinicId), queryFn: () => fetchDoctorOptions(selectedClinicId), queryKey: ["doctors", "options", "reception-probe", selectedClinicId], retry: false });
   const patientsQuery = usePatientOptions(patientSearch, isReturnModalOpen && canCreateNextCycle && Boolean(selectedClinicId), selectedClinicId || undefined, selectedDoctorId || undefined);
   const returnMutation = useReceiveProbe();
-  const selectedReturnedWorkDetailQuery = useWork(selectedReturnedWorkId, (isReturnModalOpen || isProbeFormOpen) && selectedReturnedWorkId !== null);
-  const probeTypesQuery = useProbeTypes((isReturnModalOpen || isProbeFormOpen) && canCreateNextCycle);
+  const selectedReturnedWorkDetailQuery = useWork(selectedReturnedWorkId, isReturnModalOpen && selectedReturnedWorkId !== null);
+  const probeTypesQuery = useProbeTypes(isReturnModalOpen && canCreateNextCycle);
   const returnedProbeRows = returnQuery.data?.items ?? [];
   const availableProbeRows = (availableProbeQuery.data?.items ?? []).filter((row) => row.technicalReadiness === "PROBE_READY");
   const visibleAvailableProbeRows = availableProbeRows.filter((row) =>
@@ -484,6 +484,7 @@ function ReceptionDashboard({
   // available here as well; the returned-only query intentionally excludes it
   // until reception registers the next cycle.
   const selectedReturnedWork = [...availableProbeRows, ...returnedProbeRows].find((row) => row.id === selectedReturnedWorkId) ?? null;
+  const selectedPatient = (patientsQuery.data ?? []).find((patient) => patient.id === selectedPatientId) ?? null;
   const selectedReturnedWorkDetail = selectedReturnedWorkDetailQuery.data;
   const configuredProbeCodes = selectedReturnedWorkDetail?.items?.flatMap((item) => item.workType?.probeTypeCodes ?? []) ?? [];
   const allProbeTypes = probeTypesQuery.data ?? [];
@@ -510,6 +511,18 @@ function ReceptionDashboard({
       return selectableProbeTypes[0]?.id ? [selectableProbeTypes[0].id] : [];
     });
   }, [selectableProbeTypeIdsKey, selectedReturnedWorkId]);
+
+  function closeReturnModal(): void {
+    setReturnModalOpen(false);
+    setSelectedClinicId("");
+    setSelectedDoctorId("");
+    setPatientSearch("");
+    setSelectedPatientId("");
+    setSelectedReturnedWorkId(null);
+    setProbeTypeIds([]);
+    setProbeDate("");
+    setProbeTime("");
+  }
   return (
     <div className="dashboard-page__workspace" aria-labelledby="reception-dashboard-title">
       <div className="dashboard-page__workspace-header">
@@ -539,164 +552,54 @@ function ReceptionDashboard({
         {returnedRows.slice(0, shortListSize).map((row) => <OperationalPreviewCard key={row.id} actionLabel="Deschide lucrarea" row={row} />)}
       </DashboardSection>
       <Modal
-        description="Selectează clinica, medicul și pacientul pentru a identifica automat lucrarea revenită."
+        description="Selectează informațiile, identifică proba revenită și înregistrează termenul."
+        footer={<div className="dashboard-page__return-actions"><Button disabled={returnMutation.isPending} onClick={closeReturnModal} type="button" variant="secondary">Anulează</Button><Button disabled={!selectedReturnedWork || probeTypeIds.length === 0 || !probeDate} isLoading={returnMutation.isPending} onClick={() => {
+          if (probeTypeIds.length === 0 || !probeDate || !selectedReturnedWork) return;
+          const deadlineAt = new Date(`${probeDate}T${probeTime || "23:59"}:00`).toISOString();
+          returnMutation.mutate({ input: { deadlineAt, probeTypeIds }, workOrderId: selectedReturnedWork.id }, {
+            onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Proba nu a fost înregistrată", variant: "error" }),
+            onSuccess: closeReturnModal,
+          });
+        }} type="button">Înregistrează proba</Button></div>}
         isOpen={isReturnModalOpen}
-        onOpenChange={(isOpen) => {
-          setReturnModalOpen(isOpen);
-          if (!isOpen) {
-            setSelectedReturnedWorkId(null);
-            setSelectedClinicId("");
-            setSelectedDoctorId("");
-            setPatientSearch("");
-            setSelectedPatientId("");
-          }
-        }}
-        title="Înregistrează revenirea"
+        onOpenChange={(isOpen) => { if (!isOpen) closeReturnModal(); }}
+        size="xl"
+        title="Înregistrează proba revenită"
       >
-        <div className="dashboard-page__return-modal">
-          <div className="dashboard-page__return-fields">
-            <label>
-              Clinică *
-              <select className="dl-control" value={selectedClinicId} onChange={(event) => { setSelectedClinicId(event.target.value); setSelectedDoctorId(""); setSelectedPatientId(""); setSelectedReturnedWorkId(null); setPatientSearch(""); }}>
-                <option value="">Selectează clinica</option>
-                {(clinicsQuery.data ?? []).map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}
-              </select>
-            </label>
-            <label>
-              Medic
-              <select className="dl-control" disabled={!selectedClinicId} value={selectedDoctorId} onChange={(event) => { setSelectedDoctorId(event.target.value); setSelectedPatientId(""); setSelectedReturnedWorkId(null); setPatientSearch(""); }}>
-                <option value="">Toți medicii</option>
-                {(doctorsQuery.data ?? []).map((doctor) => <option key={doctor.id} value={doctor.id}>{doctor.displayName}</option>)}
-              </select>
-            </label>
-          </div>
-          {selectedClinicId ? <TextInput label="Caută pacient" placeholder="Nume și prenume" value={patientSearch} onChange={(event) => setPatientSearch(event.target.value)} /> : null}
-          {!selectedClinicId ? <p className="dashboard-page__empty-note">Selectează mai întâi clinica pentru a vedea pacienții asociați.</p> : null}
-          {patientsQuery.isLoading ? <LoadingState text="Se încarcă pacienții" /> : null}
-          <div className="dashboard-page__return-list dashboard-page__patient-list">
-            {(patientsQuery.data ?? []).map((patient) => (
-              <button
-                aria-pressed={selectedPatientId === patient.id}
-                className="dashboard-page__return-item"
-                key={patient.id}
-                onClick={() => {
-                  const matches = availableProbeRows.filter((row) => row.patient.id === patient.id && (!selectedClinicId || row.clinic?.id === selectedClinicId) && (!selectedDoctorId || row.doctor?.id === selectedDoctorId));
-                  setSelectedPatientId(patient.id);
-                  setSelectedReturnedWorkId(matches.length === 1 ? matches[0]!.id : null);
-                }}
-                type="button"
-              >
-                <strong className="dashboard-page__return-patient">{patient.fullName}</strong>
-              </button>
-            ))}
-          </div>
-          {selectedClinicId ? (
+        <div className="dashboard-page__unified-return-modal">
+          <p className="dashboard-page__return-progress" aria-label="Etape: identifică lucrarea, apoi înregistrează revenirea"><span>1. Identifică lucrarea</span><span>2. Înregistrează revenirea</span></p>
+          <section className="dashboard-page__return-panel" aria-labelledby="return-identify-title">
+            <h3 id="return-identify-title">1. Identifică lucrarea</h3>
+            <div className="dashboard-page__return-fields">
+              <label>Clinică *<select className="dl-control" value={selectedClinicId} onChange={(event) => { setSelectedClinicId(event.target.value); setSelectedDoctorId(""); setSelectedPatientId(""); setSelectedReturnedWorkId(null); setPatientSearch(""); }}><option value="">Selectează clinica</option>{(clinicsQuery.data ?? []).map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}</select></label>
+              <label>Medic<select className="dl-control" disabled={!selectedClinicId} value={selectedDoctorId} onChange={(event) => { setSelectedDoctorId(event.target.value); setSelectedPatientId(""); setSelectedReturnedWorkId(null); setPatientSearch(""); }}><option value="">Toți medicii</option>{(doctorsQuery.data ?? []).map((doctor) => <option key={doctor.id} value={doctor.id}>{doctor.displayName}</option>)}</select></label>
+            </div>
+            {selectedClinicId ? <TextInput label="Caută pacient" placeholder="Nume și prenume" value={patientSearch} onChange={(event) => setPatientSearch(event.target.value)} /> : <p className="dashboard-page__empty-note">Selectează mai întâi clinica pentru a vedea pacienții asociați.</p>}
+            {patientsQuery.isLoading ? <LoadingState text="Se încarcă pacienții" /> : null}
+            <div className="dashboard-page__return-list dashboard-page__patient-list">
+              {(patientsQuery.data ?? []).map((patient) => <button aria-pressed={selectedPatientId === patient.id} className={`dashboard-page__return-item${selectedPatientId === patient.id ? " dashboard-page__return-item--selected" : ""}`} key={patient.id} onClick={() => { const matches = visibleAvailableProbeRows.filter((row) => row.patient.id === patient.id); setSelectedPatientId(patient.id); setSelectedReturnedWorkId(matches.length === 1 ? matches[0]!.id : null); }} type="button"><strong className="dashboard-page__return-patient">{patient.fullName}</strong></button>)}
+            </div>
+            {selectedPatient ? <div className="dashboard-page__selected-patient"><strong>{selectedPatient.fullName}</strong>{selectedReturnedWork ? <span>{selectedReturnedWork.workCode}</span> : null}</div> : null}
             <div className="dashboard-page__return-matches">
-              <strong>Probe disponibile de la curier</strong>
+              <h4>Lucrări disponibile cu probe la curier</h4>
               <p className="dashboard-page__empty-note">Selectează proba revenită pentru a introduce etapa și termenul următor.</p>
               <div className="dashboard-page__return-list">
-                {visibleAvailableProbeRows.map((row) => (
-                  <button className="dashboard-page__return-item" key={row.id} onClick={() => { setSelectedReturnedWorkId(row.id); setReturnModalOpen(false); setProbeFormOpen(true); }} type="button">
-                    <strong>{row.patient.name} · {row.workCode}</strong>
-                    <span>{probeLabel(row)} · {workCompositionLabel(row)}</span>
-                    <span>{row.components.flatMap((component) => component.teeth).length > 0 ? `Dinți: ${row.components.flatMap((component) => component.teeth).join(", ")}` : "Fără dinți"}</span>
-                  </button>
-                ))}
+                {visibleAvailableProbeRows.map((row) => <button aria-pressed={selectedReturnedWorkId === row.id} className={`dashboard-page__return-item${selectedReturnedWorkId === row.id ? " dashboard-page__return-item--selected" : ""}`} key={row.id} onClick={() => setSelectedReturnedWorkId(row.id)} type="button"><strong>{probeLabel(row)} · {workCompositionLabel(row)}</strong><span>{row.components.flatMap((component) => component.teeth).length > 0 ? `Dinți: ${row.components.flatMap((component) => component.teeth).join(", ")}` : "Fără dinți"}</span>{row.shade ? <span>Culoare: {row.shade}</span> : null}<span>Cod lucrare: {row.workCode}</span><span>Pacient: {row.patient.name}</span></button>)}
                 {!availableProbeQuery.isLoading && visibleAvailableProbeRows.length === 0 ? <p className="dashboard-page__empty-note">Nu există probe disponibile pentru selecția curentă.</p> : null}
               </div>
             </div>
-          ) : null}
+          </section>
+          <section className="dashboard-page__return-panel" aria-labelledby="return-register-title">
+            <h3 id="return-register-title">2. Înregistrează revenirea</h3>
+            {selectedReturnedWork ? <><div className="dashboard-page__selected-probe"><span>Proba selectată</span><strong>{workCompositionLabel(selectedReturnedWork)}</strong><dl><div><dt>Dinți</dt><dd>{selectedReturnedWork.components.flatMap((component) => component.teeth).join(", ") || "—"}</dd></div><div><dt>Culoare</dt><dd>{selectedReturnedWork.shade ?? "—"}</dd></div><div><dt>Cod lucrare</dt><dd>{selectedReturnedWork.workCode}</dd></div><div><dt>Pacient</dt><dd>{selectedReturnedWork.patient.name}</dd></div></dl></div><div className="dashboard-page__probe-history"><strong>Probe efectuate anterior</strong>{completedProbeHistory.length > 0 ? completedProbeHistory.map((cycle) => <div key={cycle.id}><span>{cycle.sequence === 0 ? "Proba inițială" : `Proba ${cycle.sequence}`}</span><strong>{cycle.probeTypeNameSnapshot}</strong></div>) : <span>Nu există probe efectuate anterior.</span>}</div></> : <p className="dashboard-page__return-placeholder">Selectează o lucrare din lista alăturată pentru a completa revenirea.</p>}
+            {selectedReturnedWorkDetailQuery.isLoading ? <LoadingState text="Se încarcă tipurile compatibile" /> : null}
+            {probeTypesQuery.isError ? <ErrorState title="Tipurile de probă nu au putut fi încărcate" description="Verifică accesul la catalogul tehnic și reîncarcă pagina." /> : null}
+            {selectedReturnedWork && selectableProbeTypes.length > 0 ? <fieldset className="dashboard-page__probe-types"><legend>Tipuri probă</legend><div className="dashboard-page__probe-type-cards">{selectableProbeTypes.map((type) => { const isSelected = probeTypeIds.includes(type.id); return <button aria-pressed={isSelected} className={`dashboard-page__probe-type-card${isSelected ? " dashboard-page__probe-type-card--selected" : ""}`} key={type.id} onClick={() => setProbeTypeIds((current) => current.includes(type.id) ? current.filter((id) => id !== type.id) : [...current, type.id])} type="button"><span className="dashboard-page__probe-type-name">{type.name}</span></button>; })}</div></fieldset> : null}
+            {selectedReturnedWork && !probeTypesQuery.isLoading && !probeTypesQuery.isError && selectableProbeTypes.length === 0 ? <p className="dashboard-page__empty-note">Nu există tipuri de probă active în catalogul tehnic.</p> : null}
+            <div className="dashboard-page__probe-schedule"><label>Data termenului probei *<input className="dl-control dashboard-page__probe-date" disabled={!selectedReturnedWork} onChange={(event) => setProbeDate(event.target.value)} type="date" value={probeDate} required /></label><label>Ora termenului<input className="dl-control dashboard-page__probe-time" disabled={!selectedReturnedWork} onChange={(event) => setProbeTime(event.target.value)} type="time" value={probeTime} /></label></div>
+          </section>
           {returnQuery.isLoading || availableProbeQuery.isLoading ? <LoadingState text="Se verifică lucrările revenite" /> : null}
-          {returnQuery.isError ? <ErrorState title="Lista nu a putut fi încărcată" description="Nu am putut încărca lucrările finalizate." /> : null}
-        </div>
-      </Modal>
-      <Modal
-        footer={selectedReturnedWork ? (
-          <Button
-            disabled={probeTypeIds.length === 0 || !probeDate}
-            isLoading={returnMutation.isPending}
-            onClick={() => {
-              if (probeTypeIds.length === 0 || !probeDate || !selectedReturnedWork) return;
-              const deadlineAt = new Date(`${probeDate}T${probeTime || "23:59"}:00`).toISOString();
-              returnMutation.mutate({ input: { deadlineAt, probeTypeIds }, workOrderId: selectedReturnedWork.id }, {
-                onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Proba nu a fost înregistrată", variant: "error" }),
-                onSuccess: () => {
-                  setProbeFormOpen(false);
-                  setSelectedReturnedWorkId(null);
-                },
-              });
-            }}
-          >
-            Înregistrează proba
-          </Button>
-        ) : null}
-        isOpen={isProbeFormOpen}
-        onOpenChange={(isOpen) => {
-          setProbeFormOpen(isOpen);
-          if (!isOpen) setSelectedReturnedWorkId(null);
-        }}
-        title="Înregistrează revenirea"
-      >
-        <div className="dashboard-page__probe-form">
-          <div className="dashboard-page__probe-heading">
-            <strong>{probeLabel(selectedReturnedWork)} · {selectedReturnedWork?.workCode ?? "Lucrare selectată"}</strong>
-            <span>{selectedReturnedWork?.patient.name ?? "Pacient selectat"}</span>
-          </div>
-          {selectedReturnedWork ? (
-            <div className="dashboard-page__probe-summary">
-              {selectedReturnedWork.components.map((component) => (
-                <div key={`${component.symbol}-${component.name}`}>
-                  <span aria-hidden="true" className="dashboard-page__probe-color" style={{ backgroundColor: component.colorHex ?? "#0f766e" }} />
-                  <strong>{component.name}</strong>
-                  <span>{component.teeth.length > 0 ? `Dinți: ${component.teeth.join(", ")}` : "Lucrare pe arcadă / caz"}</span>
-                </div>
-              ))}
-            </div>
-          ) : null}
-          {selectedReturnedWork ? (
-            <div className="dashboard-page__probe-history">
-              <strong>Probe efectuate anterior</strong>
-              {completedProbeHistory.length > 0 ? completedProbeHistory.map((cycle) => (
-                <div key={cycle.id}>
-                  <span>{cycle.sequence === 0 ? "Proba inițială" : `Proba ${cycle.sequence}`}</span>
-                  <strong>{cycle.probeTypeNameSnapshot}</strong>
-                </div>
-              )) : <span>Nu există probe efectuate anterior.</span>}
-            </div>
-          ) : null}
-          {selectedReturnedWorkDetailQuery.isLoading ? <LoadingState text="Se încarcă tipurile compatibile" /> : null}
-          {probeTypesQuery.isError ? <ErrorState title="Tipurile de probă nu au putut fi încărcate" description="Verifică accesul la catalogul tehnic și reîncarcă pagina." /> : null}
-          {!probeTypesQuery.isLoading && !probeTypesQuery.isError && selectableProbeTypes.length === 0 ? <p className="dashboard-page__empty-note">Nu există tipuri de probă active în catalogul tehnic.</p> : null}
-          {selectableProbeTypes.length > 0 ? (
-            <fieldset className="dashboard-page__probe-types">
-              <legend>Tipuri probă</legend>
-              <div className="dashboard-page__probe-type-cards">
-                {selectableProbeTypes.map((type) => {
-                  const isSelected = probeTypeIds.includes(type.id);
-                  return (
-                    <label className={`dashboard-page__probe-type-card${isSelected ? " dashboard-page__probe-type-card--selected" : ""}`} key={type.id}>
-                      <input
-                        checked={isSelected}
-                        onChange={() => setProbeTypeIds((current) => current.includes(type.id) ? current.filter((id) => id !== type.id) : [...current, type.id])}
-                        type="checkbox"
-                      />
-                      <span className="dashboard-page__probe-type-name">{type.name}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
-          ) : null}
-          <div className="dashboard-page__probe-schedule">
-            <label>
-              Data termenului probei *
-              <input className="dl-control dashboard-page__probe-date" onChange={(event) => setProbeDate(event.target.value)} type="date" value={probeDate} required />
-            </label>
-            <label>
-              Ora termenului
-              <input className="dl-control dashboard-page__probe-time" onChange={(event) => setProbeTime(event.target.value)} type="time" value={probeTime} />
-            </label>
-          </div>
+          {returnQuery.isError || availableProbeQuery.isError ? <ErrorState title="Lista nu a putut fi încărcată" description="Reîncarcă pagina și încearcă din nou." /> : null}
         </div>
       </Modal>
     </div>

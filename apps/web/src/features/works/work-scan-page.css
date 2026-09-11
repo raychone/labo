@@ -22,6 +22,16 @@
   padding-block: var(--dl-space-5);
 }
 
+.work-scan-modal .dl-overlay__content {
+  min-block-size: 0;
+  overflow: auto;
+}
+
+.work-scan-modal__workspace {
+  display: grid;
+  gap: var(--dl-space-4);
+}
+
 .work-scan-page__content {
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
@@ -215,5 +225,9 @@
 
   .work-scan-page__lookup-actions {
     justify-items: start;
+  }
+
+  .work-scan-modal .work-scan-page__content {
+    grid-template-columns: minmax(20rem, 0.9fr) minmax(0, 1.1fr);
   }
 }

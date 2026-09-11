@@ -484,6 +484,7 @@ export const ROLE_PERMISSION_MATRIX = {
     "notifications.dismiss_own": "ALL",
     "notifications.mark_read_own": "ALL",
     "notifications.read_own": "ALL",
+    "cycles.create_next": "ALL",
     "cycles.history.read": "ALL",
     "cycles.read": "ALL",
     "cycles.probe_type.select": "ALL",

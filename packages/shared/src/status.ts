@@ -23,6 +23,8 @@ export interface OperationalStatusQuery {
   readonly deliveryStatus?: DeliveryStatus;
   readonly doctorId?: string | null;
   readonly excludeDemo?: boolean;
+  /** Includes probe-ready works that have completed their delivery and pickup cycle for reception. */
+  readonly includeProbeReturnCandidates?: boolean;
   readonly transportHorizonDays?: 1 | 2 | 3;
   readonly transportOnly?: boolean;
   readonly executionLegalEntityCode?: LegalEntityCode;

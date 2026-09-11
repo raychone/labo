@@ -269,6 +269,15 @@ export class ScanService {
       return;
     }
 
+    const canReadAvailableForClaim = await this.authorizationService.hasPermission({
+      permission: "works.claim.available.read",
+      requiredScope: "ALL",
+      userId: actor.id,
+    });
+    if (canReadAvailableForClaim.allowed && this.isAvailableForTechnicianClaim(work)) {
+      return;
+    }
+
     if (work.assignedTechnicianId === actor.id) {
       return;
     }
@@ -277,6 +286,17 @@ export class ScanService {
     if (currentStage?.assignedUserId !== actor.id) {
       throw new ForbiddenException("Lucrarea scanată nu este asignată utilizatorului curent.");
     }
+  }
+
+  private isAvailableForTechnicianClaim(work: ScanWorkRecord): boolean {
+    if (work.claimStatus !== "UNCLAIMED" || work.status === "FINALIZATA" || work.technicalReadiness !== null) {
+      return false;
+    }
+    if (work.activeProbeCycleId !== null) {
+      return true;
+    }
+    const logisticsStatus = work.activeCycle?.logisticsState?.status;
+    return logisticsStatus !== "HANDED_TO_DELIVERY" && logisticsStatus !== "DELIVERED";
   }
 
   private async getActions(

@@ -67,7 +67,6 @@ export function AuthenticatedAppShell(): ReactNode {
   const notificationItems = notificationsQuery.data?.items ?? [];
   const unreadNotificationCount = notificationsQuery.data?.unreadCount ?? 0;
   const courierOnly = routes.length === 1 && routes[0]?.path === "/my-route";
-  const isManagerHome = roleLabel === "Manager" && (location.pathname === "/" || location.pathname === "/dashboard");
   usePageTitle(pageTitle, laboratoryName);
   const logoutMutation = useMutation({
     mutationFn: async () => {
@@ -155,13 +154,13 @@ export function AuthenticatedAppShell(): ReactNode {
           >
             <span aria-hidden="true">☰</span>
           </button>
-          <div className={`app-shell__topbar-title${isManagerHome ? " app-shell__topbar-title--manager-home" : ""}`}>
-            {isManagerHome ? <><span>Bun venit, {auth.user?.displayName ?? "Manager"}.</span><small>Urmărește prioritățile laboratorului dintr-un singur loc.</small></> : <><span>{pageTitle}</span><small>{laboratoryName}</small></>}
+          <div className="app-shell__topbar-title">
+            <><span>{pageTitle}</span><small>{laboratoryName}</small></>
           </div>
           {canReadNotifications ? <button aria-label="Deschide centrul de notificări" className={`app-shell__notification-button${unreadNotificationCount > 0 ? " app-shell__notification-button--attention" : ""}`} onClick={() => setIsNotificationsOpen(true)} type="button"><span aria-hidden="true">🔔</span>{unreadNotificationCount > 0 ? <span aria-label={`${unreadNotificationCount} notificări necitite`} className="app-shell__notification-badge">{formatNotificationBadge(unreadNotificationCount)}</span> : null}</button> : null}
         </header>
         {incomingNotification ? <div aria-live="assertive" className="app-shell__notification-alert" role="alert"><button className="app-shell__notification-alert-content" onClick={() => { if (!incomingNotification.readAt) markReadMutation.mutate(incomingNotification.id); setIncomingNotification(null); navigate(getSafeNotificationTarget(incomingNotification.deepLink, auth.permissionKeys)); }} type="button"><span aria-hidden="true">🔔</span><span><strong>{incomingNotification.title}</strong><small>{incomingNotification.message}</small><em>Deschide lucrarea</em></span></button><button aria-label="Închide alerta" className="app-shell__notification-alert-close" onClick={() => setIncomingNotification(null)} type="button">×</button></div> : null}
-        {!isManagerHome ? <AppHeader courierOnly={courierOnly} pageTitle={pageTitle} pathname={location.pathname} /> : null}
+        <AppHeader courierOnly={courierOnly} pageTitle={pageTitle} pathname={location.pathname} />
         {settingsQuery.isError && canReadSettings ? (
           <div className="app-shell__notice">
             <ErrorState title="Branding indisponibil" description="Setările laboratorului nu au putut fi încărcate. Se folosește fallback-ul." />
@@ -255,7 +254,7 @@ function AppSidebar({
 
 function BrandBlock({ courierOnly, laboratoryName }: { readonly courierOnly: boolean; readonly laboratoryName: string }): ReactNode {
   return (
-    <Link className="app-shell__brand" to={courierOnly ? "/my-route" : "/dashboard"}>
+    <Link className="app-shell__brand" to={courierOnly ? "/my-route" : "/status"}>
       <span className="app-brand-mark" aria-hidden="true">{getBrandInitials(laboratoryName)}</span>
       <span>
         <strong>{laboratoryName}</strong>
@@ -374,6 +373,10 @@ function AppHeader({
   readonly pageTitle: string;
   readonly pathname: string;
 }): ReactNode {
+  // Status already owns its visible page title. Keeping the breadcrumb here
+  // rendered a second, plain "Status" immediately above the heading.
+  if (pathname === "/status") return null;
+
   return (
     <header className="app-shell__header">
       <Breadcrumbs courierOnly={courierOnly} pageTitle={pageTitle} pathname={pathname} />
@@ -382,15 +385,15 @@ function AppHeader({
 }
 
 function Breadcrumbs({ courierOnly, pageTitle, pathname }: { readonly courierOnly: boolean; readonly pageTitle: string; readonly pathname: string }): ReactNode {
-  const isDashboard = pathname === "/" || pathname === "/dashboard";
+  const isStatus = pathname === "/status";
 
   return (
     <nav aria-label="Breadcrumb" className="app-shell__breadcrumbs">
       <ol>
         <li>
-          {courierOnly ? <span>Trasee</span> : isDashboard ? <span>Panou principal</span> : <Link to="/dashboard">Panou principal</Link>}
+          {courierOnly ? <span>Trasee</span> : isStatus ? <span>Status</span> : <Link to="/status">Status</Link>}
         </li>
-        {!isDashboard ? <li><span>{pageTitle}</span></li> : null}
+        {!isStatus ? <li><span>{pageTitle}</span></li> : null}
       </ol>
     </nav>
   );

@@ -97,17 +97,16 @@
 
 /* Total and Finalizate mark the bounds of the register: keep their cards as
    visually explicit as the semantic states between them. */
-.status-page__kpi-card:first-child,
-.status-page__kpi-card:nth-last-child(2) {
-  border-width: 2px;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tab-accent) 16%, transparent);
-}
-
 .status-page__kpi-card--all,
 .status-page__kpi-card--completed {
-  background: var(--dl-color-surface-muted);
-  border: 2px solid var(--tab-accent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tab-accent) 16%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tab-accent) 16%, var(--dl-color-surface)) 0%, var(--tab-accent-surface) 100%);
+}
+
+.status-page__kpi-card--boundary {
+  border: 2px solid var(--tab-accent) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tab-accent) 16%, transparent), 0 0 0 1px color-mix(in srgb, var(--tab-accent) 32%, transparent) !important;
+  outline: 1px solid color-mix(in srgb, var(--tab-accent) 62%, transparent);
+  outline-offset: 0;
 }
 
 .status-page__kpi-tab {

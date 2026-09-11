@@ -11,15 +11,13 @@ import {
   type ScanSource,
 } from "@dental-lab/shared";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 
 import { fetchPermissions } from "../auth/auth-api.js";
-import { fetchClinicOptions } from "../clinics/clinics-api.js";
 import { useTechnicianOptions, useAssignWorkflowStage } from "../technician-workbench/technician-workbench-api.js";
 import { hasPermission } from "../users/users-api.js";
 import { CameraScanner } from "./camera-scanner.js";
-import { ManualScanForm } from "./manual-scan-form.js";
 import { useRecordScanWorkOpened, useResolveOperationalScan } from "./scan-api.js";
 import { useCompleteWorkflowStage, useStartWorkflowStage, useWorks } from "./works-api.js";
 import "./work-scan-page.css";
@@ -37,6 +35,25 @@ const WORK_STATUS_LABELS: Record<ScanContextView["work"]["status"], string> = {
 };
 
 export function WorkScanPage(): ReactNode {
+  return <WorkScanWorkspace />;
+}
+
+export function WorkScanModal({ isOpen, onOpenChange }: { readonly isOpen: boolean; readonly onOpenChange: (isOpen: boolean) => void }): ReactNode {
+  return (
+    <Modal
+      className="work-scan-modal"
+      description="Scanează codul QR sau caută lucrarea manual, fără să părăsești registrul de lucrări."
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      size="xl"
+      title="Scanează lucrarea"
+    >
+      <WorkScanWorkspace embedded />
+    </Modal>
+  );
+}
+
+function WorkScanWorkspace({ embedded = false }: { readonly embedded?: boolean }): ReactNode {
   const navigate = useNavigate();
   const toast = useToast();
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
@@ -54,25 +71,13 @@ export function WorkScanPage(): ReactNode {
   const [scanContext, setScanContext] = useState<ScanContextView | null>(null);
   const [pendingAction, setPendingAction] = useState<ScanActionType | null>(null);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState("");
-  const [manualClinicId, setManualClinicId] = useState("");
-  const [manualDoctorSearch, setManualDoctorSearch] = useState("");
-  const [manualPatientSearch, setManualPatientSearch] = useState("");
+  const [manualSearch, setManualSearch] = useState("");
   const lastScanRef = useRef<{ readonly payload: string; readonly scannedAt: number; readonly source: ScanSource } | null>(null);
   const technicianOptionsQuery = useTechnicianOptions(
     (pendingAction === "ASSIGN_STAGE" || pendingAction === "REASSIGN_STAGE") && hasPermission(permissionsQuery.data, "technician.workload.read"),
   );
-  const clinicOptionsQuery = useQuery({
-    enabled: canSearchWorks,
-    queryFn: fetchClinicOptions,
-    queryKey: ["clinics", "options", "scan-manual"],
-    retry: false,
-  });
-  const manualLookupSearch = useMemo(() => {
-    const terms = [manualDoctorSearch.trim(), manualPatientSearch.trim()].filter((term) => term.length > 0);
-    return terms.length > 0 ? terms.join(" ") : undefined;
-  }, [manualDoctorSearch, manualPatientSearch]);
   const manualLookupQuery = useWorks({
-    clinicId: manualClinicId.trim().length > 0 ? manualClinicId : undefined,
+    clinicId: undefined,
     dateFrom: undefined,
     dateTo: undefined,
     deadlineFilter: undefined,
@@ -80,32 +85,14 @@ export function WorkScanPage(): ReactNode {
     page: 1,
     pageSize: 20,
     priority: undefined,
-    search: manualLookupSearch,
+    search: manualSearch.trim() || undefined,
     sortBy: "createdAt",
     sortDirection: "desc",
     status: undefined,
     workTypeId: undefined,
   }, canSearchWorks);
-  const manualLookupItems = useMemo(() => {
-    const clinicSearch = manualClinicId.trim().toLowerCase();
-    const doctorSearch = manualDoctorSearch.trim().toLowerCase();
-    const patientSearch = manualPatientSearch.trim().toLowerCase();
-
-    return (manualLookupQuery.data?.items ?? []).filter((work) => {
-      if (clinicSearch.length > 0 && (!work.clinic || (!work.clinic.id.toLowerCase().includes(clinicSearch) && !work.clinic.name.toLowerCase().includes(clinicSearch) && !work.clinic.code.toLowerCase().includes(clinicSearch)))) {
-        return false;
-      }
-      if (doctorSearch.length > 0 && !work.doctor?.displayName.toLowerCase().includes(doctorSearch)) {
-        return false;
-      }
-      if (patientSearch.length > 0 && !work.patientName.toLowerCase().includes(patientSearch)) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [manualClinicId, manualDoctorSearch, manualLookupQuery.data?.items, manualPatientSearch]);
-  const hasManualFilters = manualClinicId.trim().length > 0 || manualDoctorSearch.trim().length > 0 || manualPatientSearch.trim().length > 0;
+  const manualLookupItems = manualLookupQuery.data?.items ?? [];
+  const hasManualFilters = manualSearch.trim().length > 0;
 
   function resolvePayload(payload: string, source: ScanSource): void {
     if (resolveMutation.isPending) {
@@ -204,16 +191,18 @@ export function WorkScanPage(): ReactNode {
   }
 
   if (permissionsQuery.isLoading) {
-    return <PageState><LoadingState text="Se încarcă scannerul" /></PageState>;
+    return embedded ? <LoadingState text="Se încarcă scannerul" /> : <PageState><LoadingState text="Se încarcă scannerul" /></PageState>;
   }
 
   if (!canScan) {
-    return <PageState><ErrorState title="Acces refuzat" description="Contul curent nu are permisiunea scan.use." /></PageState>;
+    return embedded
+      ? <ErrorState title="Acces refuzat" description="Contul curent nu are permisiunea de scanare." />
+      : <PageState><ErrorState title="Acces refuzat" description="Contul curent nu are permisiunea de scanare." /></PageState>;
   }
 
-  return (
-    <main className="work-scan-page">
-      <section className="dl-container work-scan-page__layout" aria-labelledby="scan-title">
+  const workspace = (
+    <>
+      {embedded ? null : (
         <header className="work-scan-page__header">
           <div>
             <h1 id="scan-title">Scanează lucrare</h1>
@@ -225,8 +214,9 @@ export function WorkScanPage(): ReactNode {
             </span>
           </Link>
         </header>
+      )}
 
-        <div className="work-scan-page__content">
+      <div className="work-scan-page__content">
           <div className="work-scan-page__search-column">
             <Card>
               <CardHeader>
@@ -234,7 +224,7 @@ export function WorkScanPage(): ReactNode {
                 <CardDescription>Scanează un QR de lucrare cu browser compatibil.</CardDescription>
               </CardHeader>
               <CardContent>
-                <CameraScanner onDetected={(payload) => resolvePayload(payload, "camera")} />
+                <CameraScanner compact onDetected={(payload) => resolvePayload(payload, "camera")} />
               </CardContent>
             </Card>
 
@@ -244,34 +234,14 @@ export function WorkScanPage(): ReactNode {
                 <CardDescription>Fallback pentru desktop, cameră refuzată sau QR deteriorat.</CardDescription>
               </CardHeader>
               <CardContent className="work-scan-page__manual-lookup">
-                <ManualScanForm isLoading={resolveMutation.isPending} onSubmit={(payload) => resolvePayload(payload, "manual")} />
-                {canSearchWorks ? (
-                  <section className="work-scan-page__manual-search" aria-label="Căutare manuală după câmpuri">
-                    <Select
-                      label="Clinică"
-                      options={[
-                        { label: "Toate clinicile", value: "" },
-                        ...(clinicOptionsQuery.data ?? []).map((clinic) => ({ label: `${clinic.code} · ${clinic.name}`, value: clinic.id })),
-                      ]}
-                      value={manualClinicId}
-                    onChange={(event) => {
-                      setManualClinicId(event.target.value);
-                    }}
-                    />
-                    <TextInput
-                      label="Medic"
-                      placeholder="Dr. Ana Popescu"
-                      value={manualDoctorSearch}
-                      onChange={(event) => setManualDoctorSearch(event.target.value)}
-                    />
-                    <TextInput
-                      label="Nume pacient"
-                      placeholder="Ion Pop"
-                      value={manualPatientSearch}
-                      onChange={(event) => setManualPatientSearch(event.target.value)}
-                    />
-                  </section>
-                ) : null}
+                <TextInput
+                  disabled={resolveMutation.isPending}
+                  label="Caută lucrare"
+                  onChange={(event) => setManualSearch(event.target.value)}
+                  placeholder="Pacient, cod lucrare sau cod scanat"
+                  type="search"
+                  value={manualSearch}
+                />
               </CardContent>
             </Card>
           </div>
@@ -291,11 +261,11 @@ export function WorkScanPage(): ReactNode {
               <Card>
                 <CardHeader>
                   <CardTitle>Rezultate căutare</CardTitle>
-                  <CardDescription>Filtrează după clinică, medic și numele pacientului.</CardDescription>
+                  <CardDescription>Caută după pacient, codul lucrării sau codul scanat; selectează apoi lucrarea găsită.</CardDescription>
                 </CardHeader>
                 <CardContent className="work-scan-page__lookup-results">
                   {!hasManualFilters ? (
-                    <p className="work-scan-page__muted">Completează un filtru ca să vezi lucrările potrivite.</p>
+                    <p className="work-scan-page__muted">Caută după pacient, cod de lucrare sau cod scanat pentru a vedea lucrările potrivite.</p>
                   ) : null}
                   {hasManualFilters && manualLookupQuery.isLoading ? <LoadingState text="Se caută lucrări" /> : null}
                   {hasManualFilters && !manualLookupQuery.isLoading && manualLookupItems.length === 0 ? (
@@ -311,11 +281,7 @@ export function WorkScanPage(): ReactNode {
                       </div>
                       <div className="work-scan-page__lookup-actions">
                         <StatusBadge label={work.status} variant="registered" />
-                        <Link className="dl-button dl-button--outline dl-button--medium" to={`/works?workId=${encodeURIComponent(work.id)}`}>
-                          <span className="dl-button__content">
-                            <span>Deschide lucrarea</span>
-                          </span>
-                        </Link>
+                        <Button disabled={resolveMutation.isPending} onClick={() => resolvePayload(work.code, "manual")} variant="outline">Selectează lucrarea</Button>
                       </div>
                     </article>
                   )) : null}
@@ -324,21 +290,32 @@ export function WorkScanPage(): ReactNode {
             ) : null}
           </div>
         </div>
-        <ActionModal
-          actionType={pendingAction}
-          context={scanContext}
-          isLoading={startMutation.isPending || completeMutation.isPending || assignMutation.isPending || resolveMutation.isPending}
-          onConfirm={() => void executePendingAction()}
-          onOpenChange={(isOpen) => {
-            if (!isOpen) {
-              setPendingAction(null);
-              setSelectedTechnicianId("");
-            }
-          }}
-          selectedTechnicianId={selectedTechnicianId}
-          technicianOptions={technicianOptionsQuery.data ?? []}
-          onTechnicianChange={setSelectedTechnicianId}
-        />
+      <ActionModal
+        actionType={pendingAction}
+        context={scanContext}
+        isLoading={startMutation.isPending || completeMutation.isPending || assignMutation.isPending || resolveMutation.isPending}
+        onConfirm={() => void executePendingAction()}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) {
+            setPendingAction(null);
+            setSelectedTechnicianId("");
+          }
+        }}
+        selectedTechnicianId={selectedTechnicianId}
+        technicianOptions={technicianOptionsQuery.data ?? []}
+        onTechnicianChange={setSelectedTechnicianId}
+      />
+    </>
+  );
+
+  if (embedded) {
+    return <div className="work-scan-modal__workspace">{workspace}</div>;
+  }
+
+  return (
+    <main className="work-scan-page">
+      <section className="dl-container work-scan-page__layout" aria-labelledby="scan-title">
+        {workspace}
       </section>
     </main>
   );

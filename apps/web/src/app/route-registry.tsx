@@ -39,7 +39,7 @@ export const appRoutes = [
     path: "/dashboard",
     permissionMode: "any",
     requiredPermissions: [],
-    showInNavigation: true,
+    showInNavigation: false,
   },
   {
     icon: "WO",
@@ -84,7 +84,9 @@ export const appRoutes = [
     path: "/scan",
     permissionMode: "any",
     requiredPermissions: scanPermissions,
-    showInNavigation: true,
+    // Scanarea este disponibilă ca modal din Status; ruta rămâne numai pentru
+    // linkuri vechi și acces direct compatibil.
+    showInNavigation: false,
   },
   {
     icon: "AT",
@@ -245,8 +247,7 @@ function shouldShowInNavigation(permissionKeys: readonly string[], route: AppRou
   }
 
   if (isManagerWorkspace(permissionKeys)) {
-    return route.path === "/dashboard"
-      || route.path === "/status"
+    return route.path === "/status"
       || route.path === "/billing"
       || route.path === "/billing/archive"
       || route.path === "/work-settings"
@@ -305,7 +306,7 @@ export function getNavigationRoutes(permissionKeys: readonly string[]): readonly
 }
 
 export function getRouteByPath(pathname: string): AppRouteConfig | undefined {
-  const normalizedPathname = pathname === "/" ? "/dashboard" : pathname;
+  const normalizedPathname = pathname === "/" ? "/status" : pathname;
   return appRoutes
     .filter((route) => normalizedPathname === route.path || normalizedPathname.startsWith(`${route.path}/`))
     .sort((left, right) => right.path.length - left.path.length)[0];
@@ -316,7 +317,7 @@ function isCourierPermissions(permissionKeys: readonly string[]): boolean {
 }
 
 export function getDefaultAuthorizedRoute(permissionKeys: readonly string[] = []): string {
-  return isCourierPermissions(permissionKeys) ? "/my-route" : "/dashboard";
+  return isCourierPermissions(permissionKeys) ? "/my-route" : "/status";
 }
 
 export function getFirstAuthorizedRoute(permissionKeys: readonly string[]): string {

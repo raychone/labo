@@ -220,7 +220,7 @@ export function WorkForm({
   onClinicChange,
   onCreateClinic,
   onCreateDoctor,
-  onCreatePatient,
+  onSaveNewPatient,
   onSubmit,
   allowPatientEdit = true,
   allowPatientNameEdit = false,
@@ -238,7 +238,7 @@ export function WorkForm({
   readonly onClinicChange: (clinicId: string) => void;
   readonly onCreateClinic?: () => void;
   readonly onCreateDoctor?: () => void;
-  readonly onCreatePatient: () => void;
+  readonly onSaveNewPatient?: (fullName: string) => Promise<{ readonly fullName: string; readonly id: string }>;
   readonly onSubmit: (values: WorkFormValues) => void;
   readonly allowPatientEdit?: boolean;
   readonly allowPatientNameEdit?: boolean;
@@ -259,6 +259,7 @@ export function WorkForm({
   const [clinicSearch, setClinicSearch] = useState("");
   const [doctorSearch, setDoctorSearch] = useState("");
   const [workTypeSearch, setWorkTypeSearch] = useState("");
+  const [isSavingNewPatient, setSavingNewPatient] = useState(false);
   const patientId = form.watch("patientId");
   const clinicId = form.watch("clinicId");
   const doctorId = form.watch("doctorId");
@@ -306,22 +307,43 @@ export function WorkForm({
     label: clinic.name,
     secondary: undefined,
     value: clinic.id,
-  })), clinicSearch), [clinicOptions, clinicSearch]);
+  })), selectedClinic ? "" : clinicSearch), [clinicOptions, clinicSearch, selectedClinic]);
   const visibleDoctorOptions = useMemo(() => filterSearchableOptions(doctorOptions.map((doctor) => ({
     label: stripDoctorTitle(doctor.displayName),
     secondary: undefined,
     value: doctor.id,
-  })), doctorSearch), [doctorOptions, doctorSearch]);
+  })), selectedDoctor ? "" : doctorSearch), [doctorOptions, doctorSearch, selectedDoctor]);
   const visiblePatientOptions = useMemo(() => filterSearchableOptions(patientOptions.map((patient) => ({
     label: patient.fullName,
     secondary: patient.birthDate ? formatSearchableDate(patient.birthDate) : undefined,
     value: patient.id,
-  })), patientSearch), [patientOptions, patientSearch]);
+  })), selectedPatient ? "" : patientSearch), [patientOptions, patientSearch, selectedPatient]);
   const visibleWorkTypeOptions = useMemo(() => filterSearchableOptions(workTypeOptions.map((workType) => ({
     label: displayWorkTypeName(workType.name),
     secondary: undefined,
     value: workType.id,
-  })), workTypeSearch), [workTypeOptions, workTypeSearch]);
+  })), selectedWorkType ? "" : workTypeSearch), [selectedWorkType, workTypeOptions, workTypeSearch]);
+  const normalizedPatientSearch = normalizeSearchText(patientSearch.trim());
+  const hasExactPatient = normalizedPatientSearch !== "" && patientOptions.some((patient) => normalizeSearchText(patient.fullName) === normalizedPatientSearch);
+  const patientNameParts = patientSearch.trim().split(/\s+/u).filter(Boolean);
+  const canSaveNewPatient = allowPatientEdit && onSaveNewPatient !== undefined && !hasExactPatient && patientNameParts.length > 0;
+
+  async function saveNewPatient(): Promise<void> {
+    if (!onSaveNewPatient || !canSaveNewPatient || isSavingNewPatient) {
+      return;
+    }
+
+    setSavingNewPatient(true);
+    try {
+      const patient = await onSaveNewPatient(patientSearch);
+      form.setValue("patientId", patient.id, { shouldDirty: true, shouldValidate: true });
+      setPatientSearch(patient.fullName);
+    } catch {
+      form.setError("patientId", { message: "Pacientul nu a putut fi salvat. Încearcă din nou." });
+    } finally {
+      setSavingNewPatient(false);
+    }
+  }
 
   return (
     <FormLayout className="works-page__form" id={formId} onSubmit={(event) => void form.handleSubmit(onSubmit)(event)}>
@@ -329,79 +351,77 @@ export function WorkForm({
 
       <FormSection title="Clinică și medic">
         <FormGrid>
-          <SearchablePickerField
-            disabled={isDisabled || !allowPatientEdit}
-            error={form.formState.errors.clinicId?.message}
-            id="clinicId"
-            label="Clinică"
-            onSelect={(value) => {
-              form.setValue("clinicId", value, { shouldDirty: true, shouldValidate: true });
-              form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true });
-              form.setValue("patientId", "", { shouldDirty: true, shouldValidate: true });
-              onClinicChange(value);
-              setDoctorSearch("");
-              setPatientSearch("");
-            }}
-            onSearchChange={(value) => {
-              setClinicSearch(value);
-              if (value === "") {
-                form.setValue("clinicId", "", { shouldDirty: true, shouldValidate: true });
-              }
-            }}
-            options={visibleClinicOptions}
-            placeholder="Caută clinica"
-            required={false}
-            searchValue={clinicSearch}
-            selectedValue={clinicId}
-            emptyMessage="Nu există clinici potrivite."
-          />
-          {onCreateClinic ? <div><Button disabled={isDisabled} onClick={onCreateClinic} type="button" variant="secondary">Clinică nouă</Button></div> : null}
-          <SearchablePickerField
-            disabled={isDisabled}
-            error={form.formState.errors.doctorId?.message}
-            id="doctorId"
-            label="Medic"
-            onSelect={(value) => {
-              form.setValue("doctorId", value, { shouldDirty: true, shouldValidate: true });
-              form.setValue("patientId", "", { shouldDirty: true, shouldValidate: true });
-              setPatientSearch("");
-            }}
-            onSearchChange={(value) => {
-              setDoctorSearch(value);
-              if (value === "") {
-                form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true });
-              }
-            }}
-            options={visibleDoctorOptions}
-            placeholder="Caută medicul"
-            required={false}
-            searchValue={doctorSearch}
-            selectedValue={doctorId}
-            emptyMessage={doctorOptions.length === 0 ? "Nu există medici activi disponibili." : "Nu există medici potriviți."}
-          />
-          {onCreateDoctor ? <div><Button disabled={isDisabled} onClick={onCreateDoctor} type="button" variant="secondary">Medic nou</Button></div> : null}
+          <FormGridFull>
+            <div className="works-page__picker-with-action">
+              <SearchablePickerField
+                disabled={isDisabled || !allowPatientEdit}
+                error={form.formState.errors.clinicId?.message}
+                id="clinicId"
+                label="Clinică"
+                onSelect={(value) => {
+                  form.setValue("clinicId", value, { shouldDirty: true, shouldValidate: true });
+                  form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true });
+                  form.setValue("patientId", "", { shouldDirty: true, shouldValidate: true });
+                  onClinicChange(value);
+                  setDoctorSearch("");
+                  setPatientSearch("");
+                }}
+                onSearchChange={setClinicSearch}
+                options={visibleClinicOptions}
+                placeholder="Caută clinica"
+                required={false}
+                searchValue={clinicSearch}
+                selectedValue={clinicId}
+                emptyMessage="Nu există clinici potrivite."
+              />
+              {onCreateClinic ? <Button disabled={isDisabled} onClick={onCreateClinic} type="button" variant="secondary">Clinică nouă</Button> : null}
+            </div>
+          </FormGridFull>
+          <FormGridFull>
+            <div className="works-page__picker-with-action">
+              <SearchablePickerField
+                disabled={isDisabled}
+                error={form.formState.errors.doctorId?.message}
+                id="doctorId"
+                label="Medic"
+                onSelect={(value) => {
+                  form.setValue("doctorId", value, { shouldDirty: true, shouldValidate: true });
+                  form.setValue("patientId", "", { shouldDirty: true, shouldValidate: true });
+                  setPatientSearch("");
+                }}
+                onSearchChange={setDoctorSearch}
+                options={visibleDoctorOptions}
+                placeholder="Caută medicul"
+                required={false}
+                searchValue={doctorSearch}
+                selectedValue={doctorId}
+                emptyMessage={doctorOptions.length === 0 ? "Nu există medici activi disponibili." : "Nu există medici potriviți."}
+              />
+              {onCreateDoctor ? <Button disabled={isDisabled} onClick={onCreateDoctor} type="button" variant="secondary">Medic nou</Button> : null}
+            </div>
+          </FormGridFull>
         </FormGrid>
       </FormSection>
 
       <FormSection title="Pacient">
         <FormGrid>
-          <SearchablePickerField
-            disabled={isDisabled}
-            error={form.formState.errors.patientId?.message}
-            id="patientId"
-            label="Pacient"
-            onSelect={(value) => form.setValue("patientId", value, { shouldDirty: true, shouldValidate: true })}
-            onSearchChange={setPatientSearch}
-            options={visiblePatientOptions}
-            placeholder="Caută pacientul"
-            required
-            searchValue={patientSearch}
-            selectedValue={patientId}
-            emptyMessage="Nu există pacienți potriviți."
-          />
-          {allowPatientEdit ? <div>
-            <Button disabled={isDisabled} onClick={onCreatePatient} type="button" variant="secondary">Pacient nou</Button>
-          </div> : null}
+          <div className="works-page__picker-with-action">
+            <SearchablePickerField
+              disabled={isDisabled}
+              error={form.formState.errors.patientId?.message}
+              id="patientId"
+              label="Pacient"
+              onSelect={(value) => form.setValue("patientId", value, { shouldDirty: true, shouldValidate: true })}
+              onSearchChange={setPatientSearch}
+              options={visiblePatientOptions}
+              placeholder="Caută pacientul"
+              required
+              searchValue={patientSearch}
+              selectedValue={patientId}
+              emptyMessage="Nu există pacienți potriviți."
+            />
+            {canSaveNewPatient ? <Button disabled={isDisabled || isSavingNewPatient} isLoading={isSavingNewPatient} onClick={() => void saveNewPatient()} type="button" variant="primary">Salvează</Button> : null}
+          </div>
           {allowPatientNameEdit ? <TextInput disabled={isDisabled} error={form.formState.errors.patientName?.message} id="patientName" label="Nume pacient" required {...form.register("patientName")} /> : null}
         </FormGrid>
       </FormSection>
@@ -710,7 +730,7 @@ export function SearchablePickerField({
               <strong>{option.label}</strong>
               {option.secondary ? <span>{option.secondary}</span> : null}
             </button>
-          )) : <div className="works-page__search-empty">{emptyMessage}</div>}
+          )) : <div className="works-page__search-empty"><span>{emptyMessage}</span></div>}
         </div>
       ) : null}
     </div>

@@ -116,8 +116,8 @@ describe("AuthenticatedAppShell", () => {
     );
 
     await waitFor(() => expect(screen.getAllByText("Laborator Test").length).toBeGreaterThan(0), { timeout: 5_000 });
-    await waitFor(() => expect(screen.getAllByText("Status").length).toBeGreaterThan(0), { timeout: 5_000 });
-    expect(screen.getByRole("link", { name: /Status/ })).toBeDefined();
+    const navigation = await screen.findByRole("navigation", { name: "Navigație principală" });
+    await waitFor(() => expect(within(navigation).getByRole("link", { name: "Status" })).toBeDefined(), { timeout: 5_000 });
     expect(screen.queryByText("Lucrări")).toBeNull();
     expect(screen.queryByText("Scanare")).toBeNull();
     expect(screen.queryByText("Centru operațional")).toBeNull();
@@ -156,9 +156,10 @@ describe("AuthenticatedAppShell", () => {
       ["/dashboard"],
     );
 
-    await waitFor(() => expect(screen.getByRole("link", { name: /Status/ })).toBeDefined());
-    expect(screen.getByRole("link", { name: /Scanare/ })).toBeDefined();
-    expect(screen.getByRole("link", { name: /Atelier tehnician/ })).toBeDefined();
+    const navigation = await screen.findByRole("navigation", { name: "Navigație principală" });
+    await waitFor(() => expect(within(navigation).getByRole("link", { name: "Status" })).toBeDefined());
+    expect(within(navigation).queryByRole("link", { name: "Scanare" })).toBeNull();
+    expect(within(navigation).getByRole("link", { name: "Atelier tehnician" })).toBeDefined();
     expect(screen.queryByText("Utilizatori")).toBeNull();
   });
 

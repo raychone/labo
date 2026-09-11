@@ -1,6 +1,6 @@
 import { ToastProvider } from "@dental-lab/ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -296,6 +296,19 @@ describe("DashboardPage", () => {
     expect(screen.getAllByRole("link", { name: "Scanează lucrare" }).length).toBe(1);
     expect(screen.queryByText("Situație financiară")).toBeNull();
     expect(screen.queryByRole("link", { name: "Lucrările mele" })).toBeNull();
+  });
+
+  it("keeps return identification and registration together in one reception modal", async () => {
+    vi.stubGlobal("fetch", createFetchMock(permissions.reception));
+
+    renderWithProviders(<DashboardPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Probe" }));
+
+    expect(await screen.findByRole("heading", { name: "Înregistrează proba revenită" })).toBeDefined();
+    expect(screen.getByRole("heading", { name: "1. Identifică lucrarea" })).toBeDefined();
+    expect(screen.getByRole("heading", { name: "2. Înregistrează revenirea" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Înregistrează proba" })).toBeDefined();
   });
 
   it("renders the doctor portal with only read-only work tracking actions", async () => {

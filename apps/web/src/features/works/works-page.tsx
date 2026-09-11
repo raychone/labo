@@ -8,11 +8,9 @@ import {
   CardHeader,
   CardTitle,
   DataTable,
-  DateInput,
   Drawer,
   ErrorState,
   FormActions,
-  FormErrorSummary,
   FormGrid,
   FormLayout,
   LoadingState,
@@ -59,7 +57,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { fetchPermissions } from "../auth/auth-api.js";
 import { createClinic, createDoctor, fetchClinicOptions, fetchDoctorOptions } from "../clinics/clinics-api.js";
 import { fetchPatient, patientsQueryKeys, useCreatePatient, usePatientOptions } from "../patients/patients-api.js";
-import { patientFormSchema, type PatientFormValues } from "../patients/patients-page.schema.js";
+import type { PatientFormValues } from "../patients/patients-page.schema.js";
 import { useSettings } from "../settings/settings-api.js";
 import { hasPermission } from "../users/users-api.js";
 import { useWorkTypeOptions } from "../work-types/work-types-api.js";
@@ -74,7 +72,7 @@ import { filterDraftConnections, getDraftCompositionTeeth, MultiItemWorkEditor, 
 import "./multi-item-work-editor.css";
 import { WorkDetailComposition } from "./work-detail-composition.js";
 import { displayWorkTypeSymbolOrName } from "./work-type-symbols.js";
-import { applyApiErrorsToForm, getErrorMessage, getFormErrorSummaryItems, UnsavedChangesPrompt, useBeforeUnloadPrompt, useCloseGuard, useErrorSummaryFocus } from "../../lib/form-utils.js";
+import { applyApiErrorsToForm, getErrorMessage, UnsavedChangesPrompt, useBeforeUnloadPrompt, useCloseGuard } from "../../lib/form-utils.js";
 import { useTechnicianOptions } from "../technician-workbench/technician-workbench-api.js";
 import "./works-page.css";
 
@@ -617,7 +615,6 @@ function CreateWorkModal({
   readonly pricingWorkTypeOptions: readonly { readonly basePriceMinor: number; readonly id: string }[];
   readonly submitError: unknown;
 }): ReactNode {
-  const [isPatientCreateOpen, setPatientCreateOpen] = useState(false);
   const [isClinicCreateOpen, setClinicCreateOpen] = useState(false);
   const [isDoctorCreateOpen, setDoctorCreateOpen] = useState(false);
   const [draftItems, setDraftItems] = useState<readonly DraftWorkOrderItem[]>([]);
@@ -739,7 +736,18 @@ function CreateWorkModal({
           onClinicChange={() => form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true })}
           onCreateClinic={() => setClinicCreateOpen(true)}
           onCreateDoctor={() => setDoctorCreateOpen(true)}
-          onCreatePatient={() => setPatientCreateOpen(true)}
+          onSaveNewPatient={async (fullName) => {
+            const nameParts = fullName.trim().split(/\s+/u).filter(Boolean);
+            const patient = await createPatientMutation.mutateAsync({
+              ...quickPatientDefaults,
+              clinicId: selectedClinicId || null,
+              doctorId: selectedDoctorId || null,
+              firstName: nameParts[0] ?? "",
+              lastName: nameParts.slice(1).join(" "),
+            });
+            await queryClient.invalidateQueries({ queryKey: patientsQueryKeys.all });
+            return { fullName: patient.overview.fullName, id: patient.overview.id };
+          }}
           onSubmit={(values) => {
             form.clearErrors("root");
             if (draftItems.length === 0) {
@@ -783,21 +791,6 @@ function CreateWorkModal({
           patientOptions={patientOptions}
         />
       </Modal>
-      <QuickPatientModal
-        clinicId={selectedClinicId}
-        doctorId={selectedDoctorId}
-        isOpen={isPatientCreateOpen}
-        isSaving={createPatientMutation.isPending}
-        onOpenChange={setPatientCreateOpen}
-        onSubmit={(values) => createPatientMutation.mutate(values, {
-          onSuccess: async (patient) => {
-            await queryClient.invalidateQueries({ queryKey: patientsQueryKeys.options("", selectedClinicId || undefined, selectedDoctorId || undefined) });
-            form.setValue("patientId", patient.overview.id, { shouldDirty: true, shouldValidate: true });
-            setPatientCreateOpen(false);
-          },
-        })}
-        submitError={createPatientMutation.error}
-      />
       <QuickClinicModal
         isOpen={isClinicCreateOpen}
         isSaving={createClinicMutation.isPending}
@@ -1166,7 +1159,6 @@ function WorkDetailsDrawer({
               allowPatientEdit={false}
                 allowPatientNameEdit={false}
                 hideWorkSelection
-              onCreatePatient={() => undefined}
               onSubmit={(values) => {
                 form.clearErrors("root");
                 if (activeTemplateQuery.isLoading || (activeTemplateQuery.isError && !work.workForm)) {
@@ -1927,84 +1919,6 @@ const quickPatientDefaults: PatientFormValues = {
   notes: null,
   sex: "UNSPECIFIED",
 };
-
-const quickPatientLabels: Record<keyof PatientFormValues, string> = {
-  birthDate: "Data nașterii",
-  clinicId: "Clinică",
-  firstName: "Prenume",
-  lastName: "Nume",
-  doctorId: "Medic",
-  notes: "Note limitate",
-  sex: "Sex",
-};
-
-function QuickPatientModal({
-  clinicId,
-  doctorId,
-  isOpen,
-  isSaving,
-  onOpenChange,
-  onSubmit,
-  submitError,
-}: {
-  readonly clinicId: string;
-  readonly doctorId: string;
-  readonly isOpen: boolean;
-  readonly isSaving: boolean;
-  readonly onOpenChange: (isOpen: boolean) => void;
-  readonly onSubmit: (values: PatientFormValues) => void;
-  readonly submitError: unknown;
-}): ReactNode {
-  const form = useForm<PatientFormValues>({
-    defaultValues: { ...quickPatientDefaults, clinicId: clinicId || null, doctorId: doctorId || null },
-    resolver: zodResolver(patientFormSchema),
-  });
-  const summaryRef = useErrorSummaryFocus(form.formState.errors, form.formState.submitCount);
-  const summaryItems = form.formState.submitCount > 0 ? getFormErrorSummaryItems(form.formState.errors, quickPatientLabels) : [];
-
-  useEffect(() => {
-    if (!isOpen) {
-      form.reset({ ...quickPatientDefaults, clinicId: clinicId || null, doctorId: doctorId || null });
-    }
-  }, [clinicId, doctorId, form, isOpen]);
-
-  useEffect(() => {
-    if (submitError) {
-      applyApiErrorsToForm(form, submitError);
-    }
-  }, [form, submitError]);
-
-  return (
-    <Modal
-      description="Creează doar identitatea minimă necesară pentru lucrare."
-      footer={<FormActions formId="quick-patient-form" isSubmitting={isSaving} submitLabel="Creează pacient" />}
-      isOpen={isOpen}
-      onOpenChange={onOpenChange}
-      title="Pacient nou"
-    >
-      <FormLayout id="quick-patient-form" onSubmit={(event) => void form.handleSubmit(onSubmit)(event)}>
-        <FormErrorSummary errors={summaryItems} ref={summaryRef} />
-        <FormGrid>
-          <TextInput error={form.formState.errors.firstName?.message} id="quickFirstName" label="Prenume" required {...form.register("firstName")} />
-          <TextInput error={form.formState.errors.lastName?.message} id="quickLastName" label="Nume" required {...form.register("lastName")} />
-          <DateInput error={form.formState.errors.birthDate?.message} id="quickBirthDate" label="Data nașterii" {...form.register("birthDate")} />
-          <Select
-            error={form.formState.errors.sex?.message}
-            id="quickSex"
-            label="Sex"
-            options={[
-              { label: "Nespecificat", value: "UNSPECIFIED" },
-              { label: "Feminin", value: "FEMALE" },
-              { label: "Masculin", value: "MALE" },
-            ]}
-            {...form.register("sex")}
-          />
-        </FormGrid>
-        <Textarea error={form.formState.errors.notes?.message} id="quickNotes" label="Note limitate" rows={3} {...form.register("notes")} />
-      </FormLayout>
-    </Modal>
-  );
-}
 
 const quickClinicSchema = z.object({
   legalEntityCode: z.union([z.enum(["CDT", "NG"]), z.literal("")]),

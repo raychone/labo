@@ -127,7 +127,32 @@ describe("form controls", () => {
     fireEvent.click(within(listbox).getByRole("option", { name: /Cimentare PMMA I/ }));
 
     expect(onChange).toHaveBeenCalled();
-    expect(screen.getByRole("combobox", { name: "Tip lucrare" }).getAttribute("value")).toBe("Cimentare PMMA I");
+    const select = screen.getByRole("combobox", { name: "Tip lucrare" });
+    expect(select.getAttribute("value")).toBe("Cimentare PMMA I");
+    expect(select.getAttribute("type")).toBe("text");
+  });
+
+  it("shows all options again when reopening a selected Select", () => {
+    render(
+      <Select
+        label="Stare"
+        onChange={() => undefined}
+        options={[
+          { label: "Planificat", value: "planned" },
+          { label: "Finalizat", value: "done" },
+        ]}
+        value="planned"
+      />,
+    );
+
+    const select = screen.getByRole("combobox", { name: "Stare" });
+    fireEvent.focus(select);
+    fireEvent.click(within(screen.getByRole("listbox")).getByRole("option", { name: /Planificat/ }));
+    fireEvent.click(select);
+
+    const listbox = screen.getByRole("listbox");
+    expect(within(listbox).getByRole("option", { name: /Planificat/ })).toBeDefined();
+    expect(within(listbox).getByRole("option", { name: /Finalizat/ })).toBeDefined();
   });
 
   it("supports Checkbox, RadioGroup, and Switch interactions", () => {

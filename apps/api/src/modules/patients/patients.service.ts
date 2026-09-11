@@ -70,19 +70,23 @@ export class PatientsService {
     const search = query.search?.trim();
     const clinicId = query.clinicId ?? null;
     const doctorId = query.doctorId ?? null;
+    const referralFilter: Prisma.PatientWhereInput | null = clinicId && doctorId ? {
+      OR: [
+        { clinicId, doctorId },
+        { workOrders: { some: { clinicId, doctorId } } },
+      ],
+    } : clinicId ? {
+      OR: [{ clinicId }, { workOrders: { some: { clinicId } } }],
+    } : doctorId ? {
+      OR: [{ doctorId }, { workOrders: { some: { doctorId } } }],
+    } : null;
+    const filters = [
+      ...(referralFilter ? [referralFilter] : []),
+      ...(search ? [this.toPatientSearchWhere(search)] : []),
+    ];
     const where: Prisma.PatientWhereInput = {
       isArchived: false,
-      ...(clinicId && doctorId ? {
-        OR: [
-          { clinicId, doctorId },
-          { workOrders: { some: { clinicId, doctorId } } },
-        ],
-      } : clinicId ? {
-        OR: [{ clinicId }, { workOrders: { some: { clinicId } } }],
-      } : doctorId ? {
-        OR: [{ doctorId }, { workOrders: { some: { doctorId } } }],
-      } : {}),
-      ...(search ? this.toPatientSearchWhere(search) : {}),
+      ...(filters.length > 0 ? { AND: filters } : {}),
     };
 
     const patients = await this.prisma.patient.findMany({

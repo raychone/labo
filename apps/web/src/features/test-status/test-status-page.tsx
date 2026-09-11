@@ -11,6 +11,7 @@ import { StatusPage } from "../status/status-page.js";
 import { useOperationalStatus } from "../status/status-api.js";
 import { hasPermission } from "../users/users-api.js";
 import { StatusProbeModal } from "./status-probe-modal.js";
+import { WorkScanModal } from "../works/work-scan-page.js";
 
 import "./test-status-page.css";
 
@@ -19,15 +20,13 @@ export function TestStatusPage(): ReactNode {
   const navigate = useNavigate();
   const [pickupOpen, setPickupOpen] = useState(false);
   const [probeOpen, setProbeOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
   const [transportFilter, setTransportFilter] = useState<1 | 2 | 3 | null | undefined>();
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   // Logistics has the operational marker permission; manager is identified by audit access.
   // Reception and technicians may still see the work register, but not transport KPI data.
   const canSeeTransportKpi = hasPermission(permissionsQuery.data, "logistics.delivery_marker.update") || hasPermission(permissionsQuery.data, "audit.read");
-  // Technicians keep scan access from their own workbench, but the shared
-  // status header must not expose the scan action to them.
-  const canScanWork = hasPermission(permissionsQuery.data, "scan.use")
-    && !hasPermission(permissionsQuery.data, "technician.workbench.read");
+  const canScanWork = hasPermission(permissionsQuery.data, "scan.use");
   const canCreateWork = hasPermission(permissionsQuery.data, "works.create");
   const canCreatePickup = hasPermission(permissionsQuery.data, "pickup.create");
   const canCreateProbe = hasPermission(permissionsQuery.data, "cycles.create_next");
@@ -39,7 +38,7 @@ export function TestStatusPage(): ReactNode {
           allowLogisticsRead
           experimental
           headerActions={<div className="test-status-page__actions" aria-label="Acțiuni rapide">
-            {canScanWork ? <Button onClick={() => navigate("/scan")} variant="outline">Scanează lucrare</Button> : null}
+            {canScanWork ? <Button onClick={() => setScanOpen(true)} variant="outline">Scanează lucrare</Button> : null}
             {canCreateWork ? <Button onClick={() => navigate("/works?create=1&returnTo=%2Fstatus")} variant="primary">Lucrare nouă</Button> : null}
             {canCreatePickup ? <Button onClick={() => setPickupOpen(true)} variant="primary">Ridicare nouă</Button> : null}
             {canCreateProbe ? <Button onClick={() => setProbeOpen(true)} variant="outline">Probe</Button> : null}
@@ -50,6 +49,7 @@ export function TestStatusPage(): ReactNode {
           transportKpi={<TestTransportKpi activeFilter={transportFilter} onOpen={(days) => setTransportFilter(days ?? null)} />}
         />
         <StatusProbeModal isOpen={probeOpen} onOpenChange={setProbeOpen} />
+        <WorkScanModal isOpen={scanOpen} onOpenChange={setScanOpen} />
         <PickupRequestModal editingPickup={null} isOpen={pickupOpen} onOpenChange={setPickupOpen} />
       </section>
     </main>

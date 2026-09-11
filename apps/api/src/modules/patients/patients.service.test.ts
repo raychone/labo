@@ -93,6 +93,31 @@ describe("PatientsService", () => {
     ]);
   });
 
+  it("combines patient-name search with the selected clinic and doctor", async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const service = createService({
+      patient: { findMany },
+      workOrder: { groupBy: vi.fn().mockResolvedValue([]) },
+    });
+
+    await service.listPatientOptions({ clinicId: "clinic_1", doctorId: "doctor_1", limit: 5, search: "Maria" });
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        AND: [
+          {
+            OR: [
+              { clinicId: "clinic_1", doctorId: "doctor_1" },
+              { workOrders: { some: { clinicId: "clinic_1", doctorId: "doctor_1" } } },
+            ],
+          },
+          expect.objectContaining({ OR: expect.any(Array) }),
+        ],
+        isArchived: false,
+      },
+    }));
+  });
+
   it("rejects archived patients for new work orders", async () => {
     const service = createService({
       patient: { findUnique: vi.fn().mockResolvedValue(patient({ isArchived: true })) },

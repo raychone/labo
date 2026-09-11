@@ -510,6 +510,20 @@
   min-width: 0;
 }
 
+.works-page__picker-with-action {
+  align-items: end;
+  display: grid;
+  gap: var(--dl-space-2);
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+.works-page__picker-with-action > .dl-button {
+  margin-bottom: 0;
+  white-space: nowrap;
+  width: max-content;
+}
+
 .works-page__search-hint {
   color: var(--dl-color-text-muted);
   font-size: var(--dl-font-size-sm);
