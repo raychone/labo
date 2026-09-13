@@ -187,6 +187,25 @@ describe("OperationalStatusService", () => {
     expect(response.counters.find((counter) => counter.tab === "COMPLETED")?.count).toBe(1);
   });
 
+  it("keeps an undelivered probe in the logistics transport queue", async () => {
+    const { service } = createService({
+      findManyRows: [createWorkRecord("probe-ready", { technicalReadiness: "PROBE_READY" })],
+      readAll: true,
+    });
+
+    const response = await service.getOperationalStatus(actor, {
+      page: 1,
+      pageSize: 25,
+      sortBy: "updatedAt",
+      sortDirection: "desc",
+      tab: "ALL",
+      transportOnly: true,
+    });
+
+    expect(response.items.map((row) => row.workCode)).toEqual(["WO-2026-probe-ready"]);
+    expect(response.counters.find((counter) => counter.tab === "COMPLETED")?.count).toBe(1);
+  });
+
   it("shows a delivered probe only after a pickup later than that delivery", async () => {
     const deliveryCompletedAt = new Date("2026-08-04T09:00:00.000Z");
     const { service } = createService({
