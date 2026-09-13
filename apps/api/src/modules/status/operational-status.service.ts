@@ -6,7 +6,7 @@ import { PrismaService } from "../database/prisma.service.js";
 import { AuthorizationService, doesScopeSatisfy } from "../rbac/authorization.service.js";
 import type { PermissionScope } from "../rbac/permission-registry.js";
 import type { OperationalStatusQueryDto } from "./dto/operational-status.dto.js";
-import { latestSuccessfulDeliveryAt, latestSuccessfulPickupAt } from "../works/probe-return-evidence.js";
+import { latestSuccessfulDeliveryAt } from "../works/probe-return-evidence.js";
 import {
   compareOperationalStatusRows,
   createOperationalStatusCounters,
@@ -66,8 +66,11 @@ export class OperationalStatusService {
         const evidence = toOperationalProbeReturnEvidence(work);
         const deliveredAt = latestSuccessfulDeliveryAt(evidence, readyAt);
         if (!deliveredAt) return true;
-        if (work.status === "FINALIZATA") return false;
-        return work.technicalReadiness !== "PROBE_READY" || latestSuccessfulPickupAt(evidence, deliveredAt) !== null;
+        // A probe-ready work remains operationally visible after delivery to
+        // the clinic, until the probe is picked up and reception opens the
+        // next cycle. Hiding it here made it disappear from Status while it
+        // was still awaiting its return.
+        return work.status !== "FINALIZATA";
       })
       .map((work) => toOperationalStatusRow(work, now))
       .filter((row) => !query.transportHorizonDays || isWithinTransportHorizon(row.deadline.effectiveDueAt, query.transportHorizonDays))
@@ -127,7 +130,7 @@ export class OperationalStatusService {
           // evidence belongs to the previous cycle and must not hide it from
           // the available/operational queues.
           { activeProbeCycleId: { not: null } },
-          { technicalReadiness: "PROBE_READY", OR: [{ requiresDelivery: true }, { requiresPickup: true }, { courierRouteStops: { none: { outcomeStatus: "DELIVERED" } } }] },
+          { technicalReadiness: "PROBE_READY" },
           { technicalReadiness: "FINAL_READY" },
           { NOT: { OR: [{ activeCycle: { is: { logisticsState: { is: { status: "DELIVERED" } } } } }, { courierRouteStops: { some: { outcomeStatus: "DELIVERED" } } }] } },
         ],

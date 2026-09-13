@@ -169,7 +169,7 @@ describe("OperationalStatusService", () => {
     }
   });
 
-  it("hides a delivered probe until a new cycle is opened", async () => {
+  it("keeps a delivered probe visible until it is picked up and returned", async () => {
     const { service } = createService({
       findManyRows: [createWorkRecord("probe-delivered", { deliveryStatus: "DELIVERED", technicalReadiness: "PROBE_READY" })],
       readAll: true,
@@ -180,11 +180,11 @@ describe("OperationalStatusService", () => {
       pageSize: 25,
       sortBy: "updatedAt",
       sortDirection: "desc",
-      tab: "TODAY",
+      tab: "ALL",
     });
 
-    expect(response.items).toHaveLength(0);
-    expect(response.counters.every((counter) => counter.count === 0)).toBe(true);
+    expect(response.items.map((row) => row.workCode)).toEqual(["WO-2026-probe-delivered"]);
+    expect(response.counters.find((counter) => counter.tab === "COMPLETED")?.count).toBe(1);
   });
 
   it("shows a delivered probe only after a pickup later than that delivery", async () => {
@@ -205,8 +205,9 @@ describe("OperationalStatusService", () => {
       tab: "ALL",
     });
 
-    expect(response.items.map((row) => row.workCode)).toEqual(["WO-2026-pickup-after"]);
-    expect(response.items[0]?.hasCompletedPickup).toBe(true);
+    expect(response.items.map((row) => row.workCode)).toEqual(["WO-2026-pickup-after", "WO-2026-pickup-before"]);
+    expect(response.items.find((row) => row.workCode.endsWith("pickup-after"))?.hasCompletedPickup).toBe(true);
+    expect(response.items.find((row) => row.workCode.endsWith("pickup-before"))?.hasCompletedPickup).toBe(false);
   });
 
   it("includes eligible returned-probe candidates only when the explicit query option is requested", async () => {
