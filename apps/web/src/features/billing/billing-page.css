@@ -1985,3 +1985,21 @@
     font-size: 0.58rem;
   }
 }
+
+/* Keep the note table compact in both the browser preview and generated PDF.
+   The template supplies the visual header/footer; these rules only control
+   the readable data area that sits between them. */
+.billing-statement .billing-print__table--attachment thead th {
+  font-size: 0.52rem;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: 0.01em;
+  vertical-align: top;
+}
+
+.billing-statement .billing-print__table--attachment tbody td,
+.billing-statement .billing-print__table--attachment tfoot td,
+.billing-statement .billing-print__table--attachment tfoot th {
+  font-size: 0.6rem;
+  line-height: 1.12;
+}

@@ -193,7 +193,9 @@ describe("BillingStatementPrintPage", () => {
     );
 
     expect(await screen.findAllByText("Catre:")).toHaveLength(1);
+    const template = screen.getByTitle("Antet notă de plată A4");
     expect(screen.getAllByTitle("Antet notă de plată A4")).toHaveLength(1);
+    expect(template.getAttribute("src")).toBe("/billing-notes/nota-a4.png?v=20260813");
     expect(screen.queryByText("Perioadă")).toBeNull();
     expect(screen.queryByText("2 documente selectate din perioadă")).toBeNull();
     expect(screen.getByText("Anexa la factura FACT-2026-000123")).toBeDefined();
