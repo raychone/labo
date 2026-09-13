@@ -492,7 +492,11 @@ export function useCreateWork() {
   return useMutation({
     mutationFn: createWork,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: worksQueryKeys.all });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: worksQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: statusQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ["logistics"] }),
+      ]);
     },
   });
 }
