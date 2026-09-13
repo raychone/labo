@@ -26,6 +26,7 @@ describe("describeRealtimeMutation", () => {
       { expectedType: "TECHNICIAN_CHANGED", path: "/technician-operations/performed", topics: ["technician-operations", "technician-workbench"] },
       { expectedType: "LOGISTICS_CHANGED", path: "/deliveries/delivery-1/complete", topics: ["logistics", "status"] },
       { expectedType: "BILLING_CHANGED", path: "/billing-documents/document-1/payments", topics: ["billing", "audit"] },
+      { expectedType: "BILLING_CHANGED", path: "/billing-payments/batch", topics: ["billing", "works", "audit"] },
     ] as const;
 
     for (const scenario of scenarios) {

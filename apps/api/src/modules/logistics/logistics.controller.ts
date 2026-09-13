@@ -105,6 +105,13 @@ export class LogisticsController {
     return this.logisticsService.startRoute({ actor, requestMetadata: getRequestMetadata(request) }, routeId);
   }
 
+  @Post("routes/:routeId/takeover")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("routes.update", "ALL")
+  public takeOverRoute(@Param("routeId") routeId: string, @CurrentUser() actor: AuthenticatedUser, @Req() request: Request) {
+    return this.logisticsService.takeOverRoute({ actor, requestMetadata: getRequestMetadata(request) }, routeId);
+  }
+
   @Patch("routes/:routeId")
   @UseGuards(CsrfGuard)
   @RequirePermission("routes.update", "ALL")

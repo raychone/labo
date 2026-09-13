@@ -18,6 +18,7 @@ import type {
   BillingRangeQueryDto,
   CreateBillingDocumentDto,
   ListBillingDocumentsQueryDto,
+  RecordBatchPaymentDto,
   RecordPaymentDto,
   DocumentShareAttemptDto,
   ReplaceBillingLinesDto,
@@ -783,6 +784,86 @@ export class BillingService {
 
     await this.recordDocumentAudit(context, BILLING_AUDIT_ACTIONS.paymentRecorded, document);
     return toBillingDocumentDetail(document);
+  }
+
+  public async recordBatchPayment(legalEntity: LegalEntityContext, context: ActorContext, dto: RecordBatchPaymentDto) {
+    const documentIds = [...new Set(dto.documentIds)];
+    if (documentIds.length !== dto.documentIds.length) {
+      throw new BadRequestException("Aceeași factură nu poate apărea de două ori în aceeași încasare.");
+    }
+
+    let documents: BillingDocumentRecord[] | null = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        documents = await this.prisma.$transaction(async (tx) => {
+          const found = await tx.billingDocument.findMany({
+            include: BILLING_DOCUMENT_INCLUDE,
+            where: { id: { in: documentIds }, legalEntityId: legalEntity.id },
+          });
+          if (found.length !== documentIds.length) {
+            throw new NotFoundException("Una sau mai multe facturi nu au fost găsite pentru firma activă.");
+          }
+          const byId = new Map(found.map((document) => [document.id, document]));
+          const ordered = documentIds.map((id) => byId.get(id)!);
+          const first = ordered[0]!;
+          if (ordered.some((document) => document.type !== "INVOICE" || !["ISSUED", "PARTIALLY_PAID"].includes(document.status))) {
+            throw new BadRequestException("Încasarea poate include doar facturi emise active.");
+          }
+          if (ordered.some((document) => document.clinicId !== first.clinicId)) {
+            throw new BadRequestException("Facturile dintr-o încasare trebuie să aparțină aceleiași clinici.");
+          }
+          if (ordered.some((document) => document.currency !== first.currency)) {
+            throw new BadRequestException("Facturile dintr-o încasare trebuie să aibă aceeași monedă.");
+          }
+
+          const balances = ordered.map((document) => ({ document, balanceMinor: calculateBillingAmounts(document).balanceMinor }));
+          const combinedBalance = balances.reduce((total, entry) => total + entry.balanceMinor, 0);
+          if (dto.amountMinor > combinedBalance) {
+            throw new ConflictException("Plata depășește soldul total rămas.");
+          }
+
+          let remaining = dto.amountMinor;
+          const updated: BillingDocumentRecord[] = [];
+          for (const entry of balances) {
+            if (remaining <= 0) break;
+            const allocation = Math.min(remaining, entry.balanceMinor);
+            if (allocation <= 0) continue;
+            await tx.payment.create({
+              data: {
+                amountMinor: allocation,
+                billingDocumentId: entry.document.id,
+                clinicId: entry.document.clinicId,
+                createdByUserId: context.actorUserId,
+                currency: entry.document.currency,
+                legalEntityId: entry.document.legalEntityId,
+                method: dto.method,
+                notes: dto.notes ?? null,
+                paymentDate: parseDateOnly(dto.paymentDate, "paymentDate"),
+                receiptDate: dto.receiptDate ? parseDateOnly(dto.receiptDate, "receiptDate") : dto.method === "CASH" ? parseDateOnly(dto.paymentDate, "paymentDate") : null,
+                receiptNumber: dto.receiptNumber ?? null,
+                reference: dto.reference ?? null,
+              },
+            });
+            updated.push(await this.updateDocumentPaymentStatus(tx, entry.document.id, context.actorUserId));
+            remaining -= allocation;
+          }
+          return updated;
+        }, { isolationLevel: "Serializable" });
+        break;
+      } catch (error) {
+        if (isSerializationConflict(error) && attempt < 2) continue;
+        if (isSerializationConflict(error)) {
+          throw new ConflictException("Încasarea nu a putut fi înregistrată din cauza unei alte plăți simultane. Reîncearcă.");
+        }
+        throw error;
+      }
+    }
+    if (!documents) throw new ConflictException("Încasarea nu a putut fi înregistrată. Reîncearcă.");
+    await Promise.all(documents.map((document) => this.recordDocumentAudit(context, BILLING_AUDIT_ACTIONS.paymentRecorded, document)));
+    return {
+      amountMinor: dto.amountMinor,
+      documents: documents.map(toBillingDocumentDetail),
+    };
   }
 
   public async cancelPayment(legalEntity: LegalEntityContext, context: ActorContext, paymentId: string) {

@@ -27,6 +27,7 @@ import {
   DoctorStatementQueryDto,
   ListBillingDocumentsQueryDto,
   RecordPaymentDto,
+  RecordBatchPaymentDto,
   ReplaceBillingLinesDto,
   SearchBillingQueryDto,
   UpdateBillingDocumentDto,
@@ -308,6 +309,18 @@ export class BillingController {
     @Req() request: Request,
   ) {
     return this.billingService.recordPayment(legalEntity, { actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, documentId, dto);
+  }
+
+  @Post("billing-payments/batch")
+  @UseGuards(CsrfGuard)
+  @RequirePermission("finance.record_payment", "ALL")
+  public recordBatchPayment(
+    @CurrentLegalEntity() legalEntity: LegalEntityContext,
+    @Body() dto: RecordBatchPaymentDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Req() request: Request,
+  ) {
+    return this.billingService.recordBatchPayment(legalEntity, { actorUserId: actor.id, requestMetadata: getRequestMetadata(request) }, dto);
   }
 
   @Post("billing-documents/:id/share-attempt")

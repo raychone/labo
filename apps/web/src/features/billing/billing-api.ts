@@ -16,6 +16,7 @@ import type {
   MonthEndRegistry,
   PaginatedBillingDocumentsResponse,
   PrintableBillingDocument,
+  RecordBatchPaymentInput,
   RecordPaymentInput,
 } from "@dental-lab/shared";
 
@@ -240,6 +241,10 @@ export async function recordPayment(documentId: string, input: RecordPaymentInpu
   return sendJson<BillingDocumentDetail>(`/billing-documents/${documentId}/payments`, "POST", input);
 }
 
+export async function recordBatchPayment(input: RecordBatchPaymentInput): Promise<{ readonly amountMinor: number; readonly documents: readonly BillingDocumentDetail[] }> {
+  return sendJson<{ readonly amountMinor: number; readonly documents: readonly BillingDocumentDetail[] }>("/billing-payments/batch", "POST", input);
+}
+
 export async function recordDocumentShareAttempt(documentId: string, input: { readonly channel: "EMAIL" | "WHATSAPP" | "SHARE"; readonly recipient?: string }): Promise<void> {
   await sendJson(`/billing-documents/${documentId}/share-attempt`, "POST", input);
 }
@@ -338,7 +343,7 @@ export function useDoctorStatement(params: BillingStatementParams, enabled: bool
   return useQuery({ enabled, queryFn: () => fetchDoctorStatement(params), queryKey: billingQueryKeys.statementDoctor(params), retry: false });
 }
 
-function useBillingMutation<TVariables>(mutationFn: (variables: TVariables) => Promise<BillingDocumentDetail>) {
+function useBillingMutation<TVariables, TResult = BillingDocumentDetail>(mutationFn: (variables: TVariables) => Promise<TResult>) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn,
@@ -377,4 +382,8 @@ export function useCreateStorno() {
 
 export function useRecordPayment() {
   return useBillingMutation(({ documentId, input }: { readonly documentId: string; readonly input: RecordPaymentInput }) => recordPayment(documentId, input));
+}
+
+export function useRecordBatchPayment() {
+  return useBillingMutation(recordBatchPayment);
 }

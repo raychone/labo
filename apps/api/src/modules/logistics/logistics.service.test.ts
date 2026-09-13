@@ -68,6 +68,7 @@ function createService({ allowUpload = true } = {}) {
     version: 1,
   };
   const courierRouteCount = vi.fn(() => Promise.resolve(0));
+  const courierRouteFindFirst = vi.fn(() => Promise.resolve(null));
   const courierRouteFindMany = vi.fn(() => Promise.resolve([] as { readonly routeNumber: string }[]));
   const courierRouteFindUnique = vi.fn(() => Promise.resolve(routeRecord));
   const courierRouteCreate = vi.fn(({ data }: { readonly data: Record<string, unknown> }) => Promise.resolve({
@@ -93,14 +94,17 @@ function createService({ allowUpload = true } = {}) {
   const courierRouteUpdate = vi.fn(({ data }: { readonly data: Record<string, unknown> }) => Promise.resolve({
     ...routeRecord,
     completedAt: (data.completedAt as Date | undefined) ?? routeRecord.completedAt,
+    courier: data.courierUserId === null ? null : routeRecord.courier,
+    courierUserId: data.courierUserId === null ? null : routeRecord.courierUserId,
     startedAt: (data.startedAt as Date | undefined) ?? routeRecord.startedAt,
-    status: data.status as string,
+    status: (data.status as string | undefined) ?? routeRecord.status,
     stops: routeRecord.stops.map((stop) => stop.id === "stop_1" ? { ...stop, outcomeAt: new Date("2026-08-20T12:00:00.000Z"), outcomeBy: { displayName: "Curier Test" }, outcomeStatus: "DELIVERED" } : stop),
     version: 2,
   }));
   const courierRouteEventCreate = vi.fn(() => Promise.resolve({ id: "route_event_1" }));
   const courierRouteStopFindFirst = vi.fn(() => Promise.resolve(null));
   const courierRouteStopUpdate = vi.fn(() => Promise.resolve({ id: "stop_1" }));
+  const courierRouteStopUpdateMany = vi.fn(() => Promise.resolve({ count: 1 }));
   const workOrderUpdate = vi.fn(() => Promise.resolve({ id: "work_1" }));
   const workOrderFindMany = vi.fn(({ where }: { readonly where: { readonly id: { readonly in: readonly string[] } } }) => Promise.resolve(where.id.in.map((id) => ({ id }))));
   const workAttachmentCreate = vi.fn(({ data }: { readonly data: { readonly fileName: string; readonly mimeType: string; readonly sizeBytes: number } }) => Promise.resolve({
@@ -114,9 +118,9 @@ function createService({ allowUpload = true } = {}) {
     $transaction: vi.fn((callback: (tx: unknown) => unknown) => callback({
       $executeRaw: vi.fn().mockResolvedValue(0),
       auditLog: { create: auditLogCreate },
-      courierRoute: { count: courierRouteCount, create: courierRouteCreate, findMany: courierRouteFindMany, findUnique: courierRouteFindUnique, update: courierRouteUpdate },
+      courierRoute: { count: courierRouteCount, create: courierRouteCreate, findFirst: courierRouteFindFirst, findMany: courierRouteFindMany, findUnique: courierRouteFindUnique, update: courierRouteUpdate },
       courierRouteEvent: { create: courierRouteEventCreate },
-      courierRouteStop: { findFirst: courierRouteStopFindFirst, update: courierRouteStopUpdate },
+      courierRouteStop: { findFirst: courierRouteStopFindFirst, update: courierRouteStopUpdate, updateMany: courierRouteStopUpdateMany },
       delivery: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       deliveryPreparationItem: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       pickupRequest: { create: pickupRequestCreate, findUnique: pickupRequestFindUnique, update: pickupRequestUpdate },
@@ -135,9 +139,11 @@ function createService({ allowUpload = true } = {}) {
     auditLogCreate,
     courierRouteCreate,
     courierRouteEventCreate,
+    courierRouteFindFirst,
     courierRouteFindUnique,
     courierRouteFindMany,
     courierRouteStopUpdate,
+    courierRouteStopUpdateMany,
     courierRouteUpdate,
     prisma,
     pickupRequestCreate,
@@ -420,8 +426,126 @@ describe("LogisticsService routes", () => {
     expect(courierRouteCreate).not.toHaveBeenCalled();
   });
 
+  it("only lets a genuinely active route block a later route", async () => {
+    const { courierRouteFindFirst, courierRouteUpdate, service } = createService();
+
+    await service.startRoute(
+      { actor: { id: "courier_1" } as never, requestMetadata: {} },
+      "route_1",
+    );
+
+    expect(courierRouteFindFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        courierUserId: "courier_1",
+        id: { not: "route_1" },
+        status: "IN_PROGRESS",
+      }),
+    }));
+    expect(courierRouteUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: "IN_PROGRESS" }),
+    }));
+  });
+
+  it("keeps an actually active route as the single blocker", async () => {
+    const { courierRouteFindFirst, courierRouteUpdate, service } = createService();
+    courierRouteFindFirst.mockResolvedValueOnce({ routeNumber: "TR-260820-01" } as never);
+
+    await expect(service.startRoute(
+      { actor: { id: "courier_1" } as never, requestMetadata: {} },
+      "route_1",
+    )).rejects.toThrow("Finalizează traseul anterior");
+    expect(courierRouteUpdate).not.toHaveBeenCalled();
+  });
+
+  it("lets logistics take over the same route without recreating stops", async () => {
+    const { courierRouteEventCreate, courierRouteUpdate, service } = createService();
+
+    const result = await service.takeOverRoute(
+      { actor: { id: "logistics_1" } as never, requestMetadata: {} },
+      "route_1",
+    );
+
+    expect(courierRouteUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ courierUserId: null, status: "DRAFT" }),
+      where: { id: "route_1", version: 1 },
+    }));
+    expect(courierRouteUpdate.mock.calls[0]?.[0].data).not.toHaveProperty("stops");
+    expect(courierRouteEventCreate).toHaveBeenCalledWith({ data: expect.objectContaining({
+      metadata: expect.objectContaining({ previousCourierUserId: "courier_1", takeoverByLogistics: true }),
+      routeId: "route_1",
+      type: "ROUTE_UPDATED",
+    }) });
+    expect(result.courier).toBeNull();
+    expect(result.stops.map((stop) => stop.id)).toEqual(["stop_1", "stop_2"]);
+  });
+
+  it("treats a repeated logistics takeover as an idempotent success", async () => {
+    const { courierRouteFindUnique, courierRouteUpdate, service } = createService();
+    courierRouteFindUnique.mockResolvedValueOnce({
+      ...await courierRouteFindUnique(),
+      courier: null,
+      courierUserId: null,
+      status: "IN_PROGRESS",
+    } as never);
+
+    const result = await service.takeOverRoute(
+      { actor: { id: "logistics_1" } as never, requestMetadata: {} },
+      "route_1",
+    );
+
+    expect(courierRouteUpdate).not.toHaveBeenCalled();
+    expect(result.courier).toBeNull();
+    expect(result.status).toBe("IN_PROGRESS");
+  });
+
+  it("preserves completed stops when logistics takes over an in-progress route", async () => {
+    const { courierRouteFindUnique, courierRouteUpdate, service } = createService();
+    const current = await courierRouteFindUnique();
+    courierRouteFindUnique.mockResolvedValueOnce({
+      ...current,
+      startedAt: new Date("2026-08-20T11:00:00.000Z"),
+      status: "IN_PROGRESS",
+      stops: current.stops.map((stop, index) => index === 0
+        ? { ...stop, outcomeAt: new Date("2026-08-20T11:15:00.000Z"), outcomeStatus: "DELIVERED" }
+        : stop),
+    } as never);
+
+    await service.takeOverRoute(
+      { actor: { id: "logistics_1" } as never, requestMetadata: {} },
+      "route_1",
+    );
+
+    expect(courierRouteUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ courierUserId: null }),
+    }));
+    expect(courierRouteUpdate.mock.calls[0]?.[0].data).not.toHaveProperty("stops");
+    expect(courierRouteUpdate.mock.calls[0]?.[0].data).not.toHaveProperty("status");
+  });
+
+  it("rejects the original courier after logistics has taken over the route", async () => {
+    const { authorizationService, courierRouteFindUnique, courierRouteStopUpdateMany, service } = createService();
+    courierRouteFindUnique.mockResolvedValueOnce({
+      ...await courierRouteFindUnique(),
+      courier: null,
+      courierUserId: null,
+      status: "IN_PROGRESS",
+    } as never);
+    authorizationService.hasPermission.mockImplementation(({ permission, requiredScope }: { readonly permission: string; readonly requiredScope?: string }) => Promise.resolve({
+      allowed: permission === "routes.execute_own" && requiredScope !== "ALL",
+      effectiveScopes: permission === "routes.execute_own" ? ["OWN_DELIVERY"] : [],
+    }));
+
+    await expect(service.recordRouteStopOutcome(
+      { actor: { id: "courier_1" } as never, requestMetadata: {} },
+      "route_1",
+      "stop_1",
+      { outcomeStatus: "DELIVERED" },
+    )).rejects.toBeInstanceOf(ForbiddenException);
+    expect(courierRouteStopUpdateMany).not.toHaveBeenCalled();
+  });
+
   it("records an outcome on an own assigned route stop", async () => {
-    const { auditLogCreate, courierRouteEventCreate, courierRouteStopUpdate, courierRouteUpdate, service } = createService();
+    const { auditLogCreate, courierRouteEventCreate, courierRouteStopUpdateMany, courierRouteUpdate, service } = createService();
 
     const result = await service.recordRouteStopOutcome(
       { actor: { id: "courier_1" } as never, requestMetadata: {} },
@@ -430,7 +554,7 @@ describe("LogisticsService routes", () => {
       { notes: "Predat", outcomeStatus: "DELIVERED" },
     );
 
-    expect(courierRouteStopUpdate).toHaveBeenCalledWith({ data: expect.objectContaining({ outcomeByUserId: "courier_1", outcomeNotes: "Predat", outcomeStatus: "DELIVERED" }), where: { id: "stop_1" } });
+    expect(courierRouteStopUpdateMany).toHaveBeenCalledWith({ data: expect.objectContaining({ outcomeByUserId: "courier_1", outcomeNotes: "Predat", outcomeStatus: "DELIVERED" }), where: { id: "stop_1", outcomeStatus: "PENDING", routeId: "route_1" } });
     expect(courierRouteUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "IN_PROGRESS" }) }));
     expect(courierRouteEventCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ routeId: "route_1", type: "STOP_OUTCOME_RECORDED" }) });
     expect(auditLogCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ action: "route.stop_outcome_recorded", resourceType: "courier_route" }) });
@@ -447,5 +571,18 @@ describe("LogisticsService routes", () => {
       { outcomeStatus: "PICKED_UP" },
     )).rejects.toBeInstanceOf(BadRequestException);
     expect(courierRouteStopUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a concurrent second outcome instead of overwriting it", async () => {
+    const { courierRouteStopUpdateMany, courierRouteUpdate, service } = createService();
+    courierRouteStopUpdateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(service.recordRouteStopOutcome(
+      { actor: { id: "courier_1" } as never, requestMetadata: {} },
+      "route_1",
+      "stop_1",
+      { outcomeStatus: "DELIVERED" },
+    )).rejects.toThrow("Oprirea a fost deja actualizată");
+    expect(courierRouteUpdate).not.toHaveBeenCalled();
   });
 });

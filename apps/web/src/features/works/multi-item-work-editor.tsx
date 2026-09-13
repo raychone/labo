@@ -135,6 +135,10 @@ export function MultiItemWorkEditor({
   const [formOpen, setFormOpen] = useState(false);
 
   const compositionTeeth = useMemo(() => getDraftCompositionTeeth(items), [items]);
+  const sortedSelectedTeeth = useMemo(
+    () => ADULT_FDI_TEETH.filter((tooth) => selectedTeeth.includes(tooth)),
+    [selectedTeeth],
+  );
   const effectiveConnectionComposition = useMemo(
     () => getDraftCompositionTeeth([...items, { scope, teeth: selectedTeeth }]),
     [items, scope, selectedTeeth],
@@ -374,6 +378,9 @@ export function MultiItemWorkEditor({
           shortcutsAction={<Button disabled={disabled} onClick={startAdding} type="button" variant="outline">Adaugă lucrare</Button>}
           toothColors={workTypeVisualization.toothColors}
         />
+        <p aria-live="polite" className="multi-item-work-editor__selected-teeth-summary">
+          {sortedSelectedTeeth.length > 0 ? `Dinți selectați: ${sortedSelectedTeeth.join(", ")}` : "Niciun dinte selectat"}
+        </p>
         {workTypeVisualization.legend.length > 0 ? <div className="multi-item-work-editor__legend" aria-label="Legendă tipuri de lucrări">
           {workTypeVisualization.legend.map((entry) => <span key={`${entry.symbol}-${entry.label}`}><i aria-hidden="true" style={{ background: entry.color }} />{entry.symbol} · {entry.label}</span>)}
         </div> : null}

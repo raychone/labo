@@ -41,9 +41,10 @@ export function CourierRoutePage(): ReactNode {
   const canRead = hasPermission(permissionsQuery.data, "routes.read");
   const canExecute = hasPermission(permissionsQuery.data, "routes.execute_own");
   const routesQuery = useCourierRoutes({ dateFrom: today(), page: 1, pageSize: 30 }, canRead);
+  const activeRouteQuery = useCourierRoutes({ page: 1, pageSize: 30, status: "IN_PROGRESS" }, canRead);
   const outcomeMutation = useRecordCourierRouteStopOutcome();
   const startMutation = useStartCourierRoute();
-  const routes = (routesQuery.data?.items ?? [])
+  const routes = [...new Map([...(activeRouteQuery.data?.items ?? []), ...(routesQuery.data?.items ?? [])].map((route) => [route.id, route])).values()]
     .filter((route) => route.status !== "CANCELLED")
     .slice()
     .sort((left, right) => left.routeDate.localeCompare(right.routeDate) || left.routeNumber.localeCompare(right.routeNumber));
@@ -83,11 +84,11 @@ export function CourierRoutePage(): ReactNode {
           </div>
         </header>
         <NextStep description={inProgressRoute ? `Continuă cu oprirea ${inProgressRoute.stops.find((stop) => stop.outcomeStatus === "PENDING")?.stopOrder ?? "următoare"} și confirmă rezultatul.` : startableRoute ? "Pornește traseul disponibil, apoi confirmă fiecare oprire în ordine." : "Așteaptă finalizarea traseului anterior sau verifică traseele asignate."} />
-        {routesQuery.isLoading ? <LoadingState text="Se încarcă rutele" /> : null}
-        {routesQuery.isError ? <ErrorState title="Rutele nu au fost încărcate" description={getErrorMessage(routesQuery.error)} /> : null}
+        {routesQuery.isLoading || activeRouteQuery.isLoading ? <LoadingState text="Se încarcă rutele" /> : null}
+        {routesQuery.isError || activeRouteQuery.isError ? <ErrorState title="Rutele nu au fost încărcate" description={getErrorMessage(routesQuery.error ?? activeRouteQuery.error)} /> : null}
         <div className="logistics-page__content">
           {routes.map((route) => <RouteCard canExecute={canExecute && route.status === "IN_PROGRESS"} canStart={startableRoute?.id === route.id} key={route.id} onRecord={record} onStart={() => start(route.id)} pending={outcomeMutation.isPending || startMutation.isPending} route={route} />)}
-          {routesQuery.data && routes.length === 0 ? <p className="logistics-page__empty">Nu ai trasee asignate.</p> : null}
+          {routesQuery.data && activeRouteQuery.data && routes.length === 0 ? <p className="logistics-page__empty">Nu ai trasee asignate.</p> : null}
         </div>
       </section>
     </main>

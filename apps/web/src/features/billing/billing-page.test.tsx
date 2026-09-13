@@ -46,13 +46,23 @@ function createJsonResponse(body: unknown, status = 200): Response {
   } as Response;
 }
 
+function createBlobResponse(): Response {
+  return {
+    blob: async () => new Blob(["pdf"], { type: "application/pdf" }),
+    headers: new Headers({ "content-disposition": "attachment; filename=factura.pdf" }),
+    ok: true,
+    status: 200,
+  } as Response;
+}
+
 describe("BillingPage", () => {
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
   it("renders month-end cards, billable works and document actions", async () => {
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/auth/permissions")) {
         return Promise.resolve(createJsonResponse({
@@ -66,6 +76,21 @@ describe("BillingPage", () => {
             { key: "invoice.configure_series", scopes: ["ALL"] },
           ],
         }));
+      }
+      if (url.endsWith("/auth/csrf")) {
+        return Promise.resolve(createJsonResponse({ csrfToken: "csrf-token" }));
+      }
+      if (url.endsWith("/billing-payments/batch")) {
+        return Promise.resolve(createJsonResponse({ amountMinor: 5000, documents: [] }));
+      }
+      if (/\/billing-documents\/invoice_[12]$/.test(url)) {
+        return Promise.resolve(createJsonResponse({ clinicSnapshot: { email: "clinica@example.test", phone: "+40700111222" } }));
+      }
+      if (/\/billing-documents\/invoice_[12]\/pdf$/.test(url)) {
+        return Promise.resolve(createBlobResponse());
+      }
+      if (/\/billing-documents\/invoice_[12]\/share-attempt$/.test(url)) {
+        return Promise.resolve(createJsonResponse({}));
       }
       if (url.endsWith("/settings")) {
         return Promise.resolve(createJsonResponse({ currency: "RON", legalEntityCode: "NC", legalEntityDisplayName: "Nicolaie Cristina", locale: "ro-RO" }));
@@ -276,6 +301,46 @@ describe("BillingPage", () => {
             type: "INVOICE",
             workCodes: ["WO-2026-000002"],
             workCount: 1,
+          }, {
+            balanceMinor: 20000,
+            clinicId: "clinic_1",
+            clinicName: "Clinica Test",
+            currency: "RON",
+            dueDate: "2026-09-30T00:00:00.000Z",
+            formattedNumber: "FACT-2026-000002",
+            id: "invoice_2",
+            issueDate: "2026-09-09T12:00:00.000Z",
+            legalEntityCode: "NC",
+            legalEntityName: "Nicolaie Cristina",
+            paidMinor: 0,
+            paymentStatus: "UNPAID",
+            status: "ISSUED",
+            stornoDocumentId: null,
+            stornoOfDocumentId: null,
+            totalMinor: 20000,
+            type: "INVOICE",
+            workCodes: ["WO-2026-000004"],
+            workCount: 1,
+          }, {
+            balanceMinor: 15000,
+            clinicId: "clinic_1",
+            clinicName: "Clinica Test",
+            currency: "RON",
+            dueDate: "2026-09-30T00:00:00.000Z",
+            formattedNumber: null,
+            id: "invoice_draft_1",
+            issueDate: "2026-09-10T12:00:00.000Z",
+            legalEntityCode: "NC",
+            legalEntityName: "Nicolaie Cristina",
+            paidMinor: 0,
+            paymentStatus: "UNPAID",
+            status: "DRAFT",
+            stornoDocumentId: null,
+            stornoOfDocumentId: null,
+            totalMinor: 15000,
+            type: "INVOICE",
+            workCodes: ["WO-2026-000003"],
+            workCount: 1,
           }],
           page: 1,
           pageCount: 1,
@@ -297,6 +362,8 @@ describe("BillingPage", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     vi.stubGlobal("open", vi.fn());
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: vi.fn(() => "blob:test"), revokeObjectURL: vi.fn() }));
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
 
     renderWithProviders(<BillingPage />);
 
@@ -339,12 +406,12 @@ describe("BillingPage", () => {
     expect(screen.queryByRole("tab", { name: "Prezentare generală" })).toBeNull();
     expect(screen.queryByRole("tab", { name: "Ghid facturare" })).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Facturi" }));
-    expect(await screen.findByRole("button", { name: "Deschide" })).toBeDefined();
+    expect((await screen.findAllByRole("button", { name: "Deschide" })).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("tab", { name: "De facturat" }));
     await waitFor(() => expect((screen.getByRole("button", { name: "Emite factură" }) as HTMLButtonElement).disabled).toBe(true));
     expect(screen.queryByText(/1 lucrări selectate/)).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Facturi" }));
-    expect(await screen.findByRole("button", { name: "Deschide" })).toBeDefined();
+    expect((await screen.findAllByRole("button", { name: "Deschide" })).length).toBeGreaterThan(0);
     const invoicesToolbar = screen.getByRole("group", { name: "Toolbar facturi" });
     expect(within(invoicesToolbar).getByRole("button", { name: "Export CSV" })).toBeDefined();
     expect((within(invoicesToolbar).getByRole("button", { name: "Încasează" }) as HTMLButtonElement).disabled).toBe(true);
@@ -352,11 +419,32 @@ describe("BillingPage", () => {
     const invoiceCheckbox = await screen.findByRole("checkbox", { name: "Selectează FACT-2026-000001" });
     expect(invoiceCheckbox.classList.contains("billing-page__row-selection-checkbox")).toBe(true);
     fireEvent.click(invoiceCheckbox);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Selectează FACT-2026-000002" }));
+    expect(screen.getByText(/2 facturi selectate/)).toBeDefined();
+    fireEvent.click(within(invoicesToolbar).getByRole("button", { name: "Trimite WhatsApp" }));
+    await waitFor(() => expect(window.open).toHaveBeenCalledWith(expect.stringContaining("FACT-2026-000001%2C%20FACT-2026-000002"), "_blank", "noopener,noreferrer"));
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([input, init]) => {
+      if (!/\/billing-documents\/invoice_[12]\/share-attempt$/.test(String(input)) || init?.method !== "POST") return false;
+      const body = JSON.parse(String(init.body)) as { readonly channel?: string; readonly recipient?: string };
+      return body.channel === "WHATSAPP" && body.recipient === "40700111222";
+    })).toHaveLength(2));
     expect(screen.getByRole("button", { name: "Încasează" })).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Încasează" }));
     fireEvent.change(await screen.findByLabelText("Sumă încasată"), { target: { value: "50.00" } });
     fireEvent.click(screen.getByRole("button", { name: "Înregistrează încasarea" }));
-    expect(screen.queryByText("Incaseaza sold")).toBeNull();
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => {
+      if (!String(input).endsWith("/billing-payments/batch") || init?.method !== "POST") return false;
+      const body = JSON.parse(String(init.body)) as { readonly documentIds?: readonly string[] };
+      return body.documentIds?.join(",") === "invoice_1,invoice_2";
+    })).toBe(true));
+
+    const draftCheckbox = screen.getByRole("checkbox", { name: "Selectează Draft" });
+    fireEvent.click(draftCheckbox);
+    expect(screen.getByText("Draft — emite factura înainte de a înregistra încasarea.")).toBeDefined();
+    expect((within(invoicesToolbar).getByRole("button", { name: "Încasează" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(invoicesToolbar).getByRole("button", { name: "Emite factura" }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(within(invoicesToolbar).getByRole("button", { name: "Emite factura" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith("/billing-documents/invoice_draft_1/issue") && init?.method === "POST")).toBe(true));
 
     fireEvent.click(screen.getByRole("tab", { name: "Restanțe" }));
     const receivablesToolbar = await screen.findByRole("group", { name: "Toolbar restanțe" });
@@ -370,15 +458,19 @@ describe("BillingPage", () => {
     expect(await screen.findByLabelText("Sumă încasată")).toBeDefined();
 
     fireEvent.click(screen.getByRole("tab", { name: "Note de plată" }));
-    expect(await screen.findByRole("heading", { name: "Clinica Test" })).toBeDefined();
+    expect(await screen.findByRole("heading", { name: "Note de plată" })).toBeDefined();
+    expect(screen.getAllByText("FACT-2026-000001").length).toBeGreaterThan(0);
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/billing/statements/clinic"))).toBe(false);
     const statementsToolbar = screen.getByRole("group", { name: "Toolbar note de plată" });
     expect(within(statementsToolbar).getByRole("button", { name: "Clinică" })).toBeDefined();
     expect(within(statementsToolbar).getByRole("button", { name: "Medic" })).toBeDefined();
     expect(within(statementsToolbar).getByRole("button", { name: "Documente emise" })).toBeDefined();
     expect(within(statementsToolbar).getByRole("button", { name: "Lucrări nefacturate" })).toBeDefined();
-    expect(within(statementsToolbar).getByRole("button", { name: "Export PDF" })).toBeDefined();
-    expect(within(statementsToolbar).getByRole("button", { name: "Trimite email" })).toBeDefined();
-    expect(within(statementsToolbar).getByRole("button", { name: "Trimite WhatsApp" })).toBeDefined();
+    expect((within(statementsToolbar).getByRole("button", { name: "Export PDF" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(statementsToolbar).getByRole("button", { name: "Trimite email" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(statementsToolbar).getByRole("button", { name: "Trimite WhatsApp" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getAllByRole("button", { name: "Deschide nota" })[0]!);
+    expect(await screen.findByRole("heading", { name: "Clinica Test" })).toBeDefined();
     expect(screen.getByText("FACT-2026-000099")).toBeDefined();
     expect(screen.getByRole("checkbox", { name: "Selectează FACT-2026-000099" }).classList.contains("billing-page__row-selection-checkbox")).toBe(true);
     expect(screen.getAllByText("350,00 RON").length).toBeGreaterThan(0);

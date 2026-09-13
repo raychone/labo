@@ -155,6 +155,7 @@ export const operationalStatusWorkInclude = {
   activeProbeCycle: {
     select: {
       deadlineAt: true,
+      sequence: true,
     },
   },
   // Keep a completed probe's deadline available for legacy/current records
@@ -246,6 +247,7 @@ export interface OperationalStatusRowView {
   readonly requiresDelivery: boolean;
   readonly requiresPickup: boolean;
   readonly hasCompletedPickup: boolean;
+  readonly hasReturnedProbe: boolean;
   readonly components: readonly {
     readonly colorHex: string | null;
     readonly name: string;
@@ -343,8 +345,8 @@ export function matchesOperationalStatusTab(row: OperationalStatusRowView, tab: 
     return row.operationalStatus !== "FINALIZATA"
       && row.technicalReadiness === null
       && row.claimStatus === "UNCLAIMED"
-      && row.delivery.status !== "DELIVERED"
-      && row.logistics.status !== "DELIVERED";
+      && (row.hasReturnedProbe
+        || (row.delivery.status !== "DELIVERED" && row.logistics.status !== "DELIVERED"));
   }
   if (tab === "LATE") {
     return row.deadline.state === "LATE";
@@ -359,12 +361,11 @@ export function matchesOperationalStatusTab(row: OperationalStatusRowView, tab: 
   if (tab === "RETURNED") {
     // A probe-ready cycle is still on its way to the clinic/logistics. It is a
     // real return only after reception has opened the next cycle for it.
-    return row.currentCycle !== null && row.currentCycle.number > 1;
+    return row.hasReturnedProbe === true;
   }
-  // „Finalizate” is reserved for true technical finalization. A probe that is
-  // ready for delivery remains in its probe cycle and must never be presented
-  // as a completed work.
-  return row.operationalStatus === "FINALIZATA";
+  // A completed technical stage is operationally finished even when the work
+  // is leaving only for a probe. Final finalization remains included as well.
+  return row.operationalStatus === "FINALIZATA" || row.technicalReadiness === "PROBE_READY";
 }
 
 export function compareOperationalStatusRows(
@@ -451,6 +452,7 @@ export function toOperationalStatusRow(work: OperationalStatusWorkRecord, now: D
           return deliveredAt ? latestSuccessfulPickupAt(evidence, deliveredAt) !== null : false;
         })()
       : false,
+    hasReturnedProbe: (work.activeProbeCycle?.sequence ?? 0) > 0,
     operationalStatus: work.status === "REGISTERED" ? "RECEPTIE" : work.status,
     patient: {
       id: work.patient?.id ?? null,

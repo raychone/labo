@@ -7,7 +7,7 @@ import { useSearchParams } from "react-router";
 import { fetchPermissions } from "../auth/auth-api.js";
 import { hasPermission } from "../users/users-api.js";
 import { getErrorMessage } from "../../lib/form-utils.js";
-import { useCourierRoutes, useCreateCourierRoute, useDeleteCourierRoute, useLogisticsCenter, usePickupRequests, useRecordCourierRouteStopOutcome, useRouteCourierOptions, useStartCourierRoute, useUpdateCourierRoute } from "./logistics-api.js";
+import { useCourierRoutes, useCreateCourierRoute, useDeleteCourierRoute, useLogisticsCenter, usePickupRequests, useRecordCourierRouteStopOutcome, useRouteCourierOptions, useStartCourierRoute, useTakeOverCourierRoute, useUpdateCourierRoute } from "./logistics-api.js";
 import "./logistics-page.css";
 
 type SelectedStop =
@@ -146,6 +146,7 @@ export function LogisticsRouteBuilderPage(): ReactNode {
   const updateRoute = useUpdateCourierRoute();
   const deleteRoute = useDeleteCourierRoute();
   const startRoute = useStartCourierRoute();
+  const takeOverRoute = useTakeOverCourierRoute();
   const outcomeRoute = useRecordCourierRouteStopOutcome();
   const selectedKeys = useMemo(() => new Set(selectedStops.map((stop) => stop.id)), [selectedStops]);
   const previousStopContacts = useMemo(() => {
@@ -268,6 +269,13 @@ export function LogisticsRouteBuilderPage(): ReactNode {
     startRoute.mutate(routeId, {
       onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Traseul nu a putut fi pornit", variant: "error" }),
       onSuccess: () => toast.showToast({ message: "Traseul a fost pornit de logistică.", title: "Traseu pornit", variant: "success" }),
+    });
+  }
+
+  function takeOverRouteAsLogistics(routeId: string): void {
+    takeOverRoute.mutate(routeId, {
+      onError: (error) => toast.showToast({ message: getErrorMessage(error), title: "Traseul nu a putut fi preluat", variant: "error" }),
+      onSuccess: () => toast.showToast({ message: "Traseul și opririle sale sunt acum gestionate de Logistică.", title: "Traseu preluat", variant: "success" }),
     });
   }
 
@@ -554,7 +562,7 @@ export function LogisticsRouteBuilderPage(): ReactNode {
                 <section aria-labelledby={`in-progress-route-${route.id}`} className="logistics-page__in-progress-routes" key={route.id}>
                   <h2 id={`in-progress-route-${route.id}`}>Traseu în desfășurare</h2>
                   <p>Finalizează opririle acestui traseu înainte de a porni unul nou. Este afișat chiar dacă are altă dată decât filtrul curent.</p>
-                  <RouteGroup canAssign={canAssign} canCancel={canCancel} canExecute={canExecute} assigningCourierId={assigningCourierId} assigningRouteId={assigningRouteId} couriers={couriersQuery.data ?? []} deletePending={deleteRoute.isPending} editRoute={editRoute} onAssign={assignRoute} onRecord={recordRouteStopAsLogistics} onRemove={removeRoute} onStart={startRouteAsLogistics} onStartAssigning={startAssigning} outcomePending={outcomeRoute.isPending} route={route} startPending={startRoute.isPending} updatePending={updateRoute.isPending} setAssigningCourierId={setAssigningCourierId} printRoutes={printRoutes} />
+                  <RouteGroup canAssign={canAssign} canCancel={canCancel} canExecute={canExecute} assigningCourierId={assigningCourierId} assigningRouteId={assigningRouteId} couriers={couriersQuery.data ?? []} deletePending={deleteRoute.isPending} editRoute={editRoute} onAssign={assignRoute} onRecord={recordRouteStopAsLogistics} onRemove={removeRoute} onStart={startRouteAsLogistics} onStartAssigning={startAssigning} onTakeOver={takeOverRouteAsLogistics} outcomePending={outcomeRoute.isPending} route={route} startPending={startRoute.isPending} takeOverPending={takeOverRoute.isPending} updatePending={updateRoute.isPending} setAssigningCourierId={setAssigningCourierId} printRoutes={printRoutes} />
                 </section>
               ))}
             <div className="logistics-page__print-controls">
@@ -584,13 +592,13 @@ export function LogisticsRouteBuilderPage(): ReactNode {
             {routesQuery.isError ? <ErrorState title="Traseele nu au fost încărcate" description={getErrorMessage(routesQuery.error)} /> : null}
             {selectedPlannedRoutes.length === 0 && !routesQuery.isLoading ? <p className="logistics-page__empty">Nu există trasee pentru filtrele selectate.</p> : null}
             {selectedPlannedRoutes.map((route) => (
-              <RouteGroup key={route.id} canAssign={canAssign} canCancel={canCancel} canExecute={canExecute} assigningCourierId={assigningCourierId} assigningRouteId={assigningRouteId} couriers={couriersQuery.data ?? []} deletePending={deleteRoute.isPending} editRoute={editRoute} onAssign={assignRoute} onRecord={recordRouteStopAsLogistics} onRemove={removeRoute} onStart={startRouteAsLogistics} onStartAssigning={startAssigning} outcomePending={outcomeRoute.isPending} route={route} startPending={startRoute.isPending} updatePending={updateRoute.isPending} setAssigningCourierId={setAssigningCourierId} printRoutes={printRoutes} />
+              <RouteGroup key={route.id} canAssign={canAssign} canCancel={canCancel} canExecute={canExecute} assigningCourierId={assigningCourierId} assigningRouteId={assigningRouteId} couriers={couriersQuery.data ?? []} deletePending={deleteRoute.isPending} editRoute={editRoute} onAssign={assignRoute} onRecord={recordRouteStopAsLogistics} onRemove={removeRoute} onStart={startRouteAsLogistics} onStartAssigning={startAssigning} onTakeOver={takeOverRouteAsLogistics} outcomePending={outcomeRoute.isPending} route={route} startPending={startRoute.isPending} takeOverPending={takeOverRoute.isPending} updatePending={updateRoute.isPending} setAssigningCourierId={setAssigningCourierId} printRoutes={printRoutes} />
             ))}
             {selectedHistoricalRoutes.length > 0 ? <details className="logistics-page__route-history">
               <summary>Istoric trasee · {selectedHistoricalRoutes.length}</summary>
               <p>Trasee încheiate, păstrate pentru evidență.</p>
               {selectedHistoricalRoutes.map((route) => (
-                <RouteGroup key={route.id} canAssign={false} canCancel={false} canExecute={false} assigningCourierId="" assigningRouteId={null} couriers={[]} deletePending={false} editRoute={editRoute} onAssign={() => undefined} onRecord={() => undefined} onRemove={() => undefined} onStart={() => undefined} onStartAssigning={() => undefined} outcomePending={false} route={route} startPending={false} updatePending={false} setAssigningCourierId={() => undefined} printRoutes={printRoutes} />
+                <RouteGroup key={route.id} canAssign={false} canCancel={false} canExecute={false} assigningCourierId="" assigningRouteId={null} couriers={[]} deletePending={false} editRoute={editRoute} onAssign={() => undefined} onRecord={() => undefined} onRemove={() => undefined} onStart={() => undefined} onStartAssigning={() => undefined} onTakeOver={() => undefined} outcomePending={false} route={route} startPending={false} takeOverPending={false} updatePending={false} setAssigningCourierId={() => undefined} printRoutes={printRoutes} />
               ))}
             </details> : null}
             </> : <section aria-labelledby="preparation-lists-title" className="logistics-page__preparation-panel">
@@ -613,7 +621,7 @@ export function LogisticsRouteBuilderPage(): ReactNode {
   );
 }
 
-function RouteGroup({ assigningCourierId, assigningRouteId, canAssign, canCancel, canExecute, couriers, deletePending, editRoute, onAssign, onRecord, onRemove, onStart, onStartAssigning, outcomePending, printRoutes, route, setAssigningCourierId, startPending, updatePending }: {
+function RouteGroup({ assigningCourierId, assigningRouteId, canAssign, canCancel, canExecute, couriers, deletePending, editRoute, onAssign, onRecord, onRemove, onStart, onStartAssigning, onTakeOver, outcomePending, printRoutes, route, setAssigningCourierId, startPending, takeOverPending, updatePending }: {
   readonly assigningCourierId: string;
   readonly assigningRouteId: string | null;
   readonly canAssign: boolean;
@@ -627,11 +635,13 @@ function RouteGroup({ assigningCourierId, assigningRouteId, canAssign, canCancel
   readonly onRemove: (route: CourierRouteView) => void;
   readonly onStart: (routeId: string) => void;
   readonly onStartAssigning: (route: CourierRouteView) => void;
+  readonly onTakeOver: (routeId: string) => void;
   readonly outcomePending: boolean;
   readonly printRoutes: (routeId?: string) => void;
   readonly route: CourierRouteView;
   readonly setAssigningCourierId: (value: string) => void;
   readonly startPending: boolean;
+  readonly takeOverPending: boolean;
   readonly updatePending: boolean;
 }): ReactNode {
   const [stopsExpanded, setStopsExpanded] = useState(false);
@@ -648,6 +658,7 @@ function RouteGroup({ assigningCourierId, assigningRouteId, canAssign, canCancel
       <Button aria-expanded={stopsExpanded} className="logistics-page__route-stops-toggle" onClick={() => setStopsExpanded((value) => !value)} size="small" type="button" variant="ghost">{stopsExpanded ? "Ascunde opririle" : `Vezi ${route.stops.length === 1 ? "oprirea" : "opririle"}`}</Button>
     </div>
     <div className="logistics-page__group-actions">
+      {canExecute && route.courier && !isHistorical ? <Button disabled={takeOverPending} onClick={() => onTakeOver(route.id)} size="small" type="button">{route.status === "IN_PROGRESS" ? "Continuă ca Logistică" : "Preia traseul"}</Button> : null}
       {canExecute && (route.status === "ASSIGNED" || (route.status === "DRAFT" && !route.courier)) ? <Button disabled={startPending} onClick={() => onStart(route.id)} size="small" type="button">Începe traseul</Button> : null}
       {route.status === "DRAFT" ? <Button aria-label="Deschide traseul" onClick={() => editRoute(route)} size="small" type="button" variant="outline">Deschide</Button> : null}
       {canAssign && route.status !== "COMPLETED" ? <Button aria-label={route.courier ? "Schimbă curierul traseului" : "Trimite traseul curierului"} onClick={() => onStartAssigning(route)} size="small" type="button" variant="outline">{route.courier ? "Curier" : "Trimite curierului"}</Button> : null}
@@ -660,7 +671,7 @@ function RouteGroup({ assigningCourierId, assigningRouteId, canAssign, canCancel
       <Button disabled={updatePending} onClick={() => onAssign(route)} size="small" type="button">Trimite traseul</Button>
     </div> : null}
     {stopsExpanded ? <ol className="logistics-page__print-stops">{route.stops.map((stop) => <li key={stop.id}><strong>{stop.stopOrder}. {stop.type === "DELIVERY" ? "Livrare" : "Ridicare"}</strong><span>{stop.targetLabel}</span><StatusBadge label={routeStopOutcomeLabel(stop.outcomeStatus, stop.type)} variant={routeStopOutcomeVariant(stop.outcomeStatus)} /><span>Adresă: {stop.addressOverride || "-"}</span><span>Telefon: {stop.phoneOverride || "-"}</span></li>)}</ol> : null}
-    {canExecute && route.status === "IN_PROGRESS" ? <LogisticsRouteExecution route={route} onRecord={(stop, outcome, notes) => onRecord(route.id, stop.id, outcome, notes)} pending={outcomePending} /> : null}
+    {canExecute && !route.courier && route.status === "IN_PROGRESS" ? <LogisticsRouteExecution route={route} onRecord={(stop, outcome, notes) => onRecord(route.id, stop.id, outcome, notes)} pending={outcomePending} /> : null}
   </div>;
 }
 

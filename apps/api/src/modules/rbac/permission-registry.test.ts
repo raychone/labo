@@ -332,6 +332,11 @@ describe("PERMISSION_REGISTRY", () => {
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["cycles.mark_received"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.custom_type.save_to_catalog"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["works.custom_type.save_to_catalog"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.MANAGER["works.custom_type.save_to_catalog"]).toBe("ALL");
+    expect(ROLE_PERMISSION_MATRIX.MEDIC["works.custom_type.save_to_catalog"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.CURIER["works.custom_type.save_to_catalog"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.RECEPTIE["pricing.create"]).toBeNull();
+    expect(ROLE_PERMISSION_MATRIX.LOGISTICA["pricing.create"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.RECEPTIE["works.custom_platform.save_to_catalog"]).toBeNull();
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["works.connections.manage"]).toBe("ALL");
     expect(ROLE_PERMISSION_MATRIX.LOGISTICA["works.item.update"]).toBe("ALL");

@@ -601,18 +601,17 @@ export class LogisticsService {
       if (current.status !== CourierRouteStatus.ASSIGNED && !canStartUnassignedDraft) {
         throw new ConflictException("Acest traseu nu poate fi pornit acum.");
       }
-      const previous = current.courierUserId ? await tx.courierRoute.findFirst({
+      const executionOwner = current.courierUserId ?? `logistics:${context.actor.id}`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`courier-route-execution:${executionOwner}`}))`;
+      const previous = await tx.courierRoute.findFirst({
         select: { routeNumber: true },
         where: {
-          courierUserId: current.courierUserId,
-          status: { notIn: [CourierRouteStatus.COMPLETED, CourierRouteStatus.CANCELLED] },
-          OR: [
-            { routeDate: { lt: current.routeDate } },
-            { routeDate: current.routeDate, routeNumber: { lt: current.routeNumber } },
-          ],
+          id: { not: current.id },
+          status: CourierRouteStatus.IN_PROGRESS,
+          ...(current.courierUserId ? { courierUserId: current.courierUserId } : { courierUserId: null, updatedByUserId: context.actor.id }),
         },
         orderBy: [{ routeDate: "asc" }, { routeNumber: "asc" }],
-      }) : null;
+      });
       if (previous) {
         throw new ConflictException("Finalizează traseul anterior înainte să începi acest traseu.");
       }
@@ -621,6 +620,43 @@ export class LogisticsService {
         include: courierRouteInclude,
         where: { id: routeId },
       });
+    });
+    return this.toCourierRouteView(route);
+  }
+
+  public async takeOverRoute(context: ActorContext, routeId: string): Promise<CourierRouteView> {
+    await this.ensureRoutePermission(context.actor.id, "routes.update");
+    const route = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`courier-route-takeover:${routeId}`}))`;
+      const current = await tx.courierRoute.findUnique({ include: courierRouteInclude, where: { id: routeId } });
+      if (!current) throw new NotFoundException("Traseul nu a fost găsit.");
+      if (current.status === CourierRouteStatus.COMPLETED || current.status === CourierRouteStatus.CANCELLED) {
+        throw new ConflictException("Un traseu încheiat nu mai poate fi preluat.");
+      }
+      if (!current.courierUserId) return current;
+
+      const previousCourierUserId = current.courierUserId;
+      const updated = await tx.courierRoute.update({
+        data: {
+          courierUserId: null,
+          ...(current.status === CourierRouteStatus.ASSIGNED ? { status: CourierRouteStatus.DRAFT } : {}),
+          updatedByUserId: context.actor.id,
+          version: { increment: 1 },
+        },
+        include: courierRouteInclude,
+        where: { id: routeId, version: current.version },
+      });
+      await this.recordRouteEvent(tx, context, routeId, CourierRouteEventType.ROUTE_UPDATED, {
+        previousCourierUserId,
+        routeId,
+        takeoverByLogistics: true,
+      });
+      await this.recordAudit(tx, context, LOGISTICS_AUDIT_ACTIONS.routeUpdated, routeId, {
+        after: this.toRouteAuditMetadata(updated),
+        before: this.toRouteAuditMetadata(current),
+        takeoverByLogistics: true,
+      });
+      return updated;
     });
     return this.toCourierRouteView(route);
   }
@@ -643,16 +679,24 @@ export class LogisticsService {
       if (isCorrection && !canCorrect) {
         throw new ConflictException("Stopul are deja rezultat.");
       }
-      await tx.courierRouteStop.update({
-        data: {
-          failureReason: dto.failureReason ?? null,
-          outcomeAt: now,
-          outcomeByUserId: context.actor.id,
-          outcomeNotes: dto.notes ?? null,
-          outcomeStatus: dto.outcomeStatus,
-        },
-        where: { id: stopId },
-      });
+      const outcomeData = {
+        failureReason: dto.failureReason ?? null,
+        outcomeAt: now,
+        outcomeByUserId: context.actor.id,
+        outcomeNotes: dto.notes ?? null,
+        outcomeStatus: dto.outcomeStatus,
+      };
+      if (isCorrection) {
+        await tx.courierRouteStop.update({ data: outcomeData, where: { id: stopId } });
+      } else {
+        const claimed = await tx.courierRouteStop.updateMany({
+          data: outcomeData,
+          where: { id: stopId, outcomeStatus: "PENDING", routeId },
+        });
+        if (claimed.count !== 1) {
+          throw new ConflictException("Oprirea a fost deja actualizată. Reîncarcă traseul pentru rezultatul curent.");
+        }
+      }
       if (stop.workOrderId) {
         await tx.workOrder.update({
           data: {

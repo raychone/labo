@@ -348,6 +348,14 @@ export class RecordPaymentDto {
   public readonly notes?: string | null;
 }
 
+export class RecordBatchPaymentDto extends RecordPaymentDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  public readonly documentIds!: readonly string[];
+}
+
 export class DocumentShareAttemptDto {
   @IsIn(["EMAIL", "WHATSAPP", "SHARE"])
   public readonly channel!: "EMAIL" | "WHATSAPP" | "SHARE";

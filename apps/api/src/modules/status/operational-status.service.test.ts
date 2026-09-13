@@ -95,13 +95,15 @@ function createWorkRecord(id: string, input: {
 
 function createService(input: {
   readonly findManyRows?: readonly OperationalStatusWorkRecord[];
+  readonly readAvailable?: boolean;
   readonly readAll?: boolean;
   readonly readAssignedScopes?: readonly string[];
 }) {
   const findMany = vi.fn().mockResolvedValue(input.findManyRows ?? []);
   const hasPermission = vi.fn()
     .mockResolvedValueOnce({ allowed: input.readAll ?? true, effectiveScopes: input.readAll ? ["ALL"] : [], permission: "works.read_all" })
-    .mockResolvedValueOnce({ allowed: (input.readAssignedScopes ?? []).length > 0, effectiveScopes: input.readAssignedScopes ?? [], permission: "works.read_assigned" });
+    .mockResolvedValueOnce({ allowed: (input.readAssignedScopes ?? []).length > 0, effectiveScopes: input.readAssignedScopes ?? [], permission: "works.read_assigned" })
+    .mockResolvedValueOnce({ allowed: input.readAvailable ?? false, effectiveScopes: input.readAvailable ? ["ALL"] : [], permission: "works.claim.available.read" });
   const service = new OperationalStatusService(
     { hasPermission } as unknown as AuthorizationService,
     { workOrder: { findMany } } as unknown as PrismaService,
@@ -124,6 +126,16 @@ describe("OperationalStatusService", () => {
 
     expect(JSON.stringify(findMany.mock.calls[0]?.[0].where)).toContain("tech_1");
     expect(JSON.stringify(findMany.mock.calls[0]?.[0].where)).toContain("assignedUserId");
+  });
+
+  it("uses the same unclaimed visibility as the technician claim queue", async () => {
+    const { findMany, service } = createService({ readAll: false, readAvailable: true });
+
+    await service.getOperationalStatus(actor, { page: 1, pageSize: 25, sortBy: "effectiveDueAt", sortDirection: "asc", tab: "AVAILABLE" });
+
+    const where = JSON.stringify(findMany.mock.calls[0]?.[0].where);
+    expect(where).toContain('"claimStatus":"UNCLAIMED"');
+    expect(where).toContain('"activeProbeCycleId":{"not":null}');
   });
 
   it("returns filtered counters, pagination metadata and no financial fields", async () => {

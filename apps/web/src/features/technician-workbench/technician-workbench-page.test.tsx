@@ -504,8 +504,9 @@ describe("TechnicianWorkbenchPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Închide" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Finalizata" }));
-    fireEvent.focus(screen.getByLabelText("Firmă"));
-    fireEvent.click(await screen.findByRole("option", { name: "CDT" }));
+    fireEvent.click(screen.getByRole("button", { name: "NG" }));
+    expect(screen.getByRole("button", { name: "NG" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "CDT" }));
     fireEvent.click(screen.getByRole("button", { name: "Finalizează" }));
 
     await waitFor(() => {

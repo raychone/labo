@@ -524,7 +524,7 @@ export async function deliverSmokeCycle(
   await loginAs(page, "TEHNICIAN");
   await page.goto("/workbench");
   await expect(page.getByRole("heading", { name: "Atelier tehnician" })).toBeVisible({ timeout: 20_000 });
-  await page.getByRole("button", { name: "Lucrări de preluat", exact: true }).click();
+  await page.getByRole("button", { name: /^Lucrări de preluat\b/ }).click();
   await page.getByRole("searchbox", { name: "Căutare" }).fill(work.code);
   await expect(page.getByRole("article").filter({ hasText: work.code })).toBeVisible({ timeout: 20_000 });
 
@@ -725,18 +725,28 @@ export async function switchToWorkExecutionCompany(page: Page, workId: string): 
 export async function registerReturnFromDashboard(page: Page, work: SmokeWork): Promise<void> {
   await loginAs(page, "RECEPTIE");
   await page.goto("/dashboard");
-  const workDetail = await browserJson<{ readonly clinic: { readonly id: string } }>(page, `/works/${work.id}`);
+  const workDetail = await browserJson<{
+    readonly clinic: { readonly id: string; readonly name: string };
+    readonly patient: { readonly fullName: string; readonly id: string } | null;
+  }>(page, `/works/${work.id}`);
   await page.getByRole("button", { name: "Probe", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Înregistrează revenirea", exact: true });
+  const dialog = page.getByRole("dialog", { name: "Înregistrează proba revenită", exact: true });
   await expect(dialog).toBeVisible({ timeout: 20_000 });
-  await dialog.getByLabel(/^Clinică/).selectOption(workDetail.clinic.id);
+  const clinicSelect = dialog.getByRole("combobox", { name: /^Clinică/ });
+  await clinicSelect.click();
+  await dialog.getByRole("option", { name: workDetail.clinic.name, exact: true }).click();
+  if (!workDetail.patient) throw new Error(`Work ${work.code} has no patient available for probe return.`);
+  await dialog.getByRole("textbox", { name: "Caută pacient" }).fill(workDetail.patient.fullName);
+  const patientButton = dialog.getByRole("button", { name: workDetail.patient.fullName, exact: true });
+  await expect(patientButton).toBeVisible({ timeout: 20_000 });
+  await patientButton.click();
   const workButton = dialog.getByRole("button").filter({ hasText: work.code }).first();
   await expect(workButton).toBeVisible({ timeout: 20_000 });
   await workButton.click();
   await expect(dialog).toContainText(work.code, { timeout: 20_000 });
-  const firstProbeType = dialog.getByRole("group", { name: "Tipuri probă" }).getByRole("checkbox").first();
+  const firstProbeType = dialog.getByRole("group", { name: "Tipuri probă" }).getByRole("button").first();
   await expect(firstProbeType).toBeVisible({ timeout: 20_000 });
-  await firstProbeType.check();
+  if (await firstProbeType.getAttribute("aria-pressed") !== "true") await firstProbeType.click();
   await dialog.getByLabel(/^Data termenului probei/).fill(futureDateValue(7));
   const submit = dialog.getByRole("button", { name: "Înregistrează proba", exact: true });
   await expect(submit).toBeEnabled({ timeout: 20_000 });

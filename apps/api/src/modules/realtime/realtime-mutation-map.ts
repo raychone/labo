@@ -61,7 +61,7 @@ export function describeRealtimeMutation(request: RealtimeMutationRequest): Real
     return { topics: ["settings", "audit"], type: "SETTINGS_CHANGED" };
   }
 
-  if (["billing", "billing-documents", "billing-series", "payments"].includes(root)) {
+  if (["billing", "billing-documents", "billing-payments", "billing-series", "payments"].includes(root)) {
     return { topics: ["billing", "works", "audit", "notifications"], type: "BILLING_CHANGED" };
   }
 

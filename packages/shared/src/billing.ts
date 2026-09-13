@@ -209,6 +209,10 @@ export interface RecordPaymentInput {
   readonly reference?: string | null;
 }
 
+export interface RecordBatchPaymentInput extends RecordPaymentInput {
+  readonly documentIds: readonly string[];
+}
+
 export interface BillingListQuery {
   readonly amountMaxMinor?: number;
   readonly amountMinMinor?: number;

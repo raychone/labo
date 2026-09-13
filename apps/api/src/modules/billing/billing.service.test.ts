@@ -58,6 +58,63 @@ function createBillableWork(overrides: Record<string, unknown>) {
   };
 }
 
+function createPaymentDocument(id: string, overrides: Record<string, unknown> = {}) {
+  return {
+    cancelledAt: null,
+    clinicAddressSnapshot: null,
+    clinicEmailSnapshot: null,
+    clinicId: "clinic_1",
+    clinicLegalNameSnapshot: null,
+    clinicNameSnapshot: "Clinica Test",
+    clinicPhoneSnapshot: null,
+    clinicRegistrationNumberSnapshot: null,
+    clinicTaxIdSnapshot: null,
+    createdAt: new Date("2026-09-01T08:00:00.000Z"),
+    currency: "RON",
+    discountMinor: 0,
+    dueDate: new Date("2026-09-30T00:00:00.000Z"),
+    formattedNumber: id.toUpperCase(),
+    id,
+    issueDate: new Date("2026-09-01T00:00:00.000Z"),
+    issuedAt: new Date("2026-09-01T08:00:00.000Z"),
+    legalEntityCodeSnapshot: "CDT",
+    legalEntityId: "legal_cdt",
+    legalEntityNameSnapshot: "CDT",
+    lines: [],
+    notes: null,
+    paymentNoteIssuedAt: new Date("2026-09-01T08:00:00.000Z"),
+    paymentNoteSnapshot: { totalMinor: 10000 },
+    payments: [],
+    status: "ISSUED",
+    stornoDocument: null,
+    stornoOfDocument: null,
+    stornoOfDocumentId: null,
+    subtotalMinor: 10000,
+    taxMinor: 0,
+    totalMinor: 10000,
+    type: "INVOICE",
+    ...overrides,
+  };
+}
+
+function createBatchPaymentService(documents: readonly ReturnType<typeof createPaymentDocument>[]) {
+  const paymentCreate = vi.fn((_input: { readonly data: { readonly amountMinor: number } }) => Promise.resolve({ id: "payment" }));
+  const transaction = vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+    billingDocument: {
+      findMany: vi.fn(() => Promise.resolve(documents)),
+    },
+    payment: { create: paymentCreate },
+  }));
+  const service = new BillingService({ $transaction: transaction } as never, { record: vi.fn() } as never) as unknown as {
+    recordBatchPayment: BillingService["recordBatchPayment"];
+    recordDocumentAudit: ReturnType<typeof vi.fn>;
+    updateDocumentPaymentStatus: ReturnType<typeof vi.fn>;
+  };
+  service.updateDocumentPaymentStatus = vi.fn((_tx, documentId: string) => Promise.resolve(documents.find((document) => document.id === documentId)));
+  service.recordDocumentAudit = vi.fn(() => Promise.resolve());
+  return { paymentCreate, service, transaction };
+}
+
 describe("BillingService invoice series", () => {
   it("requires a persisted successful delivery before billing", () => {
     const service = new BillingService({} as never, { record: vi.fn() } as never) as unknown as {
@@ -251,5 +308,92 @@ describe("BillingService invoice series", () => {
     )).rejects.toBeInstanceOf(ConflictException);
 
     expect(transaction).toHaveBeenCalledTimes(3);
+  });
+
+  it("records one settlement across five emitted invoices atomically", async () => {
+    const documents = Array.from({ length: 5 }, (_, index) => createPaymentDocument(`invoice_${index + 1}`));
+    const { paymentCreate, service, transaction } = createBatchPaymentService(documents);
+
+    const result = await service.recordBatchPayment(
+      { code: "CDT", displayName: "CDT", id: "legal_cdt" },
+      { actorUserId: "manager_1", requestMetadata: {} },
+      { amountMinor: 50000, documentIds: documents.map((document) => document.id), method: "BANK_TRANSFER", paymentDate: "2026-09-10", reference: "TRANSFER-1" },
+    );
+
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(paymentCreate).toHaveBeenCalledTimes(5);
+    expect(paymentCreate.mock.calls.map(([call]) => call.data.amountMinor)).toEqual([10000, 10000, 10000, 10000, 10000]);
+    expect(result.documents).toHaveLength(5);
+  });
+
+  it("allocates a partial settlement deterministically across selected invoices", async () => {
+    const documents = [createPaymentDocument("invoice_1"), createPaymentDocument("invoice_2"), createPaymentDocument("invoice_3")];
+    const { paymentCreate, service } = createBatchPaymentService(documents);
+
+    await service.recordBatchPayment(
+      { code: "CDT", displayName: "CDT", id: "legal_cdt" },
+      { actorUserId: "manager_1", requestMetadata: {} },
+      { amountMinor: 25000, documentIds: documents.map((document) => document.id), method: "BANK_TRANSFER", paymentDate: "2026-09-10" },
+    );
+
+    expect(paymentCreate.mock.calls.map(([call]) => call.data.amountMinor)).toEqual([10000, 10000, 5000]);
+  });
+
+  it("rejects duplicate, draft, cross-company and cross-currency batch selections", async () => {
+    const emitted = createPaymentDocument("invoice_1");
+    const draft = createPaymentDocument("invoice_2", { status: "DRAFT" });
+    const otherCurrency = createPaymentDocument("invoice_2", { currency: "EUR" });
+
+    const duplicateService = createBatchPaymentService([emitted]).service;
+    await expect(duplicateService.recordBatchPayment(
+      { code: "CDT", displayName: "CDT", id: "legal_cdt" },
+      { actorUserId: "manager_1", requestMetadata: {} },
+      { amountMinor: 10000, documentIds: [emitted.id, emitted.id], method: "CARD", paymentDate: "2026-09-10" },
+    )).rejects.toBeInstanceOf(BadRequestException);
+
+    const draftBatch = createBatchPaymentService([emitted, draft]);
+    await expect(draftBatch.service.recordBatchPayment(
+      { code: "CDT", displayName: "CDT", id: "legal_cdt" },
+      { actorUserId: "manager_1", requestMetadata: {} },
+      { amountMinor: 20000, documentIds: [emitted.id, draft.id], method: "CARD", paymentDate: "2026-09-10" },
+    )).rejects.toBeInstanceOf(BadRequestException);
+    expect(draftBatch.paymentCreate).not.toHaveBeenCalled();
+
+    const crossCompanyBatch = createBatchPaymentService([emitted]);
+    await expect(crossCompanyBatch.service.recordBatchPayment(
+      { code: "CDT", displayName: "CDT", id: "legal_cdt" },
+      { actorUserId: "manager_1", requestMetadata: {} },
+      { amountMinor: 20000, documentIds: [emitted.id, "invoice_other_company"], method: "CARD", paymentDate: "2026-09-10" },
+    )).rejects.toThrow("firma activă");
+    expect(crossCompanyBatch.paymentCreate).not.toHaveBeenCalled();
+
+    const crossCurrencyBatch = createBatchPaymentService([emitted, otherCurrency]);
+    await expect(crossCurrencyBatch.service.recordBatchPayment(
+      { code: "CDT", displayName: "CDT", id: "legal_cdt" },
+      { actorUserId: "manager_1", requestMetadata: {} },
+      { amountMinor: 20000, documentIds: [emitted.id, otherCurrency.id], method: "CARD", paymentDate: "2026-09-10" },
+    )).rejects.toBeInstanceOf(BadRequestException);
+    expect(crossCurrencyBatch.paymentCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a repeated settlement and mixed-clinic selections before creating allocations", async () => {
+    const alreadyPaid = createPaymentDocument("invoice_paid", { status: "PAID" });
+    const repeatedBatch = createBatchPaymentService([alreadyPaid]);
+    await expect(repeatedBatch.service.recordBatchPayment(
+      { code: "CDT", displayName: "CDT", id: "legal_cdt" },
+      { actorUserId: "manager_1", requestMetadata: {} },
+      { amountMinor: 10000, documentIds: [alreadyPaid.id], method: "BANK_TRANSFER", paymentDate: "2026-09-10", reference: "TRANSFER-1" },
+    )).rejects.toBeInstanceOf(BadRequestException);
+    expect(repeatedBatch.paymentCreate).not.toHaveBeenCalled();
+
+    const first = createPaymentDocument("invoice_1");
+    const second = createPaymentDocument("invoice_2", { clinicId: "clinic_2", clinicNameSnapshot: "Altă clinică" });
+    const mixedClinicBatch = createBatchPaymentService([first, second]);
+    await expect(mixedClinicBatch.service.recordBatchPayment(
+      { code: "CDT", displayName: "CDT", id: "legal_cdt" },
+      { actorUserId: "manager_1", requestMetadata: {} },
+      { amountMinor: 20000, documentIds: [first.id, second.id], method: "BANK_TRANSFER", paymentDate: "2026-09-10" },
+    )).rejects.toBeInstanceOf(BadRequestException);
+    expect(mixedClinicBatch.paymentCreate).not.toHaveBeenCalled();
   });
 });

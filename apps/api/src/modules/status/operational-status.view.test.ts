@@ -13,6 +13,7 @@ function createWorkRecord(input: {
   readonly deliveryStatus?: "DELIVERED" | "IN_TRANSIT" | null;
   readonly effectiveDueAt?: Date | null;
   readonly logisticsStatus?: "DELIVERED" | "HANDED_TO_DELIVERY" | "IN_PRODUCTION" | null;
+  readonly probeSequence?: number;
   readonly stageStatus?: "COMPLETED" | "IN_PROGRESS" | "PENDING";
   readonly workflowStatus?: "ACTIVE" | "COMPLETED";
 } = {}): OperationalStatusWorkRecord {
@@ -136,6 +137,9 @@ function createWorkRecord(input: {
         workOrderId: "work_1",
       },
     },
+    activeProbeCycle: input.probeSequence === undefined
+      ? null
+      : { deadlineAt: new Date("2026-08-06T10:00:00.000Z"), sequence: input.probeSequence },
     activeCycleId: "cycle_1",
     manualDueAt: null,
     patient: { id: "patient_1" },
@@ -211,7 +215,7 @@ describe("operational status view", () => {
     expect(matchesOperationalStatusTab(row, "COMPLETED")).toBe(false);
   });
 
-  it("counts only the current FINALIZATA status as completed", () => {
+  it("counts final and probe-ready technical stages as completed", () => {
     const reception = toOperationalStatusRow(
       createWorkRecord({ deliveryStatus: "DELIVERED", logisticsStatus: "DELIVERED", workflowStatus: "COMPLETED" }),
       new Date("2026-08-04T08:00:00.000Z"),
@@ -227,7 +231,7 @@ describe("operational status view", () => {
 
     expect(matchesOperationalStatusTab(reception, "COMPLETED")).toBe(false);
     expect(matchesOperationalStatusTab(finalized, "COMPLETED")).toBe(true);
-    expect(matchesOperationalStatusTab(probeReady, "COMPLETED")).toBe(false);
+    expect(matchesOperationalStatusTab(probeReady, "COMPLETED")).toBe(true);
   });
 
   it("keeps returned count at zero when cycle data does not exist", () => {
@@ -237,10 +241,24 @@ describe("operational status view", () => {
     expect(returned?.count).toBe(0);
   });
 
-  it("classifies active cycle 2 as returned while not delivered", () => {
+  it("classifies a subsequent active probe cycle as returned without depending on the work cycle number", () => {
+    const row = toOperationalStatusRow(
+      {
+        ...createWorkRecord({ cycleNumber: 1, deliveryStatus: "DELIVERED", logisticsStatus: "DELIVERED", probeSequence: 1 }),
+        technicalReadiness: null,
+      },
+      new Date("2026-08-04T08:00:00.000Z"),
+    );
+
+    expect(row.currentCycle?.label).toBe("Ciclul 1");
+    expect(row.hasReturnedProbe).toBe(true);
+    expect(matchesOperationalStatusTab(row, "RETURNED")).toBe(true);
+    expect(matchesOperationalStatusTab(row, "AVAILABLE")).toBe(true);
+  });
+
+  it("does not classify a later work cycle as returned without a subsequent probe cycle", () => {
     const row = toOperationalStatusRow(createWorkRecord({ cycleNumber: 2 }), new Date("2026-08-04T08:00:00.000Z"));
 
-    expect(row.currentCycle?.label).toBe("Ciclul 2");
-    expect(matchesOperationalStatusTab(row, "RETURNED")).toBe(true);
+    expect(matchesOperationalStatusTab(row, "RETURNED")).toBe(false);
   });
 });

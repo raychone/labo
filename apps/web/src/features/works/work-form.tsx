@@ -19,7 +19,7 @@ import type { UseFormReturn } from "react-hook-form";
 import { useEffect, useId, useMemo, useState } from "react";
 
 import { IMPLANT_PLATFORM_OPTIONS, RESTORATION_TYPE_OPTIONS, WORK_SHADE_OPTIONS, type WorkFormValues } from "./works-page.schema.js";
-import { getFormErrorSummaryItems, useErrorSummaryFocus } from "../../lib/form-utils.js";
+import { getErrorMessage, getFormErrorSummaryItems, useErrorSummaryFocus } from "../../lib/form-utils.js";
 import "./works-page.css";
 
 export const defaultWorkFormValues: WorkFormValues = {
@@ -339,13 +339,24 @@ export function WorkForm({
       return;
     }
 
+    if (patientNameParts.length < 2) {
+      form.setError("patientId", { message: "Introdu numele și prenumele pacientului." });
+      return;
+    }
+
     setSavingNewPatient(true);
     try {
       const patient = await onSaveNewPatient(patientSearch);
       form.setValue("patientId", patient.id, { shouldDirty: true, shouldValidate: true });
       setPatientSearch(patient.fullName);
-    } catch {
-      form.setError("patientId", { message: "Pacientul nu a putut fi salvat. Încearcă din nou." });
+      form.clearErrors("patientId");
+    } catch (error) {
+      const message = getErrorMessage(error);
+      form.setError("patientId", {
+        message: /firstName|lastName|prenume|numele|nume complet/iu.test(message)
+          ? "Introdu numele și prenumele pacientului."
+          : "Pacientul nu a putut fi salvat. Încearcă din nou.",
+      });
     } finally {
       setSavingNewPatient(false);
     }

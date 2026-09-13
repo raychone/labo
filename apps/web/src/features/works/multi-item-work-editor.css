@@ -127,6 +127,12 @@
   margin-top: var(--dl-space-3);
 }
 
+.multi-item-work-editor__selected-teeth-summary {
+  color: var(--dl-color-text);
+  font-weight: 700;
+  margin: var(--dl-space-2) 0 0;
+}
+
 .multi-item-work-editor__legend span {
   align-items: center;
   display: inline-flex;

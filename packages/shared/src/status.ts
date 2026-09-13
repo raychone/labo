@@ -110,6 +110,8 @@ export interface OperationalStatusRow {
   readonly requiresPickup?: boolean;
   /** True when a courier pickup stop was completed for this work. */
   readonly hasCompletedPickup?: boolean;
+  /** True when reception opened a subsequent probe cycle after a completed return. */
+  readonly hasReturnedProbe?: boolean;
   readonly components: readonly {
     readonly colorHex: string | null;
     readonly name: string;

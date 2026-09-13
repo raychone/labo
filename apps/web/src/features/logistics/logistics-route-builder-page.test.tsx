@@ -274,4 +274,44 @@ describe("LogisticsRouteBuilderPage", () => {
     expect(screen.getByText("TR-BLOCAT · Traseu blocant", { selector: "strong" })).toBeDefined();
     expect(screen.getByText("Finalizează opririle acestui traseu înainte de a porni unul nou. Este afișat chiar dacă are altă dată decât filtrul curent.")).toBeDefined();
   });
+
+  it("requires an explicit same-route takeover before Logistics can continue a courier route", async () => {
+    const posts: string[] = [];
+    const courierRoute = {
+      completedAt: null,
+      courier: { id: "courier_1", name: "Curier Test" },
+      createdAt: "2026-08-18T08:00:00.000Z",
+      id: "route_courier",
+      name: "Traseu curier",
+      notes: null,
+      routeDate: "2026-08-18",
+      routeNumber: "TR-CURIER",
+      startedAt: "2026-08-18T09:00:00.000Z",
+      status: "IN_PROGRESS" as const,
+      stops: [{ addressOverride: "Str. Test 1", failureReason: null, id: "stop_courier", outcomeAt: null, outcomeByUserName: null, outcomeNotes: null, outcomeStatus: "PENDING" as const, phoneOverride: "0700000000", pickupRequestId: null, stopNotes: null, stopOrder: 1, targetLabel: "WO-26-0002 · Ana Pop", type: "DELIVERY" as const, workOrderId: "work_2" }],
+      updatedAt: "2026-08-18T09:00:00.000Z",
+      version: 1,
+    };
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/auth/permissions")) return Promise.resolve(createJsonResponse({ permissions: ["routes.read", "routes.execute_own", "routes.update", "logistics.center.read"].map((key) => ({ key, scopes: ["ALL"] })) }));
+      if (url.endsWith("/auth/csrf")) return Promise.resolve(createJsonResponse({ csrfToken: "csrf-token" }));
+      if (url.endsWith("/routes/route_courier/takeover") && init?.method === "POST") {
+        posts.push(url);
+        return Promise.resolve(createJsonResponse({ ...courierRoute, courier: null, courierUserId: null, version: 2 }));
+      }
+      if (url.includes("/logistics/center?")) return Promise.resolve(createJsonResponse({ items: [], page: 1, pageCount: 1, pageSize: 100, total: 0 }));
+      if (url.includes("/routes?") && url.includes("status=IN_PROGRESS")) return Promise.resolve(createJsonResponse({ items: [courierRoute], page: 1, pageCount: 1, pageSize: 100, total: 1 }));
+      if (url.includes("/routes?")) return Promise.resolve(createJsonResponse({ items: [], page: 1, pageCount: 1, pageSize: 100, total: 0 }));
+      if (url.endsWith("/couriers/options") || url.endsWith("/pickup-requests")) return Promise.resolve(createJsonResponse([]));
+      return Promise.resolve(createJsonResponse({}, 404));
+    }));
+
+    renderWithProviders(<LogisticsRouteBuilderPage />);
+
+    expect(await screen.findByRole("button", { name: "Continuă ca Logistică" })).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Livrat" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Continuă ca Logistică" }));
+    await waitFor(() => expect(posts).toEqual([expect.stringContaining("/routes/route_courier/takeover")]));
+  });
 });

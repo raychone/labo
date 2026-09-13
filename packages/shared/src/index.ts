@@ -565,6 +565,7 @@ export type {
   PaymentView,
   PrintableBillingDocument,
   RecordPaymentInput,
+  RecordBatchPaymentInput,
   ReplaceBillingLinesInput,
   UpdateBillingDocumentInput,
 } from "./billing.js";

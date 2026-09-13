@@ -217,6 +217,10 @@ export async function startCourierRoute(routeId: string): Promise<CourierRouteVi
   return sendJson<CourierRouteView>(`/routes/${routeId}/start`, "POST");
 }
 
+export async function takeOverCourierRoute(routeId: string): Promise<CourierRouteView> {
+  return sendJson<CourierRouteView>(`/routes/${routeId}/takeover`, "POST");
+}
+
 export async function recordCourierRouteStopOutcome(routeId: string, stopId: string, input: RecordCourierRouteStopOutcomeInput): Promise<CourierRouteView> {
   return sendJson<CourierRouteView>(`/routes/${routeId}/stops/${stopId}/outcome`, "POST", input);
 }
@@ -378,6 +382,14 @@ export function useStartCourierRoute() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: startCourierRoute,
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: logisticsQueryKeys.all }); },
+  });
+}
+
+export function useTakeOverCourierRoute() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: takeOverCourierRoute,
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: logisticsQueryKeys.all }); },
   });
 }

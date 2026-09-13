@@ -257,6 +257,29 @@
   margin: 0 0 var(--dl-space-3);
 }
 
+.technician-workbench__completion-company {
+  display: grid;
+  gap: var(--dl-space-3);
+}
+
+.technician-workbench__completion-company p {
+  margin: 0;
+}
+
+.technician-workbench__completion-company fieldset {
+  border: 0;
+  display: grid;
+  gap: var(--dl-space-2);
+  margin: 0;
+  padding: 0;
+}
+
+.technician-workbench__completion-company fieldset > div {
+  display: grid;
+  gap: var(--dl-space-2);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .technician-workbench__probe-context {
   align-items: center;
   background: var(--dl-color-accent-subtle);

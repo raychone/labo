@@ -89,4 +89,47 @@ describe("CourierRoutePage", () => {
     expect(posts[0]).toMatchObject({ type: "start" });
     expect(posts[1]).toMatchObject({ outcomeStatus: "DELIVERED" });
   });
+
+  it("surfaces an in-progress route from an earlier day so it can be resumed", async () => {
+    const routeQueries: string[] = [];
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/auth/permissions")) {
+        return Promise.resolve(createJsonResponse({ permissions: ["routes.read", "routes.execute_own"].map((key) => ({ key, scopes: ["OWN_DELIVERY"] })) }));
+      }
+      if (url.includes("/routes?")) {
+        routeQueries.push(url);
+        const isActiveQuery = url.includes("status=IN_PROGRESS");
+        return Promise.resolve(createJsonResponse({
+          items: isActiveQuery ? [{
+            completedAt: null,
+            courier: { id: "courier_1", name: "Curier Test" },
+            createdAt: "2026-08-19T08:00:00.000Z",
+            id: "route_old",
+            name: "Traseu început ieri",
+            notes: null,
+            routeDate: "2026-08-19",
+            routeNumber: "TR-260819-01",
+            startedAt: "2026-08-19T09:00:00.000Z",
+            status: "IN_PROGRESS",
+            stops: [{ failureReason: null, id: "stop_old", outcomeAt: null, outcomeByUserName: null, outcomeNotes: null, outcomeStatus: "PENDING", pickupRequestId: null, stopOrder: 1, targetLabel: "WO-26-0099 · Pacient", type: "DELIVERY", workOrderId: "work_old" }],
+            updatedAt: "2026-08-19T09:00:00.000Z",
+            version: 2,
+          }] : [],
+          page: 1,
+          pageCount: 1,
+          pageSize: 30,
+          total: isActiveQuery ? 1 : 0,
+        }));
+      }
+      return Promise.resolve(createJsonResponse({}, 404));
+    }));
+
+    renderWithProviders(<CourierRoutePage />);
+
+    expect(await screen.findByText("TR-260819-01 · Traseu început ieri")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Livrat" })).toBeDefined();
+    expect(routeQueries.some((url) => url.includes("dateFrom="))).toBe(true);
+    expect(routeQueries.some((url) => url.includes("status=IN_PROGRESS"))).toBe(true);
+  });
 });

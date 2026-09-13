@@ -60,6 +60,23 @@ describe("WorkTypesService", () => {
     expect(result.name).toBe("Gutieră specială");
   });
 
+  it("reuses an existing operational catalog name without creating a duplicate", async () => {
+    const existing = workType({ basePriceMinor: null, code: "CU-ABC", name: "Gutieră specială", symbol: "custom-ABC" });
+    const create = vi.fn();
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        auditLog: { create: vi.fn() },
+        workType: { create, findFirst: vi.fn().mockResolvedValue(existing) },
+      })),
+    });
+
+    await expect(service.saveOperationalNameToCatalog(
+      { actorUserId: "actor_1", requestMetadata: {} },
+      "gutieră specială",
+    )).resolves.toMatchObject({ id: existing.id, name: existing.name });
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it("propagates only the first configured price to unresolved active items", async () => {
     const before = workType({ basePriceMinor: null });
     const after = workType({ basePriceMinor: 35000, version: 2 });

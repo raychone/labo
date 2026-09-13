@@ -32,6 +32,7 @@ function isWithinTransportHorizon(value: string | null, days: 1 | 2 | 3): boolea
 }
 
 interface WorkAccess {
+  readonly canReadAvailable: boolean;
   readonly canReadAll: boolean;
   readonly readAssignedScopes: readonly PermissionScope[];
 }
@@ -95,16 +96,18 @@ export class OperationalStatusService {
   }
 
   private async getWorkAccess(userId: string): Promise<WorkAccess> {
-    const [readAll, readAssigned] = await Promise.all([
+    const [readAll, readAssigned, readAvailable] = await Promise.all([
       this.authorizationService.hasPermission({ permission: "works.read_all", requiredScope: "ALL", userId }),
       this.authorizationService.hasPermission({ permission: "works.read_assigned", userId }),
+      this.authorizationService.hasPermission({ permission: "works.claim.available.read", requiredScope: "ALL", userId }),
     ]);
 
-    if (!readAll.allowed && !readAssigned.allowed) {
+    if (!readAll.allowed && !readAssigned.allowed && !readAvailable.allowed) {
       throw new ForbiddenException("Permission denied.");
     }
 
     return {
+      canReadAvailable: readAvailable.allowed,
       canReadAll: readAll.allowed,
       readAssignedScopes: readAssigned.effectiveScopes,
     };
@@ -120,6 +123,10 @@ export class OperationalStatusService {
     if (!isProbeReturnQuery) {
       nestedConditions.push({
         OR: [
+          // A returned probe starts a new active technical cycle. Delivery
+          // evidence belongs to the previous cycle and must not hide it from
+          // the available/operational queues.
+          { activeProbeCycleId: { not: null } },
           { technicalReadiness: "PROBE_READY", OR: [{ requiresDelivery: true }, { requiresPickup: true }, { courierRouteStops: { none: { outcomeStatus: "DELIVERED" } } }] },
           { technicalReadiness: "FINAL_READY" },
           { NOT: { OR: [{ activeCycle: { is: { logisticsState: { is: { status: "DELIVERED" } } } } }, { courierRouteStops: { some: { outcomeStatus: "DELIVERED" } } }] } },
@@ -185,6 +192,18 @@ export class OperationalStatusService {
         { activeCycle: { is: { workflowExecution: { is: { currentStage: { is: { assignedUserId: actor.id } } } } } } },
         { activeCycle: { is: { workflowExecution: { is: { stages: { some: { assignedUserId: actor.id } } } } } } },
       );
+    }
+
+    if (access.canReadAvailable) {
+      visibility.push({
+        claimStatus: "UNCLAIMED",
+        status: { not: "FINALIZATA" },
+        technicalReadiness: null,
+        OR: [
+          { activeProbeCycleId: { not: null } },
+          { NOT: { activeCycle: { is: { logisticsState: { is: { status: { in: ["HANDED_TO_DELIVERY", "DELIVERED"] } } } } } } },
+        ],
+      });
     }
 
     if (canReadOwnDelivery) {

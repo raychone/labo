@@ -279,7 +279,7 @@ export function TechnicianWorkbenchPage(): ReactNode {
           size="sm"
           title={completionTarget?.action === "FINALIZE" ? "Finalizezi definitiv lucrarea?" : "Marchezi proba gata?"}
         >
-          {completionCompany ? <p>Firma <strong>{completionCompany}</strong> este deja fixată pentru această lucrare și va fi folosită pentru plata tehnicianului și facturare.</p> : <><p>Selectează firma care va fi folosită pentru plata tehnicianului și facturare.</p><Select label="Firmă" onChange={(event) => setCompletionCompany(event.target.value as "" | "CDT" | "NG")} options={[{ label: "CDT", value: "CDT" }, { label: "NG", value: "NG" }]} placeholder="Alege firma" value={completionCompany} /></>}
+          {completionTarget && completionCompany && currentCompletionCompany(completionTarget.work) ? <p>Firma <strong>{completionCompany}</strong> este deja fixată pentru această lucrare și va fi folosită pentru plata tehnicianului și facturare.</p> : <div className="technician-workbench__completion-company"><p>Selectează firma care va fi folosită pentru plata tehnicianului și facturare.</p><fieldset><legend>Firmă</legend><div>{(["CDT", "NG"] as const).map((company) => <Button aria-pressed={completionCompany === company} key={company} onClick={() => setCompletionCompany(company)} type="button" variant={completionCompany === company ? "primary" : "outline"}>{company}</Button>)}</div></fieldset></div>}
         </Modal>
       </section>
     </main>
