@@ -80,8 +80,9 @@ describe("TechnicianEarningsPage", () => {
 
     await waitFor(() => expect(screen.getByText("WO-26-0001")).toBeDefined());
     expect(screen.getByText("Manoperele finalizate generează o sumă de primit. Plata apare doar după ce Managerul o înregistrează.")).toBeDefined();
-    expect(screen.getByText("CER · Ceramică")).toBeDefined();
-    expect(screen.getByText("GLZ · Glazurare")).toBeDefined();
+    expect(screen.getByText("Ceramică")).toBeDefined();
+    expect(screen.getByText("Glazurare")).toBeDefined();
+    expect(screen.queryByText("CER · Ceramică")).toBeNull();
     expect(screen.getAllByText(/45,00/).length).toBeGreaterThan(0);
     expect(screen.getByText("Câștig înregistrat")).toBeDefined();
     expect(screen.queryByText(/snapshot|scop tarifar/i)).toBeNull();

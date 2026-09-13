@@ -198,7 +198,7 @@ function EarningsBreakdown({ showTechnician, works }: { readonly showTechnician:
               {work.operations.map((operation) => (
                 <tr key={operation.performedOperationId}>
                   <td data-label="Manoperă">
-                    {operation.operation.code} · {operation.operation.name}
+                    {operation.operation.name}
                     {operation.isLegacy ? <small> · istoric, fără detalii despre tarif</small> : operation.quantity !== null && operation.rateMinorSnapshot !== null ? <small> · {operation.quantity} × {formatMoneyMinor(operation.rateMinorSnapshot, operation.currency)}</small> : null}
                     {(operation.selectedTeeth ?? []).length > 0 ? <small> · FDI {(operation.selectedTeeth ?? []).slice().sort((a, b) => ADULT_FDI_TEETH.indexOf(a as never) - ADULT_FDI_TEETH.indexOf(b as never)).join(", ")}</small> : null}
                     {operation.probeCycle ? <small> · Proba {operation.probeCycle.sequence}</small> : null}
