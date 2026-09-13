@@ -707,6 +707,12 @@ export function useClaimWork() {
     onSuccess: async (_work, variables) => {
       await invalidateClaimQueries(queryClient, variables.workOrderId);
     },
+    onError: async (_error, variables) => {
+      // A stale workbench card can race with another technician or logistics
+      // action. Refresh every claim/status view after the API rejects the
+      // optimistic-looking action so the unavailable card disappears.
+      await invalidateClaimQueries(queryClient, variables.workOrderId);
+    },
   });
 }
 
