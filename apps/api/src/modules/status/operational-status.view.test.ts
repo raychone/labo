@@ -191,6 +191,16 @@ describe("operational status view", () => {
     expect(matchesOperationalStatusTab(delivered, "COMPLETED")).toBe(false);
   });
 
+  it("includes a work created today even when its deadline is tomorrow", () => {
+    const row = toOperationalStatusRow(
+      { ...createWorkRecord({ effectiveDueAt: new Date("2026-08-05T10:00:00.000Z") }), createdAt: new Date("2026-08-04T18:00:00.000Z") },
+      new Date("2026-08-04T08:00:00.000Z"),
+    );
+
+    expect(row.deadline.state).toBe("DUE_TOMORROW");
+    expect(matchesOperationalStatusTab(row, "TODAY", new Date("2026-08-04T08:00:00.000Z"))).toBe(true);
+  });
+
   it("classifies canonical finalized works as completed even when workflow data lags", () => {
     const row = toOperationalStatusRow(
       { ...createWorkRecord({ claimStatus: "CLAIMED", stageStatus: "IN_PROGRESS" }), status: "FINALIZATA" },

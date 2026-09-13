@@ -321,21 +321,21 @@ const tabLabels = {
   TODAY: "Astăzi",
 } as const satisfies Record<OperationalStatusTab, string>;
 
-export function createOperationalStatusCounters(rows: readonly OperationalStatusRowView[]): readonly OperationalStatusTabCounterView[] {
+export function createOperationalStatusCounters(rows: readonly OperationalStatusRowView[], now = new Date()): readonly OperationalStatusTabCounterView[] {
   const tabs: readonly OperationalStatusTab[] = ["ALL", "TODAY", "IN_PROGRESS", "AVAILABLE", "LATE", "AT_CLINIC", "RETURNED", "COMPLETED"];
   return tabs.map((tab) => ({
-    count: rows.filter((row) => matchesOperationalStatusTab(row, tab)).length,
+    count: rows.filter((row) => matchesOperationalStatusTab(row, tab, now)).length,
     label: tabLabels[tab],
     tab,
   }));
 }
 
-export function matchesOperationalStatusTab(row: OperationalStatusRowView, tab: OperationalStatusTab): boolean {
+export function matchesOperationalStatusTab(row: OperationalStatusRowView, tab: OperationalStatusTab, now = new Date()): boolean {
   if (tab === "ALL") {
     return true;
   }
   if (tab === "TODAY") {
-    return row.deadline.state === "DUE_TODAY";
+    return row.deadline.state === "DUE_TODAY" || isSameBucharestCalendarDay(new Date(row.createdAt), now);
   }
   if (tab === "IN_PROGRESS") {
     return row.operationalStatus !== "FINALIZATA"
@@ -366,6 +366,16 @@ export function matchesOperationalStatusTab(row: OperationalStatusRowView, tab: 
   // A completed technical stage is operationally finished even when the work
   // is leaving only for a probe. Final finalization remains included as well.
   return row.operationalStatus === "FINALIZATA" || row.technicalReadiness === "PROBE_READY";
+}
+
+function isSameBucharestCalendarDay(left: Date, right: Date): boolean {
+  const format = new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "Europe/Bucharest",
+    year: "numeric",
+  });
+  return format.format(left) === format.format(right);
 }
 
 export function compareOperationalStatusRows(

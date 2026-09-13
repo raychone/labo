@@ -72,9 +72,9 @@ export class OperationalStatusService {
       .map((work) => toOperationalStatusRow(work, now))
       .filter((row) => !query.transportHorizonDays || isWithinTransportHorizon(row.deadline.effectiveDueAt, query.transportHorizonDays))
       .filter((row) => this.matchesComputedFilters(row, query));
-    const counters = createOperationalStatusCounters(rows);
+    const counters = createOperationalStatusCounters(rows, now);
     const tabRows = rows
-      .filter((row) => query.transportOnly || matchesOperationalStatusTab(row, query.tab))
+      .filter((row) => query.transportOnly || matchesOperationalStatusTab(row, query.tab, now))
       .sort((left, right) => compareOperationalStatusRows(left, right, query.sortBy, query.sortDirection));
     const total = tabRows.length;
     const page = query.page;
