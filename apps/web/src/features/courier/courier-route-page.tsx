@@ -20,9 +20,10 @@ function formatDate(value: string): string {
 
 function routeStatusLabel(status: CourierRouteView["status"]): string {
   if (status === "ASSIGNED") return "Planificat";
+  if (status === "DRAFT") return "Traseu pregătit · neînceput";
   if (status === "IN_PROGRESS") return "În desfășurare";
   if (status === "COMPLETED") return "Finalizat";
-  return status === "CANCELLED" ? "Anulat" : "Planificare neterminată";
+  return status === "CANCELLED" ? "Anulat" : status;
 }
 
 function stopOutcomeLabel(outcome: CourierRouteStopOutcome): string {
@@ -49,9 +50,10 @@ export function CourierRoutePage(): ReactNode {
     .slice()
     .sort((left, right) => left.routeDate.localeCompare(right.routeDate) || left.routeNumber.localeCompare(right.routeNumber));
   const inProgressRoute = routes.find((route) => route.status === "IN_PROGRESS");
+  const isStartableStatus = (route: CourierRouteView): boolean => route.status === "ASSIGNED" || (route.status === "DRAFT" && route.courier !== null);
   const startableRoute = inProgressRoute
     ? undefined
-    : routes.find((route, index) => route.status === "ASSIGNED" && routes.slice(0, index).every((previous) => previous.status === "COMPLETED" || previous.status === "CANCELLED"));
+    : routes.find((route, index) => isStartableStatus(route) && routes.slice(0, index).every((previous) => previous.status === "COMPLETED" || previous.status === "CANCELLED"));
 
   function record(routeId: string, stop: CourierRouteStopView, outcomeStatus: CourierRouteStopOutcome, notes: string): void {
     outcomeMutation.mutate({ input: { notes, outcomeStatus }, routeId, stopId: stop.id }, {
@@ -106,7 +108,7 @@ function RouteCard({ canExecute, canStart, onRecord, onStart, pending, route }: 
         <StatusBadge label={routeStatusLabel(route.status)} variant={route.status === "COMPLETED" ? "delivered" : route.status === "IN_PROGRESS" ? "planned" : "awaiting"} />
         <div aria-label={`Progres traseu: ${resolvedStops} din ${route.stops.length} opriri rezolvate`} className="logistics-page__route-progress"><span style={{ width: `${route.stops.length === 0 ? 0 : (resolvedStops / route.stops.length) * 100}%` }} /><small>{resolvedStops} din {route.stops.length} opriri rezolvate{route.status === "IN_PROGRESS" && resolvedStops < route.stops.length ? ` · urmează oprirea ${currentStopOrder}` : ""}</small></div>
         {canStart ? <Button disabled={pending} onClick={onStart}>Începe traseul</Button> : null}
-        {route.status === "ASSIGNED" && !canStart ? <p className="logistics-page__route-waiting">Disponibil după finalizarea traseului anterior.</p> : null}
+        {(route.status === "ASSIGNED" || (route.status === "DRAFT" && route.courier !== null)) && !canStart ? <p className="logistics-page__route-waiting">Disponibil după finalizarea traseului anterior.</p> : null}
       </CardHeader>
       <CardContent className="logistics-page__route-stops">
         {route.stops.map((stop) => <RouteStop canExecute={canExecute} isCurrent={route.status === "IN_PROGRESS" && stop.outcomeStatus === "PENDING" && stop.stopOrder === currentStopOrder} key={stop.id} onRecord={(outcome, notes) => onRecord(route.id, stop, outcome, notes)} pending={pending} stop={stop} />)}

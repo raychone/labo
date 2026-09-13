@@ -1,10 +1,10 @@
-import { Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import QRCode from "qrcode";
 
 import type { AuthenticatedUser, RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
-import { AuthorizationService } from "../rbac/authorization.service.js";
+import { AuthorizationService, doesScopeSatisfy } from "../rbac/authorization.service.js";
 import { createWorkClaimAccess, toWorkDetailView, type WorkOrderRecord } from "../works/works.view.js";
 import { QR_AUDIT_ACTIONS, QR_PAYLOAD_PREFIX, QR_RESOURCE_TYPE, WORK_CODE_PATTERN, WORK_QR_TOKEN_PATTERN } from "./qr.constants.js";
 import { QrRateLimitService } from "./qr-rate-limit.service.js";
@@ -214,6 +214,7 @@ export class QrService {
 
   public async getWorkQr(context: ActorContext, workOrderId: string): Promise<WorkQrView> {
     const workOrder = await this.findQrWorkOrThrow({ id: workOrderId });
+    await this.assertCanReadQr(context.actor.id, workOrder);
     await this.recordQrAudit({
       action: QR_AUDIT_ACTIONS.viewed,
       context,
@@ -228,6 +229,7 @@ export class QrService {
 
   public async getWorkQrImage(context: ActorContext, workOrderId: string): Promise<Buffer> {
     const workOrder = await this.findQrWorkOrThrow({ id: workOrderId });
+    await this.assertCanReadQr(context.actor.id, workOrder);
     await this.recordQrAudit({
       action: QR_AUDIT_ACTIONS.viewed,
       context,
@@ -249,6 +251,7 @@ export class QrService {
     this.qrRateLimitService.assertAllowed(`${context.actor.id}:${context.requestMetadata.ipAddress ?? "unknown"}`);
     const lookup = parseQrLookup(input.payload);
     const workOrder = await this.findWorkDetailForLookup(lookup);
+    await this.assertCanReadQr(context.actor.id, workOrder);
 
     await this.recordQrAudit({
       action: QR_AUDIT_ACTIONS.resolved,
@@ -267,6 +270,7 @@ export class QrService {
 
   public async recordPrint(context: ActorContext, workOrderId: string): Promise<WorkQrView> {
     const workOrder = await this.findQrWorkOrThrow({ id: workOrderId });
+    await this.assertCanReadQr(context.actor.id, workOrder);
     await this.recordQrAudit({
       action: QR_AUDIT_ACTIONS.printed,
       context,
@@ -313,6 +317,17 @@ export class QrService {
     });
 
     return result.allowed;
+  }
+
+  private async assertCanReadQr(userId: string, workOrder: { readonly assignedTechnicianId?: string | null; readonly claimedByUserId?: string | null }): Promise<void> {
+    const readAll = await this.authorizationService.hasPermission({ permission: "works.read_all", requiredScope: "ALL", userId });
+    if (readAll.allowed) return;
+
+    const readAssigned = await this.authorizationService.hasPermission({ permission: "works.read_assigned", userId });
+    const canReadAssigned = readAssigned.allowed && readAssigned.effectiveScopes.some((scope) => doesScopeSatisfy(scope, "ASSIGNED") || doesScopeSatisfy(scope, "OWN_STAGE"));
+    if (canReadAssigned && (workOrder.assignedTechnicianId === userId || workOrder.claimedByUserId === userId)) return;
+
+    throw new ForbiddenException("Nu ai acces la codul QR al acestei lucrări.");
   }
 
   private async recordQrAudit(input: {

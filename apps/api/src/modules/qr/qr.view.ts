@@ -3,6 +3,8 @@ import type { WorkPriority } from "@prisma/client";
 import { QR_PAYLOAD_PREFIX } from "./qr.constants.js";
 
 export interface QrWorkRecord {
+  readonly assignedTechnicianId?: string | null;
+  readonly claimedByUserId?: string | null;
   readonly clinic: {
     readonly name: string;
   } | null;

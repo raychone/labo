@@ -1,4 +1,4 @@
-import { ForbiddenException, INestApplication, ValidationPipe } from "@nestjs/common";
+import { INestApplication, ValidationPipe } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import cookieParser from "cookie-parser";
 import request from "supertest";
@@ -33,7 +33,6 @@ describe("QrController", () => {
   const getWorkQr = vi.fn();
   const getWorkQrImage = vi.fn();
   const recordPrint = vi.fn();
-  const requirePermission = vi.fn();
   const resolveQr = vi.fn();
 
   beforeEach(async () => {
@@ -45,11 +44,6 @@ describe("QrController", () => {
     getWorkQr.mockResolvedValue(qrResponse);
     getWorkQrImage.mockResolvedValue(Buffer.from("png"));
     recordPrint.mockResolvedValue(qrResponse);
-    requirePermission.mockResolvedValue({
-      allowed: true,
-      effectiveScopes: ["ALL"],
-      permission: "works.read_all",
-    });
     resolveQr.mockResolvedValue({
       work: {
         code: "WO-26-0001",
@@ -66,7 +60,7 @@ describe("QrController", () => {
         PermissionsGuard,
         {
           provide: AuthorizationService,
-          useValue: { requirePermission },
+          useValue: {},
         },
         {
           provide: SessionService,
@@ -124,15 +118,6 @@ describe("QrController", () => {
     await request(app.getHttpServer() as App).get("/works/work_order_1/qr").expect(401);
   });
 
-  it("returns 403 without works.read_all", async () => {
-    requirePermission.mockRejectedValueOnce(new ForbiddenException("Permission denied."));
-
-    await request(app.getHttpServer() as App)
-      .get("/works/work_order_1/qr")
-      .set("Cookie", ["dl_session=session-token"])
-      .expect(403);
-  });
-
   it("returns QR metadata for authenticated readers", async () => {
     await request(app.getHttpServer() as App)
       .get("/works/work_order_1/qr")
@@ -140,7 +125,6 @@ describe("QrController", () => {
       .expect(200)
       .expect(qrResponse);
 
-    expect(requirePermission).toHaveBeenCalledWith(expect.objectContaining({ permission: "works.read_all" }));
   });
 
   it("returns a private PNG QR image", async () => {

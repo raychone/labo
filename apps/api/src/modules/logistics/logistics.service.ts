@@ -595,10 +595,13 @@ export class LogisticsService {
       const current = await tx.courierRoute.findUnique({ include: courierRouteInclude, where: { id: routeId } });
       if (!current) throw new NotFoundException("Traseul nu a fost găsit.");
       await this.assertRouteExecutionAccess(context.actor.id, current.courierUserId);
+      const canStartAssignedLegacyDraft = Boolean(current.courierUserId)
+        && current.status === CourierRouteStatus.DRAFT
+        && await this.hasPermission(context.actor.id, "routes.execute_own", "OWN_DELIVERY");
       const canStartUnassignedDraft = !current.courierUserId
         && current.status === CourierRouteStatus.DRAFT
         && await this.hasPermission(context.actor.id, "routes.execute_own", "ALL");
-      if (current.status !== CourierRouteStatus.ASSIGNED && !canStartUnassignedDraft) {
+      if (current.status !== CourierRouteStatus.ASSIGNED && !canStartAssignedLegacyDraft && !canStartUnassignedDraft) {
         throw new ConflictException("Acest traseu nu poate fi pornit acum.");
       }
       const executionOwner = current.courierUserId ?? `logistics:${context.actor.id}`;

@@ -87,6 +87,30 @@ describe("QrRateLimitService", () => {
 });
 
 describe("QrService", () => {
+  it("allows a technician to read the QR of their own claimed work", async () => {
+    const authorizationService = {
+      hasPermission: vi.fn(({ permission }: { readonly permission: string }) => Promise.resolve({
+        allowed: permission === "works.read_assigned",
+        effectiveScopes: permission === "works.read_assigned" ? ["ASSIGNED"] : [],
+      })),
+    };
+    const service = new QrService(
+      authorizationService as never,
+      {
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+        workOrder: { findUnique: vi.fn().mockResolvedValue(qrWork({ assignedTechnicianId: "tech_1", claimedByUserId: "tech_1" })) },
+      } as never,
+      { assertAllowed: vi.fn() } as never,
+    );
+
+    const result = await service.getWorkQr(
+      { actor: { id: "tech_1" } as never, requestMetadata: {} },
+      "work_order_1",
+    );
+
+    expect(result.workId).toBe("work_order_1");
+  });
+
   it("resolves QR payloads through an authorized backend lookup and masks pricing", async () => {
     const auditCreate = vi.fn().mockResolvedValue({});
     const workOrder = {
@@ -129,7 +153,7 @@ describe("QrService", () => {
     };
     const findUnique = vi.fn().mockResolvedValue(workOrder);
     const service = new QrService(
-      { hasPermission: vi.fn().mockResolvedValue({ allowed: false }) } as never,
+      { hasPermission: vi.fn(({ permission }: { readonly permission: string }) => Promise.resolve({ allowed: permission === "works.read_all", effectiveScopes: permission === "works.read_all" ? ["ALL"] : [] })) } as never,
       {
         auditLog: { create: auditCreate },
         workOrder: { findUnique },
@@ -265,7 +289,7 @@ describe("QrService", () => {
       activeCycle: activeCycle(2, "cycle_2"),
     };
     const service = new QrService(
-      { hasPermission: vi.fn().mockResolvedValue({ allowed: false }) } as never,
+      { hasPermission: vi.fn(({ permission }: { readonly permission: string }) => Promise.resolve({ allowed: permission === "works.read_all", effectiveScopes: permission === "works.read_all" ? ["ALL"] : [] })) } as never,
       {
         auditLog: { create: vi.fn().mockResolvedValue({}) },
         workOrder: {

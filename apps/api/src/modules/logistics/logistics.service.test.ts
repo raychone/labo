@@ -446,6 +446,23 @@ describe("LogisticsService routes", () => {
     }));
   });
 
+  it("allows the assigned courier to recover a legacy draft route", async () => {
+    const { courierRouteFindUnique, courierRouteUpdate, service } = createService();
+    courierRouteFindUnique.mockResolvedValueOnce({
+      ...await courierRouteFindUnique(),
+      status: "DRAFT",
+    } as never);
+
+    await service.startRoute(
+      { actor: { id: "courier_1" } as never, requestMetadata: {} },
+      "route_1",
+    );
+
+    expect(courierRouteUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: "IN_PROGRESS" }),
+    }));
+  });
+
   it("keeps an actually active route as the single blocker", async () => {
     const { courierRouteFindFirst, courierRouteUpdate, service } = createService();
     courierRouteFindFirst.mockResolvedValueOnce({ routeNumber: "TR-260820-01" } as never);
