@@ -1,5 +1,5 @@
 import { Button, ErrorState, LoadingState } from "@dental-lab/ui";
-import { type MonthCloseArchiveSummary, type MonthEndRegistry, formatMoneyMinor } from "@dental-lab/shared";
+import { type MonthCloseArchiveSummary, type MonthEndRegistry } from "@dental-lab/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router";
 import { useMemo, type ReactNode } from "react";
@@ -136,9 +136,9 @@ function ArchiveLandingView({
                   <small>Închis de {archive.closedByDisplayName ?? archive.closedByEmail ?? "Necunoscut"}</small>
                 </div>
                 <div className="billing-month-registry__archive-card-summary">
-                  <span>Total: {formatMoneyMinor(archive.totalMinor, archive.currency, "ro-RO")}</span>
-                  <span>Încasat: {formatMoneyMinor(archive.paidMinor, archive.currency, "ro-RO")}</span>
-                  <span>Neachitat: {formatMoneyMinor(archive.unpaidTotalMinor, archive.currency, "ro-RO")}</span>
+                  <span>Total: {formatRegistryMoney(archive.totalMinor, archive.currency)}</span>
+                  <span>Încasat: {formatRegistryMoney(archive.paidMinor, archive.currency)}</span>
+                  <span>Neachitat: {formatRegistryMoney(archive.unpaidTotalMinor, archive.currency)}</span>
                 </div>
                 <div className="billing-page__toolbar billing-page__toolbar--tight">
                   <Button
@@ -206,7 +206,7 @@ export function MonthRegistryReportView({
           {summaryCards.map((card) => (
             <div className="dl-kpi billing-month-registry__summary-card" key={card.label}>
               <span>{card.label}</span>
-              <strong>{formatMoneyMinor(card.value, registry.currency, "ro-RO")}</strong>
+              <strong>{formatRegistryMoney(card.value, registry.currency)}</strong>
             </div>
           ))}
         </section>
@@ -268,9 +268,9 @@ export function MonthRegistryReportView({
               { label: "Număr", width: "12%", align: "left", nowrap: true },
               { label: "Client", width: "21%", align: "left" },
               { label: "Lucrări", width: "24%", align: "left" },
-              { label: "Total", width: "8%", align: "right", nowrap: true },
-              { label: "Încasat", width: "8%", align: "right", nowrap: true },
-              { label: "Sold", width: "9%", align: "right", nowrap: true },
+              { label: "Total", width: "10%", align: "right" },
+              { label: "Încasat", width: "10%", align: "right" },
+              { label: "Sold", width: "10%", align: "right" },
             ]}
             rows={documents.map((row) => ([
               { content: formatDate(row.issueDate), nowrap: true },
@@ -427,7 +427,16 @@ interface RegistryTableCell {
 }
 
 function money(valueMinor: number, currency: string): string {
-  return formatMoneyMinor(valueMinor, currency, "ro-RO");
+  return formatRegistryMoney(valueMinor, currency);
+}
+
+function formatRegistryMoney(valueMinor: number, currency: string): string {
+  return new Intl.NumberFormat("ro-RO", {
+    currency,
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+    style: "currency",
+  }).format(valueMinor / 100);
 }
 
 function groupRowsByClinic(rows: MonthEndRegistry["rows"]): ClinicRegistryGroup[] {

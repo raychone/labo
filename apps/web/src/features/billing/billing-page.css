@@ -1576,6 +1576,49 @@
     page-break-inside: avoid;
   }
 
+  .billing-month-registry__paper {
+    padding: 8mm 9mm 10mm;
+  }
+
+  .billing-month-registry__summary {
+    gap: 3mm;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .billing-month-registry__summary-card {
+    min-width: 0;
+    min-height: 0;
+    padding: 3mm 2.5mm 2.5mm;
+  }
+
+  .billing-month-registry__summary-card span {
+    font-size: 0.58rem;
+    line-height: 1.05;
+    white-space: normal;
+  }
+
+  .billing-month-registry__summary-card strong {
+    font-size: 0.72rem;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .billing-month-registry__table th,
+  .billing-month-registry__table td {
+    font-size: 0.58rem;
+    line-height: 1.08;
+    padding: 0.18rem 0.2rem;
+    overflow-wrap: anywhere;
+  }
+
+  .billing-month-registry__table th {
+    white-space: normal;
+  }
+
+  .billing-month-registry__table td.billing-month-registry__cell--right {
+    white-space: nowrap;
+  }
+
   .billing-print-page .dl-tabs {
     display: block;
   }
