@@ -23,7 +23,7 @@ import {
   type DataTableColumn,
   type DataTableSort,
 } from "@dental-lab/ui";
-import { formatPatientSex, type PatientDetail, type PatientSortField, type PatientSummary, type PatientsListParams, type SortDirection } from "@dental-lab/shared";
+import { formatPatientSex, type PaginatedPatientWorksResponse, type PatientDetail, type PatientSortField, type PatientSummary, type PatientWorksListParams, type PatientsListParams, type SortDirection } from "@dental-lab/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router";
@@ -32,7 +32,7 @@ import { useForm, type UseFormReturn } from "react-hook-form";
 import { fetchPermissions } from "../auth/auth-api.js";
 import { fetchClinicOptions, fetchDoctorOptions } from "../clinics/clinics-api.js";
 import { hasPermission } from "../users/users-api.js";
-import { archivePatient, createPatient, fetchPatient, fetchPatients, patientsQueryKeys, restorePatient, updatePatient } from "./patients-api.js";
+import { archivePatient, createPatient, fetchPatient, fetchPatients, fetchPatientWorks, patientsQueryKeys, restorePatient, updatePatient } from "./patients-api.js";
 import { patientFormSchema, type PatientFormValues } from "./patients-page.schema.js";
 import { applyApiErrorsToForm, getErrorMessage, getFormErrorSummaryItems, UnsavedChangesPrompt, useBeforeUnloadPrompt, useCloseGuard, useErrorSummaryFocus } from "../../lib/form-utils.js";
 import "./patients-page.css";
@@ -109,6 +109,7 @@ export function PatientsPage(): ReactNode {
   const queryClient = useQueryClient();
   const [params, setParams] = useState<PatientsListParams>(defaultParams);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  const [patientWorksPage, setPatientWorksPage] = useState(1);
   const [isCreateOpen, setCreateOpen] = useState(false);
   const permissionsQuery = useQuery({ queryFn: fetchPermissions, queryKey: ["auth", "permissions"], retry: false });
   const permissions = permissionsQuery.data;
@@ -129,6 +130,22 @@ export function PatientsPage(): ReactNode {
     queryKey: patientsQueryKeys.detail(selectedPatientId),
     retry: false,
   });
+  const patientWorksParams = useMemo<PatientWorksListParams>(() => ({
+    clinicId: undefined,
+    dateFrom: undefined,
+    dateTo: undefined,
+    doctorId: undefined,
+    page: patientWorksPage,
+    pageSize: 20,
+    status: undefined,
+    workTypeId: undefined,
+  }), [patientWorksPage]);
+  const selectedPatientWorksQuery = useQuery({
+    enabled: canRead && selectedPatientId !== null,
+    queryFn: () => fetchPatientWorks(selectedPatientId ?? "", patientWorksParams),
+    queryKey: patientsQueryKeys.works(selectedPatientId, patientWorksParams),
+    retry: false,
+  });
   const clinicOptionsQuery = useQuery({ enabled: canRead, queryFn: fetchClinicOptions, queryKey: ["clinics", "options"], retry: false });
   const doctorOptionsQuery = useQuery({
     enabled: canRead && params.clinicId !== undefined,
@@ -140,6 +157,10 @@ export function PatientsPage(): ReactNode {
   async function refreshPatients(): Promise<void> {
     await queryClient.invalidateQueries({ queryKey: patientsQueryKeys.all });
   }
+
+  useEffect(() => {
+    setPatientWorksPage(1);
+  }, [selectedPatientId]);
 
   const createMutation = useMutation({
     mutationFn: createPatient,
@@ -194,7 +215,7 @@ export function PatientsPage(): ReactNode {
   }
 
   if (!canRead) {
-    return <PageState><ErrorState title="Acces refuzat" description="Contul curent nu are permisiunea patients.read." /></PageState>;
+    return <PageState><ErrorState title="Acces refuzat" description="Contul curent nu poate consulta registrul de pacienți." /></PageState>;
   }
 
   return (
@@ -296,6 +317,10 @@ export function PatientsPage(): ReactNode {
         onSubmit={(values) => updateMutation.mutate(values)}
         patient={selectedPatientQuery.data}
         patientError={selectedPatientQuery.error}
+        patientWorks={selectedPatientWorksQuery.data}
+        patientWorksError={selectedPatientWorksQuery.error}
+        patientWorksLoading={selectedPatientWorksQuery.isLoading}
+        onPatientWorksPageChange={setPatientWorksPage}
         submitError={updateMutation.error}
       />
     </main>
@@ -386,6 +411,10 @@ function PatientDrawer({
   onSubmit,
   patient,
   patientError,
+  patientWorks,
+  patientWorksError,
+  patientWorksLoading,
+  onPatientWorksPageChange,
   submitError,
 }: {
   readonly canArchive: boolean;
@@ -400,6 +429,10 @@ function PatientDrawer({
   readonly onSubmit: (values: PatientFormValues) => void;
   readonly patient: PatientDetail | undefined;
   readonly patientError: unknown;
+  readonly patientWorks: PaginatedPatientWorksResponse | undefined;
+  readonly patientWorksError: unknown;
+  readonly patientWorksLoading: boolean;
+  readonly onPatientWorksPageChange: (page: number) => void;
   readonly submitError: unknown;
 }): ReactNode {
   const [tab, setTab] = useState<"documents" | "overview" | "relationships" | "timeline" | "works">("overview");
@@ -468,7 +501,7 @@ function PatientDrawer({
             </div>
           ) : null}
           {tab === "works" ? (
-            <ListPanel items={patient.works.map((work) => `${work.code} · ${work.workType.name} · ${work.clinic?.name ?? "-"} · ${formatDate(work.createdAt)}`)} empty="Nu există lucrări." />
+            <PatientWorksPanel data={patientWorks} error={patientWorksError} isLoading={patientWorksLoading} onPageChange={onPatientWorksPageChange} />
           ) : null}
           {tab === "relationships" ? (
             <ListPanel items={patient.relationships.map((entry) => `${entry.clinic.name}: ${entry.totalWorks} lucrări, ${entry.doctors.map((doctor) => doctor.displayName).join(", ")}`)} empty="Nu există relații derivate." />
@@ -489,6 +522,41 @@ function PatientDrawer({
         </div>
       ) : <LoadingState text="Se încarcă dosarul" />}
     </Drawer>
+  );
+}
+
+export function PatientWorksPanel({
+  data,
+  error,
+  isLoading,
+  onPageChange,
+}: {
+  readonly data: PaginatedPatientWorksResponse | undefined;
+  readonly error: unknown;
+  readonly isLoading: boolean;
+  readonly onPageChange: (page: number) => void;
+}): ReactNode {
+  if (isLoading) return <LoadingState text="Se încarcă lucrările pacientului" />;
+  if (error) return <ErrorState description={getErrorMessage(error)} title="Lucrările pacientului nu au putut fi încărcate" />;
+  const works = data?.items ?? [];
+  return (
+    <div className="patients-page__works-panel">
+      <ListPanel
+        empty="Nu există lucrări."
+        items={works.map((work) => `${work.code} · ${work.workType.name} · ${work.clinic?.name ?? "-"} · ${formatDate(work.createdAt)}`)}
+        renderItem={(text, index) => {
+          const work = works[index];
+          return work ? <Link to={`/works?workId=${encodeURIComponent(work.id)}`}>{text}</Link> : text;
+        }}
+      />
+      {data && data.pageCount > 1 ? (
+        <nav aria-label="Paginare lucrări pacient" className="patients-page__works-pagination">
+          <Button disabled={data.page <= 1} onClick={() => onPageChange(data.page - 1)} size="small" variant="outline">Anterior</Button>
+          <span>Pagina {data.page} din {data.pageCount}</span>
+          <Button disabled={data.page >= data.pageCount} onClick={() => onPageChange(data.page + 1)} size="small" variant="outline">Următor</Button>
+        </nav>
+      ) : null}
+    </div>
   );
 }
 

@@ -1,12 +1,18 @@
 export const TECHNICIAN_OPERATION_SORT_FIELDS = ["code", "createdAt", "name", "updatedAt"] as const;
+export const TECHNICIAN_OPERATION_CATEGORIES = ["Coroană zirconiu", "Coroană ceramică", "Altele"] as const;
+export const TECHNICIAN_OPERATION_QUANTITY_RULES = ["PER_ELEMENT", "PER_ARCH", "PER_WORK"] as const;
 
 export type TechnicianOperationSortField = (typeof TECHNICIAN_OPERATION_SORT_FIELDS)[number];
+export type TechnicianOperationCategory = (typeof TECHNICIAN_OPERATION_CATEGORIES)[number];
+export type TechnicianOperationQuantityRule = (typeof TECHNICIAN_OPERATION_QUANTITY_RULES)[number];
 
 export interface TechnicianOperationInput {
-  readonly category: string;
-  readonly code: string;
+  readonly category: TechnicianOperationCategory;
+  readonly code?: string;
   readonly description?: string | null;
   readonly name: string;
+  readonly quantityRule?: TechnicianOperationQuantityRule;
+  readonly workTypeIds?: readonly string[];
 }
 
 export interface TechnicianOperationSummary {
@@ -17,8 +23,10 @@ export interface TechnicianOperationSummary {
   readonly id: string;
   readonly isActive: boolean;
   readonly name: string;
+  readonly quantityRule: TechnicianOperationQuantityRule;
   readonly sortOrder: number;
   readonly updatedAt: string;
+  readonly workTypeIds: readonly string[];
 }
 
 export interface TechnicianOperationDetail extends TechnicianOperationSummary {
@@ -35,7 +43,9 @@ export interface TechnicianOperationOption {
   readonly currency?: string | null;
   readonly id: string;
   readonly name: string;
+  readonly quantityRule: TechnicianOperationQuantityRule;
   readonly rateMinor?: number | null;
+  readonly workTypeIds: readonly string[];
 }
 
 export interface TechnicianOperationsListParams {
@@ -118,6 +128,7 @@ export interface PerformedTechnicianOperationView {
   readonly probeCycleId: string | null;
   readonly selectedTeeth: readonly number[];
   readonly quantity: number | null;
+  readonly quantityRuleSnapshot: TechnicianOperationQuantityRule;
   readonly rateMinorSnapshot: number | null;
   readonly notes: string | null;
   readonly performedAt: string;

@@ -1,3 +1,5 @@
+import { calculateQuantityByRule, type AnatomicalScopeType, type QuantityRule } from "./postmeeting-contract.js";
+
 export const WORK_TYPE_UNITS = ["ELEMENT", "UNIT", "ARCH", "CASE", "REPAIR", "OTHER"] as const;
 export const WORK_TYPE_SORT_FIELDS = ["basePriceMinor", "code", "createdAt", "name", "symbol", "updatedAt"] as const;
 
@@ -39,8 +41,13 @@ export interface WorkTypeOption {
   readonly symbol: string;
   readonly unit: WorkTypeUnit;
   readonly probeFamily?: WorkTypeProbeFamily | null;
+  readonly probeTypeIds?: readonly string[];
   readonly probeTypeCodes?: readonly string[];
   readonly allowedAddOns?: readonly WorkTypeAddOnOption[];
+  readonly allowedAnatomicalScopes?: readonly AnatomicalScopeType[];
+  readonly operationApplicabilityConfigured?: boolean;
+  readonly probeApplicabilityConfigured?: boolean;
+  readonly technicianOperationIds?: readonly string[];
   readonly exclusiveGroup?: string | null;
 }
 
@@ -67,8 +74,11 @@ export interface CreateWorkTypeInput {
   readonly symbol: string;
   readonly unit: WorkTypeUnit;
   readonly probeFamily?: WorkTypeProbeFamily | null;
+  readonly probeTypeIds?: readonly string[];
   readonly probeTypeCodes?: readonly string[];
   readonly allowedAddOns?: readonly WorkTypeAddOnOption[];
+  readonly allowedAnatomicalScopes?: readonly AnatomicalScopeType[];
+  readonly technicianOperationIds?: readonly string[];
   readonly exclusiveGroup?: string | null;
 }
 
@@ -144,14 +154,28 @@ export function formatMoneyMinor(value: number, currency: string, locale = "ro-R
 }
 
 export const WORK_TYPE_UNIT_LABELS = {
-  ARCH: "arcadă",
-  CASE: "lucrare",
-  ELEMENT: "element",
-  OTHER: "altă unitate",
-  REPAIR: "reparație",
-  UNIT: "bucată",
+  ARCH: "Per arcadă",
+  CASE: "O dată per lucrare",
+  ELEMENT: "Per element",
+  OTHER: "O dată per lucrare",
+  REPAIR: "O dată per lucrare",
+  UNIT: "O dată per lucrare",
 } as const satisfies Record<WorkTypeUnit, string>;
 
 export function formatWorkTypeUnit(unit: WorkTypeUnit): string {
   return WORK_TYPE_UNIT_LABELS[unit];
+}
+
+export function workTypeUnitToQuantityRule(unit: WorkTypeUnit | string): QuantityRule {
+  if (unit === "ELEMENT") return "PER_ELEMENT";
+  if (unit === "ARCH") return "PER_ARCH";
+  return "PER_WORK";
+}
+
+export function calculateWorkTypeQuantity(
+  unit: WorkTypeUnit | string,
+  input: { readonly scope?: AnatomicalScopeType | null; readonly selectedTeeth?: readonly number[] },
+): number {
+  if (workTypeUnitToQuantityRule(unit) === "PER_ELEMENT" && (input.selectedTeeth?.length ?? 0) === 0) return 1;
+  return calculateQuantityByRule(workTypeUnitToQuantityRule(unit), input);
 }

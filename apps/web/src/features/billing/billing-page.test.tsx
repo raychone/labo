@@ -340,6 +340,11 @@ describe("BillingPage", () => {
     expect(screen.queryByRole("tab", { name: "Ghid facturare" })).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Facturi" }));
     expect(await screen.findByRole("button", { name: "Deschide" })).toBeDefined();
+    fireEvent.click(screen.getByRole("tab", { name: "De facturat" }));
+    await waitFor(() => expect((screen.getByRole("button", { name: "Emite factură" }) as HTMLButtonElement).disabled).toBe(true));
+    expect(screen.queryByText(/1 lucrări selectate/)).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Facturi" }));
+    expect(await screen.findByRole("button", { name: "Deschide" })).toBeDefined();
     const invoicesToolbar = screen.getByRole("group", { name: "Toolbar facturi" });
     expect(within(invoicesToolbar).getByRole("button", { name: "Export CSV" })).toBeDefined();
     expect((within(invoicesToolbar).getByRole("button", { name: "Încasează" }) as HTMLButtonElement).disabled).toBe(true);

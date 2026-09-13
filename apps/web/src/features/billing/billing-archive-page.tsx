@@ -129,7 +129,7 @@ export function BillingArchivePage({ embedded = false }: { readonly embedded?: b
           <BillingTabToolbar
             actions={(
               <>
-                <StatusBadge label="Snapshot arhivat" variant="closed" />
+                <StatusBadge label="Arhivă închisă" variant="closed" />
                 <Button
                   onClick={() => void downloadMonthRegistryPdf({ year, month })}
                   variant="outline"
@@ -152,7 +152,7 @@ export function BillingArchivePage({ embedded = false }: { readonly embedded?: b
             context={(
               <div className="billing-archive-page__detail-heading">
                 <Button onClick={() => navigate(`/billing?tab=archive&year=${year}`)} variant="outline">Înapoi la arhivă</Button>
-                <p className="billing-archive-page__eyebrow">Snapshot financiar</p>
+                <p className="billing-archive-page__eyebrow">Situație financiară arhivată</p>
                 <h1>{monthLabel(month)} {year}</h1>
                 <p>{companyLabel}</p>
                 <p>
@@ -179,8 +179,8 @@ export function BillingArchivePage({ embedded = false }: { readonly embedded?: b
             </CardContent>
           </Card>
 
-          {detailRegistryQuery.isLoading ? <LoadingState text="Se încarcă snapshot-ul arhivat" /> : null}
-          {detailRegistryQuery.isError ? <ErrorState title="Snapshot-ul arhivat nu poate fi încărcat" description={getErrorMessage(detailRegistryQuery.error)} /> : null}
+          {detailRegistryQuery.isLoading ? <LoadingState text="Se încarcă situația arhivată" /> : null}
+          {detailRegistryQuery.isError ? <ErrorState title="Situația arhivată nu poate fi încărcată" description={getErrorMessage(detailRegistryQuery.error)} /> : null}
           {detailRegistryQuery.data ? <MonthRegistryReportView companyLabel={companyLabel} registry={detailRegistryQuery.data} /> : null}
         </section>
       </main>

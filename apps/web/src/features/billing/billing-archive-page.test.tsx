@@ -188,8 +188,9 @@ describe("BillingArchivePage", () => {
     renderArchivePage("/billing/archive/2026/8");
 
     expect(await screen.findByRole("heading", { name: "august 2026" })).toBeDefined();
-    expect(screen.getByText("Snapshot financiar")).toBeDefined();
-    expect(screen.getByText("Snapshot arhivat")).toBeDefined();
+    expect(screen.getByText("Situație financiară arhivată")).toBeDefined();
+    expect(screen.getByText("Arhivă închisă")).toBeDefined();
+    expect(screen.queryByText(/snapshot/i)).toBeNull();
     expect(screen.getByText("august 2026")).toBeDefined();
     expect(screen.getAllByText("Cabinet Stomatologic Central").length).toBeGreaterThan(0);
     expect(screen.getByText("Registru lunar facturare")).toBeDefined();

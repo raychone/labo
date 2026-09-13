@@ -113,7 +113,7 @@ function ArchiveLandingView({
           <div className="billing-month-registry__identity">
             <h1>ARHIVĂ ÎNCHIDERI</h1>
             <strong>Facturare</strong>
-            <span>Arhiva lunară salvează snapshot-uri separate pe firma activă.</span>
+            <span>Arhiva lunară păstrează situații separate pentru firma activă.</span>
             <small>Alege o lună închisă pentru a redeschide registrul lunar PDF.</small>
           </div>
           <div className="billing-month-registry__company">

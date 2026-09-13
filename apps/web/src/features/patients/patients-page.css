@@ -63,6 +63,24 @@
   color: var(--dl-color-primary-contrast);
 }
 
+.patients-page__works-panel {
+  display: grid;
+  gap: var(--dl-space-3);
+}
+
+.patients-page__works-panel a {
+  color: var(--dl-color-primary);
+  font-weight: var(--dl-font-weight-semibold);
+}
+
+.patients-page__works-pagination {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dl-space-3);
+  justify-content: flex-end;
+}
+
 .patients-page__link-button {
   align-items: center;
   border: 1px solid var(--dl-color-border);

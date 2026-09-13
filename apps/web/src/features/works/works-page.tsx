@@ -65,7 +65,7 @@ import { useActiveWorkFormTemplate } from "../work-forms/work-form-templates-api
 import { WorkForm, WorkFormActions, defaultWorkFormValues, toPersistedWorkFormValues, toWorkDeadlinePreviewInput, toWorkFormValues, toWorkMutationInput } from "./work-form.js";
 import { WorkFormFieldRenderer } from "./work-dynamic-form.js";
 import { WorkWorkflowSection } from "./work-workflow-section.js";
-import { downloadWorkAttachment, saveOperationalWorkTypeName, useChangeWorkCompany, useCreateNextWorkCycle, useCreateWork, useFinalizeRealLabSheet, useProbeTypes, useRealLabSheet, useReceiveProbe, useUpdateProbeTypes, useSetManualWorkDeadline, useUpdateActiveProbeDeadline, useUpdateWork, useUpdateTechnicianWorkDetails, useUploadWorkAttachments, useUpsertRealLabSheet, useWork, useWorkCycles, useWorkDeadlinePreview, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
+import { downloadWorkAttachment, useChangeWorkCompany, useCreateNextWorkCycle, useCreateWork, useFinalizeRealLabSheet, useProbeTypes, useRealLabSheet, useReceiveProbe, useSaveOperationalWorkTypeName, useUpdateProbeTypes, useSetManualWorkDeadline, useUpdateActiveProbeDeadline, useUpdateWork, useUpdateTechnicianWorkDetails, useUploadWorkAttachments, useUpsertRealLabSheet, useWork, useWorkCycles, useWorkDeadlinePreview, useWorkFormWorkTypeOptions, useWorks } from "./works-api.js";
 import { workFormSchema, type WorkFormValues } from "./works-page.schema.js";
 import { WorkQrModal } from "./work-qr-modal.js";
 import { filterDraftConnections, getDraftCompositionTeeth, MultiItemWorkEditor, type DraftToothConnection, type DraftWorkOrderItem } from "./multi-item-work-editor.js";
@@ -624,6 +624,7 @@ function CreateWorkModal({
     resolver: zodResolver(workFormSchema),
   });
   const createPatientMutation = useCreatePatient();
+  const saveOperationalWorkTypeMutation = useSaveOperationalWorkTypeName();
   const queryClient = useQueryClient();
   const createClinicMutation = useMutation({
     mutationFn: (input: CreateClinicInput) => createClinic(input),
@@ -777,7 +778,7 @@ function CreateWorkModal({
             });
           }}
           multiItem
-          workDetailsSlot={<MultiItemWorkEditor canEditTechnicalCode={canEditTechnicalCode} canSaveCustomWorkType onSaveCustomWorkType={saveOperationalWorkTypeName} connections={draftConnections} disabled={isSaving} items={draftItems} onChange={(items, connections) => {
+          workDetailsSlot={<MultiItemWorkEditor canEditTechnicalCode={canEditTechnicalCode} canSaveCustomWorkType onSaveCustomWorkType={(name) => saveOperationalWorkTypeMutation.mutateAsync(name)} connections={draftConnections} disabled={isSaving} items={draftItems} onChange={(items, connections) => {
             setDraftItems(items);
             setDraftConnections(connections);
             const first = items[0];
@@ -1369,7 +1370,7 @@ function WorkCyclesSection({
                   <MetricCell label="Logistică" value={cycle.logistics.status ?? "Fără status"} />
                   <MetricCell label="Livrare" value={`${cycle.delivery.activePreparationItemCount} pregătiri active`} />
                   <MetricCell label="Termen" value={cycle.deadline.effectiveDueAt ? formatDateTime(cycle.deadline.effectiveDueAt) : "Fără termen"} />
-                  <MetricCell label="Snapshot execuție" value={cycle.executionSnapshot.version ? `v${cycle.executionSnapshot.version} · ${cycle.executionSnapshot.status ?? "-"}` : "Nefixat"} />
+                  <MetricCell label="Configurație execuție" value={cycle.executionSnapshot.version ? `v${cycle.executionSnapshot.version} · ${cycle.executionSnapshot.status ?? "-"}` : "Nestabilită"} />
                 </div>
               </article>
             ))}

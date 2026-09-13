@@ -83,6 +83,8 @@ describe("TechnicianEarningsPage", () => {
     expect(screen.getByText("CER · Ceramică")).toBeDefined();
     expect(screen.getByText("GLZ · Glazurare")).toBeDefined();
     expect(screen.getAllByText(/45,00/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Câștig înregistrat")).toBeDefined();
+    expect(screen.queryByText(/snapshot|scop tarifar/i)).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/technician-operations/earnings/me?"), expect.objectContaining({ credentials: "include" }));
   });
 });

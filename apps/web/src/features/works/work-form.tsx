@@ -221,6 +221,7 @@ export function WorkForm({
   onCreateClinic,
   onCreateDoctor,
   onSaveNewPatient,
+  onSaveNewWorkType,
   onSubmit,
   allowPatientEdit = true,
   allowPatientNameEdit = false,
@@ -239,6 +240,7 @@ export function WorkForm({
   readonly onCreateClinic?: () => void;
   readonly onCreateDoctor?: () => void;
   readonly onSaveNewPatient?: (fullName: string) => Promise<{ readonly fullName: string; readonly id: string }>;
+  readonly onSaveNewWorkType?: (name: string) => Promise<WorkTypeFormOption>;
   readonly onSubmit: (values: WorkFormValues) => void;
   readonly allowPatientEdit?: boolean;
   readonly allowPatientNameEdit?: boolean;
@@ -260,6 +262,7 @@ export function WorkForm({
   const [doctorSearch, setDoctorSearch] = useState("");
   const [workTypeSearch, setWorkTypeSearch] = useState("");
   const [isSavingNewPatient, setSavingNewPatient] = useState(false);
+  const [isSavingNewWorkType, setSavingNewWorkType] = useState(false);
   const patientId = form.watch("patientId");
   const clinicId = form.watch("clinicId");
   const doctorId = form.watch("doctorId");
@@ -327,6 +330,9 @@ export function WorkForm({
   const hasExactPatient = normalizedPatientSearch !== "" && patientOptions.some((patient) => normalizeSearchText(patient.fullName) === normalizedPatientSearch);
   const patientNameParts = patientSearch.trim().split(/\s+/u).filter(Boolean);
   const canSaveNewPatient = allowPatientEdit && onSaveNewPatient !== undefined && !hasExactPatient && patientNameParts.length > 0;
+  const normalizedWorkTypeSearch = normalizeSearchText(workTypeSearch.trim());
+  const hasExactWorkType = normalizedWorkTypeSearch !== "" && workTypeOptions.some((workType) => normalizeSearchText(workType.name) === normalizedWorkTypeSearch);
+  const canSaveNewWorkType = onSaveNewWorkType !== undefined && !hasExactWorkType && workTypeSearch.trim().length >= 2;
 
   async function saveNewPatient(): Promise<void> {
     if (!onSaveNewPatient || !canSaveNewPatient || isSavingNewPatient) {
@@ -342,6 +348,24 @@ export function WorkForm({
       form.setError("patientId", { message: "Pacientul nu a putut fi salvat. Încearcă din nou." });
     } finally {
       setSavingNewPatient(false);
+    }
+  }
+
+  async function saveNewWorkType(): Promise<void> {
+    if (!onSaveNewWorkType || !canSaveNewWorkType || isSavingNewWorkType) {
+      return;
+    }
+
+    setSavingNewWorkType(true);
+    try {
+      const workType = await onSaveNewWorkType(workTypeSearch);
+      form.setValue("workTypeId", workType.id, { shouldDirty: true, shouldValidate: true });
+      setWorkTypeSearch(workType.name);
+      form.clearErrors("workTypeId");
+    } catch {
+      form.setError("workTypeId", { message: "Tipul de lucrare nu a putut fi salvat în catalog. Încearcă din nou." });
+    } finally {
+      setSavingNewWorkType(false);
     }
   }
 
@@ -428,20 +452,23 @@ export function WorkForm({
 
       {!hideWorkSelection ? <FormSection title="Lucrare">
         {multiItem ? <FormGrid className="works-page__multi-item-details-grid">{workDetailsSlot}</FormGrid> : <FormGrid className="works-page__work-selection-grid">
-          <SearchablePickerField
-            disabled={isDisabled}
-            error={form.formState.errors.workTypeId?.message}
-            id="workTypeId"
-            label="Tip lucrare"
-            onSelect={(value) => form.setValue("workTypeId", value, { shouldDirty: true, shouldValidate: true })}
-            onSearchChange={setWorkTypeSearch}
-            options={visibleWorkTypeOptions}
-            placeholder="Caută tipul lucrării"
-            required
-            searchValue={workTypeSearch}
-            selectedValue={workTypeId}
-            emptyMessage="Nu există tipuri de lucrări potrivite."
-          />
+          <div className="works-page__picker-with-action">
+            <SearchablePickerField
+              disabled={isDisabled}
+              error={form.formState.errors.workTypeId?.message}
+              id="workTypeId"
+              label="Tip lucrare"
+              onSelect={(value) => form.setValue("workTypeId", value, { shouldDirty: true, shouldValidate: true })}
+              onSearchChange={setWorkTypeSearch}
+              options={visibleWorkTypeOptions}
+              placeholder="Caută sau scrie un tip nou"
+              required
+              searchValue={workTypeSearch}
+              selectedValue={workTypeId}
+              emptyMessage="Tipul nu există încă în catalog."
+            />
+            {canSaveNewWorkType ? <Button disabled={isDisabled || isSavingNewWorkType} isLoading={isSavingNewWorkType} onClick={() => void saveNewWorkType()} type="button" variant="primary">Salvează în catalog</Button> : null}
+          </div>
           <NumberInput
             disabled={isDisabled}
             error={form.formState.errors.quantity?.message}

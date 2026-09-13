@@ -42,12 +42,12 @@ export function OrganizationContextSwitch({ canRead, canSwitch = true, compact =
     onSuccess: (context) => {
       queryClient.setQueryData(organizationContextQueryKeys.all, context);
       void Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["billing"], refetchType: "active" }),
-        queryClient.invalidateQueries({ queryKey: logisticsQueryKeys.all, refetchType: "active" }),
-        queryClient.invalidateQueries({ queryKey: pricingQueryKeys.all, refetchType: "active" }),
-        queryClient.invalidateQueries({ queryKey: settingsQueryKey, refetchType: "active" }),
-        queryClient.invalidateQueries({ queryKey: statusQueryKeys.all, refetchType: "active" }),
-        queryClient.invalidateQueries({ queryKey: worksQueryKeys.all, refetchType: "active" }),
+        queryClient.resetQueries({ queryKey: ["billing"] }),
+        queryClient.resetQueries({ queryKey: logisticsQueryKeys.all }),
+        queryClient.resetQueries({ queryKey: pricingQueryKeys.all }),
+        queryClient.resetQueries({ queryKey: settingsQueryKey }),
+        queryClient.resetQueries({ queryKey: statusQueryKeys.all }),
+        queryClient.resetQueries({ queryKey: worksQueryKeys.all }),
       ]);
       toast.showToast({
         message: context.active ? formatLegalEntityOption(context.active) : "Contextul activ a fost actualizat.",

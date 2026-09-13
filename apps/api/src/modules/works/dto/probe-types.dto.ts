@@ -1,5 +1,5 @@
 import { Transform } from "class-transformer";
-import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min } from "class-validator";
+import { IsArray, IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min } from "class-validator";
 
 function trim(value: unknown): unknown {
   return typeof value === "string" ? value.trim() : value;
@@ -26,6 +26,11 @@ export class CreateProbeTypeDto {
   @IsInt()
   @Min(0)
   public readonly sortOrder?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  public readonly workTypeIds?: readonly string[];
 }
 
 export class UpdateProbeTypeDto {
@@ -54,4 +59,9 @@ export class UpdateProbeTypeDto {
   @IsOptional()
   @IsBoolean()
   public readonly isArchived?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  public readonly workTypeIds?: readonly string[];
 }

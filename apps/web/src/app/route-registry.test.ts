@@ -128,6 +128,17 @@ describe("route registry", () => {
     expect(getSafeReturnTo("/works?workId=work_1")).toBe("/works?workId=work_1");
   });
 
+  it("registers Pricing as the canonical Manager workspace and keeps the old URL authorized", () => {
+    const navigation = getNavigationRoutes(["pricing.read"]);
+
+    expect(navigation.map((route) => route.path)).toContain("/pricing");
+    expect(navigation.map((route) => route.path)).not.toContain("/work-settings");
+    expect(getRouteByPath("/pricing")?.path).toBe("/pricing");
+    expect(getRouteByPath("/work-settings")?.path).toBe("/work-settings");
+    expect(getSafeNotificationTarget("/pricing?tab=operations", ["pricing.read"])).toBe("/pricing?tab=operations");
+    expect(getSafeNotificationTarget("/work-settings?workTypeId=work_type_1", ["pricing.read"])).toBe("/work-settings?workTypeId=work_type_1");
+  });
+
   it("does not send a notification to a route outside the user's permissions", () => {
     expect(getSafeNotificationTarget("/billing?tab=uninvoiced&workId=work_1", ["works.read_all"])).toBe("/status");
     expect(getSafeNotificationTarget("/billing?tab=uninvoiced&workId=work_1", ["invoice.create"])).toBe("/billing?tab=uninvoiced&workId=work_1");

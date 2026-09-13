@@ -175,7 +175,7 @@ const WORK_DETAIL_INCLUDE = {
   },
   patient: true,
   items: {
-    include: { teeth: true, workType: true },
+    include: { teeth: true, workType: { include: { probeTypes: { include: { probeType: true } } } } },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     where: { archivedAt: null },
   },
@@ -201,7 +201,7 @@ const WORK_DETAIL_INCLUDE = {
       uploadedAt: true,
     },
   },
-  workType: true,
+  workType: { include: { probeTypes: { include: { probeType: true } } } },
 } as const satisfies Prisma.WorkOrderInclude;
 
 @Injectable()

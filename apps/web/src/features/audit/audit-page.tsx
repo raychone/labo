@@ -33,7 +33,7 @@ export function AuditPage(): ReactNode {
     return <main className="dl-container"><LoadingState text="Se încarcă auditul" /></main>;
   }
   if (!canReadAudit) {
-    return <main className="dl-container"><ErrorState title="Acces refuzat" description="Contul curent nu are permisiunea audit.read." /></main>;
+    return <main className="dl-container"><ErrorState title="Acces refuzat" description="Contul curent nu poate consulta istoricul de audit." /></main>;
   }
 
   function updateFilter(key: keyof typeof filters, value: string): void {

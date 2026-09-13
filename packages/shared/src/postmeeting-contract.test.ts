@@ -12,6 +12,7 @@ import {
   PROBE_LIFECYCLE_TRANSITIONS,
   calculateTechnicianManeuverElementQuantity,
   calculateTechnicianManeuverTotalMinor,
+  calculateQuantityByRule,
   TECHNICIAN_MANEUVER_SELECTION_ORDER,
   TECHNICIAN_PERFORMED_MANEUVER_UNIQUENESS_SCOPE,
   URGENCY_SURCHARGE_PERCENT,
@@ -63,6 +64,14 @@ describe("POSTMODEL-001 canonical contract", () => {
     expect(calculateTechnicianManeuverTotalMinor(2, 3500)).toBe(7000);
     expect(calculateTechnicianManeuverTotalMinor(3, 3500)).toBe(10500);
     expect(calculateTechnicianManeuverTotalMinor(10, 3500)).toBe(35000);
+  });
+
+  it("applies technician quantity rules to the technician's actual selection", () => {
+    expect(calculateQuantityByRule("PER_ELEMENT", { selectedTeeth: [11, 12, 13, 14, 15] }) * 3_500).toBe(17_500);
+    expect(calculateQuantityByRule("PER_ELEMENT", { selectedTeeth: [11, 12, 13, 14, 15, 16, 21, 22, 23, 24, 25, 26] }) * 3_500).toBe(42_000);
+    expect(calculateQuantityByRule("PER_WORK", { selectedTeeth: [11, 12, 13, 14, 15] })).toBe(1);
+    expect(calculateQuantityByRule("PER_ARCH", { selectedTeeth: [11, 12] })).toBe(1);
+    expect(calculateQuantityByRule("PER_ARCH", { selectedTeeth: [11, 31] })).toBe(2);
   });
 
   it("defines the active-first-cycle transition contract", () => {

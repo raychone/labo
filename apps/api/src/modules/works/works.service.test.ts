@@ -12,6 +12,7 @@ import type { AuthorizationService } from "../rbac/authorization.service.js";
 import type { WorkFormSubmissionValidationService } from "../work-forms/work-form-submission-validation.service.js";
 import type { WorkflowExecutionService } from "../workflow-execution/workflow-execution.service.js";
 import { CreateNextWorkCycleDto, CreateWorkDto } from "./dto/works.dto.js";
+import { toWorkTypeFormOptionView } from "./works.view.js";
 import type { WorkDeadlineService } from "./work-deadline.service.js";
 import type { WorkOrderCodeService } from "./work-order-code.service.js";
 import { calculateTotalPriceMinor, parseDateOnly, WorksService } from "./works.service.js";
@@ -96,6 +97,9 @@ function workType(overrides: Partial<WorkType> = {}): WorkType {
     probeFamily: null,
     probeTypeCodes: null,
     allowedAddOns: null,
+    allowedAnatomicalScopes: null,
+    operationApplicabilityConfigured: false,
+    probeApplicabilityConfigured: false,
     exclusiveGroup: null,
     name: "Coroana zirconiu",
     symbol: "Zr",
@@ -362,7 +366,7 @@ describe("WorksService", () => {
         statusChangedByUserId: "actor_1",
         totalPriceMinor: 70000,
       }),
-      include: expect.objectContaining({ clinic: true, doctor: true, workType: true }),
+      include: expect.objectContaining({ clinic: true, doctor: true, workType: expect.any(Object) as object }),
     });
     expect(auditCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -1906,6 +1910,28 @@ describe("work order helpers", () => {
   it("calculates totals and rejects invalid dates", () => {
     expect(calculateTotalPriceMinor(35000, 3)).toBe(105000);
     expect(() => parseDateOnly("not-a-date", true)).toThrow(BadRequestException);
+  });
+
+  it("exposes only the explicitly configured probe types in WorkType order", () => {
+    const option = toWorkTypeFormOptionView({
+      allowedAddOns: null,
+      code: "TECH-ZR",
+      colorHex: null,
+      exclusiveGroup: null,
+      id: "work_type_zr",
+      name: "Coroană zirconiu",
+      probeFamily: "ZR",
+      probeApplicabilityConfigured: true,
+      probeTypeCodes: ["LEGACY_SHOULD_NOT_WIN"],
+      probeTypes: [
+        { probeType: { code: "MIYO" }, sortOrder: 1 },
+        { probeType: { code: "ZR" }, sortOrder: 0 },
+      ],
+      symbol: "ZR",
+      unit: "ELEMENT",
+    });
+
+    expect(option.probeTypeCodes).toEqual(["ZR", "MIYO"]);
   });
 });
 

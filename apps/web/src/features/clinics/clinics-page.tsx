@@ -173,8 +173,8 @@ const doctorFieldLabels: Partial<Record<keyof DoctorFormValues, string>> = {
   phone: "Telefon",
 };
 
-function toPermissionError(permissionKey: string): ReactNode {
-  return `Contul curent nu are permisiunea ${permissionKey}.`;
+function toPermissionError(_permissionKey: string): ReactNode {
+  return "Contul curent nu poate efectua această acțiune.";
 }
 
 function toStatusValue(isActive: boolean | undefined): string {

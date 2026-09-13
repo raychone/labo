@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { createHash } from "node:crypto";
-import { Prisma, type Prisma as PrismaTypes } from "@prisma/client";
+import { Prisma, type Prisma as PrismaTypes, type WorkTypeUnit } from "@prisma/client";
 import { B16_NOTIFICATION_EVENTS, getB16WorkTypePricingNotificationKey } from "@dental-lab/shared";
 
 import type { RequestMetadata } from "../auth/auth.types.js";
@@ -13,6 +13,7 @@ import {
   type PaginatedWorkTypesView,
   type WorkTypeDetailView,
   type WorkTypeOptionView,
+  type WorkTypeRecord,
   toWorkTypeDetailView,
   toWorkTypeOptionView,
   toWorkTypeSummaryView,
@@ -25,7 +26,8 @@ interface ActorContext {
 
 type AuditClient = Pick<PrismaTypes.TransactionClient, "auditLog"> | Pick<PrismaService, "auditLog">;
 
-const WORK_TYPE_MUTATION_FIELDS = ["basePriceMinor", "colorHex", "description", "name", "symbol", "unit"] as const satisfies readonly (keyof UpdateWorkTypeDto)[];
+const WORK_TYPE_INCLUDE = { probeTypes: { include: { probeType: true } }, technicianOperations: true } as const;
+const WORK_TYPE_MUTATION_FIELDS = ["allowedAddOns", "allowedAnatomicalScopes", "basePriceMinor", "colorHex", "description", "exclusiveGroup", "name", "probeFamily", "symbol", "unit"] as const satisfies readonly (keyof UpdateWorkTypeDto)[];
 
 @Injectable()
 export class WorkTypesService {
@@ -56,6 +58,7 @@ export class WorkTypesService {
     const [total, workTypes] = await this.prisma.$transaction([
       this.prisma.workType.count({ where }),
       this.prisma.workType.findMany({
+        include: WORK_TYPE_INCLUDE,
         orderBy: {
           [query.sortBy]: query.sortDirection,
         },
@@ -76,6 +79,7 @@ export class WorkTypesService {
 
   public async listWorkTypeOptions(): Promise<readonly WorkTypeOptionView[]> {
     const workTypes = await this.prisma.workType.findMany({
+      include: WORK_TYPE_INCLUDE,
       orderBy: {
         name: "asc",
       },
@@ -95,13 +99,19 @@ export class WorkTypesService {
 
   public async createWorkType(context: ActorContext, dto: CreateWorkTypeDto): Promise<WorkTypeDetailView> {
     const workType = await this.prisma.$transaction(async (tx) => {
+      const references = await this.validateConfigurationReferences(tx, dto);
       const code = await this.workTypeCodeService.generate(tx);
       const data: PrismaTypes.WorkTypeUncheckedCreateInput = {
+        ...(dto.allowedAddOns === undefined ? {} : { allowedAddOns: dto.allowedAddOns as unknown as Prisma.InputJsonValue }),
+        ...(dto.allowedAnatomicalScopes === undefined ? {} : { allowedAnatomicalScopes: dto.allowedAnatomicalScopes as Prisma.InputJsonValue }),
         basePriceMinor: dto.basePriceMinor,
         colorHex: dto.colorHex ?? null,
         code,
         createdByUserId: context.actorUserId,
         name: dto.name,
+        operationApplicabilityConfigured: dto.technicianOperationIds !== undefined,
+        probeApplicabilityConfigured: dto.probeTypeIds !== undefined || dto.probeTypeCodes !== undefined,
+        probeFamily: dto.probeFamily ?? null,
         symbol: dto.symbol,
         unit: dto.unit,
         updatedByUserId: context.actorUserId,
@@ -112,6 +122,16 @@ export class WorkTypesService {
       }
 
       const createdWorkType = await tx.workType.create({ data });
+      if (dto.technicianOperationIds !== undefined && dto.technicianOperationIds.length > 0) {
+        await tx.workTypeTechnicianOperation.createMany({
+          data: [...new Set(dto.technicianOperationIds)].map((operationId, sortOrder) => ({ operationId, sortOrder, workTypeId: createdWorkType.id })),
+        });
+      }
+      if ((dto.probeTypeIds !== undefined || dto.probeTypeCodes !== undefined) && references.probeTypeIds.length > 0) {
+        await tx.workTypeProbeType.createMany({
+          data: references.probeTypeIds.map((probeTypeId, sortOrder) => ({ probeTypeId, sortOrder, workTypeId: createdWorkType.id })),
+        });
+      }
 
       await this.recordAudit(tx, {
         action: WORK_TYPES_AUDIT_ACTIONS.created,
@@ -121,7 +141,9 @@ export class WorkTypesService {
         resourceId: createdWorkType.id,
       });
 
-      return createdWorkType;
+      return typeof tx.workType.findUniqueOrThrow === "function"
+        ? tx.workType.findUniqueOrThrow({ include: WORK_TYPE_INCLUDE, where: { id: createdWorkType.id } })
+        : createdWorkType as WorkTypeRecord;
     });
 
     await this.notificationsService?.publishNewWorkType(workType);
@@ -181,19 +203,53 @@ export class WorkTypesService {
     }
 
     const data = this.toUpdateData(dto, context.actorUserId);
-    if (Object.keys(data).length <= 2) {
+    if (Object.keys(data).length <= 2 && dto.probeTypeIds === undefined && dto.probeTypeCodes === undefined && dto.technicianOperationIds === undefined) {
       throw new BadRequestException("No work type fields were provided.");
     }
 
     const after = await this.prisma.$transaction(async (tx) => {
+      const references = await this.validateConfigurationReferences(tx, dto, {
+        operationIds: before.technicianOperations?.map((mapping) => mapping.operationId) ?? [],
+        probeTypeIds: before.probeTypes?.map((mapping) => mapping.probeTypeId) ?? [],
+      });
       const updatedWorkType = await tx.workType.update({
         data,
+        include: WORK_TYPE_INCLUDE,
         where: {
           id: workTypeId,
           ...(before.basePriceMinor === null ? { basePriceMinor: null } : {}),
         },
       });
-      const changedFields = this.getChangedFields(before, updatedWorkType);
+      if (dto.technicianOperationIds !== undefined) {
+        await tx.workTypeTechnicianOperation.deleteMany({ where: { workTypeId } });
+        if (dto.technicianOperationIds.length > 0) {
+          await tx.workTypeTechnicianOperation.createMany({
+            data: [...new Set(dto.technicianOperationIds)].map((operationId, sortOrder) => ({ operationId, sortOrder, workTypeId })),
+          });
+        }
+      }
+      if (dto.probeTypeIds !== undefined || dto.probeTypeCodes !== undefined) {
+        await tx.workTypeProbeType.deleteMany({ where: { workTypeId } });
+        if (references.probeTypeIds.length > 0) {
+          await tx.workTypeProbeType.createMany({
+            data: references.probeTypeIds.map((probeTypeId, sortOrder) => ({ probeTypeId, sortOrder, workTypeId })),
+          });
+        }
+      }
+      const completeWorkType = typeof tx.workType.findUniqueOrThrow === "function"
+        ? await tx.workType.findUniqueOrThrow({ include: WORK_TYPE_INCLUDE, where: { id: workTypeId } })
+        : updatedWorkType as WorkTypeRecord;
+      const changedFields = [
+        ...this.getChangedFields(before, completeWorkType),
+        ...(dto.technicianOperationIds !== undefined && !sameOrderedIds(
+          before.technicianOperations?.map((mapping) => mapping.operationId) ?? [],
+          dto.technicianOperationIds,
+        ) ? ["technicianOperationIds"] : []),
+        ...((dto.probeTypeIds !== undefined || dto.probeTypeCodes !== undefined) && !sameOrderedIds(
+          [...(before.probeTypes ?? [])].sort((left, right) => left.sortOrder - right.sortOrder).map((mapping) => mapping.probeTypeId),
+          references.probeTypeIds,
+        ) ? ["probeTypeIds"] : []),
+      ];
 
       if (before.basePriceMinor === null && updatedWorkType.basePriceMinor !== null) {
         const eligibleItems = await tx.workOrderItem.findMany({
@@ -262,7 +318,7 @@ export class WorkTypesService {
         });
       }
 
-      return updatedWorkType;
+      return completeWorkType;
     });
 
     if (before.basePriceMinor === null && after.basePriceMinor !== null) await this.notificationsService?.resolveUnpricedWorkType(workTypeId);
@@ -287,6 +343,7 @@ export class WorkTypesService {
             increment: 1,
           },
         },
+        include: WORK_TYPE_INCLUDE,
         where: {
           id: workTypeId,
         },
@@ -324,6 +381,7 @@ export class WorkTypesService {
             increment: 1,
           },
         },
+        include: WORK_TYPE_INCLUDE,
         where: {
           id: workTypeId,
         },
@@ -343,8 +401,9 @@ export class WorkTypesService {
     return toWorkTypeDetailView(restoredWorkType);
   }
 
-  private async findWorkTypeOrThrow(workTypeId: string): Promise<Prisma.WorkTypeGetPayload<object>> {
+  private async findWorkTypeOrThrow(workTypeId: string): Promise<Prisma.WorkTypeGetPayload<{ include: typeof WORK_TYPE_INCLUDE }>> {
     const workType = await this.prisma.workType.findUnique({
+      include: WORK_TYPE_INCLUDE,
       where: {
         id: workTypeId,
       },
@@ -364,6 +423,8 @@ export class WorkTypesService {
         increment: 1,
       },
     };
+    if (dto.technicianOperationIds !== undefined) data.operationApplicabilityConfigured = true;
+    if (dto.probeTypeIds !== undefined || dto.probeTypeCodes !== undefined) data.probeApplicabilityConfigured = true;
 
     for (const field of WORK_TYPE_MUTATION_FIELDS) {
       if (!(field in dto)) {
@@ -384,9 +445,13 @@ export class WorkTypesService {
   private assignUpdateValue(
     data: Prisma.WorkTypeUncheckedUpdateInput,
     field: (typeof WORK_TYPE_MUTATION_FIELDS)[number],
-    value: number | string | null,
+    value: unknown,
   ): void {
     switch (field) {
+      case "allowedAddOns":
+      case "allowedAnatomicalScopes":
+        data[field] = value as Prisma.InputJsonValue;
+        return;
       case "basePriceMinor":
         if (typeof value === "number") {
           data.basePriceMinor = value;
@@ -396,7 +461,11 @@ export class WorkTypesService {
         data.colorHex = typeof value === "string" ? value : null;
         return;
       case "description":
-        data.description = typeof value === "number" ? null : value;
+        data.description = typeof value === "string" ? value : null;
+        return;
+      case "exclusiveGroup":
+      case "probeFamily":
+        data[field] = typeof value === "string" ? value : null;
         return;
       case "name":
         if (typeof value === "string") {
@@ -409,18 +478,44 @@ export class WorkTypesService {
         }
         return;
       case "unit":
-        if (value === "UNIT") {
-          data.unit = value;
+        if (typeof value === "string") {
+          data.unit = value as WorkTypeUnit;
         }
         return;
     }
   }
 
   private getChangedFields(
-    before: Prisma.WorkTypeGetPayload<object>,
-    after: Prisma.WorkTypeGetPayload<object>,
+    before: Prisma.WorkTypeGetPayload<{ include: typeof WORK_TYPE_INCLUDE }>,
+    after: Prisma.WorkTypeGetPayload<{ include: typeof WORK_TYPE_INCLUDE }>,
   ): readonly (typeof WORK_TYPE_MUTATION_FIELDS)[number][] {
     return WORK_TYPE_MUTATION_FIELDS.filter((field) => before[field] !== after[field]);
+  }
+
+  private async validateConfigurationReferences(
+    client: Prisma.TransactionClient,
+    dto: Pick<UpdateWorkTypeDto, "probeTypeCodes" | "probeTypeIds" | "technicianOperationIds">,
+    existing: { readonly operationIds: readonly string[]; readonly probeTypeIds: readonly string[] } = { operationIds: [], probeTypeIds: [] },
+  ): Promise<{ readonly probeTypeIds: readonly string[] }> {
+    if (dto.technicianOperationIds !== undefined) {
+      const ids = [...new Set(dto.technicianOperationIds)];
+      const count = ids.length === 0 ? 0 : await client.technicianOperation.count({ where: { id: { in: ids }, OR: [{ isActive: true }, { id: { in: [...existing.operationIds] } }] } });
+      if (count !== ids.length) throw new BadRequestException("Selectează numai manopere active din catalogul global.");
+    }
+    if (dto.probeTypeIds !== undefined) {
+      const ids = [...new Set(dto.probeTypeIds)];
+      const count = ids.length === 0 ? 0 : await client.probeType.count({ where: { id: { in: ids }, OR: [{ isArchived: false }, { id: { in: [...existing.probeTypeIds] } }] } });
+      if (count !== ids.length) throw new BadRequestException("Selectează numai tipuri de probă active din catalogul global.");
+      return { probeTypeIds: ids };
+    }
+    if (dto.probeTypeCodes !== undefined) {
+      const codes = [...new Set(dto.probeTypeCodes)];
+      const probes = codes.length === 0 ? [] : await client.probeType.findMany({ select: { code: true, id: true }, where: { code: { in: codes }, isArchived: false } });
+      if (probes.length !== codes.length) throw new BadRequestException("Selectează numai tipuri de probă active din catalogul global.");
+      const idByCode = new Map(probes.flatMap((probe) => probe.code ? [[probe.code, probe.id] as const] : []));
+      return { probeTypeIds: codes.map((code) => idByCode.get(code)!) };
+    }
+    return { probeTypeIds: [] };
   }
 
   private async recordAudit(
@@ -454,4 +549,10 @@ export class WorkTypesService {
 
     await client.auditLog.create({ data });
   }
+}
+
+function sameOrderedIds(left: readonly string[], right: readonly string[]): boolean {
+  const normalizedLeft = [...new Set(left)];
+  const normalizedRight = [...new Set(right)];
+  return normalizedLeft.length === normalizedRight.length && normalizedLeft.every((id, index) => id === normalizedRight[index]);
 }

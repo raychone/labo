@@ -126,6 +126,17 @@ export async function seedTechnicalCatalog(prisma: PrismaClient): Promise<{ read
     },
   });
 
+  // Old demo operation rows can still be referenced by immutable rate and
+  // execution history. Keep those rows, but never let a technical/production
+  // seed reactivate them in the operational catalog.
+  await prisma.technicianOperation.updateMany({
+    data: { archivedAt: new Date(), description: null, isActive: false, updatedByUserId: manager.id },
+    where: {
+      id: { startsWith: "demo_operation_" },
+      OR: [{ isActive: true }, { archivedAt: null }, { description: { not: null } }],
+    },
+  });
+
   // Give the two standard demo technicians an initial rate for every
   // canonical operation so a fresh minimal database can record manopere
   // immediately. These are seed defaults and remain editable by a manager.
@@ -243,6 +254,42 @@ export async function seedTechnicalCatalog(prisma: PrismaClient): Promise<{ read
         update: { executionDays: item.executionGroup === "PROVISIONAL_REPAIR" ? 3 : item.executionGroup === "MOBILE_PROSTHESIS" ? 7 : 5, isActive: true, priceCatalogItemId: persistedPriceCatalogItemId, updatedByUserId: manager.id },
         where: { id: `technical_execution_${legalEntity.code.toLowerCase()}_${item.key}` },
       });
+    }
+  }
+
+  // Initialize only rows that have never received an explicit manager
+  // configuration. Re-running the seed must not overwrite either side of the
+  // canonical WorkType↔Operation / WorkType↔ProbeType relations.
+  const unconfiguredWorkTypes = await prisma.workType.findMany({
+    select: { id: true, name: true, operationApplicabilityConfigured: true, probeApplicabilityConfigured: true, probeFamily: true, probeTypeCodes: true, symbol: true },
+    where: { OR: [{ operationApplicabilityConfigured: false }, { probeApplicabilityConfigured: false }] },
+  });
+  const activeOperations = await prisma.technicianOperation.findMany({ select: { category: true, id: true, sortOrder: true }, where: { isActive: true } });
+  const activeProbeTypes = await prisma.probeType.findMany({ select: { code: true, id: true }, where: { isArchived: false } });
+  const probeIdByCode = new Map(activeProbeTypes.flatMap((probe) => probe.code ? [[probe.code, probe.id] as const] : []));
+  for (const workType of unconfiguredWorkTypes) {
+    if (!workType.operationApplicabilityConfigured) {
+      const identity = `${workType.symbol} ${workType.name}`.toLocaleLowerCase("ro-RO");
+      const family = workType.probeFamily
+        ?? (identity.includes("tf") || identity.includes("sf") || identity.includes("metalo") || identity.includes("metaloceramic") ? "MC"
+          : identity.includes("zrp") || identity.includes("zirconia placat") ? "ZRP"
+            : identity === "zr" || identity.includes(" zr ") || identity.includes("zircon") ? "ZR"
+              : identity.includes("protez") || identity.includes("lingură individuală") ? "PRO" : null);
+      const compatible = activeOperations.filter((operation) => family === null
+        || (family === "MC" && operation.category === "Coroană ceramică")
+        || ((family === "ZR" || family === "ZRP") && operation.category === "Coroană zirconiu")
+        || (family === "PRO" && operation.category === "Altele"));
+      if (compatible.length) await prisma.workTypeTechnicianOperation.createMany({ data: compatible.map((operation) => ({ operationId: operation.id, sortOrder: operation.sortOrder, workTypeId: workType.id })), skipDuplicates: true });
+      await prisma.workType.update({ data: { operationApplicabilityConfigured: true }, where: { id: workType.id } });
+    }
+    if (!workType.probeApplicabilityConfigured) {
+      const configuredCodes = Array.isArray(workType.probeTypeCodes) ? workType.probeTypeCodes.filter((code): code is string => typeof code === "string") : [];
+      const mappings = configuredCodes.flatMap((code, sortOrder) => {
+        const probeTypeId = probeIdByCode.get(code);
+        return probeTypeId ? [{ probeTypeId, sortOrder, workTypeId: workType.id }] : [];
+      });
+      if (mappings.length) await prisma.workTypeProbeType.createMany({ data: mappings, skipDuplicates: true });
+      await prisma.workType.update({ data: { probeApplicabilityConfigured: true }, where: { id: workType.id } });
     }
   }
 

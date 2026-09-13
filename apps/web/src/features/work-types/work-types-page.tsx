@@ -140,7 +140,7 @@ export function WorkTypesPage(): ReactNode {
   }
 
   if (!canRead) {
-    return <PageState><ErrorState title="Acces refuzat" description="Contul curent nu are permisiunea pricing.read." /></PageState>;
+    return <PageState><ErrorState title="Acces refuzat" description="Contul curent nu poate consulta tipurile de lucrări." /></PageState>;
   }
 
   return (

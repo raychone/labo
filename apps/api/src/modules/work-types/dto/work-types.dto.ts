@@ -1,5 +1,6 @@
 import { Transform, Type } from "class-transformer";
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from "class-validator";
+import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
+import { ANATOMICAL_SCOPE_TYPES, WORK_TYPE_ADD_ON_CODES, WORK_TYPE_PROBE_FAMILIES } from "@dental-lab/shared";
 
 import { MAX_BASE_PRICE_MINOR, SORT_DIRECTIONS, WORK_TYPE_SORT_FIELDS, WORK_TYPE_UNITS } from "../work-types.constants.js";
 
@@ -78,6 +79,24 @@ export class ListWorkTypesQueryDto {
   public readonly sortDirection: (typeof SORT_DIRECTIONS)[number] = "desc";
 }
 
+export class WorkTypeAddOnDto {
+  @IsIn(WORK_TYPE_ADD_ON_CODES)
+  public readonly code!: (typeof WORK_TYPE_ADD_ON_CODES)[number];
+
+  @Transform(({ value }) => trimRequiredString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(80)
+  public readonly label!: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(MAX_BASE_PRICE_MINOR)
+  public readonly amountMinor?: number | null;
+}
+
 export class WorkTypeMutationDto {
   @IsOptional()
   @Transform(({ value }) => normalizeColor(value))
@@ -114,6 +133,44 @@ export class WorkTypeMutationDto {
   @IsOptional()
   @IsIn(WORK_TYPE_UNITS)
   public readonly unit?: (typeof WORK_TYPE_UNITS)[number];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsIn(ANATOMICAL_SCOPE_TYPES, { each: true })
+  public readonly allowedAnatomicalScopes?: readonly (typeof ANATOMICAL_SCOPE_TYPES)[number][];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  public readonly technicianOperationIds?: readonly string[];
+
+  @IsOptional()
+  @IsIn(WORK_TYPE_PROBE_FAMILIES)
+  public readonly probeFamily?: (typeof WORK_TYPE_PROBE_FAMILIES)[number] | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  public readonly probeTypeIds?: readonly string[];
+
+  /** @deprecated Kept for older clients; new clients send canonical probe IDs. */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  public readonly probeTypeCodes?: readonly string[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => WorkTypeAddOnDto)
+  public readonly allowedAddOns?: readonly WorkTypeAddOnDto[];
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @MaxLength(80)
+  public readonly exclusiveGroup?: string | null;
 }
 
 export class CreateWorkTypeDto extends WorkTypeMutationDto {

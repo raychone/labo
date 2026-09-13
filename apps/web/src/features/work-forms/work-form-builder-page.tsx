@@ -154,7 +154,7 @@ export function WorkFormBuilderPage(): ReactNode {
   }
 
   if (!canRead) {
-    return <PageState><ErrorState title="Acces refuzat" description="Contul curent nu are permisiunea forms.read." /></PageState>;
+    return <PageState><ErrorState title="Acces refuzat" description="Contul curent nu poate consulta formularul lucrării." /></PageState>;
   }
 
   if (listQuery.isError) {

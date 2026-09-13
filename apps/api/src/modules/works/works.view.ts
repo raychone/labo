@@ -211,9 +211,9 @@ type WorkOrderRecordPayload = Prisma.WorkOrderGetPayload<{
         uploadedAt: true;
       };
     };
-    workType: true,
+    workType: { include: { probeTypes: { include: { probeType: true } } } },
     items: {
-      include: { teeth: true, workType: true },
+      include: { teeth: true, workType: { include: { probeTypes: { include: { probeType: true } } } } },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       where: { archivedAt: null },
     },
@@ -534,7 +534,7 @@ export interface PaginatedWorksView {
   readonly total: number;
 }
 
-export function toWorkTypeFormOptionView(workType: { readonly code: string; readonly colorHex: string | null; readonly id: string; readonly name: string; readonly symbol: string; readonly unit: string; readonly probeFamily: string | null; readonly probeTypeCodes: Prisma.JsonValue | null; readonly allowedAddOns: Prisma.JsonValue | null; readonly exclusiveGroup: string | null }): WorkTypeFormOptionView {
+export function toWorkTypeFormOptionView(workType: { readonly code: string; readonly colorHex: string | null; readonly id: string; readonly name: string; readonly symbol: string; readonly unit: string; readonly probeFamily: string | null; readonly probeApplicabilityConfigured?: boolean; readonly probeTypes?: readonly { readonly sortOrder: number; readonly probeType: { readonly code: string | null } }[]; readonly probeTypeCodes?: Prisma.JsonValue | null; readonly allowedAddOns: Prisma.JsonValue | null; readonly exclusiveGroup: string | null }): WorkTypeFormOptionView {
   return {
     code: workType.code,
     colorHex: workType.colorHex,
@@ -543,7 +543,7 @@ export function toWorkTypeFormOptionView(workType: { readonly code: string; read
     symbol: workType.symbol,
     unit: workType.unit,
     probeFamily: workType.probeFamily,
-    probeTypeCodes: Array.isArray(workType.probeTypeCodes) ? workType.probeTypeCodes.filter((value): value is string => typeof value === "string") : [],
+    probeTypeCodes: configuredProbeTypeCodes(workType),
     allowedAddOns: Array.isArray(workType.allowedAddOns) ? workType.allowedAddOns.flatMap((value) => {
       if (typeof value !== "object" || value === null || Array.isArray(value) || typeof value.code !== "string" || typeof value.label !== "string") return [];
       return [{ code: value.code, label: value.label, amountMinor: typeof value.amountMinor === "number" ? value.amountMinor : null }];
@@ -620,10 +620,21 @@ export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: bo
       colorHex: workOrder.workType.colorHex,
       id: workOrder.workType.id,
       name: workOrder.workType.name,
-      probeTypeCodes: Array.isArray(workOrder.workType.probeTypeCodes) ? workOrder.workType.probeTypeCodes.filter((value): value is string => typeof value === "string") : [],
+      probeTypeCodes: configuredProbeTypeCodes(workOrder.workType),
       symbol: workOrder.workType.symbol,
     },
   };
+}
+
+function configuredProbeTypeCodes(workType: { readonly probeApplicabilityConfigured?: boolean; readonly probeTypes?: readonly { readonly sortOrder?: number; readonly probeType: { readonly code: string | null } }[]; readonly probeTypeCodes?: Prisma.JsonValue | null }): readonly string[] {
+  if (workType.probeApplicabilityConfigured === true || (workType.probeTypes !== undefined && workType.probeTypeCodes === undefined)) {
+    return [...(workType.probeTypes ?? [])]
+      .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0))
+      .flatMap((mapping) => mapping.probeType.code ? [mapping.probeType.code] : []);
+  }
+  return Array.isArray(workType.probeTypeCodes)
+    ? workType.probeTypeCodes.filter((code): code is string => typeof code === "string")
+    : [];
 }
 
 function toWorkClaimView(workOrder: WorkOrderRecord, access: WorkClaimAccessViewInput): WorkClaimView {

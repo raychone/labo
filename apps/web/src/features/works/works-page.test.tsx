@@ -664,6 +664,47 @@ describe("WorksPage", () => {
     expect(within(workTypeList).getByRole("button", { name: "Punte zirconiu" })).toBeDefined();
   });
 
+  it("lets reception save a freely entered work type to the reusable catalog", async () => {
+    const savedNames: string[] = [];
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/auth/permissions")) {
+        return Promise.resolve(createJsonResponse({ permissions: [
+          { key: "clinics.read", scopes: ["ALL"] },
+          { key: "doctors.read", scopes: ["ALL"] },
+          { key: "works.create", scopes: ["ALL"] },
+          { key: "works.custom_type.save_to_catalog", scopes: ["ALL"] },
+          { key: "works.read_all", scopes: ["ALL"] },
+        ] }));
+      }
+      if (url.endsWith("/auth/csrf")) return Promise.resolve(createJsonResponse({ csrfToken: "csrf-token" }));
+      if (url.endsWith("/work-types/operational-name") && init?.method === "POST") {
+        const body = JSON.parse(String(init.body)) as { readonly name: string };
+        savedNames.push(body.name);
+        return Promise.resolve(createJsonResponse({ code: "CU-RECEPTION", id: "work_type_reception", name: body.name, symbol: "custom-RECEPTION", unit: "UNIT" }, 201));
+      }
+      if (url.includes("/works/work-type-options")) return Promise.resolve(createJsonResponse(workTypeOptionsResponse));
+      if (url.includes("/clinics/options")) return Promise.resolve(createJsonResponse(clinicOptionsResponse));
+      if (url.includes("/doctors/options")) return Promise.resolve(createJsonResponse(doctorOptionsResponse));
+      if (url.includes("/patients/options")) return Promise.resolve(createJsonResponse(patientOptionsResponse));
+      if (url.includes("/works?")) return Promise.resolve(createJsonResponse(worksListResponse));
+      return Promise.resolve(createJsonResponse({}, 404));
+    }));
+
+    renderWithProviders(<WorksPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Adaugă lucrare" }));
+    fireEvent.click(screen.getByRole("button", { name: "Dinte 11" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Alege tipul lucrării" }));
+    const typeDialog = (await screen.findAllByRole("dialog")).at(-1)!;
+    fireEvent.click(within(typeDialog).getByRole("button", { name: /Alt tip de lucrare/ }));
+
+    fireEvent.change(await screen.findByLabelText("Denumire tip personalizat"), { target: { value: "Lucrare recepție specială" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvează în catalog" }));
+
+    await waitFor(() => expect(savedNames).toEqual(["Lucrare recepție specială"]));
+    expect(await screen.findByRole("button", { name: "Lucrare recepție specială" })).toBeDefined();
+  });
+
   it("submits canonical reception intake fields from the create form", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -1036,6 +1077,7 @@ describe("WorksPage", () => {
     expect(await screen.findByRole("heading", { name: "Cicluri" })).toBeDefined();
     expect((await screen.findAllByText("Ciclul 2")).length).toBeGreaterThan(0);
     expect(await screen.findByText("Probă")).toBeDefined();
+    expect(screen.queryByText("Snapshot execuție")).toBeNull();
     expect(screen.queryByRole("button", { name: "Înregistrează proba" })).toBeNull();
   });
 

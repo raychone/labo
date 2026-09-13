@@ -24,6 +24,9 @@ function workType(overrides: Partial<WorkType> = {}): WorkType {
     probeFamily: null,
     probeTypeCodes: null,
     allowedAddOns: null,
+    allowedAnatomicalScopes: null,
+    operationApplicabilityConfigured: false,
+    probeApplicabilityConfigured: false,
     exclusiveGroup: null,
     name: "Coroana zirconiu",
     symbol: "Zr",
@@ -116,6 +119,75 @@ describe("WorkTypesService", () => {
     expect(result.code).toBe("WT-0001");
   });
 
+  it("creates the complete applicability configuration atomically without duplicate mappings", async () => {
+    const createdWorkType = workType({ unit: "ELEMENT" });
+    const operationCreateMany = vi.fn().mockResolvedValue({ count: 2 });
+    const probeCreateMany = vi.fn().mockResolvedValue({ count: 2 });
+    const transaction = vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+      auditLog: { create: vi.fn().mockResolvedValue({}) },
+      probeType: { count: vi.fn().mockResolvedValue(2) },
+      technicianOperation: { count: vi.fn().mockResolvedValue(2) },
+      workType: { create: vi.fn().mockResolvedValue(createdWorkType) },
+      workTypeProbeType: { createMany: probeCreateMany },
+      workTypeTechnicianOperation: { createMany: operationCreateMany },
+    }));
+    const service = createService({ $transaction: transaction });
+
+    await service.createWorkType(
+      { actorUserId: "actor_1", requestMetadata: {} },
+      {
+        allowedAddOns: [{ amountMinor: 2_000, code: "GINGIE", label: "Gingie" }],
+        allowedAnatomicalScopes: ["TOOTH", "TEETH"],
+        basePriceMinor: 30_000,
+        name: "Coroană configurată",
+        probeTypeIds: ["probe_zr", "probe_miyo", "probe_zr"],
+        symbol: "ZRC",
+        technicianOperationIds: ["operation_scan", "operation_design", "operation_scan"],
+        unit: "ELEMENT",
+      },
+    );
+
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(operationCreateMany).toHaveBeenCalledWith({ data: [
+      { operationId: "operation_scan", sortOrder: 0, workTypeId: "work_type_1" },
+      { operationId: "operation_design", sortOrder: 1, workTypeId: "work_type_1" },
+    ] });
+    expect(probeCreateMany).toHaveBeenCalledWith({ data: [
+      { probeTypeId: "probe_zr", sortOrder: 0, workTypeId: "work_type_1" },
+      { probeTypeId: "probe_miyo", sortOrder: 1, workTypeId: "work_type_1" },
+    ] });
+  });
+
+  it.each([
+    {
+      dto: { probeTypeIds: ["probe_archived"] },
+      expectedMessage: "Selectează numai tipuri de probă active",
+      probeCount: 0,
+      technicianOperationCount: 0,
+    },
+    {
+      dto: { technicianOperationIds: ["operation_archived"] },
+      expectedMessage: "Selectează numai manopere active",
+      probeCount: 0,
+      technicianOperationCount: 0,
+    },
+  ])("rejects a new association to an archived catalog entry", async ({ dto, expectedMessage, probeCount, technicianOperationCount }) => {
+    const create = vi.fn();
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        probeType: { count: vi.fn().mockResolvedValue(probeCount) },
+        technicianOperation: { count: vi.fn().mockResolvedValue(technicianOperationCount) },
+        workType: { create },
+      })),
+    });
+
+    await expect(service.createWorkType(
+      { actorUserId: "actor_1", requestMetadata: {} },
+      { basePriceMinor: 35_000, name: "Lucrare nouă", symbol: "LN", unit: "UNIT", ...dto },
+    )).rejects.toThrow(expectedMessage);
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it("audits price changes with old and new minor unit values", async () => {
     const before = workType();
     const after = workType({ basePriceMinor: 37500, version: 2 });
@@ -163,14 +235,106 @@ describe("WorkTypesService", () => {
     expect(result).toStrictEqual([
       {
         basePriceMinor: 35000,
+        allowedAnatomicalScopes: [],
         code: "WT-0001",
         colorHex: null,
         id: "active_1",
         name: "Coroana zirconiu",
+        operationApplicabilityConfigured: false,
+        probeApplicabilityConfigured: false,
+        probeTypeIds: [],
+        probeTypeCodes: [],
         symbol: "Zr",
+        technicianOperationIds: [],
         unit: "UNIT",
       },
     ]);
+  });
+
+  it("reads the same canonical mappings in WorkType order", async () => {
+    const configured = {
+      ...workType({ operationApplicabilityConfigured: true, probeApplicabilityConfigured: true }),
+      probeTypes: [
+        { probeType: { code: "MIYO" }, probeTypeId: "probe_miyo", sortOrder: 1 },
+        { probeType: { code: "ZR" }, probeTypeId: "probe_zr", sortOrder: 0 },
+      ],
+      technicianOperations: [
+        { operationId: "operation_design", sortOrder: 1 },
+        { operationId: "operation_scan", sortOrder: 0 },
+      ],
+    };
+    const service = createService({ workType: { findMany: vi.fn().mockResolvedValue([configured]) } });
+
+    const [result] = await service.listWorkTypeOptions();
+
+    expect(result?.technicianOperationIds).toEqual(["operation_scan", "operation_design"]);
+    expect(result?.probeTypeIds).toEqual(["probe_zr", "probe_miyo"]);
+    expect(result?.probeTypeCodes).toEqual(["ZR", "MIYO"]);
+  });
+
+  it("replaces work-type mappings exactly and returns the persisted selection order", async () => {
+    const before = {
+      ...workType({ operationApplicabilityConfigured: true, probeApplicabilityConfigured: true }),
+      probeTypes: [
+        { probeType: { code: "LINGURA" }, probeTypeId: "probe_lingura", sortOrder: 0 },
+        { probeType: { code: "BISCUIT" }, probeTypeId: "probe_archived", sortOrder: 1 },
+      ],
+      technicianOperations: [
+        { operationId: "operation_design", sortOrder: 0 },
+        { operationId: "operation_archived", sortOrder: 1 },
+      ],
+    };
+    const after = {
+      ...before,
+      probeTypes: [
+        { probeType: { code: "ZR" }, probeTypeId: "probe_zr", sortOrder: 0 },
+        { probeType: { code: "BISCUIT" }, probeTypeId: "probe_archived", sortOrder: 1 },
+      ],
+      technicianOperations: [
+        { operationId: "operation_archived", sortOrder: 0 },
+        { operationId: "operation_frez", sortOrder: 1 },
+      ],
+    };
+    const operationDeleteMany = vi.fn().mockResolvedValue({ count: 2 });
+    const operationCreateMany = vi.fn().mockResolvedValue({ count: 2 });
+    const probeDeleteMany = vi.fn().mockResolvedValue({ count: 2 });
+    const probeCreateMany = vi.fn().mockResolvedValue({ count: 2 });
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+        probeType: { count: vi.fn().mockResolvedValue(2) },
+        technicianOperation: { count: vi.fn().mockResolvedValue(2) },
+        workType: {
+          findUniqueOrThrow: vi.fn().mockResolvedValue(after),
+          update: vi.fn().mockResolvedValue(after),
+        },
+        workTypeProbeType: { createMany: probeCreateMany, deleteMany: probeDeleteMany },
+        workTypeTechnicianOperation: { createMany: operationCreateMany, deleteMany: operationDeleteMany },
+      })),
+      workType: { findUnique: vi.fn().mockResolvedValue(before) },
+    });
+
+    const result = await service.updateWorkType(
+      { actorUserId: "actor_1", requestMetadata: {} },
+      "work_type_1",
+      {
+        probeTypeIds: ["probe_zr", "probe_archived", "probe_zr"],
+        technicianOperationIds: ["operation_archived", "operation_frez", "operation_archived"],
+      },
+    );
+
+    expect(operationDeleteMany).toHaveBeenCalledWith({ where: { workTypeId: "work_type_1" } });
+    expect(operationCreateMany).toHaveBeenCalledWith({ data: [
+      { operationId: "operation_archived", sortOrder: 0, workTypeId: "work_type_1" },
+      { operationId: "operation_frez", sortOrder: 1, workTypeId: "work_type_1" },
+    ] });
+    expect(probeDeleteMany).toHaveBeenCalledWith({ where: { workTypeId: "work_type_1" } });
+    expect(probeCreateMany).toHaveBeenCalledWith({ data: [
+      { probeTypeId: "probe_zr", sortOrder: 0, workTypeId: "work_type_1" },
+      { probeTypeId: "probe_archived", sortOrder: 1, workTypeId: "work_type_1" },
+    ] });
+    expect(result.technicianOperationIds).toEqual(["operation_archived", "operation_frez"]);
+    expect(result.probeTypeIds).toEqual(["probe_zr", "probe_archived"]);
   });
 
   it("rejects editing archived work types", async () => {

@@ -144,6 +144,11 @@ function WorksEntryPage(): ReactNode {
   return isWorkContext ? <WorksPage /> : <Navigate replace to="/status" />;
 }
 
+function WorkSettingsCompatibilityRedirect(): ReactNode {
+  const location = useLocation();
+  return <Navigate replace to={`/pricing${location.search}${location.hash}`} />;
+}
+
 const router = createBrowserRouter([
   {
     element: stylePreviewEnabled
@@ -246,6 +251,10 @@ const router = createBrowserRouter([
       },
       {
         element: <PermissionRoute requiredPermissions={["pricing.read"]}><LazyRoute><WorkSettingsPage /></LazyRoute></PermissionRoute>,
+        path: "pricing",
+      },
+      {
+        element: <PermissionRoute requiredPermissions={["pricing.read"]}><WorkSettingsCompatibilityRedirect /></PermissionRoute>,
         path: "work-settings",
       },
       {

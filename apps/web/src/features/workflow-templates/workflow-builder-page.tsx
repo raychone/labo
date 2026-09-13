@@ -188,7 +188,7 @@ export function WorkflowBuilderPage(): ReactNode {
   }
 
   if (!canRead) {
-    return <PageState><ErrorState title="Acces refuzat" description="Contul curent nu are permisiunea workflow.read." /></PageState>;
+    return <PageState><ErrorState title="Acces refuzat" description="Contul curent nu poate consulta fluxul lucrării." /></PageState>;
   }
 
   if (listQuery.isError) {

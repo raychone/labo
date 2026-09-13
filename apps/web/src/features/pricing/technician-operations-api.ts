@@ -5,6 +5,7 @@ import type {
   TechnicianEarningsSummary,
   TechnicianOperationDetail,
   TechnicianOperationInput,
+  TechnicianOperationSummary,
   TechnicianPaymentInput,
   TechnicianPaymentView,
   TechnicianOperationsListParams,
@@ -14,6 +15,7 @@ import type {
 
 import { fetchCsrfToken } from "../auth/auth-api.js";
 import { apiFetch, parseApiResponse } from "../../lib/api-client.js";
+import { workTypeQueryKeys } from "../work-types/work-types-api.js";
 
 export const technicianOperationsQueryKeys = {
   all: ["technician-operations"] as const,
@@ -57,6 +59,22 @@ async function sendJson<TResponse>(path: string, method: "PATCH" | "POST", body?
 export async function fetchTechnicianOperations(params: TechnicianOperationsListParams): Promise<PaginatedTechnicianOperationsResponse> {
   const response = await apiFetch(`/technician-operations?${toQueryString(Object.entries(params))}`);
   return parseApiResponse<PaginatedTechnicianOperationsResponse>(response);
+}
+
+export async function fetchTechnicianOperationCatalog(): Promise<readonly TechnicianOperationSummary[]> {
+  const params: TechnicianOperationsListParams = {
+    page: 1,
+    pageSize: 100,
+    sortBy: "name",
+    sortDirection: "asc",
+  };
+  const firstPage = await fetchTechnicianOperations(params);
+  if (firstPage.pageCount <= 1) return firstPage.items;
+
+  const remainingPages = await Promise.all(
+    Array.from({ length: firstPage.pageCount - 1 }, (_, index) => fetchTechnicianOperations({ ...params, page: index + 2 })),
+  );
+  return [firstPage, ...remainingPages].flatMap((page) => page.items);
 }
 
 export async function createTechnicianOperation(input: TechnicianOperationInput): Promise<TechnicianOperationDetail> {
@@ -103,6 +121,10 @@ export function useTechnicianOperations(params: TechnicianOperationsListParams, 
   return useQuery({ enabled, queryFn: () => fetchTechnicianOperations(params), queryKey: technicianOperationsQueryKeys.list(params), retry: false });
 }
 
+export function useTechnicianOperationCatalog(enabled: boolean) {
+  return useQuery({ enabled, queryFn: fetchTechnicianOperationCatalog, queryKey: [...technicianOperationsQueryKeys.all, "catalog"], retry: false });
+}
+
 export function useTechnicianRates(technicianId: string | undefined, enabled: boolean) {
   return useQuery({ enabled, queryFn: () => fetchTechnicianRates(technicianId), queryKey: technicianOperationsQueryKeys.rates(technicianId), retry: false });
 }
@@ -130,7 +152,7 @@ function useTechnicianOperationMutation<TVariables, TResponse>(mutationFn: (vari
   return useMutation({
     mutationFn,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: technicianOperationsQueryKeys.all });
+      await Promise.all([queryClient.invalidateQueries({ queryKey: technicianOperationsQueryKeys.all }), queryClient.invalidateQueries({ queryKey: workTypeQueryKeys.all })]);
     },
   });
 }

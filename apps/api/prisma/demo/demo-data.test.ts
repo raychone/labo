@@ -55,4 +55,22 @@ describe("demo dataset", () => {
     expect(seedSource).toMatch(/items: \{[\s\S]*workCycleId: toDemoWorkCycleId\(workOrderId\)/);
     expect(resetSource).toContain("activeCycleId: null");
   });
+
+  it("keeps demo technician operations archived across repeated seeds", () => {
+    const demoSeedSource = readFileSync("prisma/demo/demo-seed.ts", "utf8");
+    const technicalSeedSource = readFileSync("prisma/technical/technical-seed.ts", "utf8");
+    const cleanupMigrationSource = readFileSync(
+      "prisma/migrations/20260912170000_archive_demo_operation_pollution/migration.sql",
+      "utf8",
+    );
+
+    expect(demoSeedSource).toMatch(
+      /technicianOperation\.updateMany\(\{[\s\S]*isActive: false[\s\S]*id: \{ startsWith: "demo_operation_" \}/,
+    );
+    expect(technicalSeedSource).toMatch(
+      /technicianOperation\.updateMany\(\{[\s\S]*archivedAt: new Date\(\)[\s\S]*isActive: false[\s\S]*id: \{ startsWith: "demo_operation_" \}/,
+    );
+    expect(cleanupMigrationSource).toContain("WHERE \"id\" LIKE 'demo_operation_%'");
+    expect(cleanupMigrationSource).toContain('"is_active" = false');
+  });
 });

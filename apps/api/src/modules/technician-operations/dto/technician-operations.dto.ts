@@ -3,6 +3,7 @@ import { IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsOptional, IsString, Match
 
 import { SORT_DIRECTIONS } from "../../work-types/work-types.constants.js";
 import { MAX_TECHNICIAN_RATE_MINOR } from "../technician-operations.constants.js";
+import { TECHNICIAN_OPERATION_CATEGORIES, TECHNICIAN_OPERATION_QUANTITY_RULES } from "@dental-lab/shared";
 
 export const TECHNICIAN_OPERATION_SORT_FIELDS = ["code", "createdAt", "name", "updatedAt"] as const;
 
@@ -73,11 +74,12 @@ export class ListTechnicianOperationsQueryDto {
 }
 
 export class TechnicianOperationMutationDto {
+  @IsOptional()
   @Transform(({ value }) => trimRequiredString(value))
   @IsString()
   @MinLength(1)
   @MaxLength(40)
-  public readonly code!: string;
+  public readonly code?: string;
 
   @Transform(({ value }) => trimRequiredString(value))
   @IsString()
@@ -85,11 +87,8 @@ export class TechnicianOperationMutationDto {
   @MaxLength(160)
   public readonly name!: string;
 
-  @Transform(({ value }) => trimRequiredString(value))
-  @IsString()
-  @MinLength(2)
-  @MaxLength(80)
-  public readonly category!: string;
+  @IsIn(TECHNICIAN_OPERATION_CATEGORIES)
+  public readonly category!: (typeof TECHNICIAN_OPERATION_CATEGORIES)[number];
 
   @IsOptional()
   @Transform(({ value }) => trimOptionalString(value))
@@ -102,6 +101,15 @@ export class TechnicianOperationMutationDto {
   @IsInt()
   @Min(0)
   public readonly sortOrder?: number;
+
+  @IsOptional()
+  @IsIn(TECHNICIAN_OPERATION_QUANTITY_RULES)
+  public readonly quantityRule?: (typeof TECHNICIAN_OPERATION_QUANTITY_RULES)[number];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  public readonly workTypeIds?: readonly string[];
 
 }
 

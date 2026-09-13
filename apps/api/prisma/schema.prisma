@@ -385,34 +385,39 @@ model Doctor {
 }
 
 model WorkType {
-  id                String             @id @default(cuid())
-  code              String             @unique @db.VarChar(20)
-  colorHex          String?            @map("color_hex") @db.VarChar(7)
-  symbol            String             @unique @db.VarChar(40)
-  name              String             @db.VarChar(160)
-  description       String?            @db.VarChar(1000)
-  basePriceMinor    Int?               @map("base_price_minor")
-  unit              WorkTypeUnit       @default(UNIT)
-  probeFamily       String?            @map("probe_family") @db.VarChar(24)
-  probeTypeCodes    Json?              @map("probe_type_codes")
-  allowedAddOns     Json?              @map("allowed_add_ons")
-  exclusiveGroup    String?            @map("exclusive_group") @db.VarChar(80)
-  isActive          Boolean            @default(true) @map("is_active")
-  archivedAt        DateTime?          @map("archived_at")
-  createdByUserId   String?            @map("created_by_user_id")
-  updatedByUserId   String?            @map("updated_by_user_id")
-  archivedByUserId  String?            @map("archived_by_user_id")
-  createdAt         DateTime           @default(now()) @map("created_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
-  version           Int                @default(1)
-  createdBy         User?              @relation("WorkTypeCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  updatedBy         User?              @relation("WorkTypeUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
-  archivedBy        User?              @relation("WorkTypeArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
-  workOrders        WorkOrder[]
-  workOrderItems    WorkOrderItem[]
-  formTemplates     WorkFormTemplate[]
-  workflowTemplates WorkflowTemplate[]
-  priceCatalogItems PriceCatalogItem[]
+  id                               String                        @id @default(cuid())
+  code                             String                        @unique @db.VarChar(20)
+  colorHex                         String?                       @map("color_hex") @db.VarChar(7)
+  symbol                           String                        @unique @db.VarChar(40)
+  name                             String                        @db.VarChar(160)
+  description                      String?                       @db.VarChar(1000)
+  basePriceMinor                   Int?                          @map("base_price_minor")
+  unit                             WorkTypeUnit                  @default(UNIT)
+  probeFamily                      String?                       @map("probe_family") @db.VarChar(24)
+  probeTypeCodes                   Json?                         @map("probe_type_codes")
+  allowedAddOns                    Json?                         @map("allowed_add_ons")
+  allowedAnatomicalScopes          Json?                         @map("allowed_anatomical_scopes")
+  operationApplicabilityConfigured Boolean                       @default(false) @map("operation_applicability_configured")
+  probeApplicabilityConfigured     Boolean                       @default(false) @map("probe_applicability_configured")
+  exclusiveGroup                   String?                       @map("exclusive_group") @db.VarChar(80)
+  isActive                         Boolean                       @default(true) @map("is_active")
+  archivedAt                       DateTime?                     @map("archived_at")
+  createdByUserId                  String?                       @map("created_by_user_id")
+  updatedByUserId                  String?                       @map("updated_by_user_id")
+  archivedByUserId                 String?                       @map("archived_by_user_id")
+  createdAt                        DateTime                      @default(now()) @map("created_at")
+  updatedAt                        DateTime                      @updatedAt @map("updated_at")
+  version                          Int                           @default(1)
+  createdBy                        User?                         @relation("WorkTypeCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy                        User?                         @relation("WorkTypeUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  archivedBy                       User?                         @relation("WorkTypeArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
+  workOrders                       WorkOrder[]
+  workOrderItems                   WorkOrderItem[]
+  formTemplates                    WorkFormTemplate[]
+  workflowTemplates                WorkflowTemplate[]
+  priceCatalogItems                PriceCatalogItem[]
+  technicianOperations             WorkTypeTechnicianOperation[]
+  probeTypes                       WorkTypeProbeType[]
 
   @@index([name])
   @@index([symbol])
@@ -443,12 +448,14 @@ model TechnicianOperation {
   updatedAt               DateTime                            @updatedAt @map("updated_at")
   version                 Int                                 @default(1)
   sortOrder               Int                                 @default(0) @map("sort_order")
+  quantityRule            TechnicianOperationQuantityRule     @default(PER_ELEMENT) @map("quantity_rule")
   createdBy               User?                               @relation("TechnicianOperationCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   updatedBy               User?                               @relation("TechnicianOperationUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   archivedBy              User?                               @relation("TechnicianOperationArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
   rates                   TechnicianOperationRate[]
   performedOperations     TechnicianPerformedOperation[]
   performedOperationTeeth TechnicianPerformedOperationTooth[]
+  workTypes               WorkTypeTechnicianOperation[]
 
   @@index([name])
   @@index([category, sortOrder])
@@ -460,6 +467,34 @@ model TechnicianOperation {
   @@index([updatedByUserId])
   @@index([archivedByUserId])
   @@map("technician_operations")
+}
+
+model WorkTypeTechnicianOperation {
+  workTypeId  String              @map("work_type_id")
+  operationId String              @map("operation_id")
+  sortOrder   Int                 @default(0) @map("sort_order")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  workType    WorkType            @relation(fields: [workTypeId], references: [id], onDelete: Cascade)
+  operation   TechnicianOperation @relation(fields: [operationId], references: [id], onDelete: Restrict)
+
+  @@id([workTypeId, operationId])
+  @@index([operationId])
+  @@index([workTypeId, sortOrder])
+  @@map("work_type_technician_operations")
+}
+
+model WorkTypeProbeType {
+  workTypeId  String    @map("work_type_id")
+  probeTypeId String    @map("probe_type_id")
+  sortOrder   Int       @default(0) @map("sort_order")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  workType    WorkType  @relation(fields: [workTypeId], references: [id], onDelete: Cascade)
+  probeType   ProbeType @relation(fields: [probeTypeId], references: [id], onDelete: Restrict)
+
+  @@id([workTypeId, probeTypeId])
+  @@index([probeTypeId])
+  @@index([workTypeId, sortOrder])
+  @@map("work_type_probe_types")
 }
 
 model TechnicianOperationRate {
@@ -496,6 +531,7 @@ model TechnicianPerformedOperation {
   operationNameSnapshot String?                             @map("operation_name_snapshot") @db.VarChar(160)
   quantity              Int?
   rateMinorSnapshot     Int?                                @map("rate_minor_snapshot")
+  quantityRuleSnapshot  TechnicianOperationQuantityRule     @map("quantity_rule_snapshot")
   notes                 String?                             @db.VarChar(1000)
   earningMinor          Int                                 @map("earning_minor")
   currency              String                              @default("RON") @db.Char(3)
@@ -566,6 +602,12 @@ enum WorkTypeUnit {
   CASE
   REPAIR
   OTHER
+}
+
+enum TechnicianOperationQuantityRule {
+  PER_ELEMENT
+  PER_ARCH
+  PER_WORK
 }
 
 model PriceCatalogItem {
@@ -1350,22 +1392,23 @@ model WorkCycle {
 }
 
 model ProbeType {
-  id               String       @id @default(cuid())
-  code             String?      @unique @db.VarChar(40)
-  symbol           String?      @db.VarChar(16)
-  name             String       @db.VarChar(120)
-  sortOrder        Int          @default(0) @map("sort_order")
-  isArchived       Boolean      @default(false) @map("is_archived")
-  createdByUserId  String?      @map("created_by_user_id")
-  updatedByUserId  String?      @map("updated_by_user_id")
-  archivedByUserId String?      @map("archived_by_user_id")
-  createdAt        DateTime     @default(now()) @map("created_at")
-  updatedAt        DateTime     @updatedAt @map("updated_at")
-  createdBy        User?        @relation("ProbeTypeCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  updatedBy        User?        @relation("ProbeTypeUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
-  archivedBy       User?        @relation("ProbeTypeArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
+  id               String                @id @default(cuid())
+  code             String?               @unique @db.VarChar(40)
+  symbol           String?               @db.VarChar(16)
+  name             String                @db.VarChar(120)
+  sortOrder        Int                   @default(0) @map("sort_order")
+  isArchived       Boolean               @default(false) @map("is_archived")
+  createdByUserId  String?               @map("created_by_user_id")
+  updatedByUserId  String?               @map("updated_by_user_id")
+  archivedByUserId String?               @map("archived_by_user_id")
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+  createdBy        User?                 @relation("ProbeTypeCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy        User?                 @relation("ProbeTypeUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  archivedBy       User?                 @relation("ProbeTypeArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
   probeCycles      ProbeCycle[]
   probeCycleTypes  ProbeCycleProbeType[]
+  workTypes        WorkTypeProbeType[]
 
   @@unique([name])
   @@index([isArchived, sortOrder])
@@ -1404,11 +1447,11 @@ model ProbeCycle {
 }
 
 model ProbeCycleProbeType {
-  id                    String    @id @default(cuid())
-  probeCycleId          String    @map("probe_cycle_id")
-  probeTypeId           String    @map("probe_type_id")
-  probeTypeNameSnapshot String    @map("probe_type_name_snapshot") @db.VarChar(120)
-  sortOrder             Int       @default(0) @map("sort_order")
+  id                    String     @id @default(cuid())
+  probeCycleId          String     @map("probe_cycle_id")
+  probeTypeId           String     @map("probe_type_id")
+  probeTypeNameSnapshot String     @map("probe_type_name_snapshot") @db.VarChar(120)
+  sortOrder             Int        @default(0) @map("sort_order")
   probeCycle            ProbeCycle @relation(fields: [probeCycleId], references: [id], onDelete: Cascade)
   probeType             ProbeType  @relation(fields: [probeTypeId], references: [id], onDelete: Restrict)
 

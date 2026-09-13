@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
-import type { WorkTypeAddOnOption, WorkTypeProbeFamily } from "@dental-lab/shared";
+import { ANATOMICAL_SCOPE_TYPES, type AnatomicalScopeType, type WorkTypeAddOnOption, type WorkTypeProbeFamily } from "@dental-lab/shared";
 
-export type WorkTypeRecord = Prisma.WorkTypeGetPayload<object>;
+export type WorkTypeRecord = Prisma.WorkTypeGetPayload<{ include: { probeTypes: { include: { probeType: true } }; technicianOperations: true } }>;
 
 export interface WorkTypeOptionView {
   readonly basePriceMinor: number | null;
@@ -12,8 +12,13 @@ export interface WorkTypeOptionView {
   readonly symbol: string;
   readonly unit: string;
   readonly probeFamily?: WorkTypeProbeFamily | null;
+  readonly probeTypeIds: readonly string[];
   readonly probeTypeCodes?: readonly string[];
   readonly allowedAddOns?: readonly WorkTypeAddOnOption[];
+  readonly allowedAnatomicalScopes?: readonly AnatomicalScopeType[];
+  readonly operationApplicabilityConfigured: boolean;
+  readonly probeApplicabilityConfigured: boolean;
+  readonly technicianOperationIds: readonly string[];
   readonly exclusiveGroup?: string | null;
 }
 
@@ -40,7 +45,9 @@ export interface PaginatedWorkTypesView {
   readonly total: number;
 }
 
-export function toWorkTypeOptionView(workType: Pick<WorkTypeRecord, "basePriceMinor" | "code" | "colorHex" | "id" | "name" | "symbol" | "unit" | "probeFamily" | "probeTypeCodes" | "allowedAddOns" | "exclusiveGroup">): WorkTypeOptionView {
+export function toWorkTypeOptionView(workType: Pick<WorkTypeRecord, "allowedAddOns" | "allowedAnatomicalScopes" | "basePriceMinor" | "code" | "colorHex" | "exclusiveGroup" | "id" | "name" | "operationApplicabilityConfigured" | "probeApplicabilityConfigured" | "probeFamily" | "probeTypes" | "symbol" | "technicianOperations" | "unit">): WorkTypeOptionView {
+  const probeTypes = workType.probeTypes ?? [];
+  const technicianOperations = workType.technicianOperations ?? [];
   return {
     basePriceMinor: workType.basePriceMinor,
     code: workType.code,
@@ -50,18 +57,24 @@ export function toWorkTypeOptionView(workType: Pick<WorkTypeRecord, "basePriceMi
     symbol: workType.symbol,
     unit: workType.unit,
     ...(isProbeFamily(workType.probeFamily) ? { probeFamily: workType.probeFamily } : {}),
-    ...(jsonStringArray(workType.probeTypeCodes).length > 0 ? { probeTypeCodes: jsonStringArray(workType.probeTypeCodes) } : {}),
+    probeTypeIds: [...probeTypes].sort((left, right) => left.sortOrder - right.sortOrder).map((mapping) => mapping.probeTypeId),
+    probeTypeCodes: [...probeTypes].sort((left, right) => left.sortOrder - right.sortOrder).flatMap((mapping) => mapping.probeType.code ? [mapping.probeType.code] : []),
     ...(jsonAddOns(workType.allowedAddOns).length > 0 ? { allowedAddOns: jsonAddOns(workType.allowedAddOns) } : {}),
+    allowedAnatomicalScopes: jsonAnatomicalScopes(workType.allowedAnatomicalScopes),
+    operationApplicabilityConfigured: workType.operationApplicabilityConfigured ?? false,
+    probeApplicabilityConfigured: workType.probeApplicabilityConfigured ?? false,
+    technicianOperationIds: [...technicianOperations].sort((left, right) => left.sortOrder - right.sortOrder).map((mapping) => mapping.operationId),
     ...(workType.exclusiveGroup ? { exclusiveGroup: workType.exclusiveGroup } : {}),
   };
 }
 
-function isProbeFamily(value: string | null): value is WorkTypeProbeFamily {
-  return value === "MC" || value === "ZR" || value === "ZRP" || value === "PRO" || value === "LA_GATA";
+function jsonAnatomicalScopes(value: Prisma.JsonValue | null): readonly AnatomicalScopeType[] {
+  const allowed = new Set<string>(ANATOMICAL_SCOPE_TYPES);
+  return Array.isArray(value) ? value.filter((entry): entry is AnatomicalScopeType => typeof entry === "string" && allowed.has(entry)) : [];
 }
 
-function jsonStringArray(value: Prisma.JsonValue | null): readonly string[] {
-  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+function isProbeFamily(value: string | null): value is WorkTypeProbeFamily {
+  return value === "MC" || value === "ZR" || value === "ZRP" || value === "PRO" || value === "LA_GATA";
 }
 
 function jsonAddOns(value: Prisma.JsonValue | null): readonly WorkTypeAddOnOption[] {

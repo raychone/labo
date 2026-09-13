@@ -20,11 +20,11 @@ function futureDateValue(daysFromNow: number): string {
 let realLabSheetPreparedForWorkTypeId: string | null = null;
 
 const loginLabels: Record<"MANAGER" | "RECEPTIE" | "TEHNICIAN" | "LOGISTICA" | "CURIER", string> = {
-  CURIER: "Intră ca curier",
-  LOGISTICA: "Intră ca logistică",
-  MANAGER: "Intră ca manager",
-  RECEPTIE: "Intră ca recepție",
-  TEHNICIAN: "Intră ca tehnician",
+  CURIER: "Curier",
+  LOGISTICA: "Logistică",
+  MANAGER: "Manager",
+  RECEPTIE: "Recepție",
+  TEHNICIAN: "Tehnician",
 };
 
 export interface SmokeWork {

@@ -42,7 +42,7 @@ import { fetchUsers, hasPermission } from "../users/users-api.js";
 import { useTechnicianOptions } from "../technician-workbench/technician-workbench-api.js";
 import { WorkForm, defaultWorkFormValues, toWorkDeadlinePreviewInput, toWorkMutationInput } from "../works/work-form.js";
 import { useActiveWorkFormTemplate } from "../work-forms/work-form-templates-api.js";
-import { setWorkStatus, useReworkProbe, useWorkDeadlinePreview, useWorkFormWorkTypeOptions } from "../works/works-api.js";
+import { setWorkStatus, useReworkProbe, useSaveOperationalWorkTypeName, useWorkDeadlinePreview, useWorkFormWorkTypeOptions } from "../works/works-api.js";
 import { workFormSchema, type WorkFormValues } from "../works/works-page.schema.js";
 import {
   useCreateLogisticsWork,
@@ -948,6 +948,7 @@ function LogisticsCreateWorkModal({ isOpen, onOpenChange }: { readonly isOpen: b
     resolver: zodResolver(workFormSchema),
   });
   const createMutation = useCreateLogisticsWork();
+  const saveOperationalWorkTypeMutation = useSaveOperationalWorkTypeName();
   const selectedClinicId = form.watch("clinicId");
   const selectedDoctorId = form.watch("doctorId");
   const selectedWorkTypeId = form.watch("workTypeId");
@@ -1036,6 +1037,7 @@ function LogisticsCreateWorkModal({ isOpen, onOpenChange }: { readonly isOpen: b
           isDeadlinePreviewLoading={deadlinePreviewQuery.isFetching}
           isDisabled={createMutation.isPending}
           onClinicChange={() => form.setValue("doctorId", "", { shouldDirty: true, shouldValidate: true })}
+          onSaveNewWorkType={(name) => saveOperationalWorkTypeMutation.mutateAsync(name)}
           onSubmit={(values) => {
             form.clearErrors("root");
             createMutation.mutate({ attachments, input: toWorkMutationInput(values, activeTemplateQuery.data) }, {

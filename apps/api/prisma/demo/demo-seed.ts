@@ -1400,6 +1400,42 @@ async function seedDemoTechnicianOperations(prisma: PrismaClient, now: Date): Pr
     });
   }
 
+  // Demo work types are created after the technical seed. Materialize their
+  // legacy behavior into the same canonical relations used in production so
+  // the demo cannot silently fall back to a second source of truth.
+  const demoWorkTypes = await prisma.workType.findMany({
+    select: { id: true, probeFamily: true, probeTypeCodes: true },
+    where: { id: { startsWith: "demo_creative_wt_" } },
+  });
+  const activeProbeTypes = await prisma.probeType.findMany({ select: { code: true, id: true }, where: { isArchived: false } });
+  const probeIdByCode = new Map(activeProbeTypes.flatMap((probe) => probe.code ? [[probe.code, probe.id] as const] : []));
+  for (const workType of demoWorkTypes) {
+    const compatibleOperations = operations.filter((operation) => workType.probeFamily === null
+      || (workType.probeFamily === "MC" && operation.category === "Coroană ceramică")
+      || ((workType.probeFamily === "ZR" || workType.probeFamily === "ZRP") && operation.category === "Coroană zirconiu")
+      || (workType.probeFamily === "PRO" && operation.category === "Altele"));
+    if (compatibleOperations.length > 0) {
+      await prisma.workTypeTechnicianOperation.createMany({
+        data: compatibleOperations.map((operation) => ({ operationId: operation.id, sortOrder: operation.sortOrder, workTypeId: workType.id })),
+        skipDuplicates: true,
+      });
+    }
+    const probeCodes = Array.isArray(workType.probeTypeCodes) ? workType.probeTypeCodes.filter((code): code is string => typeof code === "string") : [];
+    const probeMappings = probeCodes.flatMap((code, sortOrder) => {
+      const probeTypeId = probeIdByCode.get(code);
+      return probeTypeId ? [{ probeTypeId, sortOrder, workTypeId: workType.id }] : [];
+    });
+    if (probeMappings.length > 0) await prisma.workTypeProbeType.createMany({ data: probeMappings, skipDuplicates: true });
+    await prisma.workType.update({
+      data: {
+        allowedAnatomicalScopes: ["TOOTH", "TEETH", "UPPER_ARCH", "LOWER_ARCH", "BOTH_ARCHES", "CASE"],
+        operationApplicabilityConfigured: true,
+        probeApplicabilityConfigured: true,
+      },
+      where: { id: workType.id },
+    });
+  }
+
   for (const operation of operations) {
     const operationKey = operation.legacyId.replace("demo_operation_", "");
     const technicianRates = [
@@ -1426,8 +1462,8 @@ async function seedDemoTechnicianOperations(prisma: PrismaClient, now: Date): Pr
     const operationId = operationIds.get(legacyOperationId);
     if (!operationId) throw new Error(`Missing canonical technician operation for ${legacyOperationId}.`);
     await prisma.technicianPerformedOperation.upsert({
-      create: { createdByUserId: technicianId, earningMinor, id, operationId, performedAt: addDemoDays(now, -2), rateId, technicianId, workOrderId },
-      update: { earningMinor, operationId, performedAt: addDemoDays(now, -2), rateId, technicianId, workOrderId },
+      create: { createdByUserId: technicianId, earningMinor, id, operationId, performedAt: addDemoDays(now, -2), quantityRuleSnapshot: "PER_ELEMENT", rateId, technicianId, workOrderId },
+      update: { earningMinor, operationId, performedAt: addDemoDays(now, -2), quantityRuleSnapshot: "PER_ELEMENT", rateId, technicianId, workOrderId },
       where: { id },
     });
   }

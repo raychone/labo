@@ -28,11 +28,14 @@ export {
   POSTMODEL_UI_TERMINOLOGY_RO,
   PROBE_LIFECYCLE_TERMS_RO,
   PROBE_LIFECYCLE_TRANSITIONS,
+  QUANTITY_RULES,
+  QUANTITY_RULE_LABELS_RO,
   TECHNICIAN_MANEUVER_PRICING_LABEL_RO,
   TECHNICIAN_MANEUVER_PRICING_SEMANTIC,
   TECHNICIAN_MANEUVER_SELECTION_ORDER,
   TECHNICIAN_PERFORMED_MANEUVER_UNIQUENESS_SCOPE,
   calculateTechnicianManeuverElementQuantity,
+  calculateQuantityByRule,
   calculateTechnicianManeuverTotalMinor,
   URGENCY_LABELS_RO,
   URGENCY_LEVELS,
@@ -56,6 +59,7 @@ export type {
   ProbeLifecycleAction,
   ProbeLifecycleState,
   ProbeLifecycleTransition,
+  QuantityRule,
   UrgencyLevel,
   WorkOrderCanonicalIdentity,
 } from "./postmeeting-contract.js";
@@ -209,11 +213,13 @@ export {
   WORK_TYPE_ADD_ON_CODES,
   WORK_TYPE_PROBE_FAMILIES,
   WORK_TYPE_PROBE_FAMILY_LABELS,
+  calculateWorkTypeQuantity,
   decimalStringToMinor,
   formatWorkTypeCategory,
   formatMoneyMinor,
   formatWorkTypeUnit,
   minorToDecimalString,
+  workTypeUnitToQuantityRule,
 } from "./work-types.js";
 export type {
   CreateWorkTypeInput,
@@ -283,6 +289,8 @@ export type {
   PricingSortField,
 } from "./pricing.js";
 export {
+  TECHNICIAN_OPERATION_CATEGORIES,
+  TECHNICIAN_OPERATION_QUANTITY_RULES,
   TECHNICIAN_OPERATION_SORT_FIELDS,
 } from "./technician-operations.js";
 export type {
@@ -297,6 +305,8 @@ export type {
   TechnicianEarningsWorkBreakdown,
   TechnicianOperationDetail,
   TechnicianOperationInput,
+  TechnicianOperationCategory,
+  TechnicianOperationQuantityRule,
   TechnicianOperationOption,
   TechnicianOperationSortField,
   TechnicianOperationSummary,

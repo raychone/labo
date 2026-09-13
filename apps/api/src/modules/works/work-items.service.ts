@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Inject, Inj
 import { Prisma, type Prisma as PrismaTypes } from "@prisma/client";
 import {
   ANATOMICAL_SCOPE_LABELS_RO,
+  calculateWorkTypeQuantity,
   getCanonicalWorkOrderCompositionTeeth,
   isAdjacentAdultFdiPair,
   normalizeConnectionPair,
@@ -25,7 +26,7 @@ import { NotificationsService } from "../notifications/notifications.service.js"
 
 export const WORK_ORDER_ITEM_INCLUDE = {
   teeth: { orderBy: [{ sortOrder: "asc" as const }, { fdiTooth: "asc" as const }] },
-  workType: { select: { code: true, colorHex: true, id: true, name: true, symbol: true, unit: true, probeFamily: true, probeTypeCodes: true } },
+  workType: { select: { code: true, colorHex: true, id: true, name: true, symbol: true, unit: true, probeFamily: true, probeTypes: { orderBy: { sortOrder: "asc" as const }, select: { probeType: { select: { code: true } }, sortOrder: true } } } },
 } satisfies PrismaTypes.WorkOrderItemInclude;
 
 export type WorkOrderItemRecord = PrismaTypes.WorkOrderItemGetPayload<{ include: typeof WORK_ORDER_ITEM_INCLUDE }>;
@@ -113,7 +114,7 @@ export class WorkItemsService {
     const config = await this.validateWorkType(effectiveWorkTypeId);
     this.validateCatalogComposition([{ ...input.dto, scope: nextScope, teeth: validation.teeth, workTypeId: effectiveWorkTypeId, customWorkTypeSnapshot: asRecord(effectiveCustomWorkTypeSnapshot as PrismaTypes.JsonValue) ?? null } as WorkOrderItemInput], [config]);
     const canonicalAddOns = canonicalSelectedAddOns(config?.allowedAddOns ?? null, input.dto.selectedAddOns ?? jsonSelectedAddOns(existing.selectedAddOns));
-    const itemQuantity = config?.unit === "ELEMENT" ? Math.max(1, validation.teeth.length) : 1;
+    const itemQuantity = config ? calculateWorkTypeQuantity(config.unit, { scope: nextScope, selectedTeeth: validation.teeth }) : 1;
     const nextBaseUnitPriceMinor = existing.baseUnitPriceMinor ?? config?.basePriceMinor ?? null;
     const nextTotalPriceMinor = nextBaseUnitPriceMinor === null ? null : safeItemTotalMinor(nextBaseUnitPriceMinor, canonicalAddOns, itemQuantity);
     await this.requireCustomValuePermissions(input.actorUserId, {
@@ -284,7 +285,7 @@ export class WorkItemsService {
         const config = catalogConfigs[itemIndex];
         const existing = item.id ? existingById.get(item.id) : undefined;
         const selectedAddOns = canonicalSelectedAddOns(config?.allowedAddOns ?? null, item.selectedAddOns);
-        const elementQuantity = config?.unit === "ELEMENT" ? Math.max(1, normalizeWorkOrderItemTeeth(item.teeth).length) : 1;
+        const elementQuantity = config ? calculateWorkTypeQuantity(config.unit, { scope: item.scope, selectedTeeth: normalizeWorkOrderItemTeeth(item.teeth) }) : 1;
         const baseUnitPriceMinor = existing?.baseUnitPriceMinor ?? config?.basePriceMinor ?? null;
         const totalPriceMinor = baseUnitPriceMinor === null ? null : safeItemTotalMinor(baseUnitPriceMinor, selectedAddOns, elementQuantity);
         if (!item.id) {
@@ -430,16 +431,16 @@ export class WorkItemsService {
     if (input.customImplantPlatformSnapshot) await this.authorizationService.requirePermission({ permission: "works.custom_platform.use", requiredScope: "ASSIGNED", userId: actorUserId });
   }
 
-  private async validateWorkType(workTypeId: string | null | undefined): Promise<{ readonly id: string; readonly unit: string; readonly exclusiveGroup: string | null; readonly allowedAddOns: PrismaTypes.JsonValue | null; readonly basePriceMinor: number | null } | null> {
+  private async validateWorkType(workTypeId: string | null | undefined): Promise<{ readonly id: string; readonly unit: string; readonly exclusiveGroup: string | null; readonly allowedAddOns: PrismaTypes.JsonValue | null; readonly allowedAnatomicalScopes: PrismaTypes.JsonValue | null; readonly basePriceMinor: number | null } | null> {
     if (!workTypeId) return null;
-    const workType = await this.prisma.workType.findUnique({ select: { allowedAddOns: true, basePriceMinor: true, exclusiveGroup: true, id: true, unit: true }, where: { id: workTypeId } });
+    const workType = await this.prisma.workType.findUnique({ select: { allowedAddOns: true, allowedAnatomicalScopes: true, basePriceMinor: true, exclusiveGroup: true, id: true, unit: true }, where: { id: workTypeId } });
     if (!workType) throw new BadRequestException("Tipul de lucrare selectat nu există.");
     return workType;
   }
 
   private validateCatalogComposition(
     items: readonly WorkOrderItemInput[],
-    configs: readonly ({ readonly id: string; readonly unit: string; readonly exclusiveGroup: string | null; readonly allowedAddOns: PrismaTypes.JsonValue | null } | null)[],
+    configs: readonly ({ readonly id: string; readonly unit: string; readonly exclusiveGroup: string | null; readonly allowedAddOns: PrismaTypes.JsonValue | null; readonly allowedAnatomicalScopes: PrismaTypes.JsonValue | null } | null)[],
   ): void {
     const workTypeCounts = new Map<string, number>();
     const groupCounts = new Map<string, number>();
@@ -449,6 +450,8 @@ export class WorkItemsService {
       const count = (workTypeCounts.get(config.id) ?? 0) + 1;
       workTypeCounts.set(config.id, count);
       if (config.unit === "UNIT" && count > 1) throw new BadRequestException("O lucrare de tip bucată poate fi adăugată o singură dată în aceeași lucrare.");
+      const allowedScopes = Array.isArray(config.allowedAnatomicalScopes) ? config.allowedAnatomicalScopes.filter((scope): scope is string => typeof scope === "string") : [];
+      if (allowedScopes.length > 0 && !allowedScopes.includes(item.scope)) throw new BadRequestException("Domeniul anatomic selectat nu este permis pentru acest tip de lucrare.");
       if (config.exclusiveGroup) {
         const groupCount = (groupCounts.get(config.exclusiveGroup) ?? 0) + 1;
         groupCounts.set(config.exclusiveGroup, groupCount);
@@ -491,10 +494,6 @@ function jsonOrNull(value: unknown): PrismaTypes.InputJsonValue | typeof Prisma.
   return value === undefined || value === null ? Prisma.JsonNull : value as PrismaTypes.InputJsonValue;
 }
 
-function jsonStringArray(value: PrismaTypes.JsonValue | null): readonly string[] {
-  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
-}
-
 function canonicalSelectedAddOns(allowedAddOns: PrismaTypes.JsonValue | null, selectedAddOns: WorkOrderItemInput["selectedAddOns"]): readonly { readonly code: string; readonly amountMinor: number | null }[] {
   const amounts = new Map<string, number>();
   if (Array.isArray(allowedAddOns)) {
@@ -530,7 +529,16 @@ export function toWorkOrderItemView(item: WorkOrderItemRecord, includePricing = 
     sortOrder: item.sortOrder,
     scope: item.scope,
     teeth: item.teeth.map((tooth) => ({ fdiTooth: tooth.fdiTooth as WorkOrderItemView["teeth"][number]["fdiTooth"], sortOrder: tooth.sortOrder })),
-    workType: item.workType ? { ...item.workType, probeFamily: item.workType.probeFamily, probeTypeCodes: jsonStringArray(item.workType.probeTypeCodes) } : null,
+    workType: item.workType ? {
+      code: item.workType.code,
+      colorHex: item.workType.colorHex,
+      id: item.workType.id,
+      name: item.workType.name,
+      probeFamily: item.workType.probeFamily,
+      probeTypeCodes: (item.workType.probeTypes ?? []).flatMap((mapping) => mapping.probeType.code ? [mapping.probeType.code] : []),
+      symbol: item.workType.symbol,
+      unit: item.workType.unit,
+    } : null,
     workTypeId: item.workTypeId,
     customWorkTypeSnapshot: asRecord(item.customWorkTypeSnapshot),
     shade: item.shade,

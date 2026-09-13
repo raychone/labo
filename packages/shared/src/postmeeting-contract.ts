@@ -94,6 +94,13 @@ export const PROBE_LIFECYCLE_TRANSITIONS: readonly ProbeLifecycleTransition[] = 
 
 export const TECHNICIAN_MANEUVER_PRICING_SEMANTIC = "PER_ELEMENT" as const;
 export const TECHNICIAN_MANEUVER_PRICING_LABEL_RO = "Per element" as const;
+export const QUANTITY_RULES = ["PER_ELEMENT", "PER_ARCH", "PER_WORK"] as const;
+export type QuantityRule = (typeof QUANTITY_RULES)[number];
+export const QUANTITY_RULE_LABELS_RO: Readonly<Record<QuantityRule, string>> = {
+  PER_ARCH: "Per arcadă",
+  PER_ELEMENT: "Per element",
+  PER_WORK: "O dată per lucrare",
+};
 export const TECHNICIAN_MANEUVER_SELECTION_ORDER = ["TEETH_FIRST", "MANEUVER_SECOND"] as const;
 export const TECHNICIAN_PERFORMED_MANEUVER_UNIQUENESS_SCOPE = ["workOrderId", "operationId", "fdiTooth"] as const;
 
@@ -109,6 +116,23 @@ export function calculateTechnicianManeuverElementQuantity(selectedTeeth: readon
     uniqueTeeth.add(tooth);
   }
   return uniqueTeeth.size;
+}
+
+export function calculateQuantityByRule(
+  rule: QuantityRule,
+  input: { readonly scope?: AnatomicalScopeType | null; readonly selectedTeeth?: readonly number[] },
+): number {
+  if (rule === "PER_WORK") return 1;
+  const selectedTeeth = input.selectedTeeth ?? [];
+  if (rule === "PER_ELEMENT") return calculateTechnicianManeuverElementQuantity(selectedTeeth);
+  if (input.scope === "BOTH_ARCHES") return 2;
+  if (input.scope === "UPPER_ARCH" || input.scope === "LOWER_ARCH") return 1;
+  const arches = new Set(selectedTeeth.map((tooth) => {
+    if (!isAdultFdiTooth(tooth)) throw new RangeError("Cantitatea per arcadă poate folosi doar dinți adulți FDI valizi.");
+    return Math.floor(tooth / 10) <= 2 ? "UPPER" : "LOWER";
+  }));
+  if (arches.size === 0) throw new RangeError("Selectează cel puțin o arcadă pentru această regulă de calcul.");
+  return arches.size;
 }
 
 export function calculateTechnicianManeuverTotalMinor(quantity: number, rateMinor: number): number {

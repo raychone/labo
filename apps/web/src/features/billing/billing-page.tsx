@@ -530,6 +530,16 @@ export function BillingPage(): ReactNode {
   const [clinicStatementId, setClinicStatementId] = useState("");
   const [doctorStatementId, setDoctorStatementId] = useState("");
   const [statementSource, setStatementSource] = useState<StatementSource>("documents");
+
+  useEffect(() => {
+    setSelectedWorkIds([]);
+    setSelectedInvoiceIds([]);
+    setSelectedStornoIds([]);
+    setSelectedReceivableIds([]);
+    setSelectedStatementDocumentIds([]);
+    setIsDraftReviewOpen(false);
+  }, [activeTab, clinicFilter, doctorFilter, patientFilter, paymentFilter, range.dateFrom, range.dateTo, search, workCodeFilter]);
+
   useEffect(() => {
     if (permissionsQuery.isLoading) {
       return;
@@ -1122,7 +1132,7 @@ export function BillingPage(): ReactNode {
         ]}
       />
       <Modal
-        description={`${formatBillingPeriod(selectedPeriod)} · ${activeCompanyLabel}. Verifică registrul înainte de a crea snapshot-ul financiar imuabil.`}
+        description={`${formatBillingPeriod(selectedPeriod)} · ${activeCompanyLabel}. Verifică registrul înainte de a salva arhiva financiară definitivă.`}
         isOpen={monthCloseOpen}
         onOpenChange={setMonthCloseOpen}
         size="xl"
@@ -1163,7 +1173,7 @@ export function BillingPage(): ReactNode {
           </div>
           <div>
             <h3>Ajustări comerciale</h3>
-            <p>Ajustările modifică doar draftul comercial. Valorile de catalog și snapshoturile de execuție rămân neschimbate.</p>
+            <p>Ajustările modifică doar draftul comercial. Valorile de catalog și istoricul execuției rămân neschimbate.</p>
           </div>
           <Select
             label="Nivel ajustare"
@@ -2030,12 +2040,12 @@ function BillingGuideTab(): ReactNode {
     {
       id: "month-close",
       title: "Închidere lună",
-      content: "Alegi anul și luna, verifici registrul lunar și apoi exporți PDF sau CSV. Arhivarea salvează un snapshot separat pe firma activă.",
+      content: "Alegi anul și luna, verifici registrul lunar și apoi exporți PDF sau CSV. Arhivarea păstrează o situație separată pentru firma activă.",
     },
     {
       id: "archive",
       title: "Arhivă",
-      content: "Arhiva facturare este un workspace separat pentru lunile istorice. Aici redeschizi snapshot-uri fără să suprascrii închiderea deja salvată.",
+      content: "Arhiva facturare este un spațiu separat pentru lunile istorice. Aici redeschizi situațiile salvate fără să suprascrii închiderea existentă.",
     },
     {
       id: "companies",

@@ -18,6 +18,7 @@ function operation(overrides: Partial<TechnicianOperation> = {}): TechnicianOper
     id: "operation_1",
     isActive: true,
     name: "Ceramică",
+    quantityRule: "PER_ELEMENT",
     sortOrder: 0,
     updatedAt: new Date("2026-08-20T10:00:00.000Z"),
     updatedByUserId: "manager_1",
@@ -151,6 +152,104 @@ describe("TechnicianOperationsService", () => {
       }),
     });
     expect(result.code).toBe("GLAZE");
+  });
+
+  it("generates the internal operation code when Manager submits only business fields", async () => {
+    const create = vi.fn().mockImplementation(({ data }) => Promise.resolve(operation({ code: data.code, name: data.name })));
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+        technicianOperation: { create },
+      })),
+    });
+
+    await service.createOperation(
+      { actorUserId: "manager_1", requestMetadata: {} },
+      { category: "Altele", name: "Finisare manuală" },
+    );
+
+    expect(create.mock.calls[0]?.[0].data.code).toMatch(/^OP-[A-F0-9]{12}$/);
+  });
+
+  it("returns a readable conflict instead of a 500 when an operation code already exists", async () => {
+    const duplicate = new Prisma.PrismaClientKnownRequestError("unique", {
+      clientVersion: "test",
+      code: "P2002",
+      meta: { target: ["code"] },
+    });
+    const service = createService({ $transaction: vi.fn().mockRejectedValue(duplicate) });
+
+    await expect(service.createOperation(
+      { actorUserId: "manager_1", requestMetadata: {} },
+      { category: "Altele", code: "DESIGN", name: "Design" },
+    )).rejects.toEqual(expect.objectContaining<Partial<ConflictException>>({ message: "Există deja o manoperă cu acest cod." }));
+  });
+
+  it("associates an operation with canonical work types in the same transaction", async () => {
+    const createMany = vi.fn().mockResolvedValue({ count: 2 });
+    const markConfigured = vi.fn().mockResolvedValue({ count: 2 });
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+        technicianOperation: { create: vi.fn().mockResolvedValue(operation()) },
+        workType: { count: vi.fn().mockResolvedValue(2), updateMany: markConfigured },
+        workTypeTechnicianOperation: { createMany },
+      })),
+    });
+
+    await service.createOperation(
+      { actorUserId: "manager_1", requestMetadata: {} },
+      { category: "Altele", code: "design", name: "Design", quantityRule: "PER_ELEMENT", workTypeIds: ["wt_zr", "wt_mc", "wt_zr"] },
+    );
+
+    expect(createMany).toHaveBeenCalledWith({ data: [
+      { operationId: "operation_1", workTypeId: "wt_zr" },
+      { operationId: "operation_1", workTypeId: "wt_mc" },
+    ] });
+    expect(markConfigured).toHaveBeenCalledWith({ data: { operationApplicabilityConfigured: true }, where: { id: { in: ["wt_zr", "wt_mc"] } } });
+  });
+
+  it("replaces the same canonical operation mapping when edited from the operation", async () => {
+    const deleteMany = vi.fn().mockResolvedValue({ count: 1 });
+    const createMany = vi.fn().mockResolvedValue({ count: 1 });
+    const before = { ...operation(), workTypes: [{ workTypeId: "wt_old" }] };
+    const updated = { ...operation({ name: "Design actualizat", version: 2 }), workTypes: [{ workTypeId: "wt_new" }] };
+    const service = createService({
+      technicianOperation: { findUnique: vi.fn().mockResolvedValue(before) },
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+        technicianOperation: { findUniqueOrThrow: vi.fn().mockResolvedValue(updated), update: vi.fn().mockResolvedValue(updated) },
+        workType: { count: vi.fn().mockResolvedValue(1), updateMany: vi.fn().mockResolvedValue({ count: 2 }) },
+        workTypeTechnicianOperation: { createMany, deleteMany },
+      })),
+    });
+
+    const result = await service.updateOperation(
+      { actorUserId: "manager_1", requestMetadata: {} },
+      "operation_1",
+      { category: "Altele", code: "DESIGN", name: "Design actualizat", quantityRule: "PER_ELEMENT", workTypeIds: ["wt_new", "wt_new"] },
+    );
+
+    expect(deleteMany).toHaveBeenCalledWith({ where: { operationId: "operation_1" } });
+    expect(createMany).toHaveBeenCalledWith({ data: [{ operationId: "operation_1", workTypeId: "wt_new" }] });
+    expect(result.workTypeIds).toEqual(["wt_new"]);
+  });
+
+  it("filters the global catalog by each work type's explicit operation mapping", async () => {
+    const operationFindMany = vi.fn().mockResolvedValue([]);
+    const workOrderFindUnique = vi.fn()
+      .mockResolvedValueOnce({ items: [{ workType: { name: "Zirconiu", operationApplicabilityConfigured: true, probeFamily: "ZR", symbol: "ZR", technicianOperations: [{ operationId: "design" }, { operationId: "miyo" }] } }], workType: null })
+      .mockResolvedValueOnce({ items: [{ workType: { name: "Proteză", operationApplicabilityConfigured: true, probeFamily: "PRO", symbol: "PRO", technicianOperations: [{ operationId: "modelare" }] } }], workType: null });
+    const service = createService({
+      technicianOperation: { findMany: operationFindMany },
+      workOrder: { findUnique: workOrderFindUnique },
+    });
+
+    await service.listOperationOptions(undefined, "work_zr");
+    await service.listOperationOptions(undefined, "work_pro");
+
+    expect(operationFindMany.mock.calls[0]?.[0].where).toEqual({ id: { in: ["design", "miyo"] }, isActive: true });
+    expect(operationFindMany.mock.calls[1]?.[0].where).toEqual({ id: { in: ["modelare"] }, isActive: true });
   });
 
   it("resolves different rates for different technicians on the same operation", async () => {
@@ -346,6 +445,30 @@ describe("TechnicianOperationsService", () => {
       include: expect.any(Object),
     }));
     expect(result.selectedTeeth).toEqual([11, 12, 13]);
+  });
+
+  it("snapshots a PER_WORK operation once even when the technician selects multiple teeth", async () => {
+    const create = vi.fn().mockResolvedValue(performedOperation({ earningMinor: 3000, quantity: 1, teeth: [{ fdiTooth: 11 }, { fdiTooth: 12 }, { fdiTooth: 13 }] }));
+    const service = createService({
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+        technicianOperation: { findFirst: vi.fn().mockResolvedValue({ category: "Altele", code: "SCAN", id: "operation_1", name: "Scanare", quantityRule: "PER_WORK" }) },
+        technicianOperationRate: { findFirst: vi.fn().mockResolvedValue(rate({ rateMinor: 3000 })) },
+        technicianPerformedOperation: { create, findFirst: vi.fn().mockResolvedValue(null), findUniqueOrThrow: vi.fn().mockResolvedValue(performedOperation({ earningMinor: 3000, quantity: 1, teeth: [{ fdiTooth: 11 }, { fdiTooth: 12 }, { fdiTooth: 13 }] })) },
+        technicianPerformedOperationTooth: { createMany: vi.fn().mockResolvedValue({ count: 3 }), findMany: vi.fn().mockResolvedValue([]) },
+        workOrderItem: { findMany: vi.fn().mockResolvedValue([{ archivedAt: null, scope: "TEETH", teeth: [{ fdiTooth: 11 }, { fdiTooth: 12 }, { fdiTooth: 13 }] }]) },
+        workOrder: { findUnique: vi.fn().mockResolvedValue({ activeProbeCycleId: null, assignedTechnicianId: "tech_1", claimedByUserId: "tech_1", id: "work_1", status: "IN_LUCRU" }) },
+      })),
+    });
+
+    await service.performOperation(
+      { actorUserId: "tech_1", requestMetadata: {} },
+      { operationId: "operation_1", selectedTeeth: [11, 12, 13], workOrderId: "work_1" },
+    );
+
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ earningMinor: 3000, quantity: 1, quantityRuleSnapshot: "PER_WORK", rateMinorSnapshot: 3000 }),
+    }));
   });
 
   it("rejects teeth outside the active composition before creating an operation", async () => {

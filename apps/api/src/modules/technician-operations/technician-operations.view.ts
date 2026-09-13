@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 export const technicianOperationRateInclude = {
-  operation: true,
+  operation: { include: { workTypes: true } },
   technician: {
     select: {
       displayName: true,
@@ -11,13 +11,17 @@ export const technicianOperationRateInclude = {
 } as const satisfies Prisma.TechnicianOperationRateInclude;
 
 export const performedTechnicianOperationInclude = {
-  operation: true,
+  operation: { include: { workTypes: true } },
   probeCycle: { select: { id: true, sequence: true, status: true } },
   teeth: { orderBy: { fdiTooth: "asc" } },
 } as const satisfies Prisma.TechnicianPerformedOperationInclude;
 
+export const technicianOperationInclude = {
+  workTypes: true,
+} as const satisfies Prisma.TechnicianOperationInclude;
+
 export const technicianEarningsInclude = {
-  operation: true,
+  operation: { include: { workTypes: true } },
   probeCycle: { select: { id: true, sequence: true, status: true } },
   teeth: { orderBy: { fdiTooth: "asc" } },
   technician: {
@@ -35,7 +39,7 @@ export const technicianEarningsInclude = {
   },
 } as const satisfies Prisma.TechnicianPerformedOperationInclude;
 
-export type TechnicianOperationRecord = Omit<Prisma.TechnicianOperationGetPayload<object>, "sortOrder"> & { sortOrder?: number };
+export type TechnicianOperationRecord = Prisma.TechnicianOperationGetPayload<{ include: typeof technicianOperationInclude }>;
 export type TechnicianOperationRateRecord = Prisma.TechnicianOperationRateGetPayload<{ include: typeof technicianOperationRateInclude }>;
 export type PerformedTechnicianOperationRecord = Prisma.TechnicianPerformedOperationGetPayload<{ include: typeof performedTechnicianOperationInclude }>;
 export type TechnicianEarningsRecord = Prisma.TechnicianPerformedOperationGetPayload<{ include: typeof technicianEarningsInclude }>;
@@ -46,6 +50,8 @@ export interface TechnicianOperationOptionView {
   readonly currency?: string | null;
   readonly id: string;
   readonly name: string;
+  readonly quantityRule: "PER_ARCH" | "PER_ELEMENT" | "PER_WORK";
+  readonly workTypeIds: readonly string[];
   readonly rateMinor?: number | null;
 }
 
@@ -111,6 +117,7 @@ export interface PerformedTechnicianOperationView {
   readonly probeCycleId: string | null;
   readonly selectedTeeth: readonly number[];
   readonly quantity: number | null;
+  readonly quantityRuleSnapshot: "PER_ARCH" | "PER_ELEMENT" | "PER_WORK";
   readonly rateMinorSnapshot: number | null;
   readonly notes: string | null;
   readonly performedAt: string;
@@ -182,12 +189,14 @@ export interface TechnicianEarningsSummaryView {
   readonly works: readonly TechnicianEarningsWorkBreakdownView[];
 }
 
-export function toTechnicianOperationViewInput(operation: Pick<TechnicianOperationRecord, "category" | "code" | "id" | "name">): TechnicianOperationOptionView {
+export function toTechnicianOperationViewInput(operation: Pick<TechnicianOperationRecord, "category" | "code" | "id" | "name" | "quantityRule" | "workTypes">): TechnicianOperationOptionView {
   return {
     category: operation.category,
     code: operation.code,
     id: operation.id,
     name: operation.name,
+    quantityRule: operation.quantityRule ?? "PER_ELEMENT",
+    workTypeIds: operation.workTypes?.map((mapping) => mapping.workTypeId) ?? [],
   };
 }
 
@@ -261,6 +270,7 @@ export function toPerformedTechnicianOperationView(performedOperation: Performed
     performedAt: performedOperation.performedAt.toISOString(),
     selectedTeeth: (performedOperation.teeth ?? []).map((tooth) => tooth.fdiTooth),
     quantity: performedOperation.quantity,
+    quantityRuleSnapshot: performedOperation.quantityRuleSnapshot ?? "PER_ELEMENT",
     rateMinorSnapshot: performedOperation.rateMinorSnapshot,
     notes: performedOperation.notes,
     rateId: performedOperation.rateId,

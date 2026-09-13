@@ -173,10 +173,19 @@ export const appRoutes = [
     icon: "SW",
     label: "Setări lucrări",
     navigationGroup: "Management",
-    path: "/work-settings",
+    path: "/pricing",
     permissionMode: "any",
     requiredPermissions: ["pricing.read"],
     showInNavigation: true,
+  },
+  {
+    icon: "SW",
+    label: "Setări lucrări",
+    navigationGroup: "Management",
+    path: "/work-settings",
+    permissionMode: "any",
+    requiredPermissions: ["pricing.read"],
+    showInNavigation: false,
   },
   {
     icon: "TE",
@@ -249,7 +258,7 @@ function shouldShowInNavigation(permissionKeys: readonly string[], route: AppRou
   if (isManagerWorkspace(permissionKeys)) {
     return route.path === "/status"
       || route.path === "/billing"
-      || route.path === "/work-settings"
+      || route.path === "/pricing"
       || route.path === "/technicians"
       || route.path === "/patients"
       || route.path === "/clinics"

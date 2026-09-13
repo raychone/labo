@@ -51,6 +51,7 @@ import { accumulateDeadlineDashboardSummary, createEmptyDeadlineDashboardSummary
 import { WorkOrderCodeService } from "./work-order-code.service.js";
 import { getVisibleWorkWhere } from "./work-readability.js";
 import {
+  calculateWorkTypeQuantity,
   getCanonicalWorkOrderCompositionTeeth,
   isAdjacentAdultFdiPair,
   normalizeConnectionPair,
@@ -93,6 +94,7 @@ interface PricingSnapshot {
 
 interface ValidatedWorkType {
   readonly allowedAddOns: Prisma.JsonValue | null;
+  readonly allowedAnatomicalScopes: Prisma.JsonValue | null;
   readonly basePriceMinor: number | null;
   readonly exclusiveGroup: string | null;
   readonly id: string;
@@ -263,9 +265,9 @@ const WORK_ORDER_INCLUDE = {
       templateKind: "GENERIC",
     },
   },
-  workType: true,
+  workType: { include: { probeTypes: { include: { probeType: true } } } },
   items: {
-    include: { teeth: true, workType: true },
+    include: { teeth: true, workType: { include: { probeTypes: { include: { probeType: true } } } } },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     where: { archivedAt: null },
   },
@@ -683,7 +685,8 @@ export class WorksService {
         id: true,
         name: true,
         probeFamily: true,
-        probeTypeCodes: true,
+        probeApplicabilityConfigured: true,
+        probeTypes: { include: { probeType: true }, orderBy: { sortOrder: "asc" } },
         allowedAddOns: true,
         exclusiveGroup: true,
         symbol: true,
@@ -1912,8 +1915,14 @@ export class WorksService {
       const primaryConfig = itemConfigs[0];
       if (!primaryConfig) throw new BadRequestException("Compoziția lucrării nu are o configurație validă.");
       const canonicalItemAddOns = itemInputs.map((item, index) => canonicalSelectedAddOns(itemConfigs[index]!.allowedAddOns, item.selectedAddOns));
-      const itemQuantities = itemInputs.map((item, index) => itemConfigs[index]!.unit === "ELEMENT" ? Math.max(1, item.teeth?.length ?? 0) : 1);
-      const quantity = aggregateItems ? itemQuantities.reduce((total, value) => total + value, 0) : workType.unit === "UNIT" ? 1 : dto.quantity;
+      const itemQuantities = itemInputs.map((item, index) => calculateWorkTypeQuantity(itemConfigs[index]!.unit, { scope: item.scope, ...(item.teeth === undefined ? {} : { selectedTeeth: item.teeth }) }));
+      const quantity = aggregateItems
+        ? itemQuantities.reduce((total, value) => total + value, 0)
+        : workType.unit === "ELEMENT" || workType.unit === "ARCH"
+          ? dto.quantity
+          : workType.unit
+            ? 1
+            : dto.quantity;
       const pricing = aggregateItems
         ? await this.createPricingSnapshot(tx, itemInputs.length === 1 ? primaryConfig.basePriceMinor : null, quantity)
         : await this.createPricingSnapshot(tx, workType.basePriceMinor, quantity);
@@ -2041,8 +2050,9 @@ export class WorksService {
       // Keep the technical probe lifecycle aligned with the operational cycle.
       // This makes the first probe eligible for the same technician ->
       // logistics -> courier flow as later probes.
-      if (tx.probeType && Array.isArray(createdWorkOrder.workType.probeTypeCodes)) {
-        const probeCodes = createdWorkOrder.workType.probeTypeCodes.filter((value): value is string => typeof value === "string");
+      if (tx.probeType) {
+        const configuredProbeTypes = createdWorkOrder.workType.probeTypes ?? [];
+        const probeCodes = configuredProbeTypes.flatMap((mapping) => mapping.probeType.code ? [mapping.probeType.code] : []);
         if (probeCodes.length > 0) {
           const initialProbeType = await tx.probeType.findFirst({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true }, where: { code: { in: probeCodes }, isArchived: false } });
           if (initialProbeType) {
@@ -2832,6 +2842,7 @@ export class WorksService {
     const workType = await client.workType.findUnique({
       select: {
         allowedAddOns: true,
+        allowedAnatomicalScopes: true,
         basePriceMinor: true,
         exclusiveGroup: true,
         isActive: true,
@@ -3551,7 +3562,7 @@ function replaceExecutionCompanyInContextSnapshot(
 
 function validateAggregateCatalogRules(
   items: readonly WorkOrderItemInput[],
-  configs: readonly { readonly allowedAddOns: Prisma.JsonValue | null; readonly exclusiveGroup: string | null; readonly id: string; readonly unit: string }[],
+  configs: readonly { readonly allowedAddOns: Prisma.JsonValue | null; readonly allowedAnatomicalScopes: Prisma.JsonValue | null; readonly exclusiveGroup: string | null; readonly id: string; readonly unit: string }[],
 ): void {
   const workTypeCounts = new Map<string, number>();
   const exclusiveCounts = new Map<string, number>();
@@ -3561,6 +3572,8 @@ function validateAggregateCatalogRules(
     const count = (workTypeCounts.get(config.id) ?? 0) + 1;
     workTypeCounts.set(config.id, count);
     if (config.unit === "UNIT" && count > 1) throw new BadRequestException("O lucrare de tip bucată poate fi adăugată o singură dată în aceeași lucrare.");
+    const allowedScopes = Array.isArray(config.allowedAnatomicalScopes) ? config.allowedAnatomicalScopes.filter((scope): scope is string => typeof scope === "string") : [];
+    if (allowedScopes.length > 0 && !allowedScopes.includes(item.scope)) throw new BadRequestException("Domeniul anatomic selectat nu este permis pentru acest tip de lucrare.");
     if (config.exclusiveGroup) {
       const groupCount = (exclusiveCounts.get(config.exclusiveGroup) ?? 0) + 1;
       exclusiveCounts.set(config.exclusiveGroup, groupCount);

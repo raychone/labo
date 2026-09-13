@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, type Prisma as PrismaTypes, type TechnicianOperationRate } from "@prisma/client";
-import { calculateTechnicianManeuverElementQuantity, calculateTechnicianManeuverTotalMinor, getCanonicalWorkOrderCompositionTeeth, isAdultFdiTooth, type AdultFdiTooth } from "@dental-lab/shared";
+import { calculateQuantityByRule, calculateTechnicianManeuverTotalMinor, getCanonicalWorkOrderCompositionTeeth, isAdultFdiTooth, type AdultFdiTooth } from "@dental-lab/shared";
+import { randomUUID } from "node:crypto";
 
 import type { RequestMetadata } from "../auth/auth.types.js";
 import { PrismaService } from "../database/prisma.service.js";
@@ -19,11 +20,13 @@ import {
   performedTechnicianOperationInclude,
   technicianEarningsInclude,
   technicianOperationRateInclude,
+  technicianOperationInclude,
   type PaginatedTechnicianOperationsView,
   type PerformedTechnicianOperationView,
   type TechnicianEarningsSummaryView,
   type TechnicianOperationDetailView,
   type TechnicianOperationOptionView,
+  type TechnicianOperationRecord,
   type TechnicianRateResolutionView,
   type TechnicianRateView,
   type TechnicianPaymentView,
@@ -48,6 +51,13 @@ type PerformedOperationTx = Pick<
 >;
 
 type WorkTypeFamilySource = { readonly name?: string | null; readonly probeFamily?: string | null; readonly symbol?: string | null } | null;
+type WorkTypeOperationSource = {
+  readonly name?: string | null;
+  readonly probeFamily?: string | null;
+  readonly symbol?: string | null;
+  readonly operationApplicabilityConfigured?: boolean;
+  readonly technicianOperations?: readonly { readonly operationId: string }[];
+} | null;
 
 function inferProbeFamily(workType: WorkTypeFamilySource): string | null {
   if (!workType) return null;
@@ -74,6 +84,20 @@ function getAllowedOperationCategories(workTypes: readonly WorkTypeFamilySource[
   return [...categories];
 }
 
+function isOperationAllowedForWorkTypes(operationId: string, category: string, workTypes: readonly WorkTypeOperationSource[]): boolean {
+  if (workTypes.every((workType) => !workType)) return true;
+  for (const workType of workTypes) {
+    if (!workType) continue;
+    if (workType.operationApplicabilityConfigured) {
+      if (workType.technicianOperations?.some((mapping) => mapping.operationId === operationId)) return true;
+      continue;
+    }
+    const categories = getAllowedOperationCategories([workType]);
+    if (categories === null || categories.includes(category)) return true;
+  }
+  return false;
+}
+
 @Injectable()
 export class TechnicianOperationsService {
   public constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
@@ -98,6 +122,7 @@ export class TechnicianOperationsService {
     const [total, operations] = await this.prisma.$transaction([
       this.prisma.technicianOperation.count({ where }),
       this.prisma.technicianOperation.findMany({
+        include: technicianOperationInclude,
         orderBy: query.sortBy === "name" || query.sortBy === "code" ? { [query.sortBy]: query.sortDirection } : [{ sortOrder: "asc" }, { [query.sortBy]: query.sortDirection }],
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -115,10 +140,10 @@ export class TechnicianOperationsService {
   }
 
   public async listOperationOptions(technicianId?: string, workOrderId?: string): Promise<readonly TechnicianOperationOptionView[]> {
-    const allowedCategories = await this.getAllowedOperationCategories(workOrderId);
-    const operationWhere: Prisma.TechnicianOperationWhereInput = { isActive: true };
-    if (allowedCategories !== null) operationWhere.category = { in: [...allowedCategories] };
+    const applicability = await this.getAllowedOperationFilter(workOrderId);
+    const operationWhere: Prisma.TechnicianOperationWhereInput = { isActive: true, ...(applicability ?? {}) };
     const operations = await this.prisma.technicianOperation.findMany({
+      include: technicianOperationInclude,
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       where: operationWhere,
     });
@@ -144,18 +169,24 @@ export class TechnicianOperationsService {
   }
 
   public async createOperation(context: ActorContext, dto: TechnicianOperationMutationDto): Promise<TechnicianOperationDetailView> {
-    const operation = await this.prisma.$transaction(async (tx) => {
+    const operation = await this.runOperationCatalogMutation(() => this.prisma.$transaction(async (tx) => {
+      await validateActiveWorkTypes(tx, dto.workTypeIds);
       const created = await tx.technicianOperation.create({
         data: {
           category: normalizeText(dto.category),
-          code: normalizeCode(dto.code),
+          code: dto.code ? normalizeCode(dto.code) : generateInternalOperationCode(),
           createdByUserId: context.actorUserId,
           description: dto.description ?? null,
           name: normalizeText(dto.name),
+          quantityRule: dto.quantityRule ?? "PER_ELEMENT",
           sortOrder: dto.sortOrder ?? 0,
           updatedByUserId: context.actorUserId,
         },
       });
+      if (dto.workTypeIds && dto.workTypeIds.length > 0) {
+        await tx.workTypeTechnicianOperation.createMany({ data: [...new Set(dto.workTypeIds)].map((workTypeId) => ({ operationId: created.id, workTypeId })) });
+        await tx.workType.updateMany({ data: { operationApplicabilityConfigured: true }, where: { id: { in: [...new Set(dto.workTypeIds)] } } });
+      }
 
       await this.recordAudit(tx, {
         action: TECHNICIAN_OPERATION_AUDIT_ACTIONS.operationCreated,
@@ -166,8 +197,10 @@ export class TechnicianOperationsService {
         resourceType: TECHNICIAN_OPERATION_RESOURCE_TYPES.operation,
       });
 
-      return created;
-    });
+      return typeof tx.technicianOperation.findUniqueOrThrow === "function"
+        ? tx.technicianOperation.findUniqueOrThrow({ include: technicianOperationInclude, where: { id: created.id } })
+        : created as TechnicianOperationRecord;
+    }));
 
     return toTechnicianOperationDetailView(operation);
   }
@@ -178,19 +211,28 @@ export class TechnicianOperationsService {
       throw new BadRequestException("Archived technician operations must be restored before editing.");
     }
 
-    const operation = await this.prisma.$transaction(async (tx) => {
+    const operation = await this.runOperationCatalogMutation(() => this.prisma.$transaction(async (tx) => {
+      const previousWorkTypeIds = before.workTypes?.map((mapping) => mapping.workTypeId) ?? [];
+      await validateActiveWorkTypes(tx, dto.workTypeIds, previousWorkTypeIds);
       const updated = await tx.technicianOperation.update({
         data: {
           category: normalizeText(dto.category),
-          code: normalizeCode(dto.code),
+          ...(dto.code ? { code: normalizeCode(dto.code) } : {}),
           description: dto.description ?? null,
           name: normalizeText(dto.name),
+          ...(dto.quantityRule === undefined ? {} : { quantityRule: dto.quantityRule }),
           ...(dto.sortOrder === undefined ? {} : { sortOrder: dto.sortOrder }),
           updatedByUserId: context.actorUserId,
           version: { increment: 1 },
         },
+        include: technicianOperationInclude,
         where: { id: operationId },
       });
+      if (dto.workTypeIds !== undefined) {
+        await tx.workTypeTechnicianOperation.deleteMany({ where: { operationId } });
+        if (dto.workTypeIds.length > 0) await tx.workTypeTechnicianOperation.createMany({ data: [...new Set(dto.workTypeIds)].map((workTypeId) => ({ operationId, workTypeId })) });
+        await tx.workType.updateMany({ data: { operationApplicabilityConfigured: true }, where: { id: { in: [...new Set([...previousWorkTypeIds, ...dto.workTypeIds])] } } });
+      }
 
       await this.recordAudit(tx, {
         action: TECHNICIAN_OPERATION_AUDIT_ACTIONS.operationUpdated,
@@ -201,10 +243,23 @@ export class TechnicianOperationsService {
         resourceType: TECHNICIAN_OPERATION_RESOURCE_TYPES.operation,
       });
 
-      return updated;
-    });
+      return typeof tx.technicianOperation.findUniqueOrThrow === "function"
+        ? tx.technicianOperation.findUniqueOrThrow({ include: technicianOperationInclude, where: { id: updated.id } })
+        : updated as TechnicianOperationRecord;
+    }));
 
     return toTechnicianOperationDetailView(operation);
+  }
+
+  private async runOperationCatalogMutation<T>(mutation: () => Promise<T>): Promise<T> {
+    try {
+      return await mutation();
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new ConflictException("Există deja o manoperă cu acest cod.");
+      }
+      throw error;
+    }
   }
 
   public async archiveOperation(context: ActorContext, operationId: string): Promise<TechnicianOperationDetailView> {
@@ -222,6 +277,7 @@ export class TechnicianOperationsService {
           updatedByUserId: context.actorUserId,
           version: { increment: 1 },
         },
+        include: technicianOperationInclude,
         where: { id: operationId },
       });
 
@@ -255,6 +311,7 @@ export class TechnicianOperationsService {
           updatedByUserId: context.actorUserId,
           version: { increment: 1 },
         },
+        include: technicianOperationInclude,
         where: { id: operationId },
       });
 
@@ -545,23 +602,38 @@ export class TechnicianOperationsService {
 
     const performedOperation = await this.prisma.$transaction(async (tx) => {
       const technicianId = await this.ensureTechnicianOwnsWork(tx, context.actorUserId, dto.workOrderId);
-      const workOrder = await tx.workOrder.findUnique({ select: { activeProbeCycleId: true, status: true, workType: { select: { name: true, probeFamily: true, symbol: true } }, items: { select: { teeth: { select: { fdiTooth: true } }, workType: { select: { name: true, probeFamily: true, symbol: true } } }, where: { archivedAt: null } }, probeCycles: { orderBy: { sequence: "desc" }, select: { id: true }, take: 1, where: { status: "ACTIVE" } } }, where: { id: dto.workOrderId } });
+      const workOrder = await tx.workOrder.findUnique({
+        select: {
+          activeProbeCycleId: true,
+          status: true,
+          workType: { select: { name: true, operationApplicabilityConfigured: true, probeFamily: true, symbol: true, technicianOperations: { select: { operationId: true } } } },
+          items: {
+            select: {
+              teeth: { select: { fdiTooth: true } },
+              workType: { select: { name: true, operationApplicabilityConfigured: true, probeFamily: true, symbol: true, technicianOperations: { select: { operationId: true } } } },
+            },
+            where: { archivedAt: null },
+          },
+          probeCycles: { orderBy: { sequence: "desc" }, select: { id: true }, take: 1, where: { status: "ACTIVE" } },
+        },
+        where: { id: dto.workOrderId },
+      });
       if (!workOrder || workOrder.status === "FINALIZATA") {
         throw new BadRequestException("Manopera nu poate fi adăugată pentru această stare a lucrării.");
       }
       const operation = await tx.technicianOperation.findFirst({
-        select: { category: true, code: true, id: true, name: true },
+        include: technicianOperationInclude,
         where: { id: dto.operationId, isActive: true },
       });
       if (!operation) {
         throw new BadRequestException("Technician operation not found or inactive.");
       }
       const currentProbeCycleId = workOrder.probeCycles?.[0]?.id ?? workOrder.activeProbeCycleId;
-      const allowedCategories = getAllowedOperationCategories([
+      const applicableWorkTypes = [
         ...(workOrder.items ?? []).map((item) => item.workType),
         workOrder.workType,
-      ]);
-      if (allowedCategories !== null && !allowedCategories.includes(operation.category)) {
+      ];
+      if (!isOperationAllowedForWorkTypes(operation.id, operation.category, applicableWorkTypes)) {
         throw new BadRequestException("Manopera nu este disponibilă pentru tipul acestei lucrări.");
       }
 
@@ -590,14 +662,12 @@ export class TechnicianOperationsService {
       if (outsideComposition.length > 0) {
         throw new BadRequestException(`Dinții ${outsideComposition.join(", ")} nu fac parte din compoziția activă a lucrării.`);
       }
-      if (!isCaseLevel && operation.category !== "Altele") {
+      if (!isCaseLevel) {
         const incompatibleTooth = validSelectedTeeth.find((tooth) => {
-          const toothCategories = new Set(
-            (workOrder.items ?? [])
-              .filter((item) => item.teeth?.some((itemTooth) => itemTooth.fdiTooth === tooth))
-              .flatMap((item) => getAllowedOperationCategories([item.workType] ) ?? []),
-          );
-          return toothCategories.size > 0 && !toothCategories.has(operation.category);
+          const toothWorkTypes = (workOrder.items ?? [])
+            .filter((item) => item.teeth?.some((itemTooth) => itemTooth.fdiTooth === tooth))
+            .map((item) => item.workType);
+          return toothWorkTypes.length > 0 && !isOperationAllowedForWorkTypes(operation.id, operation.category, toothWorkTypes);
         });
         if (incompatibleTooth !== undefined) {
           throw new BadRequestException("Manopera nu corespunde tipului lucrării de pe dintele selectat.");
@@ -630,7 +700,8 @@ export class TechnicianOperationsService {
       }
 
       const rate = await this.findApplicableRateOrThrow(tx, technicianId, dto.operationId, now);
-      const quantity = isCaseLevel ? 1 : calculateTechnicianManeuverElementQuantity(validSelectedTeeth);
+      const quantityRule = operation.quantityRule ?? "PER_ELEMENT";
+      const quantity = isCaseLevel ? 1 : calculateQuantityByRule(quantityRule, { selectedTeeth: validSelectedTeeth });
       const earningMinor = calculateTechnicianManeuverTotalMinor(quantity, rate.rateMinor);
       let created: PrismaTypes.TechnicianPerformedOperationGetPayload<{ include: typeof performedTechnicianOperationInclude }>;
       try {
@@ -646,6 +717,7 @@ export class TechnicianOperationsService {
             performedAt: now,
             probeCycleId: currentProbeCycleId,
             quantity,
+            quantityRuleSnapshot: quantityRule,
             rateId: rate.id,
             rateMinorSnapshot: rate.rateMinor,
             technicianId,
@@ -677,6 +749,7 @@ export class TechnicianOperationsService {
           earningMinor: created.earningMinor,
           fdiTeeth: validSelectedTeeth,
           quantity,
+          quantityRule: operation.quantityRule,
           rateMinor: rate.rateMinor,
           operationCode: operation.code,
           operationId: created.operationId,
@@ -752,8 +825,8 @@ export class TechnicianOperationsService {
     return toPerformedTechnicianOperationView(performedOperation);
   }
 
-  private async findOperationOrThrow(operationId: string): Promise<Prisma.TechnicianOperationGetPayload<object>> {
-    const operation = await this.prisma.technicianOperation.findUnique({ where: { id: operationId } });
+  private async findOperationOrThrow(operationId: string): Promise<Prisma.TechnicianOperationGetPayload<{ include: typeof technicianOperationInclude }>> {
+    const operation = await this.prisma.technicianOperation.findUnique({ include: technicianOperationInclude, where: { id: operationId } });
     if (!operation) {
       throw new NotFoundException("Technician operation not found.");
     }
@@ -792,20 +865,26 @@ export class TechnicianOperationsService {
     }
   }
 
-  private async getAllowedOperationCategories(workOrderId?: string): Promise<readonly string[] | null> {
+  private async getAllowedOperationFilter(workOrderId?: string): Promise<Prisma.TechnicianOperationWhereInput | null> {
     if (!workOrderId) return null;
     const workOrder = await this.prisma.workOrder.findUnique({
       select: {
-        items: { select: { workType: { select: { name: true, probeFamily: true, symbol: true } } }, where: { archivedAt: null } },
-        workType: { select: { name: true, probeFamily: true, symbol: true } },
+        items: { select: { workType: { select: { name: true, operationApplicabilityConfigured: true, probeFamily: true, symbol: true, technicianOperations: { select: { operationId: true } } } } }, where: { archivedAt: null } },
+        workType: { select: { name: true, operationApplicabilityConfigured: true, probeFamily: true, symbol: true, technicianOperations: { select: { operationId: true } } } },
       },
       where: { id: workOrderId },
     });
-    if (!workOrder) return [];
-    return getAllowedOperationCategories([
+    if (!workOrder) return { id: { in: [] } };
+    const sources = [
       ...workOrder.items.map((item) => item.workType),
       workOrder.workType,
-    ]);
+    ].filter((source): source is NonNullable<typeof source> => source !== null);
+    const configuredIds = new Set(sources.flatMap((source) => source?.operationApplicabilityConfigured ? source.technicianOperations.map((mapping) => mapping.operationId) : []));
+    const legacySources = sources.filter((source) => !source?.operationApplicabilityConfigured);
+    if (legacySources.length === 0) return { id: { in: [...configuredIds] } };
+    const legacyCategories = getAllowedOperationCategories(legacySources);
+    if (legacyCategories === null) return null;
+    return { OR: [{ id: { in: [...configuredIds] } }, { category: { in: [...legacyCategories] } }] };
   }
 
   private async ensureTechnicianOwnsWork(client: Pick<Prisma.TransactionClient, "workOrder"> | Pick<PrismaService, "workOrder">, actorUserId: string, workOrderId: string): Promise<string> {
@@ -894,6 +973,17 @@ function normalizeCode(value: string): string {
   return normalizeText(value).toUpperCase();
 }
 
+function generateInternalOperationCode(): string {
+  return `OP-${randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`;
+}
+
+async function validateActiveWorkTypes(tx: Prisma.TransactionClient, workTypeIds: readonly string[] | undefined, existingIds: readonly string[] = []): Promise<void> {
+  if (workTypeIds === undefined) return;
+  const ids = [...new Set(workTypeIds)];
+  const count = ids.length === 0 ? 0 : await tx.workType.count({ where: { id: { in: ids }, OR: [{ isActive: true }, { id: { in: [...existingIds] } }] } });
+  if (count !== ids.length) throw new BadRequestException("Selectează numai tipuri de lucrări active.");
+}
+
 function parseDate(value: string): Date {
   return new Date(value);
 }
@@ -935,8 +1025,8 @@ function getEarningsPeriodBounds(
 }
 
 function getChangedOperationFields(
-  before: Pick<Prisma.TechnicianOperationGetPayload<object>, "category" | "code" | "description" | "name">,
-  after: Pick<Prisma.TechnicianOperationGetPayload<object>, "category" | "code" | "description" | "name">,
+  before: Pick<Prisma.TechnicianOperationGetPayload<object>, "category" | "code" | "description" | "name" | "quantityRule">,
+  after: Pick<Prisma.TechnicianOperationGetPayload<object>, "category" | "code" | "description" | "name" | "quantityRule">,
 ): readonly string[] {
-  return (["category", "code", "description", "name"] as const).filter((field) => before[field] !== after[field]);
+  return (["category", "code", "description", "name", "quantityRule"] as const).filter((field) => before[field] !== after[field]);
 }

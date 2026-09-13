@@ -36,6 +36,7 @@ import type {
 
 import { fetchCsrfToken } from "../auth/auth-api.js";
 import { statusQueryKeys } from "../status/status-api.js";
+import { workTypeQueryKeys } from "../work-types/work-types-api.js";
 import { apiFetch, parseApiResponse } from "../../lib/api-client.js";
 import { REALTIME_FALLBACK_REFETCH_MS } from "../../lib/realtime-config.js";
 
@@ -163,16 +164,30 @@ export async function saveOperationalWorkTypeName(name: string): Promise<WorkTyp
   return sendJson<WorkTypeFormOption>("/work-types/operational-name", "POST", { name });
 }
 
+export function useSaveOperationalWorkTypeName() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: saveOperationalWorkTypeName,
+    onSuccess: async (created) => {
+      queryClient.setQueryData<readonly WorkTypeFormOption[]>(worksQueryKeys.workTypeOptions, (current = []) => {
+        const withoutDuplicate = current.filter((option) => option.id !== created.id);
+        return [...withoutDuplicate, created].sort((left, right) => left.name.localeCompare(right.name, "ro-RO"));
+      });
+      await queryClient.invalidateQueries({ queryKey: workTypeQueryKeys.all });
+    },
+  });
+}
+
 export async function fetchProbeTypes(includeArchived = false): Promise<readonly ProbeTypeView[]> {
   const response = await apiFetch(`/works/probe-types${includeArchived ? "?includeArchived=true" : ""}`);
   return parseApiResponse<readonly ProbeTypeView[]>(response);
 }
 
-export async function createProbeType(input: { readonly name: string; readonly sortOrder?: number }): Promise<ProbeTypeView> {
+export async function createProbeType(input: { readonly name: string; readonly sortOrder?: number; readonly workTypeIds?: readonly string[] }): Promise<ProbeTypeView> {
   return sendJson<ProbeTypeView>("/works/probe-types", "POST", input);
 }
 
-export async function updateProbeType(id: string, input: { readonly name?: string; readonly sortOrder?: number; readonly isArchived?: boolean }): Promise<ProbeTypeView> {
+export async function updateProbeType(id: string, input: { readonly name?: string; readonly sortOrder?: number; readonly isArchived?: boolean; readonly workTypeIds?: readonly string[] }): Promise<ProbeTypeView> {
   return sendJson<ProbeTypeView>(`/works/probe-types/${id}`, "PATCH", input);
 }
 
@@ -455,12 +470,12 @@ export function useAllProbeTypes(enabled: boolean) {
 
 export function useCreateProbeType() {
   const queryClient = useQueryClient();
-  return useMutation({ mutationFn: createProbeType, onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: worksQueryKeys.probeTypes }); } });
+  return useMutation({ mutationFn: createProbeType, onSuccess: async () => { await Promise.all([queryClient.invalidateQueries({ queryKey: worksQueryKeys.probeTypes }), queryClient.invalidateQueries({ queryKey: workTypeQueryKeys.all })]); } });
 }
 
 export function useUpdateProbeType() {
   const queryClient = useQueryClient();
-  return useMutation({ mutationFn: ({ id, input }: { readonly id: string; readonly input: { readonly name?: string; readonly sortOrder?: number; readonly isArchived?: boolean } }) => updateProbeType(id, input), onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: worksQueryKeys.probeTypes }); } });
+  return useMutation({ mutationFn: ({ id, input }: { readonly id: string; readonly input: { readonly name?: string; readonly sortOrder?: number; readonly isArchived?: boolean; readonly workTypeIds?: readonly string[] } }) => updateProbeType(id, input), onSuccess: async () => { await Promise.all([queryClient.invalidateQueries({ queryKey: worksQueryKeys.probeTypes }), queryClient.invalidateQueries({ queryKey: workTypeQueryKeys.all })]); } });
 }
 
 export function useWorkDeadlinePreview(input: WorkDeadlinePreviewInput | null, enabled: boolean) {

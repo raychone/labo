@@ -1,4 +1,4 @@
-import { PRICING_ADJUSTMENT_TYPES, PRICING_AGREEMENT_SUBJECT_TYPES, PRICING_CATEGORIES, PRICING_RULE_SCOPES, WORK_TYPE_UNITS } from "@dental-lab/shared";
+import { ANATOMICAL_SCOPE_TYPES, PRICING_ADJUSTMENT_TYPES, PRICING_AGREEMENT_SUBJECT_TYPES, PRICING_CATEGORIES, PRICING_RULE_SCOPES, TECHNICIAN_OPERATION_CATEGORIES, TECHNICIAN_OPERATION_QUANTITY_RULES, WORK_TYPE_UNITS } from "@dental-lab/shared";
 import { z } from "zod";
 
 const moneyDecimal = z
@@ -11,7 +11,6 @@ export const catalogFormSchema = z.object({
   category: z.string().trim().min(1, "Categoria este obligatorie."),
   colorHex: z.string().regex(/^#[0-9A-F]{6}$/i, "Alege o culoare validă.").or(z.literal("")),
   displayName: z.string().trim().max(160).optional(),
-  executionDays: z.enum(["1", "2", "3", "4", "5", "6"]),
   isActive: z.boolean(),
   notes: z.string().trim().max(1000).optional(),
   sortOrder: z.number().int().min(0).max(10_000),
@@ -21,6 +20,13 @@ export const catalogFormSchema = z.object({
   workTypeName: z.string().trim().optional(),
   workTypeSymbol: z.string().trim().optional(),
   workTypeDescription: z.string().trim().max(1000).optional(),
+  allowedAnatomicalScopes: z.array(z.enum(ANATOMICAL_SCOPE_TYPES)).min(1, "Alege cel puțin un domeniu anatomic."),
+  technicianOperationIds: z.array(z.string()),
+  probeTypeIds: z.array(z.string()),
+  gingieEnabled: z.boolean(),
+  gingieAmountDecimal: z.union([z.literal(""), moneyDecimal]).optional(),
+  placataEnabled: z.boolean(),
+  placataAmountDecimal: z.union([z.literal(""), moneyDecimal]).optional(),
 }).superRefine((values, context) => {
   if (!values.workTypeId && !values.workTypeName) {
     context.addIssue({ code: "custom", message: "Alege sau creează tipul de lucrare.", path: ["workTypeId"] });
@@ -85,10 +91,11 @@ export const previewFormSchema = z.object({
 });
 
 export const technicianOperationFormSchema = z.object({
-  category: z.string().trim().min(2, "Categoria este obligatorie.").max(80),
-  code: z.string().trim().min(1, "Codul este obligatoriu.").max(40),
+  category: z.enum(TECHNICIAN_OPERATION_CATEGORIES),
   description: z.string().trim().max(1000).optional(),
   name: z.string().trim().min(2, "Denumirea este obligatorie.").max(160),
+  quantityRule: z.enum(TECHNICIAN_OPERATION_QUANTITY_RULES),
+  workTypeIds: z.array(z.string()),
 });
 
 export const technicianRateFormSchema = z.object({

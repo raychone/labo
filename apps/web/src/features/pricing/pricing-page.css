@@ -150,6 +150,22 @@
   margin: 0;
 }
 
+.pricing-page__choice-group { display: grid; gap: var(--dl-space-2); }
+.pricing-page__choice-group h4 { margin: var(--dl-space-2) 0 0; }
+.pricing-page__choice-grid { display: grid; gap: var(--dl-space-2); grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); }
+.pricing-page__probe-type-modal .pricing-page__choice-grid { grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); }
+.pricing-page__choice-grid > button { background: var(--dl-color-surface); border: 1px solid var(--dl-color-border); border-radius: var(--dl-radius-sm); color: var(--dl-color-text); cursor: pointer; display: grid; gap: 0.2rem; min-height: 3.5rem; padding: var(--dl-space-3); text-align: left; }
+.pricing-page__choice-grid > button:hover, .pricing-page__choice-grid > button:focus-visible { border-color: var(--dl-color-accent); }
+.pricing-page__choice-grid > button.is-selected { background: color-mix(in srgb, var(--dl-color-accent) 12%, var(--dl-color-surface)); border-color: var(--dl-color-accent); box-shadow: inset 3px 0 0 var(--dl-color-accent); }
+.pricing-page__choice-grid > button:disabled { cursor: not-allowed; opacity: 0.55; }
+.pricing-page__choice-grid > button span { color: var(--dl-color-muted); font-size: var(--dl-font-size-small); }
+.pricing-page__ordered-list { display: grid; gap: var(--dl-space-2); list-style: none; margin: 0; padding: 0; }
+.pricing-page__ordered-list li { align-items: center; background: var(--dl-color-surface); border: 1px solid var(--dl-color-border); border-radius: var(--dl-radius-sm); display: flex; gap: var(--dl-space-3); justify-content: space-between; padding: var(--dl-space-2) var(--dl-space-3); }
+.pricing-page__ordered-list li > div { display: flex; gap: var(--dl-space-1); }
+.pricing-page__field-error { color: var(--dl-color-danger); margin: 0; }
+.pricing-page__calculation-help { background: var(--dl-color-surface); border-left: 3px solid var(--dl-color-accent); color: var(--dl-color-muted); margin: 0; padding: var(--dl-space-3); }
+.pricing-page__calculation-help strong { color: var(--dl-color-text); }
+
 .pricing-page__modal-actions {
   background: color-mix(in srgb, var(--dl-color-surface) 94%, transparent);
   border-top: var(--dl-border-width) solid var(--dl-color-border);

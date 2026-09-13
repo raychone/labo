@@ -118,7 +118,7 @@ export function SettingsPage(): ReactNode {
     return (
       <main className="settings-page">
         <section className="dl-container">
-          <ErrorState title="Acces refuzat" description="Contul curent nu are permisiunea settings.read." />
+          <ErrorState title="Acces refuzat" description="Contul curent nu poate consulta setările laboratorului." />
         </section>
       </main>
     );

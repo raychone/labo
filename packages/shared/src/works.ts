@@ -47,6 +47,7 @@ export interface ProbeTypeView {
   readonly sortOrder: number;
   readonly isArchived: boolean;
   readonly symbol?: string | null;
+  readonly workTypeIds?: readonly string[];
 }
 
 export interface ProbeCycleView {

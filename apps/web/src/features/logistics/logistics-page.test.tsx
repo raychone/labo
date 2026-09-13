@@ -1,6 +1,6 @@
 import { ToastProvider } from "@dental-lab/ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { RenderResult } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router";
@@ -221,6 +221,35 @@ describe("LogisticsPage", () => {
     fireEvent.change(input as HTMLInputElement, { target: { files: [file] } });
 
     expect(await screen.findByText("scan.png")).toBeDefined();
+  });
+
+  it("saves a freely entered work type to the catalog from logistics intake", async () => {
+    const requests: Array<{ readonly body: unknown; readonly url: string }> = [];
+    const fallbackFetch = createFetchMock(["files.upload", "logistics.center.read", "works.create", "works.custom_type.save_to_catalog"]);
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/auth/csrf")) {
+        return Promise.resolve(createJsonResponse({ csrfToken: "csrf-token" }));
+      }
+      if (url.endsWith("/work-types/operational-name") && init?.method === "POST") {
+        requests.push({ body: JSON.parse(String(init.body)), url });
+        return Promise.resolve(createJsonResponse({ code: "CU-NEW", id: "work_type_new", name: "Lucrare logistică specială", symbol: "custom-NEW", unit: "UNIT" }, 201));
+      }
+      return fallbackFetch(input);
+    }));
+
+    renderWithProviders(<LogisticsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Lucrare nouă" }));
+
+    const workTypeInput = await screen.findByLabelText("Tip lucrare");
+    fireEvent.change(workTypeInput, { target: { value: "Lucrare logistică specială" } });
+    fireEvent.click(await screen.findByRole("button", { name: "Salvează în catalog" }));
+
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0]?.body).toEqual({ name: "Lucrare logistică specială" });
+    expect(requests[0]?.url.endsWith("/work-types/operational-name")).toBe(true);
+    await waitFor(() => expect((workTypeInput as HTMLInputElement).value).toBe("Lucrare logistică specială"));
+    expect(screen.queryByRole("button", { name: "Salvează în catalog" })).toBeNull();
   });
 
   it("shows standalone pickup requests and exact/range schedule fields", async () => {

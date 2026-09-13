@@ -160,7 +160,7 @@ export function EarningsContent({
       <Card>
         <CardHeader>
           <CardTitle>Detaliu pe lucrări</CardTitle>
-          <CardDescription>Valorile sunt snapshots istorice din manoperele efectuate.</CardDescription>
+          <CardDescription>Valorile rămân cele valabile la data efectuării manoperelor.</CardDescription>
         </CardHeader>
         <CardContent>
           {works.length === 0 ? <p className="technician-earnings__muted">Nu există câștiguri în perioada selectată.</p> : <EarningsBreakdown showTechnician={paymentPerspective === "manager" && data.technician === null} works={works} />}
@@ -191,7 +191,7 @@ function EarningsBreakdown({ showTechnician, works }: { readonly showTechnician:
               <tr>
                 <th>Manoperă</th>
                 <th>Performare</th>
-                <th>Câștig snapshot</th>
+                <th>Câștig înregistrat</th>
               </tr>
             </thead>
             <tbody>
@@ -199,7 +199,7 @@ function EarningsBreakdown({ showTechnician, works }: { readonly showTechnician:
                 <tr key={operation.performedOperationId}>
                   <td data-label="Manoperă">
                     {operation.operation.code} · {operation.operation.name}
-                    {operation.isLegacy ? <small> · istoric, fără scop tarifar disponibil</small> : operation.quantity !== null && operation.rateMinorSnapshot !== null ? <small> · {operation.quantity} × {formatMoneyMinor(operation.rateMinorSnapshot, operation.currency)}</small> : null}
+                    {operation.isLegacy ? <small> · istoric, fără detalii despre tarif</small> : operation.quantity !== null && operation.rateMinorSnapshot !== null ? <small> · {operation.quantity} × {formatMoneyMinor(operation.rateMinorSnapshot, operation.currency)}</small> : null}
                     {(operation.selectedTeeth ?? []).length > 0 ? <small> · FDI {(operation.selectedTeeth ?? []).slice().sort((a, b) => ADULT_FDI_TEETH.indexOf(a as never) - ADULT_FDI_TEETH.indexOf(b as never)).join(", ")}</small> : null}
                     {operation.probeCycle ? <small> · Proba {operation.probeCycle.sequence}</small> : null}
                     {showTechnician && operation.technician ? <small> · {operation.technician.displayName}</small> : null}

@@ -107,7 +107,7 @@ export class ProbeCyclesService {
     const latestProbe = input.directRework
       ? await this.prisma.probeCycle.findFirst({ orderBy: { sequence: "desc" }, select: { probeTypeId: true }, where: { workOrderId: work.id } })
       : null;
-    const configuredProbeCodes = unionConfiguredProbeCodes((work.items ?? []).map((item) => jsonStringArray(item.workType?.probeTypeCodes)));
+    const configuredProbeCodes = unionConfiguredProbeCodes((work.items ?? []).map((item) => probeCodes(item.workType)));
     const fallbackProbe = input.directRework && !latestProbe && configuredProbeCodes.length > 0
       ? await this.prisma.probeType.findFirst({ orderBy: { sortOrder: "asc" }, select: { id: true }, where: { code: { in: [...configuredProbeCodes] }, isArchived: false } })
       : null;
@@ -210,11 +210,11 @@ export class ProbeCyclesService {
       await this.worksService?.ensureLateExecutionContext(tx, input.workOrderId, input.actorUserId, input.requestMetadata, now, input.executionLegalEntityCode);
       let activeCycleId = work.activeProbeCycleId;
       if (!activeCycleId) {
-        const probeCodes = jsonStringArray(work.workType.probeTypeCodes);
+        const configuredCodes = probeCodes(work.workType);
         const probeType = await tx.probeType.findFirst({
           orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
           select: { id: true, name: true },
-          where: probeCodes.length > 0 ? { code: { in: [...probeCodes] }, isArchived: false } : { isArchived: false },
+          where: configuredCodes.length > 0 ? { code: { in: [...configuredCodes] }, isArchived: false } : { isArchived: false },
         });
         if (!probeType) throw new ConflictException("Tipul probei nu a fost găsit în catalogul tehnic.");
         const previous = await tx.probeCycle.findFirst({ orderBy: { sequence: "desc" }, select: { sequence: true }, where: { workOrderId: input.workOrderId } });
@@ -311,9 +311,9 @@ export class ProbeCyclesService {
     await this.notificationsService?.publishBillingCandidate({ workOrderId: input.workOrderId, code: work.code, patientName: work.patientName });
   }
 
-  private async findVisibleWork(actorUserId: string, workOrderId: string, legalEntity?: LegalEntityContext): Promise<{ readonly id: string; readonly code: string; readonly patientName: string; readonly items: readonly { readonly workType: { readonly probeTypeCodes: unknown } | null }[] }> {
+  private async findVisibleWork(actorUserId: string, workOrderId: string, legalEntity?: LegalEntityContext): Promise<{ readonly id: string; readonly code: string; readonly patientName: string; readonly items: readonly { readonly workType: ProbeConfiguredWorkType | null }[] }> {
     const visibleWhere = await getVisibleWorkWhere(this.authorizationService, actorUserId);
-    const work = await this.prisma.workOrder.findFirst({ select: { code: true, id: true, patientName: true, items: { select: { workType: { select: { probeTypeCodes: true } } }, where: { archivedAt: null } } }, where: { AND: [{ id: workOrderId }, visibleWhere, ...(legalEntity ? [{ executionLegalEntityId: legalEntity.id }] : [])] } });
+    const work = await this.prisma.workOrder.findFirst({ select: { code: true, id: true, patientName: true, items: { select: { workType: { select: { probeTypes: { orderBy: { sortOrder: "asc" }, select: { probeType: { select: { code: true } } } } } } }, where: { archivedAt: null } } }, where: { AND: [{ id: workOrderId }, visibleWhere, ...(legalEntity ? [{ executionLegalEntityId: legalEntity.id }] : [])] } });
     if (!work) throw new NotFoundException("Lucrarea nu a fost găsită.");
     return work;
   }
@@ -394,9 +394,9 @@ export class ProbeCyclesService {
     };
   }
 
-  private async findTransitionWork(actorUserId: string, workOrderId: string, legalEntity?: LegalEntityContext): Promise<{ readonly id: string; readonly code: string; readonly patientName: string; readonly status: string; readonly activeProbeCycleId: string | null; readonly claimStatus: string; readonly claimedByUserId: string | null; readonly executionLegalEntityId: string | null; readonly claimRevision: number; readonly effectiveDueAt: Date | null; readonly requestedDeliveryDate: Date | null; readonly workType: { readonly probeTypeCodes: unknown } }> {
+  private async findTransitionWork(actorUserId: string, workOrderId: string, legalEntity?: LegalEntityContext): Promise<{ readonly id: string; readonly code: string; readonly patientName: string; readonly status: string; readonly activeProbeCycleId: string | null; readonly claimStatus: string; readonly claimedByUserId: string | null; readonly executionLegalEntityId: string | null; readonly claimRevision: number; readonly effectiveDueAt: Date | null; readonly requestedDeliveryDate: Date | null; readonly workType: ProbeConfiguredWorkType }> {
     const visibleWhere = await getVisibleWorkWhere(this.authorizationService, actorUserId);
-    const work = await this.prisma.workOrder.findFirst({ select: { activeProbeCycleId: true, claimRevision: true, claimStatus: true, claimedByUserId: true, code: true, effectiveDueAt: true, executionLegalEntityId: true, id: true, patientName: true, requestedDeliveryDate: true, status: true, workType: { select: { probeTypeCodes: true } } }, where: { AND: [{ id: workOrderId }, visibleWhere, ...(legalEntity ? [{ executionLegalEntityId: legalEntity.id }] : [])] } });
+    const work = await this.prisma.workOrder.findFirst({ select: { activeProbeCycleId: true, claimRevision: true, claimStatus: true, claimedByUserId: true, code: true, effectiveDueAt: true, executionLegalEntityId: true, id: true, patientName: true, requestedDeliveryDate: true, status: true, workType: { select: { probeTypes: { orderBy: { sortOrder: "asc" }, select: { probeType: { select: { code: true } } } } } } }, where: { AND: [{ id: workOrderId }, visibleWhere, ...(legalEntity ? [{ executionLegalEntityId: legalEntity.id }] : [])] } });
     if (!work) throw new NotFoundException("Lucrarea nu a fost găsită.");
     return work;
   }
@@ -417,8 +417,10 @@ export class ProbeCyclesService {
   }
 }
 
-function jsonStringArray(value: unknown): readonly string[] {
-  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+type ProbeConfiguredWorkType = { readonly probeTypes: readonly { readonly probeType: { readonly code: string | null } }[] };
+
+function probeCodes(workType: ProbeConfiguredWorkType | null | undefined): readonly string[] {
+  return workType?.probeTypes.flatMap((mapping) => mapping.probeType.code ? [mapping.probeType.code] : []) ?? [];
 }
 
 function unionConfiguredProbeCodes(codeSets: readonly (readonly string[])[]): readonly string[] {

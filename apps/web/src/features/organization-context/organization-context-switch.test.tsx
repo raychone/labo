@@ -70,7 +70,7 @@ describe("OrganizationContextSwitch", () => {
     expect(screen.queryByText("Firmă activă")).toBeNull();
   });
 
-  it("confirms dirty settings before switching and invalidates active context queries", async () => {
+  it("confirms dirty settings and clears company-scoped cache before loading the next company", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/auth/csrf")) {
@@ -99,7 +99,9 @@ describe("OrganizationContextSwitch", () => {
     const unregister = registerOrganizationContextSwitchGuard(() => "Ai modificări nesalvate pentru Nicolaie Cristina. Schimbi firma și pierzi modificările?");
     vi.stubGlobal("fetch", fetchMock);
     const queryClient = renderWithProviders();
-    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    queryClient.setQueryData(["billing", "overview"], { company: "CDT" });
+    queryClient.setQueryData(["pricing", "agreements"], { company: "CDT" });
+    const resetSpy = vi.spyOn(queryClient, "resetQueries");
 
     fireEvent.click(await screen.findByRole("radio", { name: "NG — Nicolaie Gabriel" }));
     expect(await screen.findByText("Ai modificări nesalvate pentru Nicolaie Cristina. Schimbi firma și pierzi modificările?")).toBeDefined();
@@ -110,12 +112,13 @@ describe("OrganizationContextSwitch", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Schimbă firma" }));
 
     await waitFor(() => expect(screen.getByRole("radio", { name: "NG — Nicolaie Gabriel" }).getAttribute("aria-checked")).toBe("true"));
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["settings"], refetchType: "active" });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["works"], refetchType: "active" });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["logistics"], refetchType: "active" });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["status"], refetchType: "active" });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["billing"], refetchType: "active" });
-    expect(invalidateSpy).not.toHaveBeenCalledWith();
+    expect(resetSpy).toHaveBeenCalledWith({ queryKey: ["settings"] });
+    expect(resetSpy).toHaveBeenCalledWith({ queryKey: ["works"] });
+    expect(resetSpy).toHaveBeenCalledWith({ queryKey: ["logistics"] });
+    expect(resetSpy).toHaveBeenCalledWith({ queryKey: ["status"] });
+    expect(resetSpy).toHaveBeenCalledWith({ queryKey: ["billing"] });
+    expect(queryClient.getQueryData(["billing", "overview"])).toBeUndefined();
+    expect(queryClient.getQueryData(["pricing", "agreements"])).toBeUndefined();
     unregister();
   });
 });
