@@ -79,6 +79,16 @@ describe("AuthController", () => {
         {
           provide: AuthService,
           useValue: {
+            demoLogin: vi.fn().mockResolvedValue({
+              session: {
+                session: {
+                  expiresAt: new Date(Date.now() + 60_000),
+                  id: "demo-session-1",
+                },
+                token: "demo-session-token",
+              },
+              user: testUser,
+            }),
             login: vi.fn().mockResolvedValue({
               session: {
                 session: {
@@ -152,6 +162,30 @@ describe("AuthController", () => {
 
     expect(response.body).toStrictEqual({ csrfToken: existingToken });
     expect(getSetCookieHeader(response)).toBe("");
+  });
+
+  it("protects demo login with the issued CSRF cookie and header", async () => {
+    const csrfResponse = await request(app.getHttpServer() as App)
+      .get("/auth/csrf")
+      .expect(200);
+    const csrfToken = csrfResponse.body.csrfToken as string;
+    const csrfCookie = getSetCookieHeader(csrfResponse).split(";")[0] ?? "";
+
+    await request(app.getHttpServer() as App)
+      .post("/auth/demo-login")
+      .set("Cookie", [csrfCookie])
+      .set("x-csrf-token", csrfToken)
+      .send({ role: "MANAGER" })
+      .expect(200);
+  });
+
+  it("rejects demo login when the CSRF header does not match the cookie", async () => {
+    await request(app.getHttpServer() as App)
+      .post("/auth/demo-login")
+      .set("Cookie", ["dl_csrf=csrf-token"])
+      .set("x-csrf-token", "different-token")
+      .send({ role: "MANAGER" })
+      .expect(403);
   });
 
   it("logs in and sets the httpOnly session cookie", async () => {

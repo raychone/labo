@@ -29,11 +29,25 @@ export interface CsrfResponse {
   readonly csrfToken: string;
 }
 
-export async function fetchCsrfToken(): Promise<string> {
-  const response = await apiFetch("/auth/csrf");
-  const body = await parseApiResponse<CsrfResponse>(response);
+let csrfTokenRequest: Promise<string> | null = null;
 
-  return body.csrfToken;
+export async function fetchCsrfToken(): Promise<string> {
+  if (csrfTokenRequest) {
+    return csrfTokenRequest;
+  }
+
+  csrfTokenRequest = (async () => {
+    const response = await apiFetch("/auth/csrf", { cache: "no-store" });
+    const body = await parseApiResponse<CsrfResponse>(response);
+
+    return body.csrfToken;
+  })();
+
+  try {
+    return await csrfTokenRequest;
+  } finally {
+    csrfTokenRequest = null;
+  }
 }
 
 export async function login(credentials: LoginCredentials): Promise<AuthUserResponse> {
@@ -53,8 +67,20 @@ export async function login(credentials: LoginCredentials): Promise<AuthUserResp
 }
 
 export async function demoLogin(role: DemoLoginRole): Promise<AuthUserResponse> {
-  const csrfToken = await fetchCsrfToken();
-  const response = await apiFetch("/auth/demo-login", {
+  let response = await postDemoLogin(role, await fetchCsrfToken());
+
+  // A stale browser cookie can survive a deploy or a restored browser
+  // session. Refresh only for the explicit CSRF failure; all other 403s keep
+  // their original API behavior.
+  if (response.status === 403 && await isInvalidCsrfResponse(response)) {
+    response = await postDemoLogin(role, await fetchCsrfToken());
+  }
+
+  return parseApiResponse<AuthUserResponse>(response);
+}
+
+async function postDemoLogin(role: DemoLoginRole, csrfToken: string): Promise<Response> {
+  return apiFetch("/auth/demo-login", {
     body: JSON.stringify({ role }),
     headers: {
       "Content-Type": "application/json",
@@ -62,8 +88,15 @@ export async function demoLogin(role: DemoLoginRole): Promise<AuthUserResponse> 
     },
     method: "POST",
   });
+}
 
-  return parseApiResponse<AuthUserResponse>(response);
+async function isInvalidCsrfResponse(response: Response): Promise<boolean> {
+  try {
+    const body = await response.clone().json() as { readonly message?: unknown };
+    return body.message === "Invalid CSRF token.";
+  } catch {
+    return false;
+  }
 }
 
 export async function fetchCurrentUser(): Promise<AuthUserResponse | null> {
