@@ -342,7 +342,16 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     const recipientIds: string[] = [];
     for (const user of users) {
       const roleKeys = user.roles?.map((assignment) => assignment.role.key) ?? [];
-      if (kind === "logistics" && roleKeys.length > 0 && !roleKeys.includes("LOGISTICA") && !roleKeys.includes("MANAGER")) continue;
+      // Permissions are intentionally checked below, but they are not enough to
+      // determine the notification audience: managers inherit most permissions
+      // and reception may read parts of the logistics area. Keep audiences
+      // role-safe and reserve explicit user targeting for courier notifications.
+      const roleAllowed = kind === "manager"
+        ? roleKeys.includes("MANAGER")
+        : kind === "logistics"
+          ? roleKeys.includes("LOGISTICA") || roleKeys.includes("MANAGER")
+          : roleKeys.includes("TEHNICIAN");
+      if (!roleAllowed) continue;
       for (const permission of checks) {
         const permissionResult = await this.authorizationService.hasPermission({ permission, userId: user.id });
         if (permissionResult.allowed) {
