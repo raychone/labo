@@ -191,6 +191,8 @@ export async function seedTechnicalCatalog(prisma: PrismaClient): Promise<{ read
   // after the technical catalog is refreshed, while preserving historical work
   // orders that reference them.
   const removedAddOnWorkTypeIds = [
+    "demo_creative_wt_placata-4-plus",
+    "demo_creative_wt_gingie-ceramica-compozit",
     "technical_work_type_placata-4-plus",
     "technical_work_type_gingie-ceramica-compozit",
   ];
@@ -292,6 +294,17 @@ export async function seedTechnicalCatalog(prisma: PrismaClient): Promise<{ read
       await prisma.workType.update({ data: { probeApplicabilityConfigured: true }, where: { id: workType.id } });
     }
   }
+
+  // Keep legacy/demo copies out of active selectors after every catalog refresh.
+  // Historical work orders still reference them, so archive instead of delete.
+  await prisma.workType.updateMany({
+    data: { archivedAt: new Date(), isActive: false, updatedByUserId: manager.id },
+    where: {
+      isActive: true,
+      OR: [{ id: { startsWith: "demo_creative_wt_" } }, { id: { startsWith: "technical_work_type_" } }],
+      NOT: { id: { startsWith: "technical_pricing_work_type_" } },
+    },
+  });
 
   return { operations: operationSpecs.length, probeTypes: CREATIVE_PROBE_TYPES.length, workTypes: CREATIVE_WORK_CATALOG.length };
 }

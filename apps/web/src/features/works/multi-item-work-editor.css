@@ -246,6 +246,32 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
   }
+
+  .multi-item-work-editor__item {
+    border-width: 0 0 1px;
+    border-radius: 0;
+    padding: var(--dl-space-2) 0;
+  }
+
+  .multi-item-work-editor__work-type-cards {
+    gap: var(--dl-space-2);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: var(--dl-space-2);
+  }
+
+  .multi-item-work-editor__work-type-card {
+    border-radius: var(--dl-radius-sm);
+  }
+
+  .multi-item-work-editor__work-type-card-button {
+    min-height: 4rem;
+    padding: var(--dl-space-2);
+  }
+
+  .multi-item-work-editor__work-type-card-button .dl-card__header,
+  .multi-item-work-editor__work-type-card-button .dl-card__content {
+    padding: 0;
+  }
 }
 
 /* Keep the clinical selector broad on tablets and ordinary desktop widths.

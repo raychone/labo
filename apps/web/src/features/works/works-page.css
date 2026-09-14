@@ -22,7 +22,9 @@
 }
 
 .works-page__work-details-drawer .dl-overlay__content {
+  align-self: stretch;
   display: block;
+  height: 100%;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -34,6 +36,10 @@
   min-width: 0;
   max-width: 100%;
   overflow-wrap: anywhere;
+}
+
+.works-page__work-details-drawer .works-page__drawer {
+  min-height: 0;
 }
 
 .works-page__work-details-drawer .dl-overlay__content {
@@ -1256,4 +1262,50 @@
   font-weight: var(--dl-font-weight-normal);
   margin-top: var(--dl-space-1);
   opacity: 0.8;
+}
+
+/* Mobile detail view: keep the drawer readable without stacking a card
+   inside a card inside another card. Tablet and desktop keep the existing
+   presentation unchanged. */
+@media (max-width: 47.99rem) {
+  .works-page__work-details-drawer .dl-overlay__content {
+    height: auto;
+    padding: var(--dl-space-2) max(var(--dl-space-2), env(safe-area-inset-right)) var(--dl-space-3) max(var(--dl-space-2), env(safe-area-inset-left));
+  }
+
+  .works-page__work-details-drawer .works-page__drawer {
+    gap: var(--dl-space-3);
+    padding: 0;
+  }
+
+  .works-page__work-details-drawer .works-page__detail-section {
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--dl-color-border);
+    border-radius: 0;
+    gap: var(--dl-space-3);
+    padding: var(--dl-space-3) 0;
+  }
+
+  .works-page__work-details-drawer .works-page__composition-item,
+  .works-page__work-details-drawer .works-page__inline-composition-editor,
+  .works-page__work-details-drawer .works-page__compatibility-note {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+  }
+
+  .works-page__work-details-drawer .works-page__composition-items,
+  .works-page__work-details-drawer .works-page__composition-stack {
+    gap: var(--dl-space-3);
+  }
+
+  .works-page__work-details-drawer .works-page__probe-history {
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
+    margin: 0;
+    padding: var(--dl-space-2) 0;
+  }
 }
