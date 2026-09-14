@@ -27,7 +27,7 @@ interface ActorContext {
 type AuditClient = Pick<PrismaTypes.TransactionClient, "auditLog"> | Pick<PrismaService, "auditLog">;
 
 const WORK_TYPE_INCLUDE = { probeTypes: { include: { probeType: true } }, technicianOperations: true } as const;
-const WORK_TYPE_MUTATION_FIELDS = ["allowedAddOns", "allowedAnatomicalScopes", "basePriceMinor", "colorHex", "description", "exclusiveGroup", "name", "probeFamily", "symbol", "unit"] as const satisfies readonly (keyof UpdateWorkTypeDto)[];
+const WORK_TYPE_MUTATION_FIELDS = ["allowedAddOns", "allowedAnatomicalScopes", "allowedShades", "customShades", "basePriceMinor", "colorHex", "description", "exclusiveGroup", "name", "probeFamily", "symbol", "unit"] as const satisfies readonly (keyof UpdateWorkTypeDto)[];
 
 @Injectable()
 export class WorkTypesService {
@@ -104,6 +104,8 @@ export class WorkTypesService {
       const data: PrismaTypes.WorkTypeUncheckedCreateInput = {
         ...(dto.allowedAddOns === undefined ? {} : { allowedAddOns: dto.allowedAddOns as unknown as Prisma.InputJsonValue }),
         ...(dto.allowedAnatomicalScopes === undefined ? {} : { allowedAnatomicalScopes: dto.allowedAnatomicalScopes as Prisma.InputJsonValue }),
+        ...(dto.allowedShades === undefined ? {} : { allowedShades: dto.allowedShades === null ? Prisma.JsonNull : dto.allowedShades as Prisma.InputJsonValue }),
+        ...(dto.customShades === undefined ? {} : { customShades: dto.customShades === null ? Prisma.JsonNull : dto.customShades as Prisma.InputJsonValue }),
         basePriceMinor: dto.basePriceMinor,
         colorHex: dto.colorHex ?? null,
         code,
@@ -451,6 +453,12 @@ export class WorkTypesService {
       case "allowedAddOns":
       case "allowedAnatomicalScopes":
         data[field] = value as Prisma.InputJsonValue;
+        return;
+      case "allowedShades":
+        data.allowedShades = value === null ? Prisma.JsonNull : value as Prisma.InputJsonValue;
+        return;
+      case "customShades":
+        data.customShades = value === null ? Prisma.JsonNull : value as Prisma.InputJsonValue;
         return;
       case "basePriceMinor":
         if (typeof value === "number") {

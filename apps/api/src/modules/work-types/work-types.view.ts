@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { ANATOMICAL_SCOPE_TYPES, type AnatomicalScopeType, type WorkTypeAddOnOption, type WorkTypeProbeFamily } from "@dental-lab/shared";
+import { ANATOMICAL_SCOPE_TYPES, WORK_TYPE_SHADE_OPTIONS, type AnatomicalScopeType, type WorkTypeAddOnOption, type WorkTypeProbeFamily, type WorkTypeShade } from "@dental-lab/shared";
 
 export type WorkTypeRecord = Prisma.WorkTypeGetPayload<{ include: { probeTypes: { include: { probeType: true } }; technicianOperations: true } }>;
 
@@ -15,6 +15,8 @@ export interface WorkTypeOptionView {
   readonly probeTypeIds: readonly string[];
   readonly probeTypeCodes?: readonly string[];
   readonly allowedAddOns?: readonly WorkTypeAddOnOption[];
+  readonly allowedShades?: readonly WorkTypeShade[] | null;
+  readonly customShades?: readonly string[] | null;
   readonly allowedAnatomicalScopes?: readonly AnatomicalScopeType[];
   readonly operationApplicabilityConfigured: boolean;
   readonly probeApplicabilityConfigured: boolean;
@@ -45,7 +47,7 @@ export interface PaginatedWorkTypesView {
   readonly total: number;
 }
 
-export function toWorkTypeOptionView(workType: Pick<WorkTypeRecord, "allowedAddOns" | "allowedAnatomicalScopes" | "basePriceMinor" | "code" | "colorHex" | "exclusiveGroup" | "id" | "name" | "operationApplicabilityConfigured" | "probeApplicabilityConfigured" | "probeFamily" | "probeTypes" | "symbol" | "technicianOperations" | "unit">): WorkTypeOptionView {
+export function toWorkTypeOptionView(workType: Pick<WorkTypeRecord, "allowedAddOns" | "allowedAnatomicalScopes" | "allowedShades" | "customShades" | "basePriceMinor" | "code" | "colorHex" | "exclusiveGroup" | "id" | "name" | "operationApplicabilityConfigured" | "probeApplicabilityConfigured" | "probeFamily" | "probeTypes" | "symbol" | "technicianOperations" | "unit">): WorkTypeOptionView {
   const probeTypes = workType.probeTypes ?? [];
   const technicianOperations = workType.technicianOperations ?? [];
   return {
@@ -60,12 +62,25 @@ export function toWorkTypeOptionView(workType: Pick<WorkTypeRecord, "allowedAddO
     probeTypeIds: [...probeTypes].sort((left, right) => left.sortOrder - right.sortOrder).map((mapping) => mapping.probeTypeId),
     probeTypeCodes: [...probeTypes].sort((left, right) => left.sortOrder - right.sortOrder).flatMap((mapping) => mapping.probeType.code ? [mapping.probeType.code] : []),
     ...(jsonAddOns(workType.allowedAddOns).length > 0 ? { allowedAddOns: jsonAddOns(workType.allowedAddOns) } : {}),
+    allowedShades: jsonShades(workType.allowedShades),
+    customShades: jsonCustomShades(workType.customShades),
     allowedAnatomicalScopes: jsonAnatomicalScopes(workType.allowedAnatomicalScopes),
     operationApplicabilityConfigured: workType.operationApplicabilityConfigured ?? false,
     probeApplicabilityConfigured: workType.probeApplicabilityConfigured ?? false,
     technicianOperationIds: [...technicianOperations].sort((left, right) => left.sortOrder - right.sortOrder).map((mapping) => mapping.operationId),
     ...(workType.exclusiveGroup ? { exclusiveGroup: workType.exclusiveGroup } : {}),
   };
+}
+
+function jsonCustomShades(value: Prisma.JsonValue | null): readonly string[] | null {
+  if (value === null) return null;
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0).map((entry) => entry.trim()) : [];
+}
+
+function jsonShades(value: Prisma.JsonValue | null): readonly WorkTypeShade[] | null {
+  if (value === null) return null;
+  const allowed = new Set<string>(WORK_TYPE_SHADE_OPTIONS);
+  return Array.isArray(value) ? value.filter((entry): entry is WorkTypeShade => typeof entry === "string" && allowed.has(entry)) : null;
 }
 
 function jsonAnatomicalScopes(value: Prisma.JsonValue | null): readonly AnatomicalScopeType[] {

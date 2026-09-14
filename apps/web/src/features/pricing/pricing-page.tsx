@@ -41,6 +41,7 @@ import {
   formatWorkTypeCategory,
   formatWorkTypeUnit,
   minorToDecimalString,
+  WORK_TYPE_SHADE_OPTIONS,
   type PriceCatalogItemInput,
   type PriceCatalogItemSummary,
   type PricingAgreementDetail,
@@ -149,11 +150,11 @@ function WorkTypeColorPicker({ disabled, onChange, value }: { readonly disabled?
   return <>
     <Button disabled={disabled} onClick={() => setIsOpen(true)} type="button" variant="outline">
       <span className="pricing-page__color-preview" style={{ backgroundColor: value || "transparent" }} />
-      {value ? "Culoare activă" : "Alege culoarea"}
+      {value ? "Culoare odontogramă activă" : "Alege culoarea odontogramei"}
     </Button>
-    <Modal isOpen={isOpen} onOpenChange={setIsOpen} size="sm" title="Alege culoarea">
+    <Modal isOpen={isOpen} onOpenChange={setIsOpen} size="sm" title="Alege culoarea odontogramei">
       <div className="pricing-page__color-picker">
-        <p className="pricing-page__readonly">Alege o culoare pentru acest tip de lucrare. Culoarea este salvată doar pe tipul de lucrare curent.</p>
+        <p className="pricing-page__readonly">Aceasta este culoarea vizuală a tipului de lucrare în odontogramă și legendă.</p>
         <div className="pricing-page__color-grid" aria-label="Paletă culori tip lucrare" role="group">
           {workTypeColorPalette.map((color) => <button aria-pressed={normalizedValue === color} aria-label={`${normalizedValue === color ? "Dezactivează" : "Alege"} ${color}`} className={normalizedValue === color ? "is-selected" : undefined} key={color} onClick={() => { onChange(normalizedValue === color ? "" : color); setIsOpen(false); }} style={{ backgroundColor: color }} type="button" />)}
         </div>
@@ -218,7 +219,7 @@ function OperationCalculationHelp({ rule }: { readonly rule: TechnicianOperation
   return <p className="pricing-page__calculation-help">{text}</p>;
 }
 
-function WorkTypeConfigurationFields({ form, isOperationCatalogLoading = false, isProbeCatalogLoading = false, onRetryOperationCatalog, onRetryProbeCatalog, operationCatalogError, operations, probeCatalogError, probeTypes }: {
+function WorkTypeConfigurationFields({ availableCustomShades = [], form, isOperationCatalogLoading = false, isProbeCatalogLoading = false, onRetryOperationCatalog, onRetryProbeCatalog, operationCatalogError, operations, probeCatalogError, probeTypes }: {
   readonly form: ReturnType<typeof useForm<CatalogFormValues>>;
   readonly isOperationCatalogLoading?: boolean;
   readonly isProbeCatalogLoading?: boolean;
@@ -228,10 +229,15 @@ function WorkTypeConfigurationFields({ form, isOperationCatalogLoading = false, 
   readonly operations: readonly TechnicianOperationSummary[];
   readonly probeCatalogError?: string | undefined;
   readonly probeTypes: readonly ProbeTypeView[];
+  readonly availableCustomShades?: readonly string[];
 }): ReactNode {
   const [operationSearch, setOperationSearch] = useState("");
   const [probeSearch, setProbeSearch] = useState("");
+  const [customShadeDraft, setCustomShadeDraft] = useState("");
+  const [customShadeCatalog, setCustomShadeCatalog] = useState<readonly string[]>(() => [...new Set([...availableCustomShades, ...(form.getValues("customShades") ?? [])])]);
   const selectedScopes = form.watch("allowedAnatomicalScopes");
+  const selectedShades = form.watch("allowedShades");
+  const selectedCustomShades = form.watch("customShades");
   const selectedOperations = form.watch("technicianOperationIds");
   const selectedProbeIds = form.watch("probeTypeIds");
   const selectedUnit = form.watch("unit");
@@ -248,7 +254,18 @@ function WorkTypeConfigurationFields({ form, isOperationCatalogLoading = false, 
     ...TECHNICIAN_OPERATION_CATEGORIES.filter((category) => visibleOperations.some((operation) => operation.category === category)),
     ...new Set(visibleOperations.map((operation) => operation.category).filter((category) => !TECHNICIAN_OPERATION_CATEGORIES.includes(category as (typeof TECHNICIAN_OPERATION_CATEGORIES)[number]))),
   ];
-  const setStringList = (name: "allowedAnatomicalScopes" | "probeTypeIds" | "technicianOperationIds", value: readonly string[]) => form.setValue(name, [...value] as never, { shouldDirty: true, shouldValidate: true });
+  const setStringList = (name: "allowedAnatomicalScopes" | "allowedShades" | "customShades" | "probeTypeIds" | "technicianOperationIds", value: readonly string[]) => form.setValue(name, [...value] as never, { shouldDirty: true, shouldValidate: true });
+  const addCustomShade = () => {
+    const value = customShadeDraft.trim();
+    if (!value || selectedCustomShades.includes(value) || WORK_TYPE_SHADE_OPTIONS.includes(value as (typeof WORK_TYPE_SHADE_OPTIONS)[number])) return;
+    setCustomShadeCatalog((current) => current.includes(value) ? current : [...current, value]);
+    setStringList("customShades", [...selectedCustomShades, value]);
+    setCustomShadeDraft("");
+  };
+  useEffect(() => {
+    const missing = selectedCustomShades.filter((shade) => !customShadeCatalog.includes(shade));
+    if (missing.length > 0) setCustomShadeCatalog((current) => [...current, ...missing.filter((shade) => !current.includes(shade))]);
+  }, [customShadeCatalog, selectedCustomShades]);
   const setBoolean = (name: "gingieEnabled" | "placataEnabled", value: boolean) => form.setValue(name, value, { shouldDirty: true, shouldValidate: true });
   const moveProbe = (probeTypeId: string, direction: -1 | 1) => {
     const index = selectedProbeIds.indexOf(probeTypeId);
@@ -269,6 +286,16 @@ function WorkTypeConfigurationFields({ form, isOperationCatalogLoading = false, 
       <p className="pricing-page__readonly">Domeniul anatomic este independent de regula de calcul.</p>
       <ChoiceGrid options={ANATOMICAL_SCOPE_TYPES.map((scope) => ({ id: scope, label: ANATOMICAL_SCOPE_LABELS_RO[scope] }))} selectedIds={selectedScopes} onChange={(ids) => setStringList("allowedAnatomicalScopes", ids)} />
       {form.formState.errors.allowedAnatomicalScopes?.message ? <p className="pricing-page__field-error">{form.formState.errors.allowedAnatomicalScopes.message}</p> : null}
+    </section>
+    <section className="pricing-page__editor-section">
+      <h3>Culori disponibile în lucrare</h3>
+      <p className="pricing-page__readonly">Selectează nuanțele care pot fi alese pe dinte în odontogramă. Pentru lucrări transparente, cum este gutiera, deselectează toate culorile.</p>
+      <ChoiceGrid options={WORK_TYPE_SHADE_OPTIONS.map((shade) => ({ id: shade, label: shade }))} selectedIds={selectedShades} onChange={(ids) => setStringList("allowedShades", ids)} />
+      <FormGrid>
+        <TextInput label="Culoare custom" onChange={(event) => setCustomShadeDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCustomShade(); } }} placeholder="Ex. Bleach" value={customShadeDraft} />
+        <Button onClick={addCustomShade} type="button" variant="outline">Adaugă culoare</Button>
+      </FormGrid>
+      {customShadeCatalog.length ? <ChoiceGrid options={customShadeCatalog.map((shade) => ({ id: shade, label: shade, meta: "Custom" }))} selectedIds={selectedCustomShades} onChange={(ids) => setStringList("customShades", ids)} /> : null}
     </section>
     <section className="pricing-page__editor-section">
       <h3>Manopere disponibile</h3>
@@ -340,6 +367,8 @@ function getCatalogDefaults(item?: PriceCatalogItemSummary | null): CatalogFormV
     workTypeSymbol: item?.workType.symbol,
     workTypeDescription: undefined,
     allowedAnatomicalScopes: [...ANATOMICAL_SCOPE_TYPES],
+    allowedShades: [...WORK_TYPE_SHADE_OPTIONS],
+    customShades: [],
     technicianOperationIds: [],
     probeTypeIds: [],
     gingieEnabled: false,
@@ -550,6 +579,7 @@ export function PricingPage(): ReactNode {
   const selectedAgreementQuery = usePricingAgreement(selectedAgreementId, canRead && canReadAgreements);
   const selectedCatalogQuery = usePricingCatalogItem(selectedCatalogId, canRead);
   const workTypesQuery = useWorkTypeOptions(canRead);
+  const customShadeCatalog = useMemo(() => [...new Set((workTypesQuery.data ?? []).flatMap((workType) => workType.customShades ?? []))], [workTypesQuery.data]);
   const probeTypesQuery = useAllProbeTypes(canReadProbeTypes);
   const clinicsQuery = useQuery({ enabled: canRead, queryFn: fetchClinicOptions, queryKey: ["clinics", "options"], retry: false });
   const doctorsQuery = useQuery({ enabled: canRead, queryFn: () => fetchDoctorOptions(), queryKey: ["doctors", "options"], retry: false });
@@ -809,6 +839,8 @@ export function PricingPage(): ReactNode {
             symbol: values.workTypeSymbol ?? "",
             unit: values.unit,
             allowedAnatomicalScopes: values.allowedAnatomicalScopes,
+            allowedShades: values.allowedShades,
+            customShades: values.customShades,
             technicianOperationIds: values.technicianOperationIds,
             probeTypeIds: values.probeTypeIds,
             allowedAddOns: buildAllowedAddOns(values),
@@ -821,6 +853,7 @@ export function PricingPage(): ReactNode {
           });
         }}
         operations={configurationOperationsQuery.data ?? []}
+        availableCustomShades={customShadeCatalog}
         probeCatalogError={probeTypesQuery.isError ? getErrorMessage(probeTypesQuery.error) : undefined}
         probeTypes={probeTypesQuery.data ?? []}
         workTypes={workTypesQuery.data ?? []}
@@ -869,6 +902,7 @@ export function PricingPage(): ReactNode {
         }}
       />
       <CatalogDrawer
+        availableCustomShades={customShadeCatalog}
         canArchive={canArchive}
         canUpdate={canUpdate}
         currency={currency}
@@ -1438,6 +1472,7 @@ function CatalogModal({
   onRetryProbeCatalog,
   onSubmit,
   operations,
+  availableCustomShades,
   probeCatalogError,
   probeTypes,
   workTypes,
@@ -1455,6 +1490,7 @@ function CatalogModal({
   readonly onRetryProbeCatalog: () => void;
   readonly onSubmit: (values: CatalogFormValues, form: ReturnType<typeof useForm<CatalogFormValues>>) => void;
   readonly operations: readonly TechnicianOperationSummary[];
+  readonly availableCustomShades: readonly string[];
   readonly probeCatalogError?: string | undefined;
   readonly probeTypes: readonly ProbeTypeView[];
   readonly workTypes: readonly WorkTypeOption[];
@@ -1496,7 +1532,7 @@ function CatalogModal({
             <WorkTypeColorPicker value={form.watch("colorHex")} onChange={(value) => form.setValue("colorHex", value, { shouldDirty: true, shouldValidate: true })} />
           </FormGrid>
         </section>
-        <WorkTypeConfigurationFields form={form} isOperationCatalogLoading={isOperationCatalogLoading} isProbeCatalogLoading={isProbeCatalogLoading} onRetryOperationCatalog={onRetryOperationCatalog} onRetryProbeCatalog={onRetryProbeCatalog} operationCatalogError={operationCatalogError} operations={operations} probeCatalogError={probeCatalogError} probeTypes={probeTypes} />
+        <WorkTypeConfigurationFields availableCustomShades={availableCustomShades} form={form} isOperationCatalogLoading={isOperationCatalogLoading} isProbeCatalogLoading={isProbeCatalogLoading} onRetryOperationCatalog={onRetryOperationCatalog} onRetryProbeCatalog={onRetryProbeCatalog} operationCatalogError={operationCatalogError} operations={operations} probeCatalogError={probeCatalogError} probeTypes={probeTypes} />
         <section className="pricing-page__editor-section">
           <h3>Date comerciale</h3>
           <FormGrid>
@@ -1577,6 +1613,7 @@ function CatalogInlineForm({
 }
 
 function CatalogDrawer(props: {
+  readonly availableCustomShades: readonly string[];
   readonly canArchive: boolean;
   readonly canUpdate: boolean;
   readonly currency: string;
@@ -1618,6 +1655,8 @@ function CatalogDrawer(props: {
       configurationForm.reset({
         ...getCatalogDefaults(props.item),
         allowedAnatomicalScopes: [...(workTypeQuery.data.allowedAnatomicalScopes?.length ? workTypeQuery.data.allowedAnatomicalScopes : ANATOMICAL_SCOPE_TYPES)],
+        allowedShades: [...(workTypeQuery.data.allowedShades ?? WORK_TYPE_SHADE_OPTIONS)],
+        customShades: [...(workTypeQuery.data.customShades ?? [])],
         technicianOperationIds: [...(workTypeQuery.data.technicianOperationIds ?? [])],
         probeTypeIds: [...(workTypeQuery.data.probeTypeIds ?? [])],
         gingieEnabled: Boolean(gingie),
@@ -1645,11 +1684,13 @@ function CatalogDrawer(props: {
               <FormGridFull><Textarea label="Descriere" onChange={(event) => setWorkTypeDescription(event.target.value)} rows={3} value={workTypeDescription} /></FormGridFull>
               <WorkTypeColorPicker disabled={!props.canUpdate || updateWorkTypeMutation.isPending} value={workTypeColor} onChange={setWorkTypeColor} />
             </FormGrid>
-            <WorkTypeConfigurationFields form={configurationForm} isOperationCatalogLoading={props.isOperationCatalogLoading} isProbeCatalogLoading={props.isProbeCatalogLoading} onRetryOperationCatalog={props.onRetryOperationCatalog} onRetryProbeCatalog={props.onRetryProbeCatalog} operationCatalogError={props.operationCatalogError} operations={props.operations} probeCatalogError={props.probeCatalogError} probeTypes={props.probeTypes} />
+            <WorkTypeConfigurationFields availableCustomShades={props.availableCustomShades} key={props.item.workType.id} form={configurationForm} isOperationCatalogLoading={props.isOperationCatalogLoading} isProbeCatalogLoading={props.isProbeCatalogLoading} onRetryOperationCatalog={props.onRetryOperationCatalog} onRetryProbeCatalog={props.onRetryProbeCatalog} operationCatalogError={props.operationCatalogError} operations={props.operations} probeCatalogError={props.probeCatalogError} probeTypes={props.probeTypes} />
             <Button disabled={!props.canUpdate || updateWorkTypeMutation.isPending || workTypeQuery.isLoading} onClick={() => void configurationForm.handleSubmit((values) => {
               updateWorkTypeMutation.mutate({ workTypeId: props.item?.workType.id ?? "", input: {
                   allowedAddOns: buildAllowedAddOns(values),
                   allowedAnatomicalScopes: values.allowedAnatomicalScopes,
+                  allowedShades: values.allowedShades,
+                  customShades: values.customShades,
                   colorHex: workTypeColor || null,
                   description: workTypeDescription || null,
                   name: workTypeName,

@@ -270,6 +270,9 @@ export function WorkForm({
   const implantPlatform = form.watch("implantPlatform");
   const selectedPatient = useMemo(() => patientOptions.find((patient) => patient.id === patientId) ?? null, [patientId, patientOptions]);
   const selectedWorkType = useMemo(() => workTypeOptions.find((workType) => workType.id === workTypeId) ?? null, [workTypeId, workTypeOptions]);
+  const shadeOptions = selectedWorkType?.allowedShades === null || selectedWorkType?.allowedShades === undefined
+    ? [...WORK_SHADE_OPTIONS, ...(selectedWorkType?.customShades ?? [])]
+    : [...selectedWorkType.allowedShades, ...(selectedWorkType.customShades ?? [])];
   const isImplantWorkType = selectedWorkType?.name.toLocaleLowerCase("ro-RO").includes("implant") ?? false;
   const selectedClinic = useMemo(() => clinicOptions.find((clinic) => clinic.id === clinicId) ?? null, [clinicId, clinicOptions]);
   const selectedDoctor = useMemo(() => doctorOptions.find((doctor) => doctor.id === doctorId) ?? null, [doctorId, doctorOptions]);
@@ -500,7 +503,7 @@ export function WorkForm({
                 form.setValue("shade", null, { shouldDirty: true, shouldValidate: true });
               }
             }}
-            options={WORK_SHADE_OPTIONS.map((value) => ({ label: value, secondary: undefined, value }))}
+            options={shadeOptions.map((value) => ({ label: value, secondary: undefined, value }))}
             placeholder="Caută culoarea"
             required={false}
             searchValue={form.watch("shade") ?? ""}

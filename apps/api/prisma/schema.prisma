@@ -395,6 +395,8 @@ model WorkType {
   unit                             WorkTypeUnit                  @default(UNIT)
   probeFamily                      String?                       @map("probe_family") @db.VarChar(24)
   probeTypeCodes                   Json?                         @map("probe_type_codes")
+  allowedShades                    Json?                         @map("allowed_shades")
+  customShades                     Json?                         @map("custom_shades")
   allowedAddOns                    Json?                         @map("allowed_add_ons")
   allowedAnatomicalScopes          Json?                         @map("allowed_anatomical_scopes")
   operationApplicabilityConfigured Boolean                       @default(false) @map("operation_applicability_configured")

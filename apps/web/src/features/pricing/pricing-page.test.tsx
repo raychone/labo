@@ -396,6 +396,16 @@ describe("PricingPage consolidation", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /^Lingură/ }));
     fireEvent.click(within(dialog).getByRole("button", { name: /^Miyo/ }));
     fireEvent.click(within(dialog).getAllByRole("button", { name: "Sus" })[1]!);
+    fireEvent.click(within(dialog).getByRole("button", { name: "A2" }));
+    expect(within(dialog).getByRole("button", { name: "A2" }).getAttribute("aria-pressed")).toBe("false");
+    fireEvent.change(within(dialog).getByLabelText("Culoare custom"), { target: { value: "Bleach" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Adaugă culoare" }));
+    const customShade = within(dialog).getByRole("button", { name: /^Bleach/ });
+    expect(customShade.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(customShade);
+    expect(customShade.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(customShade);
+    expect(customShade.getAttribute("aria-pressed")).toBe("true");
 
     fireEvent.change(within(dialog).getByLabelText("Denumire tip lucrare"), { target: { value: "Lucrare UAT" } });
     fireEvent.change(within(dialog).getByLabelText("Simbol"), { target: { value: "UAT" } });
@@ -403,6 +413,8 @@ describe("PricingPage consolidation", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Salvează" }));
 
     await waitFor(() => expect(mocks.createWorkType).toHaveBeenCalledWith(expect.objectContaining({
+      allowedShades: expect.not.arrayContaining(["A2"]),
+      customShades: ["Bleach"],
       probeTypeIds: ["probe-miyo", "probe-lingura"],
       technicianOperationIds: ["operation-active", "operation-fin"],
     }), expect.anything()));
@@ -414,25 +426,25 @@ describe("PricingPage consolidation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Adaugă tip lucrare" }));
     const workTypeDialog = screen.getByRole("dialog", { name: "Adaugă tip lucrare" });
 
-    fireEvent.click(within(workTypeDialog).getByRole("button", { name: "Alege culoarea" }));
-    const colorDialog = screen.getByRole("dialog", { name: "Alege culoarea" });
+    fireEvent.click(within(workTypeDialog).getByRole("button", { name: "Alege culoarea odontogramei" }));
+    const colorDialog = screen.getByRole("dialog", { name: "Alege culoarea odontogramei" });
     const blue = within(colorDialog).getByRole("button", { name: "Alege #2563EB" });
     fireEvent.click(blue);
-    expect(within(workTypeDialog).getByRole("button", { name: "Culoare activă" })).toBeDefined();
+    expect(within(workTypeDialog).getByRole("button", { name: "Culoare odontogramă activă" })).toBeDefined();
 
-    fireEvent.click(within(workTypeDialog).getByRole("button", { name: "Culoare activă" }));
-    const selectedColorDialog = screen.getByRole("dialog", { name: "Alege culoarea" });
+    fireEvent.click(within(workTypeDialog).getByRole("button", { name: "Culoare odontogramă activă" }));
+    const selectedColorDialog = screen.getByRole("dialog", { name: "Alege culoarea odontogramei" });
     expect(within(selectedColorDialog).getByRole("button", { name: "Dezactivează #2563EB" }).getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(within(selectedColorDialog).getByRole("button", { name: "Dezactivează #2563EB" }));
-    expect(within(workTypeDialog).getByRole("button", { name: "Alege culoarea" })).toBeDefined();
+    expect(within(workTypeDialog).getByRole("button", { name: "Alege culoarea odontogramei" })).toBeDefined();
 
-    fireEvent.click(within(workTypeDialog).getByRole("button", { name: "Alege culoarea" }));
-    const customColorDialog = screen.getByRole("dialog", { name: "Alege culoarea" });
+    fireEvent.click(within(workTypeDialog).getByRole("button", { name: "Alege culoarea odontogramei" }));
+    const customColorDialog = screen.getByRole("dialog", { name: "Alege culoarea odontogramei" });
     fireEvent.change(within(customColorDialog).getByLabelText("Culoare personalizată"), { target: { value: "#123456" } });
-    expect(within(workTypeDialog).getByRole("button", { name: "Culoare activă" })).toBeDefined();
-    fireEvent.click(within(workTypeDialog).getByRole("button", { name: "Culoare activă" }));
+    expect(within(workTypeDialog).getByRole("button", { name: "Culoare odontogramă activă" })).toBeDefined();
+    fireEvent.click(within(workTypeDialog).getByRole("button", { name: "Culoare odontogramă activă" }));
     fireEvent.click(screen.getByRole("button", { name: "Fără culoare" }));
-    expect(within(workTypeDialog).getByRole("button", { name: "Alege culoarea" })).toBeDefined();
+    expect(within(workTypeDialog).getByRole("button", { name: "Alege culoarea odontogramei" })).toBeDefined();
   });
 
   it("preselects saved mappings in edit, keeps the active catalog available and reloads the changed configuration", async () => {

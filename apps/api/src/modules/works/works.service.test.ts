@@ -97,6 +97,8 @@ function workType(overrides: Partial<WorkType> = {}): WorkType {
     probeFamily: null,
     probeTypeCodes: null,
     allowedAddOns: null,
+    allowedShades: null,
+    customShades: null,
     allowedAnatomicalScopes: null,
     operationApplicabilityConfigured: false,
     probeApplicabilityConfigured: false,
@@ -1934,6 +1936,8 @@ describe("work order helpers", () => {
   it("exposes only the explicitly configured probe types in WorkType order", () => {
     const option = toWorkTypeFormOptionView({
       allowedAddOns: null,
+      allowedShades: null,
+      customShades: null,
       code: "TECH-ZR",
       colorHex: null,
       exclusiveGroup: null,

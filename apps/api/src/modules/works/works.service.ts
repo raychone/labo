@@ -688,6 +688,8 @@ export class WorksService {
         probeApplicabilityConfigured: true,
         probeTypes: { include: { probeType: true }, orderBy: { sortOrder: "asc" } },
         allowedAddOns: true,
+        allowedShades: true,
+        customShades: true,
         exclusiveGroup: true,
         symbol: true,
         unit: true,

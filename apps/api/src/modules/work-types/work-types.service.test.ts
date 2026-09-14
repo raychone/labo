@@ -24,6 +24,8 @@ function workType(overrides: Partial<WorkType> = {}): WorkType {
     probeFamily: null,
     probeTypeCodes: null,
     allowedAddOns: null,
+    allowedShades: null,
+    customShades: null,
     allowedAnatomicalScopes: null,
     operationApplicabilityConfigured: false,
     probeApplicabilityConfigured: false,
@@ -253,6 +255,8 @@ describe("WorkTypesService", () => {
       {
         basePriceMinor: 35000,
         allowedAnatomicalScopes: [],
+        allowedShades: null,
+        customShades: null,
         code: "WT-0001",
         colorHex: null,
         id: "active_1",

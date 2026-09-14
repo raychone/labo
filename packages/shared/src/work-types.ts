@@ -26,6 +26,11 @@ export function formatWorkTypeCategory(probeFamily: WorkTypeProbeFamily | string
 export const WORK_TYPE_ADD_ON_CODES = ["PLACATA", "GINGIE"] as const;
 export type WorkTypeAddOnCode = (typeof WORK_TYPE_ADD_ON_CODES)[number];
 
+export const WORK_TYPE_SHADE_OPTIONS = [
+  "A1", "A2", "A3", "A3.5", "A4", "B1", "B2", "B3", "B4", "C1", "C2", "C3", "C4", "D2", "D3", "D4",
+] as const;
+export type WorkTypeShade = (typeof WORK_TYPE_SHADE_OPTIONS)[number];
+
 export interface WorkTypeAddOnOption {
   readonly code: WorkTypeAddOnCode;
   readonly label: string;
@@ -44,6 +49,8 @@ export interface WorkTypeOption {
   readonly probeTypeIds?: readonly string[];
   readonly probeTypeCodes?: readonly string[];
   readonly allowedAddOns?: readonly WorkTypeAddOnOption[];
+  readonly allowedShades?: readonly WorkTypeShade[] | null;
+  readonly customShades?: readonly string[] | null;
   readonly allowedAnatomicalScopes?: readonly AnatomicalScopeType[];
   readonly operationApplicabilityConfigured?: boolean;
   readonly probeApplicabilityConfigured?: boolean;
@@ -77,6 +84,8 @@ export interface CreateWorkTypeInput {
   readonly probeTypeIds?: readonly string[];
   readonly probeTypeCodes?: readonly string[];
   readonly allowedAddOns?: readonly WorkTypeAddOnOption[];
+  readonly allowedShades?: readonly WorkTypeShade[] | null;
+  readonly customShades?: readonly string[] | null;
   readonly allowedAnatomicalScopes?: readonly AnatomicalScopeType[];
   readonly technicianOperationIds?: readonly string[];
   readonly exclusiveGroup?: string | null;

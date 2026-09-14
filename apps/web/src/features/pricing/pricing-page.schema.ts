@@ -1,4 +1,4 @@
-import { ANATOMICAL_SCOPE_TYPES, PRICING_ADJUSTMENT_TYPES, PRICING_AGREEMENT_SUBJECT_TYPES, PRICING_CATEGORIES, PRICING_RULE_SCOPES, TECHNICIAN_OPERATION_CATEGORIES, TECHNICIAN_OPERATION_QUANTITY_RULES, WORK_TYPE_UNITS } from "@dental-lab/shared";
+import { ANATOMICAL_SCOPE_TYPES, PRICING_ADJUSTMENT_TYPES, PRICING_AGREEMENT_SUBJECT_TYPES, PRICING_CATEGORIES, PRICING_RULE_SCOPES, TECHNICIAN_OPERATION_CATEGORIES, TECHNICIAN_OPERATION_QUANTITY_RULES, WORK_TYPE_SHADE_OPTIONS, WORK_TYPE_UNITS } from "@dental-lab/shared";
 import { z } from "zod";
 
 const moneyDecimal = z
@@ -21,6 +21,8 @@ export const catalogFormSchema = z.object({
   workTypeSymbol: z.string().trim().optional(),
   workTypeDescription: z.string().trim().max(1000).optional(),
   allowedAnatomicalScopes: z.array(z.enum(ANATOMICAL_SCOPE_TYPES)).min(1, "Alege cel puțin un domeniu anatomic."),
+  allowedShades: z.array(z.enum(WORK_TYPE_SHADE_OPTIONS)),
+  customShades: z.array(z.string().trim().min(1).max(80)),
   technicianOperationIds: z.array(z.string()),
   probeTypeIds: z.array(z.string()),
   gingieEnabled: z.boolean(),

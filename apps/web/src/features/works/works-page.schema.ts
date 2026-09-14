@@ -1,12 +1,10 @@
-import { URGENCY_LEVELS, WORK_PRIORITIES } from "@dental-lab/shared";
+import { URGENCY_LEVELS, WORK_PRIORITIES, WORK_TYPE_SHADE_OPTIONS } from "@dental-lab/shared";
 import { z } from "zod";
 
 const nullableTrimmedString = (maxLength: number) =>
   z.string().trim().max(maxLength).transform((value) => value.length === 0 ? null : value).nullable();
 
-export const WORK_SHADE_OPTIONS = [
-  "A1", "A2", "A3", "A3.5", "A4", "B1", "B2", "B3", "B4", "C1", "C2", "C3", "C4", "D2", "D3", "D4",
-] as const;
+export const WORK_SHADE_OPTIONS = WORK_TYPE_SHADE_OPTIONS;
 
 export const IMPLANT_PLATFORM_OPTIONS = [
   "Odentis", "AB Dental", "Alpha Bio", "Arum", "Dentium", "Inno", "JD", "Megagen", "Neobiotech", "Nobel", "Rhein", "Straumann", "Zimmer", "Alt tip",

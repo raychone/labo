@@ -160,7 +160,13 @@ export function MultiItemWorkEditor({
     const matched = normalized === "" ? workTypeSearchOptions : workTypeSearchOptions.filter((option) => `${option.label} ${option.secondary}`.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().includes(normalized));
     return matched;
   }, [workTypeSearch, workTypeSearchOptions]);
-  const shadeOptions = useMemo(() => filterEditorOptions(WORK_SHADE_OPTIONS.map((value) => ({ label: value, secondary: undefined, value })), shade ? "" : shadeSearch), [shade, shadeSearch]);
+  const shadeCatalog = selectedWorkType?.allowedShades === null || selectedWorkType?.allowedShades === undefined
+    ? [...WORK_SHADE_OPTIONS, ...(selectedWorkType?.customShades ?? [])]
+    : [...selectedWorkType.allowedShades, ...(selectedWorkType.customShades ?? [])];
+  const shadeOptions = useMemo(() => {
+    const values = shade && !shadeCatalog.includes(shade as (typeof WORK_SHADE_OPTIONS)[number]) ? [...shadeCatalog, shade] : shadeCatalog;
+    return filterEditorOptions(values.map((value) => ({ label: value, secondary: undefined, value })), shade ? "" : shadeSearch);
+  }, [selectedWorkType?.allowedShades, shade, shadeCatalog, shadeSearch]);
   const platformOptions = useMemo(() => filterEditorOptions(IMPLANT_PLATFORM_OPTIONS.map((value) => ({ label: value, secondary: undefined, value })), implantPlatform ? "" : platformSearch), [implantPlatform, platformSearch]);
   const workTypeVisualization = useMemo(() => {
     const colors = ["#0057b8", "#7a1fa2", "#c2410c", "#00796b", "#b91c1c", "#a16207", "#0369a1", "#be185d", "#4d7c0f", "#4338ca", "#c026d3", "#0f766e"] as const;

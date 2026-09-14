@@ -1,4 +1,5 @@
 import type { CreateWorkFormSubmissionInput, WorkFormSubmissionView, WorkFormValues } from "./work-forms.js";
+import type { WorkTypeShade } from "./work-types.js";
 import type { DeadlineDashboardSummary, DeadlineFilter } from "./work-deadline-visual-state.js";
 import type { LegalEntityCode } from "./organization-context.js";
 import type { WorkAttachmentSummary } from "./logistics.js";
@@ -87,6 +88,8 @@ export interface WorkTypeFormOption extends WorkTypeSnapshot {
   readonly probeFamily?: string | null;
   readonly probeTypeCodes?: readonly string[];
   readonly allowedAddOns?: readonly { readonly code: string; readonly label: string; readonly amountMinor: number | null }[];
+  readonly allowedShades?: readonly WorkTypeShade[] | null;
+  readonly customShades?: readonly string[] | null;
   readonly exclusiveGroup?: string | null;
 }
 

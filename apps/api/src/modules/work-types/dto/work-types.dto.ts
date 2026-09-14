@@ -1,6 +1,6 @@
 import { Transform, Type } from "class-transformer";
 import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
-import { ANATOMICAL_SCOPE_TYPES, WORK_TYPE_ADD_ON_CODES, WORK_TYPE_PROBE_FAMILIES } from "@dental-lab/shared";
+import { ANATOMICAL_SCOPE_TYPES, WORK_TYPE_ADD_ON_CODES, WORK_TYPE_PROBE_FAMILIES, WORK_TYPE_SHADE_OPTIONS } from "@dental-lab/shared";
 
 import { MAX_BASE_PRICE_MINOR, SORT_DIRECTIONS, WORK_TYPE_SORT_FIELDS, WORK_TYPE_UNITS } from "../work-types.constants.js";
 
@@ -139,6 +139,17 @@ export class WorkTypeMutationDto {
   @ArrayMinSize(1)
   @IsIn(ANATOMICAL_SCOPE_TYPES, { each: true })
   public readonly allowedAnatomicalScopes?: readonly (typeof ANATOMICAL_SCOPE_TYPES)[number][];
+
+  @IsOptional()
+  @IsArray()
+  @IsIn(WORK_TYPE_SHADE_OPTIONS, { each: true })
+  public readonly allowedShades?: readonly (typeof WORK_TYPE_SHADE_OPTIONS)[number][] | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @MaxLength(80, { each: true })
+  public readonly customShades?: readonly string[] | null;
 
   @IsOptional()
   @IsArray()

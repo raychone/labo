@@ -4,7 +4,7 @@ import { toWorkflowExecutionView, toWorkflowSummaryView } from "../workflow-exec
 import { resolveDeadlineVisualState, type DeadlineDashboardSummary } from "./work-deadline-visual.js";
 import { toWorkOrderItemView } from "./work-items.service.js";
 import { toToothConnectionView } from "./tooth-connections.service.js";
-import { calculateUrgencySurchargeMinor, URGENCY_SURCHARGE_PERCENT } from "@dental-lab/shared";
+import { calculateUrgencySurchargeMinor, URGENCY_SURCHARGE_PERCENT, type WorkTypeShade } from "@dental-lab/shared";
 
 type WorkFormValue = boolean | number | readonly string[] | string | null;
 type WorkFormValues = Readonly<Record<string, WorkFormValue>>;
@@ -246,6 +246,8 @@ export interface WorkTypeFormOptionView {
   readonly probeFamily: string | null;
   readonly probeTypeCodes: readonly string[];
   readonly allowedAddOns: readonly { readonly code: string; readonly label: string; readonly amountMinor: number | null }[];
+  readonly allowedShades: readonly WorkTypeShade[] | null;
+  readonly customShades: readonly string[] | null;
   readonly exclusiveGroup: string | null;
 }
 
@@ -534,7 +536,7 @@ export interface PaginatedWorksView {
   readonly total: number;
 }
 
-export function toWorkTypeFormOptionView(workType: { readonly code: string; readonly colorHex: string | null; readonly id: string; readonly name: string; readonly symbol: string; readonly unit: string; readonly probeFamily: string | null; readonly probeApplicabilityConfigured?: boolean; readonly probeTypes?: readonly { readonly sortOrder: number; readonly probeType: { readonly code: string | null } }[]; readonly probeTypeCodes?: Prisma.JsonValue | null; readonly allowedAddOns: Prisma.JsonValue | null; readonly exclusiveGroup: string | null }): WorkTypeFormOptionView {
+export function toWorkTypeFormOptionView(workType: { readonly allowedShades: Prisma.JsonValue | null; readonly customShades: Prisma.JsonValue | null; readonly code: string; readonly colorHex: string | null; readonly id: string; readonly name: string; readonly symbol: string; readonly unit: string; readonly probeFamily: string | null; readonly probeApplicabilityConfigured?: boolean; readonly probeTypes?: readonly { readonly sortOrder: number; readonly probeType: { readonly code: string | null } }[]; readonly probeTypeCodes?: Prisma.JsonValue | null; readonly allowedAddOns: Prisma.JsonValue | null; readonly exclusiveGroup: string | null }): WorkTypeFormOptionView {
   return {
     code: workType.code,
     colorHex: workType.colorHex,
@@ -548,8 +550,21 @@ export function toWorkTypeFormOptionView(workType: { readonly code: string; read
       if (typeof value !== "object" || value === null || Array.isArray(value) || typeof value.code !== "string" || typeof value.label !== "string") return [];
       return [{ code: value.code, label: value.label, amountMinor: typeof value.amountMinor === "number" ? value.amountMinor : null }];
     }) : [],
+    allowedShades: jsonWorkTypeShades(workType.allowedShades),
+    customShades: jsonWorkTypeCustomShades(workType.customShades),
     exclusiveGroup: workType.exclusiveGroup,
   };
+}
+
+function jsonWorkTypeCustomShades(value: Prisma.JsonValue | null): readonly string[] | null {
+  if (value === null) return null;
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0).map((entry) => entry.trim()) : [];
+}
+
+function jsonWorkTypeShades(value: Prisma.JsonValue | null): readonly WorkTypeShade[] | null {
+  if (value === null) return null;
+  const allowed = new Set<string>(["A1", "A2", "A3", "A3.5", "A4", "B1", "B2", "B3", "B4", "C1", "C2", "C3", "C4", "D2", "D3", "D4"]);
+  return Array.isArray(value) ? value.filter((entry): entry is WorkTypeShade => typeof entry === "string" && allowed.has(entry)) : null;
 }
 
 export function toWorkSummaryView(workOrder: WorkOrderRecord, includePricing: boolean, access: WorkClaimAccessViewInput): WorkSummaryView {

@@ -57,6 +57,8 @@ function workType(overrides: Partial<WorkType> = {}): WorkType {
     probeFamily: null,
     probeTypeCodes: null,
     allowedAddOns: null,
+    allowedShades: null,
+    customShades: null,
     allowedAnatomicalScopes: null,
     operationApplicabilityConfigured: false,
     probeApplicabilityConfigured: false,
