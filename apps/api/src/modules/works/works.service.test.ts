@@ -318,6 +318,25 @@ describe("WorksService", () => {
     vi.useRealTimers();
   });
 
+  it("exposes every active global WorkType to the reception form, including generated catalog entries", async () => {
+    const findMany = vi.fn().mockResolvedValue([workType({ id: "custom_work_type", name: "tipnouUAT", symbol: "UAT1" })]);
+    const service = createService(
+      { workType: { findMany } },
+      {
+        hasPermission: vi.fn().mockImplementation(async ({ permission }: { readonly permission: string }) => ({
+          allowed: permission === "works.create",
+          effectiveScopes: permission === "works.create" ? ["ALL"] : [],
+          permission,
+        })),
+      },
+    );
+
+    const result = await service.listWorkTypeFormOptions("reception_user");
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { isActive: true } }));
+    expect(result).toEqual([expect.objectContaining({ id: "custom_work_type", name: "tipnouUAT", symbol: "UAT1" })]);
+  });
+
   it("creates a RECEPTIE work order with immutable pricing snapshot and audit", async () => {
     const createdWorkOrder = workOrder();
     const auditCreate = vi.fn().mockResolvedValue({});

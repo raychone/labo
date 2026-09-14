@@ -692,19 +692,11 @@ export class WorksService {
         symbol: true,
         unit: true,
       },
-      where: {
-        isActive: true,
-        // The technical seed keeps the Excel/pricing catalog separate from
-        // the older creative/technical work-type catalog.  The latter may be
-        // needed for historical records, but must not produce duplicate or
-        // invented choices in the reception/logistics work form.
-        OR: [
-          { id: { startsWith: "technical_pricing_work_type_" } },
-          // Compatibility with local databases seeded before the catalog IDs
-          // became canonical.
-          { symbol: { startsWith: "PRICE-" } },
-        ],
-      },
+      // The reception/logistics form uses the same active global catalog as
+      // Manager. Newly-created WorkTypes may have generated ids/symbols, so
+      // restricting this list to legacy pricing prefixes hides valid catalog
+      // entries from the operational workflow.
+      where: { isActive: true },
     });
 
     const canReadPricing = actorUserId === undefined

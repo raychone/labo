@@ -408,6 +408,33 @@ describe("PricingPage consolidation", () => {
     }), expect.anything()));
   });
 
+  it("lets the manager assign, toggle off, or clear a palette/custom color for one work type", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: "Setări lucrări" });
+    fireEvent.click(screen.getByRole("button", { name: "Adaugă tip lucrare" }));
+    const workTypeDialog = screen.getByRole("dialog", { name: "Adaugă tip lucrare" });
+
+    fireEvent.click(within(workTypeDialog).getByRole("button", { name: "Alege culoarea" }));
+    const colorDialog = screen.getByRole("dialog", { name: "Alege culoarea" });
+    const blue = within(colorDialog).getByRole("button", { name: "Alege #2563EB" });
+    fireEvent.click(blue);
+    expect(within(workTypeDialog).getByRole("button", { name: "Culoare activă" })).toBeDefined();
+
+    fireEvent.click(within(workTypeDialog).getByRole("button", { name: "Culoare activă" }));
+    const selectedColorDialog = screen.getByRole("dialog", { name: "Alege culoarea" });
+    expect(within(selectedColorDialog).getByRole("button", { name: "Dezactivează #2563EB" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(within(selectedColorDialog).getByRole("button", { name: "Dezactivează #2563EB" }));
+    expect(within(workTypeDialog).getByRole("button", { name: "Alege culoarea" })).toBeDefined();
+
+    fireEvent.click(within(workTypeDialog).getByRole("button", { name: "Alege culoarea" }));
+    const customColorDialog = screen.getByRole("dialog", { name: "Alege culoarea" });
+    fireEvent.change(within(customColorDialog).getByLabelText("Culoare personalizată"), { target: { value: "#123456" } });
+    expect(within(workTypeDialog).getByRole("button", { name: "Culoare activă" })).toBeDefined();
+    fireEvent.click(within(workTypeDialog).getByRole("button", { name: "Culoare activă" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fără culoare" }));
+    expect(within(workTypeDialog).getByRole("button", { name: "Alege culoarea" })).toBeDefined();
+  });
+
   it("preselects saved mappings in edit, keeps the active catalog available and reloads the changed configuration", async () => {
     const initialDetail = {
       allowedAddOns: [],

@@ -145,20 +145,23 @@ const workTypeColorPalette = ["#FACC15", "#F97316", "#DC2626", "#7C3AED", "#2563
 
 function WorkTypeColorPicker({ disabled, onChange, value }: { readonly disabled?: boolean; readonly onChange: (value: string) => void; readonly value: string }): ReactNode {
   const [isOpen, setIsOpen] = useState(false);
+  const normalizedValue = value.toUpperCase();
   return <>
     <Button disabled={disabled} onClick={() => setIsOpen(true)} type="button" variant="outline">
       <span className="pricing-page__color-preview" style={{ backgroundColor: value || "transparent" }} />
-      Culoare
+      {value ? "Culoare activă" : "Alege culoarea"}
     </Button>
     <Modal isOpen={isOpen} onOpenChange={setIsOpen} size="sm" title="Alege culoarea">
       <div className="pricing-page__color-picker">
+        <p className="pricing-page__readonly">Alege o culoare pentru acest tip de lucrare. Culoarea este salvată doar pe tipul de lucrare curent.</p>
         <div className="pricing-page__color-grid" aria-label="Paletă culori tip lucrare" role="group">
-          {workTypeColorPalette.map((color) => <button aria-label={`Alege ${color}`} className={value.toUpperCase() === color ? "is-selected" : undefined} key={color} onClick={() => { onChange(color); setIsOpen(false); }} style={{ backgroundColor: color }} type="button" />)}
+          {workTypeColorPalette.map((color) => <button aria-pressed={normalizedValue === color} aria-label={`${normalizedValue === color ? "Dezactivează" : "Alege"} ${color}`} className={normalizedValue === color ? "is-selected" : undefined} key={color} onClick={() => { onChange(normalizedValue === color ? "" : color); setIsOpen(false); }} style={{ backgroundColor: color }} type="button" />)}
         </div>
         <div className="pricing-page__color-custom">
           <input aria-label="Culoare personalizată" type="color" value={value || "#F97316"} onChange={(event) => onChange(event.target.value.toUpperCase())} />
           <TextInput label="Cod culoare" placeholder="#F97316" value={value} onChange={(event) => onChange(event.target.value.toUpperCase())} />
         </div>
+        <Button onClick={() => { onChange(""); setIsOpen(false); }} type="button" variant="outline">Fără culoare</Button>
       </div>
     </Modal>
   </>;

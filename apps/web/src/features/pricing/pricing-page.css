@@ -8,6 +8,7 @@
 .pricing-page__color-grid { display: grid; gap: 2px; grid-template-columns: repeat(6, 2.25rem); width: max-content; }
 .pricing-page__color-grid button { border: 1px solid var(--dl-color-border); border-radius: 2px; cursor: pointer; height: 2.25rem; padding: 0; width: 2.25rem; }
 .pricing-page__color-grid button.is-selected { box-shadow: 0 0 0 3px var(--dl-color-primary), inset 0 0 0 2px #fff; }
+.pricing-page__color-grid button:focus-visible { outline: 3px solid var(--dl-color-accent); outline-offset: 2px; }
 .pricing-page__color-custom { align-items: end; display: flex; gap: var(--dl-space-3); }
 .pricing-page__color-custom input[type="color"] { border: 1px solid var(--dl-color-border); border-radius: var(--dl-radius-sm); height: 3rem; padding: 3px; width: 3rem; }
 
