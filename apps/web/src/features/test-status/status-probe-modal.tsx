@@ -34,7 +34,7 @@ export function StatusProbeModal({ isOpen, onOpenChange }: { readonly isOpen: bo
   const probeTypesQuery = useProbeTypes(isOpen && canCreate);
   const selectedWorkQuery = useWork(selectedWorkId, isOpen && selectedWorkId !== null);
   const receiveProbe = useReceiveProbe();
-  const candidateRows = useMemo(() => (candidatesQuery.data?.items ?? []).filter((row) => row.technicalReadiness === "PROBE_READY" && (!clinicId || row.clinic?.id === clinicId) && (!doctorId || row.doctor?.id === doctorId)), [candidatesQuery.data?.items, clinicId, doctorId]);
+  const candidateRows = useMemo(() => (candidatesQuery.data?.items ?? []).filter((row) => row.technicalReadiness === "PROBE_READY" && row.hasCompletedPickup && (!clinicId || row.clinic?.id === clinicId) && (!doctorId || row.doctor?.id === doctorId)), [candidatesQuery.data?.items, clinicId, doctorId]);
   const patientCandidateRows = useMemo(() => patientId ? candidateRows.filter((row) => row.patient.id === patientId) : [], [candidateRows, patientId]);
   const selectedWork = patientCandidateRows.find((row) => row.id === selectedWorkId) ?? null;
   const selectedPatient = (patientsQuery.data ?? []).find((patient) => patient.id === patientId) ?? null;

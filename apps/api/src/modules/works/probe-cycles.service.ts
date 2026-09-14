@@ -128,6 +128,7 @@ export class ProbeCyclesService {
           activeProbeCycleId: true,
           clinicId: true,
           doctorId: true,
+          probeReadyAt: true,
           status: true,
           technicalReadiness: true,
         },
@@ -139,9 +140,13 @@ export class ProbeCyclesService {
       const last = cycles[0];
       if (current.status === "FINALIZATA" || current.technicalReadiness === "FINAL_READY") throw new ConflictException("O lucrare finalizată rămâne în istoric și nu poate fi recepționată pentru o probă nouă.");
       if (input.directRework && current.technicalReadiness !== "PROBE_READY") throw new ConflictException("Doar lucrările cu status Probă gata pot fi trimise la refacere.");
-      if (!input.directRework && (!last || last.status !== "COMPLETED" || last.completionOutcome !== "PROBE_READY")) throw new ConflictException("Următoarea probă poate fi creată doar după marcarea probei ca Probă gata.");
       if (!input.directRework) {
-        if (current.technicalReadiness !== "PROBE_READY" || !last?.completedAt) {
+        const completedProbeReadyAt = last?.status === "COMPLETED" && last.completionOutcome === "PROBE_READY" ? last.completedAt : null;
+        // The projection can be stale for legacy work orders. Prefer the
+        // completed cycle as the source of truth and fall back to the stored
+        // readiness timestamp only for old records without a cycle row.
+        const readyAt = completedProbeReadyAt ?? (!last && current.technicalReadiness === "PROBE_READY" ? current.probeReadyAt : null);
+        if (!readyAt) {
           throw new ConflictException("Următoarea probă poate fi creată doar după marcarea probei ca Probă gata.");
         }
         const returnEvidence = resolveProbeReturnEvidence(
@@ -149,10 +154,10 @@ export class ProbeCyclesService {
             activeWorkCycleId: current.activeCycleId,
             clinicId: current.clinicId,
             doctorId: current.doctorId,
-            readyAt: last.completedAt,
+            readyAt,
             workOrderId: work.id,
           }),
-          last.completedAt,
+          readyAt,
         );
         if (!returnEvidence.deliveredAt) {
           throw new ConflictException("Proba poate fi recepționată doar după o livrare reușită înregistrată pentru ciclul curent.");

@@ -35,7 +35,7 @@ describe("StatusProbeModal", () => {
         counters: [],
         items: [{
           clinic: { id: "clinic_1", name: "Clinica Test" }, components: [{ name: "Coroană zirconiu", teeth: ["11"] }],
-          currentCycle: { number: 2 }, id: "work_1", patient: { id: "patient_1", name: "Maria Ionescu" },
+          currentCycle: { number: 2 }, hasCompletedPickup: true, id: "work_1", patient: { id: "patient_1", name: "Maria Ionescu" },
           shade: "A2", technicalReadiness: "PROBE_READY", workCode: "WO-26-0009", workType: { name: "Coroană zirconiu" },
         }],
         meta: { hasMore: false, page: 1, pageSize: 100, scannedRows: 1, total: 1, totalPages: 1 },
