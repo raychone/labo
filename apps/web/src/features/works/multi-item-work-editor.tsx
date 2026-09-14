@@ -144,7 +144,7 @@ export function MultiItemWorkEditor({
     [items, scope, selectedTeeth],
   );
   const workTypeSearchOptions = useMemo(() => {
-    return [
+    const options = [
       ...workTypeOptions.map((option) => ({
         label: displayWorkTypeName(option.name),
         secondary: undefined,
@@ -152,6 +152,15 @@ export function MultiItemWorkEditor({
       })),
       { label: "Alt tip de lucrare", secondary: "Valoare personalizată", value: CUSTOM_WORK_TYPE_CATEGORY },
     ];
+    const seen = new Set<string>();
+    return options.filter((option) => {
+      const key = option.value === CUSTOM_WORK_TYPE_CATEGORY
+        ? option.value
+        : option.label.normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLocaleLowerCase("ro-RO");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }, [workTypeOptions]);
   const selectedWorkType = useMemo(() => workTypeOptions.find((option) => option.id === workTypeId) ?? null, [workTypeId, workTypeOptions]);
   const isImplantWorkType = selectedWorkType?.name.toLocaleLowerCase("ro-RO").includes("implant") ?? false;

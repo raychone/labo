@@ -9,7 +9,7 @@ const operationSpecs = [
   ["Coroană ceramică", "METAL_TF", "TF"], ["Coroană ceramică", "METAL_SF", "SF"], ["Coroană ceramică", "MODELARE", "Modelare"],
   ["Coroană ceramică", "PRESARE", "Presare"], ["Coroană ceramică", "GLAZURA", "Glaze"], ["Coroană ceramică", "PLACARE_CERAMICA_CERAMICA", "Placare ceramică"],
   ["Altele", "PLACARE_CERAMICA_ALTELE", "Placare ceramică"], ["Altele", "COROANA_COMPOZIT_INLAY", "Coroană compozit / Inlay"],
-  ["Altele", "PROTEZA", "Proteză"], ["Altele", "COROANE_ADIACENTE", "Coroane adiacente"], ["Altele", "GINGIE", "Gingie"],
+  ["Altele", "PROTEZA", "Proteză"], ["Altele", "COROANE_ADIACENTE", "Placare"], ["Altele", "GINGIE", "Gingie"],
 ] as const;
 
 // Human-facing symbols from the technical catalog spreadsheet. WorkType.code

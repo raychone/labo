@@ -548,7 +548,7 @@ export function toWorkTypeFormOptionView(workType: { readonly allowedShades: Pri
     probeTypeCodes: configuredProbeTypeCodes(workType),
     allowedAddOns: Array.isArray(workType.allowedAddOns) ? workType.allowedAddOns.flatMap((value) => {
       if (typeof value !== "object" || value === null || Array.isArray(value) || typeof value.code !== "string" || typeof value.label !== "string") return [];
-      return [{ code: value.code, label: value.label, amountMinor: typeof value.amountMinor === "number" ? value.amountMinor : null }];
+      return [{ code: value.code, label: value.code === "PLACATA" ? "Placare" : value.code === "GINGIE" ? "Gingie" : value.label, amountMinor: typeof value.amountMinor === "number" ? value.amountMinor : null }];
     }) : [],
     allowedShades: jsonWorkTypeShades(workType.allowedShades),
     customShades: jsonWorkTypeCustomShades(workType.customShades),

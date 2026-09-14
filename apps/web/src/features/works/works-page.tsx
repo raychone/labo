@@ -8,7 +8,6 @@ import {
   CardHeader,
   CardTitle,
   DataTable,
-  Drawer,
   ErrorState,
   FormActions,
   FormGrid,
@@ -1100,12 +1099,13 @@ function WorkDetailsDrawer({
   return (
     <>
       <UnsavedChangesPrompt when={isOpen && form.formState.isDirty && !isSaving} />
-      <Drawer
+      <Modal
         className="works-page__work-details-drawer"
         description={work ? `${work.code} · ${work.status}` : "Detalii lucrare"}
         headerAction={work ? <Button onClick={() => onShowQr(work.id)} type="button" variant="outline">Vezi QR</Button> : null}
         isOpen={isOpen}
         onOpenChange={closeGuard.handleOpenChange}
+        size="full"
         title="Detalii lucrare"
       >
         {workError ? <ErrorState title="Lucrarea nu a fost încărcată" description={getErrorMessage(workError)} /> : null}
@@ -1187,7 +1187,7 @@ function WorkDetailsDrawer({
             {!canUpdate ? <p className="works-page__muted">Ai acces de citire, dar nu poți modifica lucrarea.</p> : null}
           </div>
         ) : !workError ? <LoadingState text="Se încarcă detaliile" /> : null}
-      </Drawer>
+      </Modal>
       <ConfirmActionModal
         confirmLabel="Continuă"
         description="Schimbarea tipului de lucrare va elimina detaliile specifice completate pentru tipul actual. Continui?"
