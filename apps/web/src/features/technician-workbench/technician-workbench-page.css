@@ -502,6 +502,23 @@
 .technician-workbench__operation-categories {
   display: grid;
   gap: var(--dl-space-4);
+  min-width: 0;
+}
+
+.technician-workbench__operations-editor {
+  display: grid;
+  gap: var(--dl-space-4);
+  min-width: 0;
+  width: 100%;
+}
+
+.technician-workbench__operations-editor .tooth-diagram,
+.technician-workbench__component-summary,
+.technician-workbench__operation-legend,
+.technician-workbench__operation-categories,
+.technician-workbench__performed-list {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .technician-workbench__operation-category h3 {

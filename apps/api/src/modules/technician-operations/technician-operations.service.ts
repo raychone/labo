@@ -881,6 +881,10 @@ export class TechnicianOperationsService {
     ].filter((source): source is NonNullable<typeof source> => source !== null);
     const configuredIds = new Set(sources.flatMap((source) => source?.operationApplicabilityConfigured ? source.technicianOperations.map((mapping) => mapping.operationId) : []));
     const legacySources = sources.filter((source) => !source?.operationApplicabilityConfigured);
+    // A work order may contain a newly-created/custom work type that has no
+    // applicability configured yet. Until the manager configures it, the
+    // technician must still be able to choose from the active global catalog.
+    if (sources.length === 0 || (legacySources.length === 0 && configuredIds.size === 0)) return null;
     if (legacySources.length === 0) return { id: { in: [...configuredIds] } };
     const legacyCategories = getAllowedOperationCategories(legacySources);
     if (legacyCategories === null) return null;

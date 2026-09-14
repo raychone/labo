@@ -469,7 +469,7 @@ function OperationsModal({
         }
       }
     }
-    return categories;
+    return categories.size > 0 ? categories : null;
   }, [detailQuery.data?.items, selectedTeeth]);
   const isMutating = performMutation.isPending || removeMutation.isPending;
   const workTypeVisualization = useMemo(() => {

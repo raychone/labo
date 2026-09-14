@@ -22,9 +22,17 @@
 }
 
 .works-page__work-details-drawer .dl-overlay__content {
+  display: block;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.works-page__work-details-drawer .works-page__drawer,
+.works-page__work-details-drawer .works-page__inline-composition-editor,
+.works-page__work-details-drawer .multi-item-work-editor {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .works-page__quick-clinic-modal {

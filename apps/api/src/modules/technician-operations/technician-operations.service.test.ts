@@ -252,6 +252,23 @@ describe("TechnicianOperationsService", () => {
     expect(operationFindMany.mock.calls[1]?.[0].where).toEqual({ id: { in: ["modelare"] }, isActive: true });
   });
 
+  it("keeps the active global catalog available for unconfigured or custom work types", async () => {
+    const operationFindMany = vi.fn().mockResolvedValue([]);
+    const workOrderFindUnique = vi.fn()
+      .mockResolvedValueOnce({ items: [{ workType: { name: "All on X", operationApplicabilityConfigured: true, probeFamily: null, symbol: "AOX", technicianOperations: [] } }], workType: null })
+      .mockResolvedValueOnce({ items: [{ workType: null }], workType: null });
+    const service = createService({
+      technicianOperation: { findMany: operationFindMany },
+      workOrder: { findUnique: workOrderFindUnique },
+    });
+
+    await service.listOperationOptions(undefined, "work_unconfigured");
+    await service.listOperationOptions(undefined, "work_custom");
+
+    expect(operationFindMany.mock.calls[0]?.[0].where).toEqual({ isActive: true });
+    expect(operationFindMany.mock.calls[1]?.[0].where).toEqual({ isActive: true });
+  });
+
   it("resolves different rates for different technicians on the same operation", async () => {
     const service = createService({
       technicianOperationRate: {
