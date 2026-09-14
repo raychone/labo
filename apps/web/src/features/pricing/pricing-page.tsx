@@ -327,8 +327,8 @@ function WorkTypeConfigurationFields({ availableCustomShades = [], form, isOpera
       <FormGrid>
         <Checkbox checked={form.watch("gingieEnabled")} label="Gingie" onChange={(event) => setBoolean("gingieEnabled", event.target.checked)} />
         <NumberInput disabled={!form.watch("gingieEnabled")} error={form.formState.errors.gingieAmountDecimal?.message} label="Valoare Gingie" {...form.register("gingieAmountDecimal")} />
-        <Checkbox checked={form.watch("placataEnabled")} label="Adiacente" onChange={(event) => setBoolean("placataEnabled", event.target.checked)} />
-        <NumberInput disabled={!form.watch("placataEnabled")} error={form.formState.errors.placataAmountDecimal?.message} label="Valoare Adiacente" {...form.register("placataAmountDecimal")} />
+        <Checkbox checked={form.watch("placataEnabled")} label="Placare" onChange={(event) => setBoolean("placataEnabled", event.target.checked)} />
+        <NumberInput disabled={!form.watch("placataEnabled")} error={form.formState.errors.placataAmountDecimal?.message} label="Valoare Placare" {...form.register("placataAmountDecimal")} />
       </FormGrid>
     </section>
   </>;
@@ -404,7 +404,7 @@ function buildAllowedAddOns(values: CatalogFormValues): import("@dental-lab/shar
   }
   if (values.placataEnabled) {
     const parsed = values.placataAmountDecimal ? decimalStringToMinor(values.placataAmountDecimal) : null;
-    result.push({ amountMinor: parsed?.ok ? parsed.value : null, code: "PLACATA", label: "Adiacente" });
+    result.push({ amountMinor: parsed?.ok ? parsed.value : null, code: "PLACATA", label: "Placare" });
   }
   return result;
 }

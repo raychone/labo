@@ -11,6 +11,7 @@
 
 .multi-item-work-editor__fields {
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* The work type needs room for its full name; shade values are short (A2/A3). */
@@ -110,6 +111,10 @@
   flex-wrap: wrap;
   gap: var(--dl-space-3);
   grid-column: 1 / -1;
+}
+
+.multi-item-work-editor__selection-grid > * {
+  min-width: 0;
 }
 
 .multi-item-work-editor__custom-type {

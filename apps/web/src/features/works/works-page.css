@@ -33,6 +33,11 @@
 .works-page__work-details-drawer .multi-item-work-editor {
   min-width: 0;
   max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.works-page__work-details-drawer .dl-overlay__content {
+  max-width: 100%;
 }
 
 .works-page__quick-clinic-modal {

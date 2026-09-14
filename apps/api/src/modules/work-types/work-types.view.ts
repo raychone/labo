@@ -100,7 +100,7 @@ function jsonAddOns(value: Prisma.JsonValue | null): readonly WorkTypeAddOnOptio
     const label = entry.label;
     const amountMinor = entry.amountMinor;
     if ((code !== "PLACATA" && code !== "GINGIE") || typeof label !== "string") return [];
-    return [{ code, label: code === "PLACATA" ? "Adiacente" : label, amountMinor: typeof amountMinor === "number" ? amountMinor : null }];
+    return [{ code, label: code === "PLACATA" ? "Placare" : label, amountMinor: typeof amountMinor === "number" ? amountMinor : null }];
   });
 }
 
