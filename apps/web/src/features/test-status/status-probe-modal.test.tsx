@@ -73,12 +73,13 @@ describe("StatusProbeModal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Proba 2.*Coroană zirconiu.*WO-26-0009/i }));
 
-    expect(await screen.findByText("Proba selectată")).toBeDefined();
+    expect(await screen.findByText("Lucrare activă pentru configurare")).toBeDefined();
     expect(screen.getByText("Probe efectuate anterior")).toBeDefined();
     expect(await screen.findByText("ZR")).toBeDefined();
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
     expect(screen.getByLabelText("Ora termenului").getAttribute("type")).toBe("time");
     expect(screen.getByRole("button", { name: "Înregistrează proba" }).hasAttribute("disabled")).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Metal" }));
 
     fireEvent.change(screen.getByLabelText("Data termenului probei *"), { target: { value: "2026-09-12" } });
     expect(screen.getByRole("button", { name: "Înregistrează proba" }).hasAttribute("disabled")).toBe(false);
