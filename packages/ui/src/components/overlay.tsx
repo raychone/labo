@@ -13,6 +13,9 @@ import { createPortal } from "react-dom";
 
 import { getFocusableElements } from "../utils/dom.js";
 
+let overlayScrollLockCount = 0;
+let previousBodyOverflow = "";
+
 export interface OverlayBaseProps {
   readonly children: ReactNode;
   readonly closeOnBackdrop?: boolean;
@@ -38,8 +41,11 @@ function useOverlayLifecycle(
     }
 
     returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    if (overlayScrollLockCount === 0) {
+      previousBodyOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+    }
+    overlayScrollLockCount += 1;
 
     const focusTimer = window.setTimeout(() => {
       const initialElement =
@@ -49,7 +55,11 @@ function useOverlayLifecycle(
 
     return () => {
       window.clearTimeout(focusTimer);
-      document.body.style.overflow = previousOverflow;
+      overlayScrollLockCount = Math.max(0, overlayScrollLockCount - 1);
+      if (overlayScrollLockCount === 0) {
+        document.body.style.overflow = previousBodyOverflow;
+        previousBodyOverflow = "";
+      }
       returnFocusRef.current?.focus();
     };
   }, [containerRef, initialFocusRef, isOpen]);

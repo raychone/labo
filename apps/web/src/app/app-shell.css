@@ -170,6 +170,16 @@
   padding-inline: var(--dl-space-3);
 }
 
+/* On small screens the page itself should be the scroll container. Keeping a
+   second scroll container here makes touch scrolling depend on where the
+   gesture starts, especially when a page also contains an inner scroller. */
+@media (max-width: 63.99rem) {
+  .app-shell__main {
+    overflow: visible;
+    scrollbar-gutter: auto;
+  }
+}
+
 .app-shell__notice {
   padding: var(--dl-space-3);
 }
